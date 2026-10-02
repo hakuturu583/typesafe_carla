@@ -1,0 +1,9 @@
+# WorldSnapshot operations: tsc_world_snapshot_<name>. The actor list
+# accessors are hand-written (native/src/snapshot.cpp).
+class: carla::client::WorldSnapshot
+prefix: world_snapshot
+self: {type: const tsc_world_snapshot_t, name: snapshot, get: snapshot_of}
+blocks:
+  world_snapshot:
+    get_id: {call: GetId, out: uint64}
+    get_timestamp: {call: GetTimestamp, out: timestamp}

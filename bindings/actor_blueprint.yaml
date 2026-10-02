@@ -1,0 +1,13 @@
+# ActorBlueprint queries on a const handle: tsc_actor_blueprint_<name>
+# (bindings/blueprint.yaml has the older non-const ones).
+class: carla::client::ActorBlueprint
+prefix: actor_blueprint
+self: {type: const tsc_actor_blueprint_t, name: blueprint, get: blueprint_of}
+blocks:
+  actor_blueprint:
+    get_id: {call: GetId, out: string}
+    has_tag: {call: ContainsTag, args: {tag: string_in}, out: {type: bool, name: out_has}}
+    has_attribute:
+      call: ContainsAttribute
+      args: {id: string_in}
+      out: {type: bool, name: out_has}

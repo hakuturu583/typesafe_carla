@@ -230,41 +230,44 @@ TSC_API void tsc_actor_attribute_free(tsc_actor_attribute_t *attribute);
 
 TSC_API tsc_status_t tsc_client_create(const char *host, size_t host_len, uint16_t port,
                                        tsc_client_t **out_client);
+/* BEGIN GENERATED client from bindings/client.yaml, do not edit */
 TSC_API tsc_status_t tsc_client_set_timeout(tsc_client_t *client, double seconds);
 TSC_API tsc_status_t tsc_client_get_timeout(tsc_client_t *client, double *out_seconds);
 TSC_API tsc_status_t tsc_client_get_client_version(tsc_client_t *client, tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_get_server_version(tsc_client_t *client, tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_get_world(tsc_client_t *client, tsc_world_t **out_world);
-TSC_API tsc_status_t tsc_client_load_world(tsc_client_t *client, const char *map_name,
-                                           size_t map_name_len, int32_t reset_settings,
-                                           tsc_world_t **out_world);
+TSC_API tsc_status_t tsc_client_load_world(tsc_client_t *client,
+                                           const char *map_name, size_t map_name_len,
+                                           int32_t reset_settings, tsc_world_t **out_world);
 TSC_API tsc_status_t tsc_client_reload_world(tsc_client_t *client, int32_t reset_settings,
                                              tsc_world_t **out_world);
+/* END GENERATED client */
 
 /* ------------------------------------------------------------------------ */
 /* World                                                                    */
 /* ------------------------------------------------------------------------ */
 
+/* BEGIN GENERATED world_core from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_id(tsc_world_t *world, uint64_t *out_id);
 TSC_API tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_list);
-/* TSC_NOT_FOUND if no actor has this id. */
-TSC_API tsc_status_t tsc_world_get_actor(tsc_world_t *world, uint32_t actor_id,
-                                         tsc_actor_t **out_actor);
 TSC_API tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
                                                      tsc_blueprint_library_t **out_library);
+/* parent may be NULL. */
 TSC_API tsc_status_t tsc_world_spawn_actor(tsc_world_t *world,
                                            const tsc_actor_blueprint_t *blueprint,
-                                           const tsc_transform_t *transform,
-                                           tsc_actor_t *parent, /* nullable */
+                                           const tsc_transform_t *transform, tsc_actor_t *parent,
                                            tsc_actor_t **out_actor);
 /* TSC_OK with *out_actor == NULL when the spawn location is occupied. */
 TSC_API tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world,
                                                const tsc_actor_blueprint_t *blueprint,
                                                const tsc_transform_t *transform,
-                                               tsc_actor_t *parent, /* nullable */
-                                               tsc_actor_t **out_actor);
+                                               tsc_actor_t *parent, tsc_actor_t **out_actor);
 TSC_API tsc_status_t tsc_world_tick(tsc_world_t *world, double timeout_seconds,
                                     uint64_t *out_frame);
+/* END GENERATED world_core */
+/* TSC_NOT_FOUND if no actor has this id. */
+TSC_API tsc_status_t tsc_world_get_actor(tsc_world_t *world, uint32_t actor_id,
+                                         tsc_actor_t **out_actor);
 TSC_API tsc_status_t tsc_world_get_settings(tsc_world_t *world, tsc_world_settings_t *out);
 TSC_API tsc_status_t tsc_world_apply_settings(tsc_world_t *world,
                                               const tsc_world_settings_t *settings,
@@ -274,11 +277,16 @@ TSC_API tsc_status_t tsc_world_apply_settings(tsc_world_t *world,
 /* Actor list                                                               */
 /* ------------------------------------------------------------------------ */
 
+/* BEGIN GENERATED actor_list_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_actor_list_size(const tsc_actor_list_t *list);
 TSC_API tsc_status_t tsc_actor_list_get(const tsc_actor_list_t *list, size_t index,
                                         tsc_actor_t **out_actor);
-TSC_API tsc_status_t tsc_actor_list_filter(const tsc_actor_list_t *list, const char *pattern,
-                                           size_t pattern_len, tsc_actor_list_t **out_list);
+/* END GENERATED actor_list_items */
+/* BEGIN GENERATED actor_list from bindings/actor_list.yaml, do not edit */
+TSC_API tsc_status_t tsc_actor_list_filter(const tsc_actor_list_t *list,
+                                           const char *pattern, size_t pattern_len,
+                                           tsc_actor_list_t **out_list);
+/* END GENERATED actor_list */
 
 /* ------------------------------------------------------------------------ */
 /* Actor (also accepts vehicle handles)                                     */
@@ -298,7 +306,10 @@ TSC_API tsc_status_t tsc_actor_set_target_velocity(tsc_actor_t *actor,
 TSC_API tsc_status_t tsc_actor_get_acceleration(tsc_actor_t *actor, tsc_vector3d_t *out);
 TSC_API tsc_status_t tsc_actor_get_angular_velocity(tsc_actor_t *actor, tsc_vector3d_t *out);
 /* END GENERATED actor */
+/* BEGIN GENERATED actor_destroy from bindings/actor.yaml, do not edit */
+/* out_destroyed may be NULL. */
 TSC_API tsc_status_t tsc_actor_destroy(tsc_actor_t *actor, int32_t *out_destroyed);
+/* END GENERATED actor_destroy */
 /* Checked downcast. TSC_TYPE_ERROR if the actor is not a vehicle. */
 TSC_API tsc_status_t tsc_actor_as_vehicle(tsc_actor_t *actor, tsc_vehicle_t **out_vehicle);
 
@@ -306,9 +317,11 @@ TSC_API tsc_status_t tsc_actor_as_vehicle(tsc_actor_t *actor, tsc_vehicle_t **ou
 /* Vehicle                                                                  */
 /* ------------------------------------------------------------------------ */
 
+/* BEGIN GENERATED vehicle_control from bindings/vehicle.yaml, do not edit */
 TSC_API tsc_status_t tsc_vehicle_apply_control(tsc_vehicle_t *vehicle,
                                                const tsc_vehicle_control_t *control);
 TSC_API tsc_status_t tsc_vehicle_get_control(tsc_vehicle_t *vehicle, tsc_vehicle_control_t *out);
+/* END GENERATED vehicle_control */
 /* BEGIN GENERATED vehicle from bindings/vehicle.yaml, do not edit */
 TSC_API tsc_status_t tsc_vehicle_set_autopilot(tsc_vehicle_t *vehicle, int32_t enabled,
                                                uint16_t tm_port);
@@ -318,25 +331,30 @@ TSC_API tsc_status_t tsc_vehicle_set_autopilot(tsc_vehicle_t *vehicle, int32_t e
 /* Blueprints                                                               */
 /* ------------------------------------------------------------------------ */
 
+/* BEGIN GENERATED blueprint_library_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_blueprint_library_size(const tsc_blueprint_library_t *library);
-TSC_API tsc_status_t tsc_blueprint_library_get(const tsc_blueprint_library_t *library,
-                                               size_t index, tsc_actor_blueprint_t **out);
+TSC_API tsc_status_t tsc_blueprint_library_get(const tsc_blueprint_library_t *library, size_t index,
+                                               tsc_actor_blueprint_t **out);
+/* END GENERATED blueprint_library_items */
 /* TSC_NOT_FOUND if no blueprint has this id. */
 TSC_API tsc_status_t tsc_blueprint_library_find(const tsc_blueprint_library_t *library,
                                                 const char *id, size_t id_len,
                                                 tsc_actor_blueprint_t **out);
+/* BEGIN GENERATED blueprint_library from bindings/blueprint_library.yaml, do not edit */
 TSC_API tsc_status_t tsc_blueprint_library_filter(const tsc_blueprint_library_t *library,
                                                   const char *pattern, size_t pattern_len,
                                                   tsc_blueprint_library_t **out);
+/* END GENERATED blueprint_library */
 
+/* BEGIN GENERATED actor_blueprint from bindings/actor_blueprint.yaml, do not edit */
 TSC_API tsc_status_t tsc_actor_blueprint_get_id(const tsc_actor_blueprint_t *blueprint,
                                                 tsc_string_t *out);
 TSC_API tsc_status_t tsc_actor_blueprint_has_tag(const tsc_actor_blueprint_t *blueprint,
-                                                 const char *tag, size_t tag_len,
-                                                 int32_t *out_has);
+                                                 const char *tag, size_t tag_len, int32_t *out_has);
 TSC_API tsc_status_t tsc_actor_blueprint_has_attribute(const tsc_actor_blueprint_t *blueprint,
                                                        const char *id, size_t id_len,
                                                        int32_t *out_has);
+/* END GENERATED actor_blueprint */
 /* TSC_NOT_FOUND if the blueprint has no such attribute. */
 TSC_API tsc_status_t tsc_actor_blueprint_get_attribute(const tsc_actor_blueprint_t *blueprint,
                                                        const char *id, size_t id_len,
@@ -383,16 +401,21 @@ typedef struct {
   tsc_vector3d_t acceleration;
 } tsc_actor_snapshot_t;
 
+/* BEGIN GENERATED world_snapshots from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_snapshot(tsc_world_t *world, tsc_world_snapshot_t **out);
 TSC_API tsc_status_t tsc_world_wait_for_tick(tsc_world_t *world, double timeout_seconds,
                                              tsc_world_snapshot_t **out);
-TSC_API tsc_status_t tsc_world_snapshot_get_id(const tsc_world_snapshot_t *s, uint64_t *out);
-TSC_API tsc_status_t tsc_world_snapshot_get_timestamp(const tsc_world_snapshot_t *s,
+/* END GENERATED world_snapshots */
+/* BEGIN GENERATED world_snapshot from bindings/world_snapshot.yaml, do not edit */
+TSC_API tsc_status_t tsc_world_snapshot_get_id(const tsc_world_snapshot_t *snapshot, uint64_t *out);
+TSC_API tsc_status_t tsc_world_snapshot_get_timestamp(const tsc_world_snapshot_t *snapshot,
                                                       tsc_timestamp_t *out);
-TSC_API size_t tsc_world_snapshot_size(const tsc_world_snapshot_t *s);
-/* By position, 0 <= index < size. */
-TSC_API tsc_status_t tsc_world_snapshot_get(const tsc_world_snapshot_t *s, size_t index,
+/* END GENERATED world_snapshot */
+/* BEGIN GENERATED world_snapshot_items from bindings/lists.yaml, do not edit */
+TSC_API size_t tsc_world_snapshot_size(const tsc_world_snapshot_t *snapshot);
+TSC_API tsc_status_t tsc_world_snapshot_get(const tsc_world_snapshot_t *snapshot, size_t index,
                                             tsc_actor_snapshot_t *out);
+/* END GENERATED world_snapshot_items */
 /* TSC_NOT_FOUND if the actor is not in the snapshot. */
 TSC_API tsc_status_t tsc_world_snapshot_find(const tsc_world_snapshot_t *s, uint32_t actor_id,
                                              tsc_actor_snapshot_t *out);
@@ -403,18 +426,22 @@ typedef struct tsc_map tsc_map_t;
 typedef struct tsc_waypoint tsc_waypoint_t;
 typedef struct tsc_waypoint_list tsc_waypoint_list_t;
 
+/* BEGIN GENERATED world_map from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_map(tsc_world_t *world, tsc_map_t **out);
+/* END GENERATED world_map */
+/* BEGIN GENERATED map_core from bindings/map.yaml, do not edit */
 TSC_API tsc_status_t tsc_map_get_name(const tsc_map_t *map, tsc_string_t *out);
 TSC_API tsc_status_t tsc_map_to_opendrive(const tsc_map_t *map, tsc_string_t *out);
 /* Two-call pattern: pass out=NULL to get the count. Copies min(capacity, n). */
-TSC_API tsc_status_t tsc_map_get_spawn_points(const tsc_map_t *map, tsc_transform_t *out,
-                                              size_t capacity, size_t *out_count);
+TSC_API tsc_status_t tsc_map_get_spawn_points(
+    const tsc_map_t *map, tsc_transform_t *out, size_t capacity, size_t *out_count);
 /* *out = NULL (TSC_OK) when no waypoint matches. lane_type: CARLA LaneType bits. */
 TSC_API tsc_status_t tsc_map_get_waypoint(const tsc_map_t *map, const tsc_location_t *location,
                                           int32_t project_to_road, int32_t lane_type,
                                           tsc_waypoint_t **out);
 TSC_API tsc_status_t tsc_map_generate_waypoints(const tsc_map_t *map, double distance,
                                                 tsc_waypoint_list_t **out);
+/* END GENERATED map_core */
 
 typedef struct {
   uint64_t id;
@@ -430,18 +457,22 @@ typedef struct {
 } tsc_waypoint_info_t;
 
 TSC_API tsc_status_t tsc_waypoint_get_info(const tsc_waypoint_t *wp, tsc_waypoint_info_t *out);
-TSC_API tsc_status_t tsc_waypoint_next(const tsc_waypoint_t *wp, double distance,
+/* BEGIN GENERATED waypoint_navigation from bindings/waypoint.yaml, do not edit */
+TSC_API tsc_status_t tsc_waypoint_next(const tsc_waypoint_t *waypoint, double distance,
                                        tsc_waypoint_list_t **out);
-TSC_API tsc_status_t tsc_waypoint_previous(const tsc_waypoint_t *wp, double distance,
+TSC_API tsc_status_t tsc_waypoint_previous(const tsc_waypoint_t *waypoint, double distance,
                                            tsc_waypoint_list_t **out);
-TSC_API tsc_status_t tsc_waypoint_next_until_lane_end(const tsc_waypoint_t *wp, double distance,
-                                                      tsc_waypoint_list_t **out);
-TSC_API tsc_status_t tsc_waypoint_previous_until_lane_start(const tsc_waypoint_t *wp,
+TSC_API tsc_status_t tsc_waypoint_next_until_lane_end(const tsc_waypoint_t *waypoint,
+                                                      double distance, tsc_waypoint_list_t **out);
+TSC_API tsc_status_t tsc_waypoint_previous_until_lane_start(const tsc_waypoint_t *waypoint,
                                                             double distance,
                                                             tsc_waypoint_list_t **out);
+/* END GENERATED waypoint_navigation */
+/* BEGIN GENERATED waypoint_list_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_waypoint_list_size(const tsc_waypoint_list_t *list);
 TSC_API tsc_status_t tsc_waypoint_list_get(const tsc_waypoint_list_t *list, size_t index,
                                            tsc_waypoint_t **out);
+/* END GENERATED waypoint_list_items */
 
 /* --- Physics control ------------------------------------------------------ */
 
@@ -543,8 +574,10 @@ typedef struct {
 /* A snapshot of one vehicle's physics control (one RPC), owned by the caller. */
 typedef struct tsc_physics_control tsc_physics_control_t;
 
+/* BEGIN GENERATED vehicle_physics from bindings/vehicle.yaml, do not edit */
 TSC_API tsc_status_t tsc_vehicle_get_physics_control(tsc_vehicle_t *vehicle,
                                                      tsc_physics_control_t **out);
+/* END GENERATED vehicle_physics */
 /* Fills *out from the snapshot; its arrays borrow from `control`. */
 TSC_API tsc_status_t tsc_physics_control_view(const tsc_physics_control_t *control,
                                               tsc_vehicle_physics_control_t *out);
@@ -656,7 +689,9 @@ TSC_API tsc_status_t tsc_actor_as_sensor(tsc_actor_t *actor, tsc_sensor_t **out_
 TSC_API tsc_status_t tsc_sensor_listen(tsc_sensor_t *sensor, size_t queue_capacity);
 /* Idempotent. */
 TSC_API tsc_status_t tsc_sensor_stop(tsc_sensor_t *sensor);
+/* BEGIN GENERATED sensor from bindings/sensor.yaml, do not edit */
 TSC_API tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out);
+/* END GENERATED sensor */
 /* Number of measurements dropped because the queue was full. */
 TSC_API tsc_status_t tsc_sensor_dropped_count(tsc_sensor_t *sensor, uint64_t *out);
 /* Number of measurements currently queued (ABI 2.1). More may arrive at any
@@ -849,6 +884,7 @@ typedef struct tsc_walker_ai_controller tsc_walker_ai_controller_t; /* also an a
 typedef struct tsc_traffic_light tsc_traffic_light_t;     /* also an actor */
 typedef struct tsc_traffic_manager tsc_traffic_manager_t;
 typedef struct tsc_landmark_list tsc_landmark_list_t;
+typedef struct tsc_landmark_handle tsc_landmark_handle_t; /* one landmark */
 typedef struct tsc_junction tsc_junction_t;
 
 /* --- More actor operations ----------------------------------------------- */
@@ -882,9 +918,11 @@ TSC_API tsc_status_t tsc_vehicle_get_speed_limit(tsc_vehicle_t *vehicle, double 
 TSC_API tsc_status_t tsc_vehicle_get_traffic_light_state(tsc_vehicle_t *vehicle, int32_t *out);
 TSC_API tsc_status_t tsc_vehicle_is_at_traffic_light(tsc_vehicle_t *vehicle, int32_t *out);
 /* END GENERATED vehicle_lights */
+/* BEGIN GENERATED vehicle_traffic_light from bindings/vehicle.yaml, do not edit */
 /* *out = NULL (TSC_OK) when the vehicle is not affected by a traffic light. */
 TSC_API tsc_status_t tsc_vehicle_get_traffic_light(tsc_vehicle_t *vehicle,
                                                    tsc_traffic_light_t **out);
+/* END GENERATED vehicle_traffic_light */
 
 typedef enum {
   TSC_TRAFFIC_LIGHT_RED = 0,
@@ -925,9 +963,11 @@ typedef struct {
   int32_t reserved0;
 } tsc_walker_control_t;
 
+/* BEGIN GENERATED walker_control from bindings/walker.yaml, do not edit */
 TSC_API tsc_status_t tsc_walker_apply_control(tsc_walker_t *walker,
                                               const tsc_walker_control_t *control);
 TSC_API tsc_status_t tsc_walker_get_control(tsc_walker_t *walker, tsc_walker_control_t *out);
+/* END GENERATED walker_control */
 /* BEGIN GENERATED walker_ai_controller from bindings/walker_ai_controller.yaml, do not edit */
 TSC_API tsc_status_t tsc_walker_ai_controller_start(tsc_walker_ai_controller_t *controller);
 TSC_API tsc_status_t tsc_walker_ai_controller_stop(tsc_walker_ai_controller_t *controller);
@@ -936,10 +976,11 @@ TSC_API tsc_status_t tsc_walker_ai_controller_go_to_location(tsc_walker_ai_contr
 TSC_API tsc_status_t tsc_walker_ai_controller_set_max_speed(tsc_walker_ai_controller_t *controller,
                                                             double max_speed);
 /* END GENERATED walker_ai_controller */
+/* BEGIN GENERATED world_navigation from bindings/world.yaml, do not edit */
 /* *out_found = 0 when the navigation mesh yields no location. */
-TSC_API tsc_status_t tsc_world_get_random_location_from_navigation(tsc_world_t *world,
-                                                                   tsc_location_t *out,
-                                                                   int32_t *out_found);
+TSC_API tsc_status_t tsc_world_get_random_location_from_navigation(
+    tsc_world_t *world, tsc_location_t *out, int32_t *out_found);
+/* END GENERATED world_navigation */
 
 /* --- Weather -------------------------------------------------------------- */
 
@@ -960,10 +1001,12 @@ typedef struct {
   double dust_storm;
 } tsc_weather_t;
 
+/* BEGIN GENERATED world_weather from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_weather(tsc_world_t *world, tsc_weather_t *out);
 TSC_API tsc_status_t tsc_world_set_weather(tsc_world_t *world, const tsc_weather_t *weather);
 /* Whether the server simulates weather (when not, set_weather has no effect). */
 TSC_API tsc_status_t tsc_world_is_weather_enabled(tsc_world_t *world, int32_t *out);
+/* END GENERATED world_weather */
 /* LibCarla's named presets ("ClearNoon", "HardRainNoon", ...); TSC_NOT_FOUND otherwise. */
 TSC_API tsc_status_t tsc_weather_preset(const char *name, size_t name_len, tsc_weather_t *out);
 
@@ -975,6 +1018,7 @@ typedef struct {
   uint8_t r, g, b, a;
 } tsc_color_t;
 
+/* BEGIN GENERATED debug_draw from bindings/debug.yaml, do not edit */
 TSC_API tsc_status_t tsc_debug_draw_point(tsc_world_t *world, const tsc_location_t *location,
                                           double size, const tsc_color_t *color, double life_time);
 TSC_API tsc_status_t tsc_debug_draw_line(tsc_world_t *world, const tsc_location_t *begin,
@@ -982,38 +1026,40 @@ TSC_API tsc_status_t tsc_debug_draw_line(tsc_world_t *world, const tsc_location_
                                          const tsc_color_t *color, double life_time);
 TSC_API tsc_status_t tsc_debug_draw_arrow(tsc_world_t *world, const tsc_location_t *begin,
                                           const tsc_location_t *end, double thickness,
-                                          double arrow_size, const tsc_color_t *color, double life_time);
+                                          double arrow_size, const tsc_color_t *color,
+                                          double life_time);
 TSC_API tsc_status_t tsc_debug_draw_box(tsc_world_t *world, const tsc_bounding_box_t *box,
                                         const tsc_rotation_t *rotation, double thickness,
                                         const tsc_color_t *color, double life_time);
 TSC_API tsc_status_t tsc_debug_draw_string(tsc_world_t *world, const tsc_location_t *location,
                                            const char *text, size_t text_len, int32_t draw_shadow,
                                            const tsc_color_t *color, double life_time);
+/* END GENERATED debug_draw */
 
 /* --- Recorder ---------------------------------------------------------------- */
 
-/* All return the server's text output in *out (free with tsc_string_free). */
-TSC_API tsc_status_t tsc_client_start_recorder(tsc_client_t *client, const char *name,
-                                               size_t name_len, int32_t additional_data,
-                                               tsc_string_t *out);
+/* BEGIN GENERATED client_recorder from bindings/client.yaml, do not edit */
+/* The recorder functions return the server's text output in *out (tsc_string_free). */
+TSC_API tsc_status_t tsc_client_start_recorder(tsc_client_t *client,
+                                               const char *name, size_t name_len,
+                                               int32_t additional_data, tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_stop_recorder(tsc_client_t *client);
-TSC_API tsc_status_t tsc_client_show_recorder_file_info(tsc_client_t *client, const char *name,
-                                                        size_t name_len, int32_t show_all,
-                                                        tsc_string_t *out);
-TSC_API tsc_status_t tsc_client_show_recorder_collisions(tsc_client_t *client, const char *name,
-                                                         size_t name_len, char type1, char type2,
-                                                         tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_show_recorder_file_info(tsc_client_t *client,
+                                                        const char *name, size_t name_len,
+                                                        int32_t show_all, tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_show_recorder_collisions(tsc_client_t *client,
+                                                         const char *name, size_t name_len,
+                                                         char type1, char type2, tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_show_recorder_actors_blocked(tsc_client_t *client,
                                                              const char *name, size_t name_len,
-                                                             double min_time,
-                                                             double min_distance,
+                                                             double min_time, double min_distance,
                                                              tsc_string_t *out);
-TSC_API tsc_status_t tsc_client_replay_file(tsc_client_t *client, const char *name,
-                                            size_t name_len, double start, double duration,
-                                            uint32_t follow_id, int32_t replay_sensors,
-                                            tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_replay_file(tsc_client_t *client, const char *name, size_t name_len,
+                                            double start, double duration, uint32_t follow_id,
+                                            int32_t replay_sensors, tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_stop_replayer(tsc_client_t *client, int32_t keep_actors);
 TSC_API tsc_status_t tsc_client_set_replayer_time_factor(tsc_client_t *client, double factor);
+/* END GENERATED client_recorder */
 
 /* --- OpenDRIVE worlds ---------------------------------------------------------- */
 
@@ -1028,18 +1074,21 @@ typedef struct {
   int32_t reserved0;
 } tsc_opendrive_parameters_t;
 
+/* BEGIN GENERATED client_opendrive from bindings/client.yaml, do not edit */
 TSC_API tsc_status_t tsc_client_generate_opendrive_world(
     tsc_client_t *client, const char *opendrive, size_t opendrive_len,
     const tsc_opendrive_parameters_t *parameters, int32_t reset_settings, tsc_world_t **out);
+/* END GENERATED client_opendrive */
 
 /* --- Map queries ------------------------------------------------------------------ */
 
-/* Topology: pairs (begin, end) of the road network's lane segments, as a
- * waypoint list of 2 * pair_count entries [b0, e0, b1, e1, ...]. */
+/* BEGIN GENERATED map_topology from bindings/map.yaml, do not edit */
+/* Lane segments (begin, end) as a waypoint list [b0, e0, b1, e1, ...]. */
 TSC_API tsc_status_t tsc_map_get_topology(const tsc_map_t *map, tsc_waypoint_list_t **out);
 /* Two-call pattern, like tsc_map_get_spawn_points. */
-TSC_API tsc_status_t tsc_map_get_crosswalks(const tsc_map_t *map, tsc_location_t *out,
-                                            size_t capacity, size_t *out_count);
+TSC_API tsc_status_t tsc_map_get_crosswalks(
+    const tsc_map_t *map, tsc_location_t *out, size_t capacity, size_t *out_count);
+/* END GENERATED map_topology */
 
 typedef struct {
   tsc_string_t id;
@@ -1063,21 +1112,33 @@ typedef struct {
 
 /* Frees the landmark's strings. */
 TSC_API void tsc_landmark_free(tsc_landmark_t *landmark);
+/* BEGIN GENERATED map_landmarks from bindings/map.yaml, do not edit */
 TSC_API tsc_status_t tsc_map_get_all_landmarks(const tsc_map_t *map, tsc_landmark_list_t **out);
-TSC_API tsc_status_t tsc_map_get_landmarks_of_type(const tsc_map_t *map, const char *type,
-                                                   size_t type_len, tsc_landmark_list_t **out);
+TSC_API tsc_status_t tsc_map_get_landmarks_of_type(const tsc_map_t *map,
+                                                   const char *type, size_t type_len,
+                                                   tsc_landmark_list_t **out);
+/* END GENERATED map_landmarks */
+/* BEGIN GENERATED landmark_list_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_landmark_list_size(const tsc_landmark_list_t *list);
 TSC_API tsc_status_t tsc_landmark_list_get(const tsc_landmark_list_t *list, size_t index,
                                            tsc_landmark_t *out);
+TSC_API tsc_status_t tsc_landmark_list_get_landmark(const tsc_landmark_list_t *list, size_t index,
+                                                    tsc_landmark_handle_t **out);
+/* END GENERATED landmark_list_items */
 
+/* BEGIN GENERATED waypoint_junction from bindings/waypoint.yaml, do not edit */
 /* *out = NULL (TSC_OK) when the waypoint is not in a junction. */
-TSC_API tsc_status_t tsc_waypoint_get_junction(const tsc_waypoint_t *wp, tsc_junction_t **out);
-TSC_API tsc_status_t tsc_junction_get_id(const tsc_junction_t *j, int32_t *out);
-TSC_API tsc_status_t tsc_junction_get_bounding_box(const tsc_junction_t *j,
+TSC_API tsc_status_t tsc_waypoint_get_junction(const tsc_waypoint_t *waypoint,
+                                               tsc_junction_t **out);
+/* END GENERATED waypoint_junction */
+/* BEGIN GENERATED junction from bindings/junction.yaml, do not edit */
+TSC_API tsc_status_t tsc_junction_get_id(const tsc_junction_t *junction, int32_t *out);
+TSC_API tsc_status_t tsc_junction_get_bounding_box(const tsc_junction_t *junction,
                                                    tsc_bounding_box_t *out);
 /* Pairs (entry, exit) as a waypoint list [b0, e0, b1, e1, ...]. */
-TSC_API tsc_status_t tsc_junction_get_waypoints(const tsc_junction_t *j, int32_t lane_type,
+TSC_API tsc_status_t tsc_junction_get_waypoints(const tsc_junction_t *junction, int32_t lane_type,
                                                 tsc_waypoint_list_t **out);
+/* END GENERATED junction */
 
 /* --- Lane markings (shared with #24 (LaneInvasionEvent)) ------------------------------ */
 
@@ -1102,7 +1163,6 @@ TSC_API tsc_status_t tsc_lane_invasion_event_get_crossed_lane_markings(
 
 /* --- Issue #22: geo-reference, XODR waypoints, landmarks, traffic light geometry --- */
 
-typedef struct tsc_landmark_handle tsc_landmark_handle_t; /* one landmark */
 typedef struct tsc_traffic_light_list tsc_traffic_light_list_t;
 
 typedef struct {
@@ -1167,10 +1227,6 @@ TSC_API tsc_status_t tsc_map_geolocation_to_transform(const tsc_map_t *map,
  * TSC_ERROR when the file cannot be written. */
 TSC_API tsc_status_t tsc_map_save_to_disk(const tsc_map_t *map, const char *path, size_t path_len);
 
-/* One landmark of a list as a handle (waypoint, lane validities, groups). */
-TSC_API tsc_status_t tsc_landmark_list_get_landmark(const tsc_landmark_list_t *list, size_t index,
-                                                    tsc_landmark_handle_t **out);
-
 typedef struct {
   int32_t from_lane;
   int32_t to_lane;
@@ -1218,9 +1274,11 @@ TSC_API tsc_status_t tsc_waypoint_get_landmarks_of_type(const tsc_waypoint_t *wa
 
 /* Traffic light geometry. The waypoint and light lists skip null entries
  * (LibCarla returns them for lanes or actors that do not exist). */
+/* BEGIN GENERATED traffic_light_list_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_traffic_light_list_size(const tsc_traffic_light_list_t *list);
 TSC_API tsc_status_t tsc_traffic_light_list_get(const tsc_traffic_light_list_t *list, size_t index,
                                                 tsc_traffic_light_t **out);
+/* END GENERATED traffic_light_list_items */
 /* BEGIN GENERATED traffic_light_geometry from bindings/traffic_light.yaml, do not edit */
 TSC_API tsc_status_t tsc_traffic_light_get_opendrive_id(tsc_traffic_light_t *light,
                                                         tsc_string_t *out);
@@ -1239,8 +1297,10 @@ TSC_API tsc_status_t tsc_traffic_light_get_group_traffic_lights(tsc_traffic_ligh
 
 /* --- Traffic Manager ---------------------------------------------------------------- */
 
+/* BEGIN GENERATED client_traffic_manager from bindings/client.yaml, do not edit */
 TSC_API tsc_status_t tsc_client_get_traffic_manager(tsc_client_t *client, uint16_t port,
                                                     tsc_traffic_manager_t **out);
+/* END GENERATED client_traffic_manager */
 /* BEGIN GENERATED traffic_manager from bindings/traffic_manager.yaml, do not edit */
 TSC_API tsc_status_t tsc_traffic_manager_get_port(tsc_traffic_manager_t *tm, uint16_t *out);
 TSC_API tsc_status_t tsc_traffic_manager_set_synchronous_mode(tsc_traffic_manager_t *tm,
@@ -1462,8 +1522,10 @@ typedef struct {
   tsc_transform_t transform; /* relative to the parent bone */
 } tsc_bone_transform_t;
 
-TSC_API tsc_status_t tsc_walker_set_bones(tsc_walker_t *walker, const tsc_bone_transform_t *bones,
-                                          size_t count);
+/* BEGIN GENERATED walker_bones from bindings/walker.yaml, do not edit */
+TSC_API tsc_status_t tsc_walker_set_bones(tsc_walker_t *walker,
+                                          const tsc_bone_transform_t *bones, size_t count);
+/* END GENERATED walker_bones */
 
 /* carla.bone_transform_out: one entry of WalkerBoneControlOut. */
 typedef struct {
@@ -1475,11 +1537,14 @@ typedef struct {
 
 /* The result of one Walker::GetBonesTransform RPC (TSC_KIND_BONE_LIST). */
 typedef struct tsc_bone_list tsc_bone_list_t;
+/* BEGIN GENERATED walker_bone_list from bindings/walker.yaml, do not edit */
 TSC_API tsc_status_t tsc_walker_get_bones(tsc_walker_t *walker, tsc_bone_list_t **out);
+/* END GENERATED walker_bone_list */
+/* BEGIN GENERATED bone_list_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_bone_list_size(const tsc_bone_list_t *list);
-/* TSC_NOT_FOUND when index >= size. */
 TSC_API tsc_status_t tsc_bone_list_get(const tsc_bone_list_t *list, size_t index,
                                        tsc_bone_transform_out_t *out);
+/* END GENERATED bone_list_items */
 
 /* ------------------------------------------------------------------------ */
 /* Issue #23: Client, Traffic Manager, blueprint, debug and value-type gaps  */
@@ -1580,10 +1645,12 @@ TSC_API void tsc_road_options_free(uint8_t *road_options);
 
 /* --- Blueprints ------------------------------------------------------------------ */
 
+/* BEGIN GENERATED blueprint_library_attributes from bindings/blueprint_library.yaml, do not edit */
 /* Blueprints whose attribute `name` has `value` (or recommends it). */
 TSC_API tsc_status_t tsc_blueprint_library_filter_by_attribute(
-    const tsc_blueprint_library_t *library, const char *name, size_t name_len, const char *value,
-    size_t value_len, tsc_blueprint_library_t **out);
+    const tsc_blueprint_library_t *library, const char *name, size_t name_len,
+    const char *value, size_t value_len, tsc_blueprint_library_t **out);
+/* END GENERATED blueprint_library_attributes */
 /* BEGIN GENERATED actor_blueprint_tags from bindings/blueprint.yaml, do not edit */
 TSC_API tsc_status_t tsc_actor_blueprint_get_tags(tsc_actor_blueprint_t *blueprint,
                                                   tsc_string_list_t *out);
@@ -1624,12 +1691,12 @@ TSC_API tsc_status_t tsc_world_apply_settings_ext(tsc_world_t *world,
 
 /* --- Geometry ---------------------------------------------------------------------- */
 
-/* LibCarla's Transform::GetMatrix / GetInverseMatrix: 16 doubles, row major.
- * The rotation convention is the linked LibCarla's (its sign on pitch and roll
- * differs between CARLA 0.10.0 and ue5-dev). */
+/* BEGIN GENERATED transform from bindings/transform.yaml, do not edit */
+/* 16 doubles, row major, in the linked LibCarla's rotation convention. */
 TSC_API tsc_status_t tsc_transform_get_matrix(const tsc_transform_t *transform, double *out16);
 TSC_API tsc_status_t tsc_transform_get_inverse_matrix(const tsc_transform_t *transform,
                                                       double *out16);
+/* END GENERATED transform */
 
 /* ------------------------------------------------------------------------ */
 /* Issue #19: actor state, attributes, parent, tags, physics at a location,  */

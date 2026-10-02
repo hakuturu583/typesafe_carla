@@ -38,15 +38,6 @@ void light_list_assign(tsc_light_list_t *out, const std::vector<carla::client::L
   });
 }
 
-tsc_traffic_light *make_traffic_light_handle(const carla::SharedPtr<carla::client::Actor> &actor) {
-  auto light = downcast<carla::client::TrafficLight>(actor);
-  return light == nullptr ? nullptr : new tsc_traffic_light(std::move(light));
-}
-
-tsc_light_manager *make_light_manager_handle(carla::SharedPtr<carla::client::LightManager> m) {
-  return m == nullptr ? nullptr : new tsc_light_manager(std::move(m));
-}
-
 std::vector<carla::SharedPtr<carla::client::TrafficLight>> traffic_lights_of(
     const std::vector<carla::SharedPtr<carla::client::Actor>> &actors) {
   std::vector<carla::SharedPtr<carla::client::TrafficLight>> lights;

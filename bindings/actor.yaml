@@ -3,6 +3,11 @@ class: carla::client::Actor
 prefix: actor
 self: {type: tsc_actor_t, name: actor, get: actor_of}
 blocks:
+  actor_destroy:
+    destroy:
+      call: Destroy
+      out: {type: nullable_bool, name: out_destroyed}
+      doc: "out_destroyed may be NULL."
   actor:
     get_id: {call: GetId, out: {type: uint32, name: out_id}}
     get_type_id: {call: GetTypeId, out: string}

@@ -64,18 +64,13 @@ endif()
 # ---------------------------------------------------------------------------
 add_library(typesafe_carla_ffi SHARED
   native/src/actor.cpp
-  native/src/actor_ext.cpp
-  native/src/actor_more.cpp
   native/src/batch.cpp
   native/src/blueprint.cpp
   native/src/client.cpp
-  native/src/client_ext.cpp
   native/src/error.cpp
   native/src/geo.cpp
   native/src/handle.cpp
   native/src/map.cpp
-  native/src/map_ext.cpp
-  native/src/map_road.cpp
   native/src/sensor.cpp
   native/src/sensor_image.cpp
   native/src/snapshot.cpp
@@ -83,8 +78,6 @@ add_library(typesafe_carla_ffi SHARED
   native/src/vehicle.cpp
   native/src/walker.cpp
   native/src/world.cpp
-  native/src/world_ext.cpp
-  native/src/geometry.cpp
   native/src/world_queries.cpp
   native/src/light_manager.cpp
   native/src/shared_types.cpp

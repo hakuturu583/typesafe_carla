@@ -1,41 +1,15 @@
+// World: the hand-written part (not-found errors naming the id, settings
+// read-modify-write, weather presets). The rest is
+// generated (bindings/world.yaml, debug.yaml).
 #include "internal.hpp"
 
+#include <array>
+#include <utility>
+
 using namespace tsc;
-
-namespace {
-
-carla::client::Actor *parent_of(tsc_actor_t *parent) {
-  return parent == nullptr ? nullptr : check_actor(parent, "parent")->actor.get();
-}
-
-// Shared body of spawn_actor / try_spawn_actor. TrySpawnActor returns NULL
-// when the spot is occupied; SpawnActor failing that way is an error.
-tsc_actor_t *spawn(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
-                   const tsc_transform_t *transform, tsc_actor_t *parent, bool try_spawn) {
-  auto &w = world_of(world);
-  const auto &bp = check_handle(blueprint, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
-  const auto t = to_carla(*require_ptr(transform, "transform"));
-  auto actor = try_spawn ? w.TrySpawnActor(bp, t, parent_of(parent))
-                         : w.SpawnActor(bp, t, parent_of(parent));
-  if (actor == nullptr && !try_spawn) fail(TSC_ERROR, "spawn failed for " + bp.GetId());
-  return make_actor_handle(actor);
-}
-
-}  // namespace
+using carla::rpc::WeatherParameters;
 
 extern "C" {
-
-tsc_status_t tsc_world_get_id(tsc_world_t *world, uint64_t *out_id) {
-  return TSC_GUARD({ *require_ptr(out_id, "out_id") = world_of(world).GetId(); });
-}
-
-tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_list) {
-  return TSC_GUARD({
-    require_ptr(out_list, "out_list");
-    *out_list = nullptr;
-    *out_list = new tsc_actor_list(world_of(world).GetActors());
-  });
-}
 
 tsc_status_t tsc_world_get_actor(tsc_world_t *world, uint32_t actor_id, tsc_actor_t **out_actor) {
   return TSC_GUARD({
@@ -44,42 +18,6 @@ tsc_status_t tsc_world_get_actor(tsc_world_t *world, uint32_t actor_id, tsc_acto
     auto actor = world_of(world).GetActor(actor_id);
     if (actor == nullptr) fail(TSC_NOT_FOUND, "no actor with id " + std::to_string(actor_id));
     *out_actor = make_actor_handle(actor);
-  });
-}
-
-tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
-                                             tsc_blueprint_library_t **out_library) {
-  return TSC_GUARD({
-    require_ptr(out_library, "out_library");
-    *out_library = nullptr;
-    *out_library = new tsc_blueprint_library(world_of(world).GetBlueprintLibrary());
-  });
-}
-
-tsc_status_t tsc_world_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
-                                   const tsc_transform_t *transform, tsc_actor_t *parent,
-                                   tsc_actor_t **out_actor) {
-  return TSC_GUARD({
-    require_ptr(out_actor, "out_actor");
-    *out_actor = nullptr;
-    *out_actor = spawn(world, blueprint, transform, parent, false);
-  });
-}
-
-tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
-                                       const tsc_transform_t *transform, tsc_actor_t *parent,
-                                       tsc_actor_t **out_actor) {
-  return TSC_GUARD({
-    require_ptr(out_actor, "out_actor");
-    *out_actor = nullptr;
-    *out_actor = spawn(world, blueprint, transform, parent, true);
-  });
-}
-
-tsc_status_t tsc_world_tick(tsc_world_t *world, double timeout_seconds, uint64_t *out_frame) {
-  return TSC_GUARD({
-    require_ptr(out_frame, "out_frame");
-    *out_frame = world_of(world).Tick(seconds_to_duration(timeout_seconds));
   });
 }
 
@@ -154,33 +92,42 @@ tsc_status_t tsc_world_apply_settings_ext(tsc_world_t *world, const tsc_world_se
   });
 }
 
-// ---------------------------------------------------------------------------
-// Actor list
-// ---------------------------------------------------------------------------
-
-size_t tsc_actor_list_size(const tsc_actor_list_t *list) {
-  if (list == nullptr || list->kind != TSC_KIND_ACTOR_LIST) return 0;
-  return list->list->size();
-}
-
-tsc_status_t tsc_actor_list_get(const tsc_actor_list_t *list, size_t index,
-                                tsc_actor_t **out_actor) {
+tsc_status_t tsc_weather_preset(const char *name, size_t name_len, tsc_weather_t *out) {
   return TSC_GUARD({
-    require_ptr(out_actor, "out_actor");
-    *out_actor = nullptr;
-    const auto &l = check_handle(list, "list", TSC_KIND_ACTOR_LIST)->list;
-    check_index(index, l->size(), "actor list");
-    *out_actor = make_actor_handle(l->at(index));
-  });
-}
-
-tsc_status_t tsc_actor_list_filter(const tsc_actor_list_t *list, const char *pattern,
-                                   size_t pattern_len, tsc_actor_list_t **out_list) {
-  return TSC_GUARD({
-    require_ptr(out_list, "out_list");
-    *out_list = nullptr;
-    const auto &l = check_handle(list, "list", TSC_KIND_ACTOR_LIST)->list;
-    *out_list = new tsc_actor_list(l->Filter(to_string(pattern, pattern_len, "pattern")));
+    require_ptr(out, "out");
+    const std::string key = to_string(name, name_len, "name");
+    static const std::array<std::pair<const char *, const WeatherParameters *>, 23> presets{{
+        {"Default", &WeatherParameters::Default},
+        {"ClearNoon", &WeatherParameters::ClearNoon},
+        {"CloudyNoon", &WeatherParameters::CloudyNoon},
+        {"WetNoon", &WeatherParameters::WetNoon},
+        {"WetCloudyNoon", &WeatherParameters::WetCloudyNoon},
+        {"MidRainyNoon", &WeatherParameters::MidRainyNoon},
+        {"HardRainNoon", &WeatherParameters::HardRainNoon},
+        {"SoftRainNoon", &WeatherParameters::SoftRainNoon},
+        {"ClearSunset", &WeatherParameters::ClearSunset},
+        {"CloudySunset", &WeatherParameters::CloudySunset},
+        {"WetSunset", &WeatherParameters::WetSunset},
+        {"WetCloudySunset", &WeatherParameters::WetCloudySunset},
+        {"MidRainSunset", &WeatherParameters::MidRainSunset},
+        {"HardRainSunset", &WeatherParameters::HardRainSunset},
+        {"SoftRainSunset", &WeatherParameters::SoftRainSunset},
+        {"ClearNight", &WeatherParameters::ClearNight},
+        {"CloudyNight", &WeatherParameters::CloudyNight},
+        {"WetNight", &WeatherParameters::WetNight},
+        {"WetCloudyNight", &WeatherParameters::WetCloudyNight},
+        {"SoftRainNight", &WeatherParameters::SoftRainNight},
+        {"MidRainyNight", &WeatherParameters::MidRainyNight},
+        {"HardRainNight", &WeatherParameters::HardRainNight},
+        {"DustStorm", &WeatherParameters::DustStorm},
+    }};
+    for (const auto &preset : presets) {
+      if (key == preset.first) {
+        *out = from_carla(*preset.second);
+        return;
+      }
+    }
+    fail(TSC_NOT_FOUND, "no weather preset named '" + key + "'");
   });
 }
 

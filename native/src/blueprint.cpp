@@ -15,62 +15,15 @@ void require_attribute(const carla::client::ActorBlueprint &bp, const std::strin
 
 extern "C" {
 
-size_t tsc_blueprint_library_size(const tsc_blueprint_library_t *library) {
-  if (library == nullptr || library->kind != TSC_KIND_BLUEPRINT_LIBRARY) return 0;
-  return library->library->size();
-}
-
-tsc_status_t tsc_blueprint_library_get(const tsc_blueprint_library_t *library, size_t index,
-                                       tsc_actor_blueprint_t **out) {
-  return TSC_GUARD({
-    require_ptr(out, "out");
-    *out = nullptr;
-    const auto &l = library_of(library);
-    check_index(index, l->size(), "blueprint library");
-    *out = new tsc_actor_blueprint(l->at(index));
-  });
-}
-
 tsc_status_t tsc_blueprint_library_find(const tsc_blueprint_library_t *library, const char *id,
                                         size_t id_len, tsc_actor_blueprint_t **out) {
   return TSC_GUARD({
     require_ptr(out, "out");
     *out = nullptr;
     const std::string key = to_string(id, id_len, "id");
-    const carla::client::ActorBlueprint *bp = library_of(library)->Find(key);
+    const carla::client::ActorBlueprint *bp = blueprint_library_of(library).Find(key);
     if (bp == nullptr) fail(TSC_NOT_FOUND, "no blueprint with id '" + key + "'");
     *out = new tsc_actor_blueprint(*bp);
-  });
-}
-
-tsc_status_t tsc_blueprint_library_filter(const tsc_blueprint_library_t *library,
-                                          const char *pattern, size_t pattern_len,
-                                          tsc_blueprint_library_t **out) {
-  return TSC_GUARD({
-    require_ptr(out, "out");
-    *out = nullptr;
-    *out = new tsc_blueprint_library(
-        library_of(library)->Filter(to_string(pattern, pattern_len, "pattern")));
-  });
-}
-
-tsc_status_t tsc_actor_blueprint_get_id(const tsc_actor_blueprint_t *blueprint, tsc_string_t *out) {
-  return TSC_GUARD({ string_assign(out, blueprint_of(blueprint).GetId()); });
-}
-
-tsc_status_t tsc_actor_blueprint_has_tag(const tsc_actor_blueprint_t *blueprint, const char *tag,
-                                         size_t tag_len, int32_t *out_has) {
-  return TSC_GUARD({
-    require_ptr(out_has, "out_has");
-    *out_has = blueprint_of(blueprint).ContainsTag(to_string(tag, tag_len, "tag")) ? 1 : 0;
-  });
-}
-
-tsc_status_t tsc_actor_blueprint_has_attribute(const tsc_actor_blueprint_t *blueprint,
-                                               const char *id, size_t id_len, int32_t *out_has) {
-  return TSC_GUARD({
-    require_ptr(out_has, "out_has");
-    *out_has = blueprint_of(blueprint).ContainsAttribute(to_string(id, id_len, "id")) ? 1 : 0;
   });
 }
 
@@ -113,15 +66,5 @@ tsc_status_t tsc_actor_blueprint_set_attribute(tsc_actor_blueprint_t *blueprint,
 }
 
 // --- Issue #23 -------------------------------------------------------------------
-
-tsc_status_t tsc_blueprint_library_filter_by_attribute(const tsc_blueprint_library_t *library,
-                                                       const char *name, size_t name_len,
-                                                       const char *value, size_t value_len,
-                                                       tsc_blueprint_library_t **out) {
-  return new_handle(__func__, out, [&] {
-    return new tsc_blueprint_library(library_of(library)->FilterByAttribute(
-        to_string(name, name_len, "name"), to_string(value, value_len, "value")));
-  });
-}
 
 }  // extern "C"

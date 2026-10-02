@@ -1,0 +1,8 @@
+# ActorList operations: tsc_actor_list_<name>. The accessors are
+# hand-written (native/src/world.cpp).
+class: carla::client::ActorList
+prefix: actor_list
+self: {type: const tsc_actor_list_t, name: list, get: actor_list_of}
+blocks:
+  actor_list:
+    filter: {call: Filter, args: {pattern: string_in}, out: {type: actor_list_handle, name: out_list}}

@@ -60,6 +60,12 @@ sensor data handle and fails with `TSC_TYPE_ERROR` unless it holds an
 `ObstacleDetectionEvent`. `self.type` is pasted into the C signature as
 written, so it may be `const`-qualified (`const tsc_sensor_data_t` there).
 
+`self` may also be a value struct passed by pointer rather than a handle
+(issue #31): `transform.yaml` binds `carla::geom::Transform` with
+`self: {type: const tsc_transform_t, name: transform, get: transform_of,
+codon: "Ptr[CTransform]"}`. `transform_of` checks the pointer and converts the
+value; `self.codon` is the self parameter's Codon type (default `cobj`).
+
 A function has:
 - `call`: the LibCarla method;
 - `args`: name to type, in order (optional);
@@ -100,7 +106,7 @@ Two kinds of types in `types.yaml` go beyond a single value (issue #22):
 - **Handle outputs.** An output type with `handle: true` creates a new handle
   from the LibCarla result: its `from_carla` is the expression, e.g.
   `"new tsc_landmark_list(without_nulls({}))"` for a list, or
-  `"waypoint_or_null({})"` for an optional object (NULL means "none"). The C
+  `"new_or_null<tsc_waypoint>({})"` for an optional object (NULL means "none"). The C
   function returns it through `T **out`, and the body runs inside
   `new_handle`, so `*out` is NULL whenever the call fails:
 
@@ -114,7 +120,8 @@ Two kinds of types in `types.yaml` go beyond a single value (issue #22):
   tsc_status_t tsc_map_get_waypoint_xodr(const tsc_map_t *map, uint32_t road_id, int32_t lane_id,
                                          double s, tsc_waypoint_t **out) {
     return new_handle(__func__, out, [&] {
-      return waypoint_or_null(map_of(map).GetWaypointXODR(road_id, lane_id, check_finite(s, "s")));
+      return new_or_null<tsc_waypoint>(
+          map_of(map).GetWaypointXODR(road_id, lane_id, check_finite(s, "s")));
     });
   }
   ```
@@ -149,8 +156,50 @@ Two kinds of types in `types.yaml` go beyond a single value (issue #22):
   `{name}`), so a function can have at most one buffer or optional output:
   two would declare the same C parameter twice.
 
-A handle *input* (`handle: true` without `from_carla`, e.g. `vehicle`,
-`landmark`) converts with `to_carla` as before.
+### Outputs are checked before the call
+
+A NULL output must fail before LibCarla is called: `tsc_world_tick(w, 1.0,
+NULL)` must not tick. C++17 evaluates the right side of `=` first, so the
+generated code never writes `*require_ptr(out, "out") = call`:
+- a plain output goes through `assign_out(out, "out", [&] { return ...; })`
+  (`internal.hpp`): it checks `out`, runs the call, and zeroes `*out` if the
+  call fails, so a caller never sees (or frees) stale data;
+- an `assign` output first checks the C parameters listed in the type's
+  `require` (default `["{out}"]`, or none with `c_param`; a buffer requires
+  `["{out}_count"]`, since its `out` may be NULL to only count);
+- a handle output goes through `new_handle` (`*out` is NULL on failure).
+
+`test_generated` passes valid outputs next to the NULL handle, so the handle
+check is what it tests; `test_ffi` checks the NULL-output cases.
+
+A handle *input* (`handle: true` with `to_carla`, e.g. `vehicle`, `landmark`)
+converts with `to_carla` as before. A handle type's `codon` defaults to `cobj`,
+and an output's `from_carla` to a new handle of the result (`c: tsc_world_t`:
+`new tsc_world({})`).
+
+### List accessors
+
+`bindings/lists.yaml` gives one line per list handle. Each entry generates
+`size_t tsc_<list>_size` (0 for NULL or another kind of handle) and one element
+getter per output type, which fails with TSC_NOT_FOUND past the end
+(`list_at` in `internal.hpp`). `items` must be an lvalue (a member of the
+handle): a getter's result may refer into it, and `list_at` rejects a
+temporary at compile time. `items` and `what` are required:
+
+```yaml
+waypoint_list: {items: "{}->waypoints", what: waypoint list, get: waypoint_handle}
+```
+```cpp
+tsc_status_t tsc_waypoint_list_get(const tsc_waypoint_list_t *list, size_t index,
+                                   tsc_waypoint_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint(non_null(list_at(check_handle(list, "list", TSC_KIND_WAYPOINT_LIST)
+                                                 ->waypoints, index, "waypoint list"), "waypoint"));
+  });
+}
+```
+
+They call no LibCarla method, so `validate` and `coverage` skip them.
 
 A call that differs between LibCarla versions names a `carla_compat.hpp`
 helper with `via`; the function then calls `via(self, args...)`, and
@@ -232,6 +281,22 @@ If the new C function is a handle check, conversions and a single LibCarla call:
    `uv run python -m tools.bindgen validate --build-dir build`.
 3. Write the Codon wrapper and the tests as for any new API (see CLAUDE.md).
 
-Anything more involved stays hand-written in `native/src/*.cpp`. That includes
-structs with many fields, list accessors, callbacks, and calls that differ
-between LibCarla versions in more than which method exists.
+Validation and conversions belong in the type, not in a hand-written
+function: a struct input converts and validates in its `to_carla` overload
+(`vehicle_control`, `walker_control`, `opendrive_parameters`), a checked
+scalar names a `check_*` helper (`positive`, `timeout`), and
+an output the caller may omit is `nullable_bool` (`store_if`).
+
+Anything more involved stays hand-written in `native/src/*.cpp` (issue #31
+reviewed every remaining function):
+- callbacks and queues (sensor listen/poll, World.on_tick);
+- zero-copy views of measurements and physics controls;
+- converters and file writers (image conversion, PNG / PLY / OpenDRIVE files);
+- several LibCarla calls combined into one struct or result (waypoint and
+  traffic light info, settings, telemetry, load_world_if_different, the
+  Traffic Manager actions, geo projections);
+- all-or-nothing validation of many values (batches, light manager setters,
+  physics control);
+- handle conversions (`tsc_actor_as_*`), handle lifetime, errors and versions;
+- lookups whose not-found error names the argument (`tsc_world_get_actor`,
+  `tsc_blueprint_library_find`, `tsc_world_snapshot_find`).

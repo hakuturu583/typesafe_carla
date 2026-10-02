@@ -14,6 +14,8 @@
 #              invalid then list one value per C parameter.
 #   assign     an output written by a statement instead of `*out = ...`
 #              (`{out}` is the output name)
+#   require    for `assign`: the C parameters checked non-NULL before the
+#              call; default ["{out}"], or [] with c_param
 #   cpp        regexes, one of which the canonical LibCarla parameter or
 #              return type must match (checked with libclang)
 
@@ -78,6 +80,7 @@ bounding_box:
   c: tsc_bounding_box_t
   struct: true
   codon: CBoundingBox
+  to_carla: "to_carla({})"
   from_carla: "from_carla({})"
   cpp: ["carla::geom::BoundingBox"]
 string:
@@ -106,7 +109,6 @@ traffic_light_state:
 vehicle:
   c: tsc_vehicle_t
   handle: true
-  codon: cobj
   to_carla: 'vehicle_ptr({}, "{name}")'
   cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]
 # --- #22 ---
@@ -145,32 +147,27 @@ lane_change:
 landmark:
   c: const tsc_landmark_handle_t
   handle: true
-  codon: cobj
   to_carla: 'landmark_of({}, "{name}")'
   cpp: ["carla::client::Landmark"]
 # Handle outputs: from_carla makes the new handle (NULL: no such object).
 waypoint_or_null:
   c: tsc_waypoint_t
   handle: true
-  codon: cobj
-  from_carla: "waypoint_or_null({})"
+  from_carla: "new_or_null<tsc_waypoint>({})"
   cpp: ["(boost|std)::shared_ptr<carla::client::Waypoint>"]
 waypoint_list:
   c: tsc_waypoint_list_t
   handle: true
-  codon: cobj
   from_carla: "new tsc_waypoint_list(without_nulls({}))"
   cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Waypoint>.*>"]
 landmark_list:
   c: tsc_landmark_list_t
   handle: true
-  codon: cobj
   from_carla: "new tsc_landmark_list(without_nulls({}))"
   cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Landmark>.*>"]
 traffic_light_list:
   c: tsc_traffic_light_list_t
   handle: true
-  codon: cobj
   from_carla: "new tsc_traffic_light_list(without_nulls({}))"
   cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::TrafficLight>.*>"]
 # Output buffers, two-call pattern: fills up to `capacity` values and reports
@@ -180,6 +177,7 @@ bounding_box_buffer:
   c_param: "tsc_bounding_box_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[CBoundingBox], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<carla::geom::BoundingBox.*>"]
 lane_validity_buffer:
@@ -187,6 +185,7 @@ lane_validity_buffer:
   c_param: "tsc_lane_validity_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[CLaneValidity], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<carla::road::LaneValidity.*>"]
 # An optional lane marking: *has_value = 0 (and *out zeroed) when there is none.
@@ -195,6 +194,7 @@ optional_lane_marking:
   c_param: "int32_t *has_value, tsc_lane_marking_t *{name}"
   codon: "Ptr[i32], Ptr[CLaneMarking]"
   assign: "assign_optional({}, has_value, {out})"
+  require: [has_value, "{out}"]
   invalid: "NULL, NULL"
   cpp: ["(boost|std)::optional<carla::road::element::LaneMarking>"]
 # --- #20 ---
@@ -237,6 +237,7 @@ transform_buffer:
   c_param: "tsc_transform_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[CTransform], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<carla::geom::Transform.*>"]
 # --- #23 ---
@@ -244,7 +245,6 @@ transform_buffer:
 actor:
   c: tsc_actor_t
   handle: true
-  codon: cobj
   to_carla: 'check_actor({}, "{name}")->actor'
   cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]
 # Arrays: (pointer, count). NULL is accepted for count 0.
@@ -289,7 +289,6 @@ actor_state:
 actor_handle:
   c: tsc_actor_t
   handle: true
-  codon: cobj
   from_carla: "make_actor_handle({})"
   cpp: ["std::shared_ptr<carla::client::Actor>"]
 # tsc_material_parameter_t; out-of-range values are rejected.
@@ -326,6 +325,7 @@ uint8_buffer:
   c_param: "uint8_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[u8], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<unsigned char.*>"]
 # --- #21 ---
@@ -353,7 +353,6 @@ light_group:
 waypoint:
   c: const tsc_waypoint_t
   handle: true
-  codon: cobj
   to_carla: "waypoint_of({})"
   cpp: ["carla::client::Waypoint"]
 # Arrays: (pointer, count). NULL is accepted for count 0.
@@ -376,21 +375,18 @@ name_list:
 traffic_light_handle:
   c: tsc_traffic_light_t
   handle: true
-  codon: cobj
   from_carla: "make_traffic_light_handle({})"
-  cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]
+  cpp: ["(boost|std)::shared_ptr<carla::client::(Actor|TrafficLight)>"]
 light_manager_handle:
   c: tsc_light_manager_t
   handle: true
-  codon: cobj
-  from_carla: "make_light_manager_handle({})"
+  from_carla: "new_or_null<tsc_light_manager>({})"
   cpp: ["(boost|std)::shared_ptr<carla::client::LightManager>"]
 # World returns traffic lights as plain actors: a tsc_traffic_light_list of
 # those that are traffic lights.
 actor_traffic_light_list:
   c: tsc_traffic_light_list_t
   handle: true
-  codon: cobj
   from_carla: "new tsc_traffic_light_list(traffic_lights_of({}))"
   cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Actor>.*>"]
 # Lists the caller frees with tsc_<type>_free.
@@ -430,6 +426,7 @@ optional_labelled_point:
   c_param: "int32_t *has_value, tsc_labelled_point_t *{name}"
   codon: "Ptr[i32], Ptr[CLabelledPoint]"
   assign: "assign_optional({}, has_value, {out})"
+  require: [has_value, "{out}"]
   invalid: "NULL, NULL"
   cpp: ["(boost|std)::optional<carla::rpc::LabelledPoint>"]
 # --- #24 ---
@@ -439,5 +436,206 @@ lane_marking_buffer:
   c_param: "tsc_lane_marking_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[CLaneMarking], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<carla::road::element::LaneMarking.*>"]
+# --- #31 ---
+# A timeout in seconds: finite, in [0, 1e9] (seconds_to_duration).
+timeout:
+  c: double
+  codon: float
+  to_carla: "seconds_to_duration({})"
+  from_carla: "duration_seconds({})"
+  invalid: NAN
+  cpp: ["carla::time_duration"]
+# A finite float > 0.
+positive:
+  c: double
+  codon: float
+  to_carla: 'check_positive({}, "{name}")'
+  invalid: NAN
+  cpp: ["double"]
+# A C char (recorder actor types: 'a', 'h', 'v', ...).
+char:
+  c: char
+  codon: byte
+  cpp: ["char"]
+# An input string that must not be empty (see string_in).
+nonempty_string_in:
+  c: const char *
+  c_param: "const char *{name}, size_t {name}_len"
+  codon: "cobj, int"
+  to_carla: 'to_nonempty_string({name}, {name}_len, "{name}")'
+  invalid: "NULL, 0"
+  cpp: ["std::(__cxx11::)?basic_string<char.*>"]
+opendrive_parameters:
+  c: tsc_opendrive_parameters_t
+  struct: true
+  codon: COpendriveParameters
+  to_carla: "to_carla({})"
+  cpp: ["carla::rpc::OpendriveGenerationParameters"]
+rotation:
+  c: tsc_rotation_t
+  struct: true
+  codon: CRotation
+  to_carla: "to_carla({})"
+  from_carla: "from_carla({})"
+  cpp: ["carla::geom::Rotation"]
+color:
+  c: tsc_color_t
+  struct: true
+  codon: CColor
+  to_carla: "to_carla({})"
+  cpp: ["carla::sensor::data::Color"]
+weather:
+  c: tsc_weather_t
+  struct: true
+  codon: CWeather
+  to_carla: "to_carla({})"
+  from_carla: "from_carla({})"
+  cpp: ["carla::rpc::WeatherParameters"]
+timestamp:
+  c: tsc_timestamp_t
+  struct: true
+  codon: CTimestamp
+  from_carla: "from_carla({})"
+  cpp: ["carla::client::Timestamp"]
+# Validated: throttle and brake in [0, 1], steer in [-1, 1].
+vehicle_control:
+  c: tsc_vehicle_control_t
+  struct: true
+  codon: CVehicleControl
+  to_carla: "to_carla({})"
+  from_carla: "from_carla({})"
+  cpp: ["carla::rpc::VehicleControl"]
+# Validated: finite direction, finite non-negative speed.
+walker_control:
+  c: tsc_walker_control_t
+  struct: true
+  codon: CWalkerControl
+  to_carla: "to_carla({})"
+  from_carla: "from_carla({})"
+  cpp: ["carla::rpc::WalkerControl"]
+# CARLA LaneType bit flags.
+lane_type:
+  c: int32_t
+  codon: i32
+  to_carla: "static_cast<carla::road::Lane::LaneType>({})"
+  cpp: ["carla::road::Lane::LaneType"]
+# An actor blueprint handle argument.
+blueprint:
+  c: const tsc_actor_blueprint_t
+  handle: true
+  to_carla: "blueprint_of({})"
+  cpp: ["carla::client::ActorBlueprint"]
+# An actor handle, or NULL for none (a spawn's parent).
+nullable_actor:
+  c: tsc_actor_t
+  handle: true
+  to_carla: 'actor_or_null({}, "{name}")'
+  cpp: ["carla::client::Actor \\*"]
+# Bones to set: (pointer, count) of named transforms, all finite.
+bone_transforms:
+  c: tsc_bone_transform_t
+  c_param: "const tsc_bone_transform_t *{name}, size_t count"
+  codon: "Ptr[CBoneTransform], int"
+  to_carla: 'to_bone_control({name}, count, "{name}")'
+  invalid: "NULL, 1"
+  cpp: ["carla::rpc::WalkerBoneControlIn"]
+# An output flag the caller may omit (NULL).
+nullable_bool:
+  c: int32_t
+  codon: i32
+  assign: "store_if({out}, {} ? 1 : 0)"
+  require: []
+  cpp: ["bool"]
+# An optional location: *{name}_found = 0 (and *out zeroed) when there is none.
+optional_location:
+  c: tsc_location_t
+  c_param: "tsc_location_t *{name}, int32_t *{name}_found"
+  codon: "Ptr[CVector3D], Ptr[i32]"
+  assign: 'assign_optional({}, {out}_found, {out}, "{out}_found")'
+  require: ["{out}_found", "{out}"]
+  invalid: "NULL, NULL"
+  cpp: ["(boost|std)::optional<carla::geom::Location>"]
+# Output buffer of locations, two-call pattern (see bounding_box_buffer).
+location_buffer:
+  c: tsc_location_t
+  c_param: "tsc_location_t *{name}, size_t capacity, size_t *{name}_count"
+  codon: "Ptr[CVector3D], int, Ptr[int]"
+  assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
+  invalid: "NULL, 0, NULL"
+  cpp: ["std::vector<carla::geom::Location.*>"]
+# A 4x4 matrix as 16 doubles, row major (Transform::GetMatrix).
+matrix4x4:
+  c: double
+  c_param: "double *{name}"
+  codon: "Ptr[float]"
+  assign: "copy_matrix({}, {out})"
+  require: ["{out}"]
+  invalid: "NULL"
+  cpp: ["std::array<float, 16>"]
+# Handle outputs: a new handle of the result.
+world_handle:
+  c: tsc_world_t
+  handle: true
+  cpp: ["carla::client::World"]
+map_handle:
+  c: tsc_map_t
+  handle: true
+  cpp: ["(boost|std)::shared_ptr<carla::client::Map>"]
+world_snapshot_handle:
+  c: tsc_world_snapshot_t
+  handle: true
+  cpp: ["carla::client::WorldSnapshot"]
+actor_list_handle:
+  c: tsc_actor_list_t
+  handle: true
+  cpp: ["(boost|std)::shared_ptr<carla::client::ActorList>"]
+blueprint_library_handle:
+  c: tsc_blueprint_library_t
+  handle: true
+  cpp: ["(boost|std)::shared_ptr<carla::client::BlueprintLibrary>"]
+traffic_manager_handle:
+  c: tsc_traffic_manager_t
+  handle: true
+  cpp: ["carla::traffic_manager::TrafficManager"]
+physics_control_handle:
+  c: tsc_physics_control_t
+  handle: true
+  cpp: ["carla::rpc::VehiclePhysicsControl"]
+bone_list_handle:
+  c: tsc_bone_list_t
+  handle: true
+  from_carla: "new tsc_bone_list({}.bone_transforms)"
+  cpp: ["carla::rpc::WalkerBoneControlOut"]
+# The spawned actor; LibCarla never returns NULL here (TSC_ERROR if it did).
+spawned_actor:
+  c: tsc_actor_t
+  handle: true
+  from_carla: "make_actor_handle(spawned({}))"
+  cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]
+junction_or_null:
+  c: tsc_junction_t
+  handle: true
+  from_carla: "new_or_null<tsc_junction>({})"
+  cpp: ["(boost|std)::shared_ptr<carla::client::Junction>"]
+# Pairs (begin, end) as one list [b0, e0, b1, e1, ...].
+waypoint_pair_list:
+  c: tsc_waypoint_list_t
+  handle: true
+  from_carla: "new tsc_waypoint_list(flatten({}))"
+  cpp: ["std::vector<std::pair<(boost|std)::shared_ptr<carla::client::Waypoint>.*"]
+# List elements (bindings/lists.yaml).
+index: {c: size_t, codon: int, cpp: ["unsigned long", "size_t"]}
+blueprint_handle: {c: tsc_actor_blueprint_t, handle: true}
+# A list element LibCarla should never have left NULL (TSC_ERROR if it did).
+waypoint_handle: {c: tsc_waypoint_t, handle: true, from_carla: 'new tsc_waypoint(non_null({}, "waypoint"))'}
+landmark_handle:
+  c: tsc_landmark_handle_t
+  handle: true
+  from_carla: 'new tsc_landmark_handle(non_null({}, "landmark"))'
+landmark_info: {c: tsc_landmark_t, struct: true, codon: CLandmark, from_carla: "from_carla(*{})"}
+bone_transform: {c: tsc_bone_transform_out_t, struct: true, codon: CBoneTransformOut, from_carla: "from_carla({})"}
+actor_snapshot: {c: tsc_actor_snapshot_t, struct: true, codon: CActorSnapshot}

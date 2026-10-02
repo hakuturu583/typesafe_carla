@@ -1,5 +1,6 @@
-# ActorBlueprint operations: tsc_actor_blueprint_<name>. The older ones
-# (id, attributes) and BlueprintLibrary are hand-written (native/src/blueprint.cpp).
+# ActorBlueprint operations on a non-const handle: tsc_actor_blueprint_<name>
+# (actor_blueprint.yaml has the const ones). Attributes are hand-written
+# (native/src/blueprint.cpp).
 class: carla::client::ActorBlueprint
 prefix: actor_blueprint
 self: {type: tsc_actor_blueprint_t, name: blueprint, get: blueprint_of}

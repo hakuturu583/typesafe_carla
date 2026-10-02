@@ -49,26 +49,34 @@ def header_block(functions: list[Function]) -> list[str]:
     for f in functions:
         if f.doc:
             lines.append(f"/* {f.doc} */")
-        lines.append(signature("TSC_API tsc_status_t ", f.name, f.c_params(), ";"))
+        lines.append(signature(f"TSC_API {f.ret} ", f.name, f.c_params(), ";"))
     return lines
 
 
+CODON_RESULT = {"tsc_status_t": "i32", "size_t": "int"}
+
+
 def codon_block(functions: list[Function]) -> list[str]:
-    return [f"from C import LIB.{f.name}({', '.join(f.codon_params())}) -> i32" for f in functions]
+    return [f"from C import LIB.{f.name}({', '.join(f.codon_params())}) -> {CODON_RESULT[f.ret]}"
+            for f in functions]
 
 
 def shim(spec: Spec) -> str:
     lines = [f"// {NOTICE}", f"// Regenerate with: {REGENERATE}", '#include "../internal.hpp"', "",
              "using namespace tsc;", "", 'extern "C" {']
     current = None
-    for f in spec.functions:
+    for f in spec.generated():
         if f.spec_file != current:
             current = f.spec_file
-            lines += ["", f"// bindings/{f.spec_file}: {f.cpp_class}"]
+            lines += ["", f"// bindings/{f.spec_file}" + (f": {f.cpp_class}" if f.cpp_class else "")]
         lines.append("")
-        lines.append(signature("tsc_status_t ", f.name, f.c_params(), " {"))
+        lines.append(signature(f"{f.ret} ", f.name, f.c_params(), " {"))
+        if f.ret != "tsc_status_t":  # a list size: plain statements, no error
+            lines += [f"  {line}" for line in f.body().split("\n")] + ["}"]
+            continue
         if f.out and f.out.type.handle:  # *out is NULL unless the new handle is made
-            head, tail = f"return new_handle(__func__, {f.out.name}, [&] {{", "});"
+            name = "" if f.out.name == "out" else f', "{f.out.name}"'
+            head, tail = f"return new_handle(__func__, {f.out.name}, [&] {{", f"}}{name});"
         else:
             head, tail = "return TSC_GUARD({", "});"
         one = f"  {head} {f.body()} {tail}"
@@ -81,11 +89,26 @@ def shim(spec: Spec) -> str:
     return "\n".join(lines)
 
 
+def _valid_out(t) -> str:
+    """C arguments for an output that pass its checks: one zeroed element per
+    pointer parameter, 0 for a capacity."""
+    if t.handle:
+        return f"({t.c} *[1]){{NULL}}"
+    if not t.c_param_template:
+        return f"({t.c}[1]){{0}}"
+    values = []
+    for param in t.c_param_template.split(","):
+        ctype = param.strip().rsplit(" ", 1)[0] if "*" not in param else param.split("*")[0]
+        ctype = ctype.replace("const ", "").strip()
+        values.append(f"({ctype}[1]){{0}}" if "*" in param else "0")
+    return ", ".join(values)
+
+
 def null_handle_test(spec: Spec) -> str:
     """A C test: every generated function rejects a NULL handle."""
     lines = [f"/* {NOTICE}", " * Every generated function rejects a NULL handle with TSC_INVALID_ARGUMENT",
              " * before looking at its other arguments, which are all invalid here (NULL",
-             " * pointers, NaN, out-of-range values). */", '#include "typesafe_carla/ffi.h"', "",
+             " * pointers, NaN, out-of-range values); the outputs are valid. */", '#include "typesafe_carla/ffi.h"', "",
              "#include <math.h>", "#include <stdio.h>", "#include <string.h>", "", "static int g_failures = 0;", "",
              "static void expect_null_rejected(tsc_status_t status, const char *function) {",
              "  if (status != TSC_INVALID_ARGUMENT ||",
@@ -93,16 +116,18 @@ def null_handle_test(spec: Spec) -> str:
              '    fprintf(stderr, "%s: NULL handle not rejected (status %d: %s)\\n", function, (int)status,',
              "            tsc_last_error_message());", "    ++g_failures;", "  }", "}", "",
              "int main(void) {"]
-    for f in spec.functions:
+    for f in spec.generated():
+        if f.ret != "tsc_status_t":  # a list size is 0 for a NULL handle
+            lines.append(f'  if ({f.name}(NULL) != 0) {{ fputs("{f.name}(NULL)\\n", stderr); '
+                         '++g_failures; }')
+            continue
         call = ["NULL"] + ["NULL" if a.type.struct or a.type.handle else a.type.invalid
                            for a in f.args]
-        if f.out and f.out.type.handle:  # a valid out, so the NULL handle is what fails
-            call.append(f"({f.out.type.c} *[1]){{NULL}}")
-        elif f.out:
-            call.append(f.out.type.invalid if f.out.type.c_param_template else "NULL")
+        if f.out:  # valid outputs, so the NULL handle is what fails
+            call.append(_valid_out(f.out.type))
         lines.append(f'  expect_null_rejected({f.name}({", ".join(call)}), "{f.name}");')
     lines += ["  if (g_failures != 0) return 1;",
-              f'  printf("test_generated: {len(spec.functions)} generated functions reject NULL handles\\n");',
+              f'  printf("test_generated: {len(spec.generated())} generated functions reject NULL handles\\n");',
               "  return 0;", "}", ""]
     return "\n".join(lines)
 

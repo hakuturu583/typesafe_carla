@@ -1,0 +1,8 @@
+# Sensor operations: tsc_sensor_<name>. Listening and the queue are
+# hand-written (native/src/sensor.cpp).
+class: carla::client::Sensor
+prefix: sensor
+self: {type: tsc_sensor_t, name: sensor, get: sensor_of}
+blocks:
+  sensor:
+    is_listening: {call: IsListening, out: bool}

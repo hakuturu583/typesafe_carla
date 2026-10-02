@@ -138,34 +138,6 @@ tsc_physics_control::tsc_physics_control(const carla::rpc::VehiclePhysicsControl
 
 extern "C" {
 
-tsc_status_t tsc_vehicle_apply_control(tsc_vehicle_t *vehicle,
-                                       const tsc_vehicle_control_t *control) {
-  return TSC_GUARD({
-    vehicle_of(vehicle).ApplyControl(to_carla(*require_ptr(control, "control")));
-  });
-}
-
-tsc_status_t tsc_vehicle_get_control(tsc_vehicle_t *vehicle, tsc_vehicle_control_t *out) {
-  return TSC_GUARD({
-    require_ptr(out, "out");
-    const carla::rpc::VehicleControl c = vehicle_of(vehicle).GetControl();
-    out->throttle = c.throttle;
-    out->steer = c.steer;
-    out->brake = c.brake;
-    out->hand_brake = c.hand_brake ? 1 : 0;
-    out->reverse = c.reverse ? 1 : 0;
-    out->manual_gear_shift = c.manual_gear_shift ? 1 : 0;
-    out->gear = c.gear;
-  });
-}
-
-tsc_status_t tsc_vehicle_get_physics_control(tsc_vehicle_t *vehicle,
-                                             tsc_physics_control_t **out) {
-  return new_handle(__func__, out, [&] {
-    return new tsc_physics_control(vehicle_of(vehicle).GetPhysicsControl());
-  });
-}
-
 tsc_status_t tsc_physics_control_view(const tsc_physics_control_t *control,
                                       tsc_vehicle_physics_control_t *out) {
   return TSC_GUARD({

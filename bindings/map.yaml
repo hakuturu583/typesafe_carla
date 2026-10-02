@@ -1,8 +1,39 @@
-# Map operations: tsc_map_<name> (issue #22).
+# Map operations: tsc_map_<name>.
 class: carla::client::Map
 prefix: map
 self: {type: const tsc_map_t, name: map, get: map_of}
 blocks:
+  map_core:
+    get_name: {call: GetName, out: string}
+    to_opendrive: {call: GetOpenDrive, out: string}
+    get_spawn_points:
+      call: GetRecommendedSpawnPoints
+      out: transform_buffer
+      doc: "Two-call pattern: pass out=NULL to get the count. Copies min(capacity, n)."
+    get_waypoint:
+      call: GetWaypoint
+      args: {location: location, project_to_road: bool, lane_type: int32}
+      out: waypoint_or_null
+      doc: "*out = NULL (TSC_OK) when no waypoint matches. lane_type: CARLA LaneType bits."
+    generate_waypoints:
+      call: GenerateWaypoints
+      args: {distance: positive}
+      out: waypoint_list
+  map_topology:
+    get_topology:
+      call: GetTopology
+      out: waypoint_pair_list
+      doc: "Lane segments (begin, end) as a waypoint list [b0, e0, b1, e1, ...]."
+    get_crosswalks:
+      call: GetAllCrosswalkZones
+      out: location_buffer
+      doc: "Two-call pattern, like tsc_map_get_spawn_points."
+  map_landmarks:
+    get_all_landmarks: {call: GetAllLandmarks, out: landmark_list}
+    get_landmarks_of_type:
+      call: GetAllLandmarksOfType
+      args: {type: string_in}
+      out: landmark_list
   map:
     get_georeference: {call: GetGeoReference, out: geo_location}
     get_waypoint_xodr:

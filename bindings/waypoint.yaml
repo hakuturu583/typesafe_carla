@@ -1,8 +1,24 @@
-# Waypoint operations: tsc_waypoint_<name> (issue #22).
+# Waypoint operations: tsc_waypoint_<name>.
 class: carla::client::Waypoint
 prefix: waypoint
 self: {type: const tsc_waypoint_t, name: waypoint, get: waypoint_of}
 blocks:
+  waypoint_navigation:
+    next: {call: GetNext, args: {distance: positive}, out: waypoint_list}
+    previous: {call: GetPrevious, args: {distance: positive}, out: waypoint_list}
+    next_until_lane_end:
+      call: GetNextUntilLaneEnd
+      args: {distance: positive}
+      out: waypoint_list
+    previous_until_lane_start:
+      call: GetPreviousUntilLaneStart
+      args: {distance: positive}
+      out: waypoint_list
+  waypoint_junction:
+    get_junction:
+      call: GetJunction
+      out: junction_or_null
+      doc: "*out = NULL (TSC_OK) when the waypoint is not in a junction."
   waypoint:
     get_left_lane:
       call: GetLeft

@@ -1,8 +1,48 @@
-# World operations (issue #21): tsc_world_<name>.
+# World operations: tsc_world_<name>.
 class: carla::client::World
 prefix: world
 self: {type: tsc_world_t, name: world, get: world_of}
 blocks:
+  world_core:
+    get_id: {call: GetId, out: {type: uint64, name: out_id}}
+    get_actors: {call: GetActors, out: {type: actor_list_handle, name: out_list}}
+    get_blueprint_library:
+      call: GetBlueprintLibrary
+      out: {type: blueprint_library_handle, name: out_library}
+    spawn_actor:
+      call: SpawnActor
+      args: {blueprint: blueprint, transform: transform, parent: nullable_actor}
+      out: {type: spawned_actor, name: out_actor}
+      doc: "parent may be NULL."
+    try_spawn_actor:
+      call: TrySpawnActor
+      args: {blueprint: blueprint, transform: transform, parent: nullable_actor}
+      out: {type: actor_handle, name: out_actor}
+      doc: "TSC_OK with *out_actor == NULL when the spawn location is occupied."
+    tick:
+      call: Tick
+      args: {timeout_seconds: timeout}
+      out: {type: uint64, name: out_frame}
+  world_snapshots:
+    get_snapshot: {call: GetSnapshot, out: world_snapshot_handle}
+    wait_for_tick:
+      call: WaitForTick
+      args: {timeout_seconds: timeout}
+      out: world_snapshot_handle
+  world_map:
+    get_map: {call: GetMap, out: map_handle}
+  world_navigation:
+    get_random_location_from_navigation:
+      call: GetRandomLocationFromNavigation
+      out: optional_location
+      doc: "*out_found = 0 when the navigation mesh yields no location."
+  world_weather:
+    get_weather: {call: GetWeather, out: weather}
+    set_weather: {call: SetWeather, args: {weather: weather}}
+    is_weather_enabled:
+      call: IsWeatherEnabled
+      out: bool
+      doc: "Whether the server simulates weather (when not, set_weather has no effect)."
   world:
     get_spectator: {call: GetSpectator, out: actor_handle}
     get_traffic_light_from_opendrive_id:
