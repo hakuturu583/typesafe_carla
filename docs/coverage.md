@@ -8,7 +8,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**234 of 326 methods bound (71%), 101 of them generated.**
+**246 of 326 methods bound (75%), 112 of them generated.**
 
 | class | bound |
 |---|---|
@@ -18,11 +18,12 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `carla::client::Waypoint` | 18 / 22 |
 | `carla::client::Junction` | 3 / 3 |
 | `carla::client::Landmark` | 23 / 23 |
-| `carla::client::Actor` | 20 / 37 |
+| `carla::client::Actor` | 32 / 37 |
 | `carla::client::Vehicle` | 23 / 23 |
 | `carla::client::Walker` | 8 / 8 |
 | `carla::client::WalkerAIController` | 4 / 5 |
-| `carla::client::TrafficLight` | 19 / 20 |
+| `carla::client::TrafficSign` | 1 / 2 |
+| `carla::client::TrafficLight` | 18 / 18 |
 | `carla::client::Sensor` | 3 / 3 |
 | `carla::client::BlueprintLibrary` | 5 / 10 |
 | `carla::client::ActorBlueprint` | 8 / 11 |
@@ -212,33 +213,33 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `AddForce` | generated |
 | `AddImpulse` | generated |
 | `AddTorque` | generated |
-| `ApplyTexture` | — |
+| `ApplyTexture` | generated |
 | `Destroy` | hand-written |
-| `DisableConstantVelocity` | — |
-| `EnableConstantVelocity` | — |
+| `DisableConstantVelocity` | generated |
+| `EnableConstantVelocity` | generated |
 | `GetAcceleration` | generated |
-| `GetActorClassName` | — |
-| `GetActorName` | — |
-| `GetActorState` | — |
+| `GetActorClassName` | generated |
+| `GetActorName` | generated |
+| `GetActorState` | generated |
 | `GetAngularVelocity` | generated |
-| `GetAttributes` | — |
+| `GetAttributes` | hand-written |
 | `GetBoundingBox` | generated |
 | `GetDisplayId` | — |
 | `GetId` | generated |
 | `GetLocation` | generated |
-| `GetParent` | — |
+| `GetParent` | generated |
 | `GetParentId` | — |
-| `GetSemanticTags` | — |
+| `GetSemanticTags` | generated |
 | `GetTransform` | generated |
 | `GetTypeId` | generated |
 | `GetVelocity` | generated |
 | `GetWorld` | — |
-| `IsActive` | — |
+| `IsActive` | generated |
 | `IsAlive` | generated |
-| `IsDormant` | — |
+| `IsDormant` | generated |
 | `Serialize` | — |
 | `SetActorDead` | — |
-| `SetCollisions` | — |
+| `SetCollisions` | generated |
 | `SetEnableGravity` | generated |
 | `SetLocation` | generated |
 | `SetSimulatePhysics` | generated |
@@ -297,6 +298,13 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `Start` | generated |
 | `Stop` | generated |
 
+### `carla::client::TrafficSign`
+
+| method | binding |
+|---|---|
+| `GetSignId` | — |
+| `GetTriggerVolume` | generated |
+
 ### `carla::client::TrafficLight`
 
 | method | binding |
@@ -310,10 +318,8 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetOpenDRIVEID` | generated |
 | `GetPoleIndex` | hand-written |
 | `GetRedTime` | hand-written |
-| `GetSignId` | — |
 | `GetState` | hand-written |
 | `GetStopWaypoints` | generated |
-| `GetTriggerVolume` | generated |
 | `GetYellowTime` | hand-written |
 | `IsFrozen` | hand-written |
 | `ResetGroup` | generated |

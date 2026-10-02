@@ -270,3 +270,61 @@ string_list:
   codon: CStringList
   assign: "string_list_assign({out}, {})"
   cpp: ["std::vector<std::(__cxx11::)?basic_string<char.*>.*>"]
+# --- #19 ---
+# A position LibCarla takes as a Vector3D (Actor::AddForce(force, location)).
+location_as_vector3d:
+  c: tsc_location_t
+  struct: true
+  codon: CVector3D
+  to_carla: "to_carla({})"
+  cpp: ["carla::geom::Vector3D"]
+# tsc_actor_state_t (output only).
+actor_state:
+  c: int32_t
+  codon: i32
+  from_carla: "static_cast<int32_t>({})"
+  cpp: ["carla::rpc::ActorState"]
+# A new actor handle of the most derived kind, owned by the caller; NULL when
+# LibCarla returns a null pointer (output only).
+actor_handle:
+  c: tsc_actor_t
+  handle: true
+  codon: cobj
+  from_carla: "make_actor_handle({})"
+  cpp: ["std::shared_ptr<carla::client::Actor>"]
+# tsc_material_parameter_t; out-of-range values are rejected.
+material_parameter:
+  c: int32_t
+  codon: i32
+  to_carla: "to_material_parameter({})"
+  invalid: 99
+  cpp: ["carla::rpc::MaterialParameter"]
+# Textures (shared_types.cpp converts and validates them).
+texture_color:
+  c: tsc_texture_color_t
+  struct: true
+  codon: CTextureColor
+  to_carla: 'to_carla_texture(&{}, "{name}")'
+  cpp: ["carla::rpc::Texture<carla::sensor::data::Color>"]
+texture_float_color:
+  c: tsc_texture_float_color_t
+  struct: true
+  codon: CTextureFloatColor
+  to_carla: 'to_carla_texture(&{}, "{name}")'
+  cpp: ["carla::rpc::Texture<carla::rpc::FloatColor>"]
+# A list of output transforms; the caller frees it with tsc_transform_list_free
+# (see string_list).
+transform_list:
+  c: tsc_transform_list_t
+  struct: true
+  codon: CTransformList
+  assign: "transform_list_assign({out}, {})"
+  cpp: ["std::vector<carla::geom::Transform.*>"]
+# Output buffer of uint8 values, two-call pattern (see bounding_box_buffer).
+uint8_buffer:
+  c: uint8_t
+  c_param: "uint8_t *{name}, size_t capacity, size_t *{name}_count"
+  codon: "Ptr[u8], int, Ptr[int]"
+  assign: "copy_out({}, {out}, capacity, {out}_count)"
+  invalid: "NULL, 0, NULL"
+  cpp: ["std::vector<unsigned char.*>"]

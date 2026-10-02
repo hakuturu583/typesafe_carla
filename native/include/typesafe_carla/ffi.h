@@ -41,9 +41,11 @@ extern "C" {
  * 3.2: vehicle Ackermann/doors/failure state/telemetry/wheel steer, walker bones
  *      and poses (#20).
  * 3.3: client map list/files/replayer flags, Traffic Manager actions and settings,
- *      blueprint tags, debug clear, extended WorldSettings, transform matrices (#23). */
+ *      blueprint tags, debug clear, extended WorldSettings, transform matrices (#23).
+ * 3.4: actor state/attributes/parent/tags, physics at a location, skeleton queries,
+ *      textures, TrafficSign (#19). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 3
+#define TSC_ABI_VERSION_MINOR 4
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -133,7 +135,8 @@ typedef enum {
   TSC_KIND_PHYSICS_CONTROL = 20, /* ABI 3.0 */
   TSC_KIND_LANDMARK = 21,           /* issue #22 */
   TSC_KIND_TRAFFIC_LIGHT_LIST = 22, /* issue #22 */
-  TSC_KIND_BONE_LIST = 23           /* ABI 3.2 (#20): Walker.get_bones() result */
+  TSC_KIND_BONE_LIST = 23,          /* ABI 3.2 (#20): Walker.get_bones() result */
+  TSC_KIND_TRAFFIC_SIGN = 24        /* ABI 3.4 (#19); also an actor (a traffic light is also a sign) */
 } tsc_handle_kind_t;
 
 typedef struct tsc_handle tsc_handle_t;
@@ -1146,6 +1149,49 @@ TSC_API tsc_status_t tsc_traffic_manager_set_update_vehicle_lights(tsc_traffic_m
 /* END GENERATED traffic_manager_vehicle */
 
 /* ------------------------------------------------------------------------ */
+/* Shared value types: string and transform lists, textures (#19, #21)     */
+/* ------------------------------------------------------------------------ */
+
+/* Lists the library allocates for the caller: free with the matching *_free,
+ * which frees the items (and their strings) and resets the struct. Freeing a
+ * zeroed or already freed list is a no-op. */
+/* tsc_string_list_t and tsc_string_list_free are declared with tsc_string_t. */
+
+typedef struct {
+  tsc_transform_t *items;
+  size_t size;
+} tsc_transform_list_t;
+TSC_API void tsc_transform_list_free(tsc_transform_list_t *list);
+
+/* rpc::FloatColor. */
+typedef struct {
+  float r, g, b, a;
+} tsc_float_color_t;
+
+/* Textures (rpc::TextureColor / rpc::TextureFloatColor): width * height
+ * pixels, row-major (pixel (x, y) at index y * width + x). The pixels are
+ * caller memory, only read during the call; NULL is allowed for 0 pixels. */
+typedef struct {
+  uint32_t width;
+  uint32_t height;
+  const tsc_color_t *pixels;
+} tsc_texture_color_t;
+
+typedef struct {
+  uint32_t width;
+  uint32_t height;
+  const tsc_float_color_t *pixels;
+} tsc_texture_float_color_t;
+
+/* rpc::MaterialParameter. */
+typedef enum {
+  TSC_MATERIAL_NORMAL = 0,
+  TSC_MATERIAL_AO_ROUGHNESS_METALLIC_EMISSIVE = 1,
+  TSC_MATERIAL_DIFFUSE = 2,
+  TSC_MATERIAL_EMISSIVE = 3
+} tsc_material_parameter_t;
+
+/* ------------------------------------------------------------------------ */
 /* Issue #20: Vehicle and Walker API gaps (ABI 3.2)                         */
 /* ------------------------------------------------------------------------ */
 
@@ -1448,6 +1494,93 @@ TSC_API tsc_status_t tsc_world_apply_settings_ext(tsc_world_t *world,
 TSC_API tsc_status_t tsc_transform_get_matrix(const tsc_transform_t *transform, double *out16);
 TSC_API tsc_status_t tsc_transform_get_inverse_matrix(const tsc_transform_t *transform,
                                                       double *out16);
+
+/* ------------------------------------------------------------------------ */
+/* Issue #19: actor state, attributes, parent, tags, physics at a location,  */
+/* skeleton queries, textures, traffic signs                                */
+/* ------------------------------------------------------------------------ */
+
+/* carla::rpc::ActorState. */
+typedef enum {
+  TSC_ACTOR_STATE_INVALID = 0,
+  TSC_ACTOR_STATE_ACTIVE = 1,
+  TSC_ACTOR_STATE_DORMANT = 2,
+  TSC_ACTOR_STATE_PENDING_KILL = 3
+} tsc_actor_state_t;
+
+/* BEGIN GENERATED actor_state from bindings/actor.yaml, do not edit */
+TSC_API tsc_status_t tsc_actor_get_actor_name(tsc_actor_t *actor, tsc_string_t *out);
+TSC_API tsc_status_t tsc_actor_get_actor_class_name(tsc_actor_t *actor, tsc_string_t *out);
+/* tsc_actor_state_t */
+TSC_API tsc_status_t tsc_actor_get_actor_state(tsc_actor_t *actor, int32_t *out);
+TSC_API tsc_status_t tsc_actor_is_active(tsc_actor_t *actor, int32_t *out_active);
+TSC_API tsc_status_t tsc_actor_is_dormant(tsc_actor_t *actor, int32_t *out_dormant);
+/* *out = NULL (TSC_OK) when the actor has no parent. */
+TSC_API tsc_status_t tsc_actor_get_parent(tsc_actor_t *actor, tsc_actor_t **out);
+/* CityObjectLabel values (client-side data, no RPC). */
+TSC_API tsc_status_t tsc_actor_get_semantic_tags(tsc_actor_t *actor,
+                                                 uint8_t *out, size_t capacity, size_t *out_count);
+/* END GENERATED actor_state */
+
+/* The actor's attributes (as spawned): out_ids->items[i] has the value
+ * out_values->items[i]. Both lists are owned by the caller. */
+TSC_API tsc_status_t tsc_actor_get_attributes(tsc_actor_t *actor, tsc_string_list_t *out_ids,
+                                              tsc_string_list_t *out_values);
+
+/* BEGIN GENERATED actor_physics_at_location from bindings/actor.yaml, do not edit */
+TSC_API tsc_status_t tsc_actor_set_collisions(tsc_actor_t *actor, int32_t enabled);
+TSC_API tsc_status_t tsc_actor_enable_constant_velocity(tsc_actor_t *actor,
+                                                        const tsc_vector3d_t *velocity);
+TSC_API tsc_status_t tsc_actor_disable_constant_velocity(tsc_actor_t *actor);
+TSC_API tsc_status_t tsc_actor_add_force_at_location(tsc_actor_t *actor,
+                                                     const tsc_vector3d_t *force,
+                                                     const tsc_location_t *location);
+TSC_API tsc_status_t tsc_actor_add_impulse_at_location(tsc_actor_t *actor,
+                                                       const tsc_vector3d_t *impulse,
+                                                       const tsc_location_t *location);
+/* END GENERATED actor_physics_at_location */
+
+/* Skeleton queries (one RPC each). They exist in LibCarla ue5-dev but not in
+ * CARLA 0.10.0's LibCarla: built against that, they fail with TSC_ERROR. */
+/* BEGIN GENERATED actor_skeleton from bindings/actor.yaml, do not edit */
+TSC_API tsc_status_t tsc_actor_get_bone_names(tsc_actor_t *actor, tsc_string_list_t *out);
+TSC_API tsc_status_t tsc_actor_get_bone_world_transforms(tsc_actor_t *actor,
+                                                         tsc_transform_list_t *out);
+TSC_API tsc_status_t tsc_actor_get_bone_relative_transforms(tsc_actor_t *actor,
+                                                            tsc_transform_list_t *out);
+TSC_API tsc_status_t tsc_actor_get_component_names(tsc_actor_t *actor, tsc_string_list_t *out);
+TSC_API tsc_status_t tsc_actor_get_component_world_transform(
+    tsc_actor_t *actor, const char *component_name, size_t component_name_len,
+    tsc_transform_t *out);
+TSC_API tsc_status_t tsc_actor_get_component_relative_transform(
+    tsc_actor_t *actor, const char *component_name, size_t component_name_len,
+    tsc_transform_t *out);
+TSC_API tsc_status_t tsc_actor_get_socket_names(tsc_actor_t *actor, tsc_string_list_t *out);
+TSC_API tsc_status_t tsc_actor_get_socket_world_transforms(tsc_actor_t *actor,
+                                                           tsc_transform_list_t *out);
+TSC_API tsc_status_t tsc_actor_get_socket_relative_transforms(tsc_actor_t *actor,
+                                                              tsc_transform_list_t *out);
+/* END GENERATED actor_skeleton */
+
+/* Textures. TSC_INVALID_ARGUMENT for an unknown material parameter or an
+ * invalid texture (see tsc_texture_color_t). */
+/* BEGIN GENERATED actor_texture from bindings/actor.yaml, do not edit */
+/* material_parameter: tsc_material_parameter_t. */
+TSC_API tsc_status_t tsc_actor_apply_texture_color(tsc_actor_t *actor, int32_t material_parameter,
+                                                   const tsc_texture_color_t *texture);
+TSC_API tsc_status_t tsc_actor_apply_texture_float_color(tsc_actor_t *actor,
+                                                         int32_t material_parameter,
+                                                         const tsc_texture_float_color_t *texture);
+/* END GENERATED actor_texture */
+
+/* Traffic signs. A traffic light handle is also a valid traffic sign handle. */
+typedef struct tsc_traffic_sign tsc_traffic_sign_t; /* also an actor */
+/* Checked downcast (traffic signs and traffic lights); TSC_TYPE_ERROR otherwise. */
+TSC_API tsc_status_t tsc_actor_as_traffic_sign(tsc_actor_t *actor, tsc_traffic_sign_t **out);
+/* BEGIN GENERATED traffic_sign from bindings/traffic_sign.yaml, do not edit */
+TSC_API tsc_status_t tsc_traffic_sign_get_trigger_volume(tsc_traffic_sign_t *sign,
+                                                         tsc_bounding_box_t *out);
+/* END GENERATED traffic_sign */
 
 #ifdef __cplusplus
 } /* extern "C" */

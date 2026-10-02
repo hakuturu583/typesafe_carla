@@ -1,0 +1,162 @@
+# Textures for World.apply_*texture* and Actor.apply_texture, with the CARLA
+# Python API's names: MaterialParameter, FloatColor, TextureColor and
+# TextureFloatColor. Pixels are kept in a row-major buffer (index
+# y * width + x) that crosses the C ABI without conversion.
+
+from ._ffi import CColor, CFloatColor, CTextureColor, CTextureFloatColor, TSC_INVALID_ARGUMENT
+from .errors import CarlaError
+from .blueprint import Color
+
+class MaterialParameter:
+    """Which material texture to replace (rpc::MaterialParameter)."""
+    Normal: ClassVar[int] = 0
+    AO_Roughness_Metallic_Emissive: ClassVar[int] = 1
+    Diffuse: ClassVar[int] = 2
+    Emissive: ClassVar[int] = 3
+
+class FloatColor:
+    """A color with float components (rpc::FloatColor), as in TextureFloatColor."""
+    r: float
+    g: float
+    b: float
+    a: float
+
+    def __init__(self, r: float = 0.0, g: float = 0.0, b: float = 0.0, a: float = 1.0):
+        self.r = r
+        self.g = g
+        self.b = b
+        self.a = a
+
+    def __eq__(self, other: FloatColor) -> bool:
+        return self.r == other.r and self.g == other.g and self.b == other.b and self.a == other.a
+
+    def __ne__(self, other: FloatColor) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return f"FloatColor(r={self.r}, g={self.g}, b={self.b}, a={self.a})"
+
+def _texture_pixels(width: int, height: int) -> int:
+    """width * height, checked: LibCarla stores both, and their product, as uint32."""
+    if width < 0 or height < 0 or width > 0xFFFFFFFF or height > 0xFFFFFFFF:
+        raise CarlaError(f"texture dimensions {width}x{height} are out of range",
+                         TSC_INVALID_ARGUMENT)
+    n = width * height
+    if n > 0xFFFFFFFF:
+        raise CarlaError(f"texture dimensions {width}x{height} have too many pixels",
+                         TSC_INVALID_ARGUMENT)
+    return n
+
+def _pixel_index(width: int, height: int, x: int, y: int) -> int:
+    if x < 0 or y < 0 or x >= width or y >= height:
+        raise IndexError(f"pixel ({x}, {y}) is outside the {width}x{height} texture")
+    return y * width + x
+
+def _color_component(v: int) -> u8:
+    if v < 0 or v > 255:
+        raise CarlaError(f"color component {v} is out of [0, 255]", TSC_INVALID_ARGUMENT)
+    return u8(v)
+
+class TextureColor:
+    """width x height pixels of Color (8 bits per channel). New pixels are
+    Color(0, 0, 0, 0), as in LibCarla."""
+    _width: int
+    _height: int
+    _pixels: Ptr[CColor]
+
+    def __init__(self, width: int = 0, height: int = 0):
+        self._width = 0
+        self._height = 0
+        self._pixels = Ptr[CColor]()
+        self.set_dimensions(width, height)
+
+    @property
+    def width(self) -> int:
+        return self._width
+
+    @property
+    def height(self) -> int:
+        return self._height
+
+    def set_dimensions(self, width: int, height: int):
+        """Resizes the pixel buffer like LibCarla: the first min(old, new)
+        pixels in row-major order are kept, new ones are Color(0, 0, 0, 0)."""
+        n = _texture_pixels(width, height)
+        old = self._width * self._height
+        pixels = Ptr[CColor](n)
+        for i in range(n):
+            pixels[i] = self._pixels[i] if i < old else CColor(u8(0), u8(0), u8(0), u8(0))
+        self._width = width
+        self._height = height
+        self._pixels = pixels
+
+    def get(self, x: int, y: int) -> Color:
+        """Raises IndexError outside the texture."""
+        p = self._pixels[_pixel_index(self._width, self._height, x, y)]
+        return Color(int(p.r), int(p.g), int(p.b), int(p.a))
+
+    def set(self, x: int, y: int, value: Color):
+        """Raises IndexError outside the texture, CarlaError for a component
+        outside [0, 255]."""
+        i = _pixel_index(self._width, self._height, x, y)
+        self._pixels[i] = CColor(_color_component(value.r), _color_component(value.g),
+                                 _color_component(value.b), _color_component(value.a))
+
+    def _to_c(self) -> CTextureColor:
+        """Borrows the pixels: keep self alive during the call."""
+        return CTextureColor(u32(self._width), u32(self._height), self._pixels)
+
+    def __repr__(self) -> str:
+        return f"TextureColor(width={self._width}, height={self._height})"
+
+class TextureFloatColor:
+    """width x height pixels of FloatColor (float32 per channel). New pixels
+    are FloatColor(0, 0, 0, 1), as in LibCarla."""
+    _width: int
+    _height: int
+    _pixels: Ptr[CFloatColor]
+
+    def __init__(self, width: int = 0, height: int = 0):
+        self._width = 0
+        self._height = 0
+        self._pixels = Ptr[CFloatColor]()
+        self.set_dimensions(width, height)
+
+    @property
+    def width(self) -> int:
+        return self._width
+
+    @property
+    def height(self) -> int:
+        return self._height
+
+    def set_dimensions(self, width: int, height: int):
+        """Resizes the pixel buffer like LibCarla: the first min(old, new)
+        pixels in row-major order are kept, new ones are FloatColor(0, 0, 0, 1)."""
+        n = _texture_pixels(width, height)
+        old = self._width * self._height
+        pixels = Ptr[CFloatColor](n)
+        for i in range(n):
+            pixels[i] = (self._pixels[i] if i < old
+                         else CFloatColor(float32(0.0), float32(0.0), float32(0.0), float32(1.0)))
+        self._width = width
+        self._height = height
+        self._pixels = pixels
+
+    def get(self, x: int, y: int) -> FloatColor:
+        """Raises IndexError outside the texture."""
+        p = self._pixels[_pixel_index(self._width, self._height, x, y)]
+        return FloatColor(float(p.r), float(p.g), float(p.b), float(p.a))
+
+    def set(self, x: int, y: int, value: FloatColor):
+        """Raises IndexError outside the texture. Components are stored as float32."""
+        i = _pixel_index(self._width, self._height, x, y)
+        self._pixels[i] = CFloatColor(float32(value.r), float32(value.g), float32(value.b),
+                                      float32(value.a))
+
+    def _to_c(self) -> CTextureFloatColor:
+        """Borrows the pixels: keep self alive during the call."""
+        return CTextureFloatColor(u32(self._width), u32(self._height), self._pixels)
+
+    def __repr__(self) -> str:
+        return f"TextureFloatColor(width={self._width}, height={self._height})"

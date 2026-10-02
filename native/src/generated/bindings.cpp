@@ -96,6 +96,131 @@ tsc_status_t tsc_actor_set_enable_gravity(tsc_actor_t *actor, int32_t enabled) {
   return TSC_GUARD({ actor_of(actor).SetEnableGravity(enabled != 0); });
 }
 
+tsc_status_t tsc_actor_get_actor_name(tsc_actor_t *actor, tsc_string_t *out) {
+  return TSC_GUARD({ string_assign(out, actor_of(actor).GetActorName()); });
+}
+
+tsc_status_t tsc_actor_get_actor_class_name(tsc_actor_t *actor, tsc_string_t *out) {
+  return TSC_GUARD({ string_assign(out, actor_of(actor).GetActorClassName()); });
+}
+
+tsc_status_t tsc_actor_get_actor_state(tsc_actor_t *actor, int32_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = static_cast<int32_t>(actor_of(actor).GetActorState());
+  });
+}
+
+tsc_status_t tsc_actor_is_active(tsc_actor_t *actor, int32_t *out_active) {
+  return TSC_GUARD({
+    *require_ptr(out_active, "out_active") = actor_of(actor).IsActive() ? 1 : 0;
+  });
+}
+
+tsc_status_t tsc_actor_is_dormant(tsc_actor_t *actor, int32_t *out_dormant) {
+  return TSC_GUARD({
+    *require_ptr(out_dormant, "out_dormant") = actor_of(actor).IsDormant() ? 1 : 0;
+  });
+}
+
+tsc_status_t tsc_actor_get_parent(tsc_actor_t *actor, tsc_actor_t **out) {
+  return new_handle(__func__, out, [&] { return make_actor_handle(actor_of(actor).GetParent()); });
+}
+
+tsc_status_t tsc_actor_get_semantic_tags(tsc_actor_t *actor,
+                                         uint8_t *out, size_t capacity, size_t *out_count) {
+  return TSC_GUARD({ copy_out(actor_of(actor).GetSemanticTags(), out, capacity, out_count); });
+}
+
+tsc_status_t tsc_actor_set_collisions(tsc_actor_t *actor, int32_t enabled) {
+  return TSC_GUARD({ actor_of(actor).SetCollisions(enabled != 0); });
+}
+
+tsc_status_t tsc_actor_enable_constant_velocity(tsc_actor_t *actor,
+                                                const tsc_vector3d_t *velocity) {
+  return TSC_GUARD({
+    actor_of(actor).EnableConstantVelocity(to_carla_vector(*require_ptr(velocity, "velocity")));
+  });
+}
+
+tsc_status_t tsc_actor_disable_constant_velocity(tsc_actor_t *actor) {
+  return TSC_GUARD({ actor_of(actor).DisableConstantVelocity(); });
+}
+
+tsc_status_t tsc_actor_add_force_at_location(tsc_actor_t *actor, const tsc_vector3d_t *force,
+                                             const tsc_location_t *location) {
+  return TSC_GUARD({
+    actor_of(actor).AddForce(to_carla_vector(*require_ptr(force, "force")), to_carla(*require_ptr(location, "location")));
+  });
+}
+
+tsc_status_t tsc_actor_add_impulse_at_location(tsc_actor_t *actor, const tsc_vector3d_t *impulse,
+                                               const tsc_location_t *location) {
+  return TSC_GUARD({
+    actor_of(actor).AddImpulse(to_carla_vector(*require_ptr(impulse, "impulse")), to_carla(*require_ptr(location, "location")));
+  });
+}
+
+tsc_status_t tsc_actor_apply_texture_color(tsc_actor_t *actor, int32_t material_parameter,
+                                           const tsc_texture_color_t *texture) {
+  return TSC_GUARD({
+    actor_of(actor).ApplyTexture(to_material_parameter(material_parameter), to_carla_texture(&*require_ptr(texture, "texture"), "texture"));
+  });
+}
+
+tsc_status_t tsc_actor_apply_texture_float_color(tsc_actor_t *actor, int32_t material_parameter,
+                                                 const tsc_texture_float_color_t *texture) {
+  return TSC_GUARD({
+    actor_of(actor).ApplyTexture(to_material_parameter(material_parameter), to_carla_texture(&*require_ptr(texture, "texture"), "texture"));
+  });
+}
+
+tsc_status_t tsc_actor_get_bone_names(tsc_actor_t *actor, tsc_string_list_t *out) {
+  return TSC_GUARD({ string_list_assign(out, get_bone_names(actor_of(actor))); });
+}
+
+tsc_status_t tsc_actor_get_bone_world_transforms(tsc_actor_t *actor, tsc_transform_list_t *out) {
+  return TSC_GUARD({ transform_list_assign(out, get_bone_world_transforms(actor_of(actor))); });
+}
+
+tsc_status_t tsc_actor_get_bone_relative_transforms(tsc_actor_t *actor, tsc_transform_list_t *out) {
+  return TSC_GUARD({ transform_list_assign(out, get_bone_relative_transforms(actor_of(actor))); });
+}
+
+tsc_status_t tsc_actor_get_component_names(tsc_actor_t *actor, tsc_string_list_t *out) {
+  return TSC_GUARD({ string_list_assign(out, get_component_names(actor_of(actor))); });
+}
+
+tsc_status_t tsc_actor_get_component_world_transform(
+    tsc_actor_t *actor, const char *component_name, size_t component_name_len,
+    tsc_transform_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = from_carla([&](auto &self_) { return get_component_world_transform(self_, to_string(component_name, component_name_len, "component_name")); }(actor_of(actor)));
+  });
+}
+
+tsc_status_t tsc_actor_get_component_relative_transform(
+    tsc_actor_t *actor, const char *component_name, size_t component_name_len,
+    tsc_transform_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = from_carla([&](auto &self_) { return get_component_relative_transform(self_, to_string(component_name, component_name_len, "component_name")); }(actor_of(actor)));
+  });
+}
+
+tsc_status_t tsc_actor_get_socket_names(tsc_actor_t *actor, tsc_string_list_t *out) {
+  return TSC_GUARD({ string_list_assign(out, get_socket_names(actor_of(actor))); });
+}
+
+tsc_status_t tsc_actor_get_socket_world_transforms(tsc_actor_t *actor, tsc_transform_list_t *out) {
+  return TSC_GUARD({ transform_list_assign(out, get_socket_world_transforms(actor_of(actor))); });
+}
+
+tsc_status_t tsc_actor_get_socket_relative_transforms(tsc_actor_t *actor,
+                                                      tsc_transform_list_t *out) {
+  return TSC_GUARD({
+    transform_list_assign(out, get_socket_relative_transforms(actor_of(actor)));
+  });
+}
+
 // bindings/blueprint.yaml: carla::client::ActorBlueprint
 
 tsc_status_t tsc_actor_blueprint_get_tags(tsc_actor_blueprint_t *blueprint,
@@ -403,6 +528,13 @@ tsc_status_t tsc_traffic_manager_set_route(tsc_traffic_manager_t *tm, tsc_vehicl
   return TSC_GUARD({
     tm_of(tm).SetImportedRoute(vehicle_ptr(vehicle, "vehicle"), to_route(route, count, "route"), empty_buffer != 0);
   });
+}
+
+// bindings/traffic_sign.yaml: carla::client::TrafficSign
+
+tsc_status_t tsc_traffic_sign_get_trigger_volume(tsc_traffic_sign_t *sign,
+                                                 tsc_bounding_box_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = from_carla(sign_of(sign).GetTriggerVolume()); });
 }
 
 // bindings/vehicle.yaml: carla::client::Vehicle

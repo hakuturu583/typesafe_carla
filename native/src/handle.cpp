@@ -38,6 +38,9 @@ tsc_actor *make_actor_handle(const carla::SharedPtr<carla::client::Actor> &actor
   if (auto light = downcast<carla::client::TrafficLight>(actor)) {
     return new tsc_traffic_light(std::move(light));
   }
+  if (auto sign = downcast<carla::client::TrafficSign>(actor)) {  // after TrafficLight
+    return new tsc_traffic_sign(std::move(sign));
+  }
   return new tsc_actor(actor);
 }
 

@@ -155,6 +155,18 @@ which catches a misspelt `call`:
 is_rht: {call: IsRHT, via: waypoint_is_rht, out: bool}
 ```
 
+With other arguments, the object is bound first (`[&](auto &self_) { return
+via(self_, args...); }(self)`), so the handle is checked before the arguments
+are converted, as in a member call: C++ evaluates function arguments in no
+fixed order. A missing method can also be caught at compile time: the
+skeleton helpers of issue #19 (`TSC_SKELETON_QUERY`) `static_assert` that the
+method exists on the mock and on a `ue5-dev` ref.
+
+`transform_list` (output) is a `tsc_transform_list_t`, filled by
+`transform_list_assign` and freed with `tsc_transform_list_free`, like
+`string_list`. `uint8_buffer` is a two-call buffer of `uint8_t` (semantic
+tags).
+
 A method that some supported LibCarla simply lacks (and that has no fallback)
 uses `optional` instead (see above): the generated code calls it through
 `TSC_CALL_OPTIONAL`, which raises TSC_ERROR where it is missing. `via` and

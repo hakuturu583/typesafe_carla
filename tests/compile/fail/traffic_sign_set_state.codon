@@ -1,0 +1,10 @@
+# A TrafficSign has no traffic-light methods (as carla.TrafficSign in the
+# Python API); convert with as_traffic_light().
+# expect-error: TrafficSign has no method set_state() (it is an Actor compatibility shortcut; call it on the right actor type)
+import typesafe_carla as carla
+
+def turn_red(actor: carla.Actor):
+    actor.as_traffic_sign().set_state(carla.TrafficLightState.Red)
+
+# Compile-only: Codon type-checks a function only when it is called.
+turn_red(carla.Client("localhost", 2000).get_world().get_actors()[2])

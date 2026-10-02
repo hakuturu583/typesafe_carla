@@ -38,6 +38,22 @@ g: {call: G, args: {flag: bool}, optional: {name: Thing.g, missing_in: ["0.10.0"
     assert g.body().startswith("TSC_CALL_OPTIONAL(thing_of(thing), G, \"Thing.g\"")
 
 
+
+def test_via_checks_the_handle_before_the_arguments(tmp_path):
+    """A `via` call takes the object as a function argument, and C++ evaluates
+    function arguments in no fixed order: with other arguments, the object
+    (the handle check) is bound first through a lambda, as in a member call,
+    so a NULL handle is reported before an invalid argument (issue #19)."""
+    s = _load(tmp_path, """
+f: {call: F, via: f_compat, args: {name: string_in}, out: transform}
+g: {call: G, via: g_compat, out: string_list}
+""")
+    f, g = s.functions
+    assert ("[&](auto &self_) { return f_compat(self_, to_string(name, name_len, \"name\")); }"
+            "(thing_of(thing))") in f.body()
+    assert g.body() == "string_list_assign(out, g_compat(thing_of(thing)));"
+
+
 @pytest.mark.parametrize("entry, message", [
     ("f: {call: F, out: bool, optional: {name: Thing.f, missing_in: [\"0.10.0\"]}}",
      "an optional method has no output"),

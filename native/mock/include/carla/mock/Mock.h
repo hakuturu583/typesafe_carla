@@ -292,9 +292,56 @@ class Lane {
 
 }  // namespace road
 
+namespace sensor { namespace data { struct Color; } }
+
 namespace rpc {
 
 using ActorId = uint32_t;
+
+enum class ActorState : uint8_t { Invalid, Active, Dormant, PendingKill };
+
+enum class MaterialParameter {
+  Tex_Normal,
+  Tex_Ao_Roughness_Metallic_Emissive,
+  Tex_Diffuse,
+  Tex_Emissive
+};
+
+struct FloatColor {
+  float r = 0.f;
+  float g = 0.f;
+  float b = 0.f;
+  float a = 1.f;
+  FloatColor() = default;
+  FloatColor(float ir, float ig, float ib, float ia = 1.f) : r(ir), g(ig), b(ib), a(ia) {}
+};
+
+template <typename T>
+class Texture {
+ public:
+  Texture() = default;
+  Texture(uint32_t width, uint32_t height) : _width(width), _height(height) {
+    _texture_data.resize(_width * _height);
+  }
+  uint32_t GetWidth() const { return _width; }
+  uint32_t GetHeight() const { return _height; }
+  void SetDimensions(uint32_t width, uint32_t height) {
+    _width = width;
+    _height = height;
+    _texture_data.resize(_width * _height);
+  }
+  T &At(uint32_t x, uint32_t y) { return _texture_data[y * _width + x]; }
+  const T &At(uint32_t x, uint32_t y) const { return _texture_data[y * _width + x]; }
+  const T *GetDataPtr() const { return _texture_data.data(); }
+
+ private:
+  uint32_t _width = 0;
+  uint32_t _height = 0;
+  std::vector<T> _texture_data;
+};
+
+using TextureColor = Texture<sensor::data::Color>;
+using TextureFloatColor = Texture<FloatColor>;
 
 enum class ActorAttributeType : uint8_t { Bool, Int, Float, String, RGBColor, SIZE, INVALID };
 
@@ -915,6 +962,21 @@ class BlueprintLibrary : public std::enable_shared_from_this<BlueprintLibrary> {
   std::vector<ActorBlueprint> _blueprints;
 };
 
+// An attribute of a spawned actor (LibCarla's client::ActorAttributeValue).
+class ActorAttributeValue {
+ public:
+  ActorAttributeValue(std::string id, rpc::ActorAttributeType type, std::string value)
+      : _id(std::move(id)), _type(type), _value(std::move(value)) {}
+  const std::string &GetId() const { return _id; }
+  rpc::ActorAttributeType GetType() const { return _type; }
+  const std::string &GetValue() const { return _value; }
+
+ private:
+  std::string _id;
+  rpc::ActorAttributeType _type;
+  std::string _value;
+};
+
 class Actor : public std::enable_shared_from_this<Actor> {
  public:
   Actor(std::shared_ptr<mock::Episode> episode, rpc::ActorId id);
@@ -940,6 +1002,34 @@ class Actor : public std::enable_shared_from_this<Actor> {
   const geom::BoundingBox &GetBoundingBox() const { return _bounding_box; }
   virtual bool Destroy();
 
+  // Issue #19 (LibCarla UE5 signatures; the skeleton queries are ue5-dev's).
+  SharedPtr<Actor> GetParent() const;
+  const std::vector<uint8_t> &GetSemanticTags() const { return _semantic_tags; }
+  const std::vector<ActorAttributeValue> &GetAttributes() const { return _attributes; }
+  std::string GetActorName() const;
+  std::string GetActorClassName() const;
+  rpc::ActorState GetActorState() const;
+  bool IsDormant() const;
+  bool IsActive() const;
+  void EnableConstantVelocity(const geom::Vector3D &vector);
+  void DisableConstantVelocity();
+  void AddImpulse(const geom::Vector3D &impulse, const geom::Vector3D &location);
+  void AddForce(const geom::Vector3D &force, const geom::Vector3D &location);
+  void SetCollisions(bool enabled = true);
+  void ApplyTexture(const rpc::MaterialParameter &MaterialParameter,
+                    const rpc::TextureColor &Texture);
+  void ApplyTexture(const rpc::MaterialParameter &MaterialParameter,
+                    const rpc::TextureFloatColor &Texture);
+  geom::Transform GetComponentWorldTransform(const std::string &component_name) const;
+  geom::Transform GetComponentRelativeTransform(const std::string &component_name) const;
+  std::vector<geom::Transform> GetBoneWorldTransforms() const;
+  std::vector<geom::Transform> GetBoneRelativeTransforms() const;
+  std::vector<std::string> GetComponentNames() const;
+  std::vector<std::string> GetBoneNames() const;
+  std::vector<geom::Transform> GetSocketWorldTransforms() const;
+  std::vector<geom::Transform> GetSocketRelativeTransforms() const;
+  std::vector<std::string> GetSocketNames() const;
+
  protected:
   // Locks the episode and returns the live actor record, or throws.
   template <typename F>
@@ -949,6 +1039,10 @@ class Actor : public std::enable_shared_from_this<Actor> {
   rpc::ActorId _id;
   std::string _type_id;
   geom::BoundingBox _bounding_box;
+  // Client-side state captured at construction, like LibCarla's ActorState.
+  rpc::ActorId _parent_id = 0u;
+  std::vector<uint8_t> _semantic_tags;
+  std::vector<ActorAttributeValue> _attributes;
 };
 
 class TrafficLight;
@@ -1050,10 +1144,18 @@ class WalkerAIController : public Actor {
   void SetMaxSpeed(float max_speed);
 };
 
-// Cycles Green -> Yellow -> Red with the configured times unless frozen.
-class TrafficLight : public Actor {
+// Traffic signs ("traffic.*" other than traffic lights). The trigger volume
+// is the actor's bounding box, as in LibCarla.
+class TrafficSign : public Actor {
  public:
   using Actor::Actor;
+  const geom::BoundingBox &GetTriggerVolume() const { return GetBoundingBox(); }
+};
+
+// Cycles Green -> Yellow -> Red with the configured times unless frozen.
+class TrafficLight : public TrafficSign {
+ public:
+  using TrafficSign::TrafficSign;
   void SetState(rpc::TrafficLightState state);
   rpc::TrafficLightState GetState() const;
   void SetGreenTime(float t);
@@ -1074,8 +1176,6 @@ class TrafficLight : public Actor {
   std::vector<geom::BoundingBox> GetLightBoxes() const;
   road::SignId GetOpenDRIVEID() const { return "1000"; }
   std::vector<SharedPtr<Waypoint>> GetStopWaypoints() const;
-  // TrafficSign::GetTriggerVolume in LibCarla: the actor's bounding box.
-  const geom::BoundingBox &GetTriggerVolume() const { return GetBoundingBox(); }
 };
 
 class Landmark {

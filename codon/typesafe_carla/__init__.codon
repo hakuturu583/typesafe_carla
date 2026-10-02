@@ -16,7 +16,7 @@ from .control import (VehicleControl, VehiclePhysicsControl, WheelPhysicsControl
                       VehicleLightState, TrafficLightState)
 from .blueprint import (ActorAttribute, ActorAttributeType, ActorBlueprint, BlueprintLibrary,
                         Color)
-from .actor import Actor, Vehicle, ActorList, TM_DEFAULT_PORT
+from .actor import Actor, Vehicle, ActorList, ActorState, TM_DEFAULT_PORT
 from .world import World, WorldSettings
 from .map import (Map, Waypoint, LaneType, Junction, Landmark, LandmarkOrientation,
                   LandmarkType)
@@ -33,7 +33,9 @@ from .walker import (Walker, WalkerAIController, WalkerBoneControlIn, WalkerBone
 from .vehicle import (VehicleAckermannControl, AckermannControllerSettings, VehicleDoor,
                       VehicleWheelLocation, VehicleFailureState, VehicleTelemetryData,
                       WheelTelemetryData)
-from .traffic_light import TrafficLight
+from .traffic_light import TrafficSign, TrafficLight
+from .texture import MaterialParameter, FloatColor, TextureColor, TextureFloatColor
+from .labels import CityObjectLabel
 from .weather import WeatherParameters
 from .debug import DebugHelper
 from .traffic_manager import TrafficManager

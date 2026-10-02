@@ -333,6 +333,34 @@ try:
         walker.get_pose_from_animation()
         world.tick()
         walker.destroy()
+    # Issue #19: actor state, attributes, parent, tags, signs, skeleton, constant velocity.
+    attrs = vehicle.attributes
+    out("actor_identity", str(vehicle.actor_state) + "," + str(int(vehicle.is_active)) + "," +
+        str(int(vehicle.is_dormant)) + "," + str(sorted(vehicle.semantic_tags)) + "," +
+        "|".join(sorted(attrs.keys())) + "," + attrs["number_of_wheels"] + "," +
+        vehicle.get_actor_class_name())
+    cam = world.spawn_actor(cam_bp, carla.Transform(carla.Location(0.0, 0.0, 2.0)),
+                            attach_to=vehicle)
+    out("actor_parent", str(int(vehicle.parent is None)) + "," +
+        str(int(cam.parent.id == vehicle.id)) + "," + str(sorted(cam.semantic_tags)))
+    cam.destroy()
+    signs = [a.as_traffic_sign() for a in world.get_actors() if a.is_traffic_sign()]
+    plain = sorted(set([a.type_id for a in signs if not a.is_traffic_light()]))
+    out("traffic_signs", str(len(signs)) + "," + "|".join(plain))
+    e = signs[0].trigger_volume.extent
+    out("trigger_extent", fmt(e.x) + "," + fmt(e.y) + "," + fmt(e.z))
+    skeleton = "error"
+    try:
+        skeleton = str(len(vehicle.get_bone_names())) + "," + str(len(vehicle.get_component_names()))
+    except carla.CarlaError:
+        skeleton = "error"
+    out("skeleton", skeleton)
+    vehicle.set_collisions(True)
+    vehicle.enable_constant_velocity(carla.Vector3D(5.0, 0.0, 0.0))
+    for _ in range(10):
+        world.tick()
+    out("constant_velocity", fmt(vehicle.get_velocity().length()))
+    vehicle.disable_constant_velocity()
 finally:
     world.apply_settings(original)
     out("destroyed", str(int(vehicle.destroy())))

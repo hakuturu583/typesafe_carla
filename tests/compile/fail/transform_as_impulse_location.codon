@@ -1,0 +1,9 @@
+# The point of application is a Location: a Transform does not compile.
+# expect-error: 'Transform' does not match expected type 'Location'
+import typesafe_carla as carla
+
+def push(actor: carla.Actor):
+    actor.add_impulse_at_location(carla.Vector3D(1.0, 0.0, 0.0), actor.get_transform())
+
+# Compile-only: Codon type-checks a function only when it is called.
+push(carla.Client("localhost", 2000).get_world().get_actors()[0])

@@ -30,7 +30,7 @@ from .geometry import BoundingBox
 from .actor import Actor, Vehicle
 from .vehicle import VehicleAckermannControl  # Vehicle's issue #20 methods
 from .walker import Walker, WalkerAIController
-from .traffic_light import TrafficLight
+from .traffic_light import TrafficSign, TrafficLight
 from .sensor import Sensor
 
 def _plain_actor_only(actor, name: Literal[str]):
@@ -324,11 +324,13 @@ class Actor:
         compat_shortcut("Actor.get_light_boxes", "[tsc-compat] Actor.get_light_boxes() without as_traffic_light()", "call as_traffic_light() first")
         return self.as_traffic_light().get_light_boxes(*args, **kwargs)
 
+    # TrafficSign and TrafficLight (as_traffic_sign() accepts both)
+
     @property
     def trigger_volume(self: S, S: type) -> BoundingBox:
         _plain_actor_only(self, "trigger_volume")
-        compat_shortcut("Actor.trigger_volume", "[tsc-compat] Actor.trigger_volume without as_traffic_light()", "call as_traffic_light() first")
-        return self.as_traffic_light().trigger_volume
+        compat_shortcut("Actor.trigger_volume", "[tsc-compat] Actor.trigger_volume without as_traffic_sign()", "call as_traffic_sign() first")
+        return self.as_traffic_sign().trigger_volume
 
     # Sensor
 

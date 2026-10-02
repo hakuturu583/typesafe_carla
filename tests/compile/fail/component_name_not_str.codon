@@ -1,0 +1,9 @@
+# Components are looked up by name.
+# expect-error: 'int' does not match expected type 'str'
+import typesafe_carla as carla
+
+def where(actor: carla.Actor):
+    print(actor.get_component_world_transform(0))
+
+# Compile-only: Codon type-checks a function only when it is called.
+where(carla.Client("localhost", 2000).get_world().get_actors()[0])

@@ -25,3 +25,49 @@ blocks:
     add_torque: {call: AddTorque, args: {torque: vector3d}}
     set_simulate_physics: {call: SetSimulatePhysics, args: {enabled: bool}}
     set_enable_gravity: {call: SetEnableGravity, args: {enabled: bool}}
+  # Issue #19.
+  actor_state:
+    get_actor_name: {call: GetActorName, out: string}
+    get_actor_class_name: {call: GetActorClassName, out: string}
+    get_actor_state: {call: GetActorState, out: actor_state, doc: "tsc_actor_state_t"}
+    is_active: {call: IsActive, out: {type: bool, name: out_active}}
+    is_dormant: {call: IsDormant, out: {type: bool, name: out_dormant}}
+    get_parent: {call: GetParent, out: actor_handle, doc: "*out = NULL (TSC_OK) when the actor has no parent."}
+    get_semantic_tags:
+      call: GetSemanticTags
+      out: uint8_buffer
+      doc: "CityObjectLabel values (client-side data, no RPC)."
+  actor_physics_at_location:
+    set_collisions: {call: SetCollisions, args: {enabled: bool}}
+    enable_constant_velocity: {call: EnableConstantVelocity, args: {velocity: vector3d}}
+    disable_constant_velocity: {call: DisableConstantVelocity}
+    add_force_at_location: {call: AddForce, args: {force: vector3d, location: location_as_vector3d}}
+    add_impulse_at_location: {call: AddImpulse, args: {impulse: vector3d, location: location_as_vector3d}}
+  actor_texture:
+    apply_texture_color:
+      call: ApplyTexture
+      args: {material_parameter: material_parameter, texture: texture_color}
+      doc: "material_parameter: tsc_material_parameter_t."
+    apply_texture_float_color:
+      call: ApplyTexture
+      args: {material_parameter: material_parameter, texture: texture_float_color}
+  # The skeleton queries are in LibCarla ue5-dev, not in CARLA 0.10.0: the
+  # carla_compat.hpp helpers throw (TSC_ERROR) where the method is missing.
+  actor_skeleton:
+    get_bone_names: {call: GetBoneNames, via: get_bone_names, out: string_list}
+    get_bone_world_transforms: {call: GetBoneWorldTransforms, via: get_bone_world_transforms, out: transform_list}
+    get_bone_relative_transforms: {call: GetBoneRelativeTransforms, via: get_bone_relative_transforms, out: transform_list}
+    get_component_names: {call: GetComponentNames, via: get_component_names, out: string_list}
+    get_component_world_transform:
+      call: GetComponentWorldTransform
+      via: get_component_world_transform
+      args: {component_name: string_in}
+      out: transform
+    get_component_relative_transform:
+      call: GetComponentRelativeTransform
+      via: get_component_relative_transform
+      args: {component_name: string_in}
+      out: transform
+    get_socket_names: {call: GetSocketNames, via: get_socket_names, out: string_list}
+    get_socket_world_transforms: {call: GetSocketWorldTransforms, via: get_socket_world_transforms, out: transform_list}
+    get_socket_relative_transforms: {call: GetSocketRelativeTransforms, via: get_socket_relative_transforms, out: transform_list}

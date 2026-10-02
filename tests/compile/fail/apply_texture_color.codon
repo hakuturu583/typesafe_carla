@@ -1,0 +1,9 @@
+# apply_texture takes a TextureColor or a TextureFloatColor, not a single Color.
+# expect-error: no function 'Actor.apply_texture' with arguments (Actor, int, Color)
+import typesafe_carla as carla
+
+def paint(actor: carla.Actor):
+    actor.apply_texture(carla.MaterialParameter.Diffuse, carla.Color(255, 0, 0))
+
+# Compile-only: Codon type-checks a function only when it is called.
+paint(carla.Client("localhost", 2000).get_world().get_actors()[0])

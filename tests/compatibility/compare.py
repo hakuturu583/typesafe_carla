@@ -25,14 +25,16 @@ EXACT = ("server_version", "vehicle_blueprints", "color_type", "wheels", "type_i
          "landmarks_by_id", "landmarks_ahead", "light_geometry", "ackermann_settings",
          "failure_state", "doors", "telemetry", "vehicle_bones", "ackermann_batch",
          "walker_bones", "available_maps", "required_files", "load_world_same",
-         "bp_filter_attr", "bp_tags", "frame_count")
+         "bp_filter_attr", "bp_tags", "frame_count", "actor_identity", "actor_parent",
+         "traffic_signs", "skeleton")
 NUMERIC = {"settled": 0.05, "driven": 0.5, "speed": 0.3, "spawn0": 0.001, "waypoint_s": 0.001,
            "next10": 0.001, "bbox": 0.001, "physics": 0.001, "physics_all": 0.001,
            "gnss": 0.0000005, "imu_compass": 0.01, "location_vector": 0.002,
            "georeference": 0.0000005, "geo_origin": 0.0000005, "waypoint_xodr_loc": 0.002,
            "light_trigger": 0.002, "wheel_steer": 0.5, "ackermann_speed": 0.3,
            "walker_pose": 0.01, "settings_ext": 0.001, "geometry_yaw": 0.002,
-           "geometry_misc": 0.002, "quaternion": 0.002}
+           "geometry_misc": 0.002, "quaternion": 0.002, "trigger_extent": 0.001,
+           "constant_velocity": 0.3}
 
 
 def parse(text: str) -> dict[str, str]:

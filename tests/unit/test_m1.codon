@@ -47,7 +47,7 @@ assert raised
 
 # Snapshots
 snap = world.get_snapshot()
-assert len(snap) == 3
+assert len(snap) == 4
 vehicle_id = world.get_actors()[0].id
 found = snap.find(vehicle_id)
 assert found is not None and found.id == vehicle_id

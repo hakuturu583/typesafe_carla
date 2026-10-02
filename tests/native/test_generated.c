@@ -39,6 +39,29 @@ int main(void) {
   expect_null_rejected(tsc_actor_add_torque(NULL, NULL), "tsc_actor_add_torque");
   expect_null_rejected(tsc_actor_set_simulate_physics(NULL, 0), "tsc_actor_set_simulate_physics");
   expect_null_rejected(tsc_actor_set_enable_gravity(NULL, 0), "tsc_actor_set_enable_gravity");
+  expect_null_rejected(tsc_actor_get_actor_name(NULL, NULL), "tsc_actor_get_actor_name");
+  expect_null_rejected(tsc_actor_get_actor_class_name(NULL, NULL), "tsc_actor_get_actor_class_name");
+  expect_null_rejected(tsc_actor_get_actor_state(NULL, NULL), "tsc_actor_get_actor_state");
+  expect_null_rejected(tsc_actor_is_active(NULL, NULL), "tsc_actor_is_active");
+  expect_null_rejected(tsc_actor_is_dormant(NULL, NULL), "tsc_actor_is_dormant");
+  expect_null_rejected(tsc_actor_get_parent(NULL, (tsc_actor_t *[1]){NULL}), "tsc_actor_get_parent");
+  expect_null_rejected(tsc_actor_get_semantic_tags(NULL, NULL, 0, NULL), "tsc_actor_get_semantic_tags");
+  expect_null_rejected(tsc_actor_set_collisions(NULL, 0), "tsc_actor_set_collisions");
+  expect_null_rejected(tsc_actor_enable_constant_velocity(NULL, NULL), "tsc_actor_enable_constant_velocity");
+  expect_null_rejected(tsc_actor_disable_constant_velocity(NULL), "tsc_actor_disable_constant_velocity");
+  expect_null_rejected(tsc_actor_add_force_at_location(NULL, NULL, NULL), "tsc_actor_add_force_at_location");
+  expect_null_rejected(tsc_actor_add_impulse_at_location(NULL, NULL, NULL), "tsc_actor_add_impulse_at_location");
+  expect_null_rejected(tsc_actor_apply_texture_color(NULL, 99, NULL), "tsc_actor_apply_texture_color");
+  expect_null_rejected(tsc_actor_apply_texture_float_color(NULL, 99, NULL), "tsc_actor_apply_texture_float_color");
+  expect_null_rejected(tsc_actor_get_bone_names(NULL, NULL), "tsc_actor_get_bone_names");
+  expect_null_rejected(tsc_actor_get_bone_world_transforms(NULL, NULL), "tsc_actor_get_bone_world_transforms");
+  expect_null_rejected(tsc_actor_get_bone_relative_transforms(NULL, NULL), "tsc_actor_get_bone_relative_transforms");
+  expect_null_rejected(tsc_actor_get_component_names(NULL, NULL), "tsc_actor_get_component_names");
+  expect_null_rejected(tsc_actor_get_component_world_transform(NULL, NULL, 1, NULL), "tsc_actor_get_component_world_transform");
+  expect_null_rejected(tsc_actor_get_component_relative_transform(NULL, NULL, 1, NULL), "tsc_actor_get_component_relative_transform");
+  expect_null_rejected(tsc_actor_get_socket_names(NULL, NULL), "tsc_actor_get_socket_names");
+  expect_null_rejected(tsc_actor_get_socket_world_transforms(NULL, NULL), "tsc_actor_get_socket_world_transforms");
+  expect_null_rejected(tsc_actor_get_socket_relative_transforms(NULL, NULL), "tsc_actor_get_socket_relative_transforms");
   expect_null_rejected(tsc_actor_blueprint_get_tags(NULL, NULL), "tsc_actor_blueprint_get_tags");
   expect_null_rejected(tsc_actor_blueprint_match_tags(NULL, NULL, 1, NULL), "tsc_actor_blueprint_match_tags");
   expect_null_rejected(tsc_client_set_replayer_ignore_hero(NULL, 0), "tsc_client_set_replayer_ignore_hero");
@@ -92,6 +115,7 @@ int main(void) {
   expect_null_rejected(tsc_traffic_manager_set_large_vehicle_wide_turn(NULL, NULL, 0), "tsc_traffic_manager_set_large_vehicle_wide_turn");
   expect_null_rejected(tsc_traffic_manager_set_path(NULL, NULL, NULL, 1, 0), "tsc_traffic_manager_set_path");
   expect_null_rejected(tsc_traffic_manager_set_route(NULL, NULL, NULL, 1, 0), "tsc_traffic_manager_set_route");
+  expect_null_rejected(tsc_traffic_sign_get_trigger_volume(NULL, NULL), "tsc_traffic_sign_get_trigger_volume");
   expect_null_rejected(tsc_vehicle_set_autopilot(NULL, 0, 0), "tsc_vehicle_set_autopilot");
   expect_null_rejected(tsc_vehicle_set_light_state(NULL, 0), "tsc_vehicle_set_light_state");
   expect_null_rejected(tsc_vehicle_get_light_state(NULL, NULL), "tsc_vehicle_get_light_state");
@@ -128,6 +152,6 @@ int main(void) {
   expect_null_rejected(tsc_waypoint_get_landmarks(NULL, NAN, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks");
   expect_null_rejected(tsc_waypoint_get_landmarks_of_type(NULL, NAN, NULL, 1, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks_of_type");
   if (g_failures != 0) return 1;
-  printf("test_generated: 107 generated functions reject NULL handles\n");
+  printf("test_generated: 131 generated functions reject NULL handles\n");
   return 0;
 }
