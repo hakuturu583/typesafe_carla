@@ -112,10 +112,6 @@ class GeoLocation {
   GeoLocation() = default;
   GeoLocation(double latitude, double longitude, double altitude)
       : latitude(latitude), longitude(longitude), altitude(altitude) {}
-  bool operator==(const GeoLocation &rhs) const {
-    return latitude == rhs.latitude && longitude == rhs.longitude && altitude == rhs.altitude;
-  }
-  bool operator!=(const GeoLocation &rhs) const { return !(*this == rhs); }
 };
 
 class Ellipsoid {
@@ -184,13 +180,6 @@ class LambertConformalConicParams {
   Ellipsoid ellps = Ellipsoid();
 };
 
-enum class ProjectionType {
-  TransverseMercator,
-  UniversalTransverseMercator,
-  WebMercator,
-  LambertConformalConic,
-};
-
 // boost::variant2::variant in LibCarla.
 using ProjectionParams = std::variant<TransverseMercatorParams, UniversalTransverseMercatorParams,
                                       WebMercatorParams, LambertConformalConicParams>;
@@ -202,10 +191,7 @@ struct GeoProjection {
     r.params = ProjectionParams(std::forward<T>(args));
     return r;
   }
-  ProjectionType GetType() const { return static_cast<ProjectionType>(params.index()); }
-  const ProjectionParams &GetParams() const { return params; }
   ProjectionParams params;
-  std::string proj_string;
   Location GeoLocationToTransform(const GeoLocation &geolocation) const;
   GeoLocation TransformToGeoLocation(const Location &location) const;
 };
@@ -703,7 +689,6 @@ class Waypoint : public std::enable_shared_from_this<Waypoint> {
                                                              bool stop_at_junction = false) const;
   std::vector<SharedPtr<Landmark>> GetLandmarksOfTypeInDistance(
       double distance, std::string filter_type, bool stop_at_junction = false) const;
-  bool IsPositiveDirection() const { return true; }
   bool IsRHT() const { return true; }
 
  private:

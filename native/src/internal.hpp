@@ -430,6 +430,9 @@ inline tsc_lane_marking_t from_carla(const carla::road::element::LaneMarking &m)
   r.width = m.width;
   return r;
 }
+inline tsc_lane_validity_t from_carla(const carla::road::LaneValidity &v) {
+  return tsc_lane_validity_t{v._from_lane, v._to_lane};
+}
 inline carla::geom::BoundingBox to_carla(const tsc_bounding_box_t &b) {
   return carla::geom::BoundingBox(to_carla(b.location), to_carla_vector(b.extent),
                                   to_carla(b.rotation));
@@ -443,6 +446,15 @@ void copy_out(const Vec &values, Out *out, size_t capacity, size_t *out_count) {
   *out_count = values.size();
   if (out == nullptr) return;
   for (size_t i = 0; i < values.size() && i < capacity; ++i) out[i] = from_carla(values[i]);
+}
+
+// An optional LibCarla value: *has_value = 0 and *out zeroed when it is empty.
+template <typename Out, typename Optional>
+void assign_optional(const Optional &value, int32_t *has_value, Out *out) {
+  require_ptr(has_value, "has_value");
+  require_ptr(out, "out");
+  *has_value = value.has_value() ? 1 : 0;
+  *out = value.has_value() ? from_carla(*value) : Out{};
 }
 
 // LibCarla's float parameters. A finite double above FLT_MAX would become

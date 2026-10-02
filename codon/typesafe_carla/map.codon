@@ -24,7 +24,7 @@ from ._ffi import (CGeoLocation, CGeoProjection, CLaneMarking, CLaneValidity,
                    tsc_waypoint_is_rht, tsc_waypoint_get_lane_change)
 from .errors import _check
 from .geometry import Location, Transform, BoundingBox, _location_arg
-from .geo import GeoLocation, GeoProjection, _projection_arg, _projection_from_c
+from .geo import GeoLocation, GeoProjection, _projection_ptr, _projection_from_c
 from .lane_marking import LaneMarking
 
 class LaneType:
@@ -140,9 +140,7 @@ class Waypoint:
     @property
     def lane_change(self) -> int:
         """The lane changes allowed here: a LaneChange value."""
-        out = Ptr[i32](1)
-        _check(tsc_waypoint_get_lane_change(self._h.ptr, out))
-        return int(out[0])
+        return _get_int(tsc_waypoint_get_lane_change, self._h.ptr)
 
     @property
     def left_lane_marking(self) -> Optional[LaneMarking]:
@@ -156,10 +154,13 @@ class Waypoint:
         return (f"Waypoint(id={self.id}, road_id={self.road_id}, lane_id={self.lane_id}, "
                 f"s={self.s}, {self.transform})")
 
-def _get_bool(fn, h: cobj) -> bool:
+def _get_int(fn, h: cobj) -> int:
     out = Ptr[i32](1)
     _check(fn(h, out))
-    return int(out[0]) != 0
+    return int(out[0])
+
+def _get_bool(fn, h: cobj) -> bool:
+    return _get_int(fn, h) != 0
 
 def _get_float(fn, h: cobj) -> float:
     out = Ptr[float](1)
@@ -180,11 +181,24 @@ def _waypoint_or_none(ptr: cobj) -> Optional[Waypoint]:
         return None
     return Waypoint(Handle(ptr))
 
-def _waypoints(fn, h: cobj, distance: float) -> List[Waypoint]:
-    """Calls a tsc_*(handle, distance, out) waypoint-list function."""
+def _waypoints(fn, h: cobj, *args) -> List[Waypoint]:
+    """Calls a tsc_*(handle, args..., out) waypoint-list function."""
     out = Ptr[cobj](1)
-    _check(fn(h, distance, out))
+    _check(fn(h, *args, out))
     return _take_list(out[0])
+
+def _read_buffer(fn, h: cobj, T: type, guess: int = 0) -> Tuple[Ptr[T], int]:
+    """Calls a two-call tsc_*(handle, buf, capacity, out_count) function with a
+    `guess`-sized buffer, and again only if that was too small: (buf, count)."""
+    n = guess
+    count = Ptr[int](1)
+    buf = Ptr[T](n if n > 0 else 1)
+    _check(fn(h, buf, n, count))
+    if count[0] > n:
+        n = count[0]
+        buf = Ptr[T](n)
+        _check(fn(h, buf, n, count))
+    return buf, min(n, count[0])
 
 def _take_list(ptr: cobj) -> List[Waypoint]:
     """Copies a native waypoint list into a Codon list and releases it."""
@@ -216,12 +230,8 @@ class Map:
         return take_string(out)
 
     def get_spawn_points(self) -> List[Transform]:
-        count = Ptr[int](1)
-        _check(tsc_map_get_spawn_points(self._h.ptr, Ptr[CTransform](), 0, count))
-        n = count[0]
-        buf = Ptr[CTransform](n if n > 0 else 1)
-        _check(tsc_map_get_spawn_points(self._h.ptr, buf, n, count))
-        return [Transform._from_c(buf[i]) for i in range(min(n, count[0]))]
+        buf, n = _read_buffer(tsc_map_get_spawn_points, self._h.ptr, CTransform)
+        return [Transform._from_c(buf[i]) for i in range(n)]
 
     def get_waypoint(self, location, project_to_road: bool = True,
                      lane_type: int = LaneType.Driving) -> Optional[Waypoint]:
@@ -386,12 +396,8 @@ class Landmark:
 
     def get_lane_validities(self) -> List[Tuple[int, int]]:
         """(from_lane, to_lane) lane id ranges the landmark applies to."""
-        count = Ptr[int](1)
-        _check(tsc_landmark_get_lane_validities(self._h.ptr, Ptr[CLaneValidity](), 0, count))
-        n = count[0]
-        buf = Ptr[CLaneValidity](n if n > 0 else 1)
-        _check(tsc_landmark_get_lane_validities(self._h.ptr, buf, n, count))
-        return [(int(buf[i].from_lane), int(buf[i].to_lane)) for i in range(min(n, count[0]))]
+        buf, n = _read_buffer(tsc_landmark_get_lane_validities, self._h.ptr, CLaneValidity)
+        return [(int(buf[i].from_lane), int(buf[i].to_lane)) for i in range(n)]
 
     def __repr__(self) -> str:
         return f"Landmark(id={self.id}, name={self.name}, type={self.type}, road_id={self.road_id}, s={self.s})"
@@ -454,15 +460,8 @@ class Map:
         """Crosswalk polygon corners (each polygon repeats its first point)."""
         # Computing the zones walks the whole road network, so guess a buffer
         # size and only call again when it was too small.
-        n = 256
-        count = Ptr[int](1)
-        buf = Ptr[CVector3D](n)
-        _check(tsc_map_get_crosswalks(self._h.ptr, buf, n, count))
-        if count[0] > n:
-            n = count[0]
-            buf = Ptr[CVector3D](n)
-            _check(tsc_map_get_crosswalks(self._h.ptr, buf, n, count))
-        return [Location._from_c(buf[i]) for i in range(min(n, count[0]))]
+        buf, n = _read_buffer(tsc_map_get_crosswalks, self._h.ptr, CVector3D, 256)
+        return [Location._from_c(buf[i]) for i in range(n)]
 
     def get_all_landmarks(self) -> List[Landmark]:
         out = Ptr[cobj](1)
@@ -495,39 +494,22 @@ class Map:
         _check(tsc_map_get_geoprojection(self._h.ptr, out))
         return _projection_from_c(out[0])
 
-    def transform_to_geolocation(self, location) -> GeoLocation:
-        """location: Location (a Vector3D is accepted as in the Python API)."""
-        return self._to_geolocation(location, Ptr[CGeoProjection]())
-
-    def transform_to_geolocation(self, location, projection) -> GeoLocation:
-        """With an explicit projection (needs CARLA ue5-dev)."""
-        p = Ptr[CGeoProjection](1)
-        p[0] = _projection_arg(projection)
-        return self._to_geolocation(location, p)
-
-    def _to_geolocation(self, location, projection: Ptr[CGeoProjection]) -> GeoLocation:
+    def transform_to_geolocation(self, location, projection=None) -> GeoLocation:
+        """location: Location (a Vector3D is accepted as in the Python API).
+        An explicit projection needs CARLA ue5-dev."""
         loc = Ptr[CVector3D](1)
         loc[0] = _location_arg(
             location, "[tsc-compat] a Vector3D passed as a Location to Map.transform_to_geolocation")._to_c()
         out = Ptr[CGeoLocation](1)
-        _check(tsc_map_transform_to_geolocation(self._h.ptr, loc, projection, out))
+        _check(tsc_map_transform_to_geolocation(self._h.ptr, loc, _projection_ptr(projection), out))
         return GeoLocation._from_c(out[0])
 
-    def geolocation_to_transform(self, geolocation: GeoLocation) -> Location:
+    def geolocation_to_transform(self, geolocation: GeoLocation, projection=None) -> Location:
         """The inverse of transform_to_geolocation (needs CARLA ue5-dev)."""
-        return self._from_geolocation(geolocation, Ptr[CGeoProjection]())
-
-    def geolocation_to_transform(self, geolocation: GeoLocation, projection) -> Location:
-        p = Ptr[CGeoProjection](1)
-        p[0] = _projection_arg(projection)
-        return self._from_geolocation(geolocation, p)
-
-    def _from_geolocation(self, geolocation: GeoLocation,
-                          projection: Ptr[CGeoProjection]) -> Location:
         geo = Ptr[CGeoLocation](1)
         geo[0] = geolocation._to_c()
         out = Ptr[CVector3D](1)
-        _check(tsc_map_geolocation_to_transform(self._h.ptr, geo, projection, out))
+        _check(tsc_map_geolocation_to_transform(self._h.ptr, geo, _projection_ptr(projection), out))
         return Location._from_c(out[0])
 
     def get_waypoint_xodr(self, road_id: int, lane_id: int, s: float) -> Optional[Waypoint]:

@@ -413,9 +413,6 @@ TSC_API tsc_status_t tsc_waypoint_next_until_lane_end(const tsc_waypoint_t *wp, 
 TSC_API tsc_status_t tsc_waypoint_previous_until_lane_start(const tsc_waypoint_t *wp,
                                                             double distance,
                                                             tsc_waypoint_list_t **out);
-/* *out = NULL (TSC_OK) when there is no such lane. */
-TSC_API tsc_status_t tsc_waypoint_get_left_lane(const tsc_waypoint_t *wp, tsc_waypoint_t **out);
-TSC_API tsc_status_t tsc_waypoint_get_right_lane(const tsc_waypoint_t *wp, tsc_waypoint_t **out);
 TSC_API size_t tsc_waypoint_list_size(const tsc_waypoint_list_t *list);
 TSC_API tsc_status_t tsc_waypoint_list_get(const tsc_waypoint_list_t *list, size_t index,
                                            tsc_waypoint_t **out);
@@ -1026,23 +1023,26 @@ TSC_API tsc_status_t tsc_landmark_is_dynamic(const tsc_landmark_handle_t *landma
 /* *out = NULL (TSC_OK) when the landmark has no waypoint (Map.get_all_landmarks*). */
 TSC_API tsc_status_t tsc_landmark_get_waypoint(const tsc_landmark_handle_t *landmark,
                                                tsc_waypoint_t **out);
-/* END GENERATED landmark */
 /* Two-call pattern, like tsc_map_get_spawn_points. */
-TSC_API tsc_status_t tsc_landmark_get_lane_validities(const tsc_landmark_handle_t *landmark,
-                                                      tsc_lane_validity_t *out, size_t capacity,
-                                                      size_t *out_count);
+TSC_API tsc_status_t tsc_landmark_get_lane_validities(
+    const tsc_landmark_handle_t *landmark,
+    tsc_lane_validity_t *out, size_t capacity, size_t *out_count);
+/* END GENERATED landmark */
 
-/* Waypoint: lane markings, traffic side (more in the generated block below). */
-/* *has_value = 0 (and *out zeroed) when there is no marking on that side. */
-TSC_API tsc_status_t tsc_waypoint_get_left_lane_marking(const tsc_waypoint_t *wp,
-                                                        int32_t *has_value,
-                                                        tsc_lane_marking_t *out);
-TSC_API tsc_status_t tsc_waypoint_get_right_lane_marking(const tsc_waypoint_t *wp,
-                                                         int32_t *has_value,
-                                                         tsc_lane_marking_t *out);
-/* Right-hand traffic. CARLA 0.10.0 has no left-hand traffic: always 1 there. */
-TSC_API tsc_status_t tsc_waypoint_is_rht(const tsc_waypoint_t *wp, int32_t *out);
+/* Waypoint: neighbour lanes, lane markings, traffic side, landmarks. */
 /* BEGIN GENERATED waypoint from bindings/waypoint.yaml, do not edit */
+/* *out = NULL (TSC_OK) when there is no such lane. */
+TSC_API tsc_status_t tsc_waypoint_get_left_lane(const tsc_waypoint_t *waypoint,
+                                                tsc_waypoint_t **out);
+TSC_API tsc_status_t tsc_waypoint_get_right_lane(const tsc_waypoint_t *waypoint,
+                                                 tsc_waypoint_t **out);
+/* Right-hand traffic. CARLA 0.10.0 has no left-hand traffic: always 1 there. */
+TSC_API tsc_status_t tsc_waypoint_is_rht(const tsc_waypoint_t *waypoint, int32_t *out);
+/* *has_value = 0 (and *out zeroed) when there is no marking on that side. */
+TSC_API tsc_status_t tsc_waypoint_get_left_lane_marking(
+    const tsc_waypoint_t *waypoint, int32_t *has_value, tsc_lane_marking_t *out);
+TSC_API tsc_status_t tsc_waypoint_get_right_lane_marking(
+    const tsc_waypoint_t *waypoint, int32_t *has_value, tsc_lane_marking_t *out);
 /* lane_change: LaneMarking::LaneChange flags. */
 TSC_API tsc_status_t tsc_waypoint_get_lane_change(const tsc_waypoint_t *waypoint, int32_t *out);
 TSC_API tsc_status_t tsc_waypoint_get_landmarks(const tsc_waypoint_t *waypoint, double distance,
@@ -1060,16 +1060,14 @@ TSC_API tsc_status_t tsc_waypoint_get_landmarks_of_type(const tsc_waypoint_t *wa
 TSC_API size_t tsc_traffic_light_list_size(const tsc_traffic_light_list_t *list);
 TSC_API tsc_status_t tsc_traffic_light_list_get(const tsc_traffic_light_list_t *list, size_t index,
                                                 tsc_traffic_light_t **out);
-/* Fills up to `capacity` boxes and reports the total in *out_count, from one
- * server call: call again with a larger buffer if it was too small. */
-TSC_API tsc_status_t tsc_traffic_light_get_light_boxes(tsc_traffic_light_t *light,
-                                                       tsc_bounding_box_t *out, size_t capacity,
-                                                       size_t *out_count);
 /* BEGIN GENERATED traffic_light_geometry from bindings/traffic_light.yaml, do not edit */
 TSC_API tsc_status_t tsc_traffic_light_get_opendrive_id(tsc_traffic_light_t *light,
                                                         tsc_string_t *out);
 TSC_API tsc_status_t tsc_traffic_light_get_trigger_volume(tsc_traffic_light_t *light,
                                                           tsc_bounding_box_t *out);
+/* Fills up to `capacity` boxes, the total in *out_count (one server call). */
+TSC_API tsc_status_t tsc_traffic_light_get_light_boxes(
+    tsc_traffic_light_t *light, tsc_bounding_box_t *out, size_t capacity, size_t *out_count);
 TSC_API tsc_status_t tsc_traffic_light_get_affected_lane_waypoints(tsc_traffic_light_t *light,
                                                                    tsc_waypoint_list_t **out);
 TSC_API tsc_status_t tsc_traffic_light_get_stop_waypoints(tsc_traffic_light_t *light,

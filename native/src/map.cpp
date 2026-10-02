@@ -103,14 +103,6 @@ tsc_status_t tsc_waypoint_previous_until_lane_start(const tsc_waypoint_t *wp, do
                        out);
 }
 
-tsc_status_t tsc_waypoint_get_left_lane(const tsc_waypoint_t *wp, tsc_waypoint_t **out) {
-  return new_handle(__func__, out, [&]() { return waypoint_or_null(waypoint_of(wp).GetLeft()); });
-}
-
-tsc_status_t tsc_waypoint_get_right_lane(const tsc_waypoint_t *wp, tsc_waypoint_t **out) {
-  return new_handle(__func__, out, [&]() { return waypoint_or_null(waypoint_of(wp).GetRight()); });
-}
-
 size_t tsc_waypoint_list_size(const tsc_waypoint_list_t *list) {
   if (list == nullptr || list->kind != TSC_KIND_WAYPOINT_LIST) return 0;
   return list->waypoints.size();

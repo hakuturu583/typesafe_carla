@@ -204,7 +204,10 @@ def _matches(patterns: tuple[str, ...], canonical: str) -> bool:
 
 def _check(f: Function, overloads: list[Method]) -> str | None:
     """None if one overload accepts the spec's arguments, else why not. A
-    result the spec does not output is ignored (e.g. Destroy's bool)."""
+    result the spec does not output is ignored (e.g. Destroy's bool). A `via`
+    helper stands in for a method this LibCarla does not have."""
+    if f.via and not overloads:
+        return None
     reasons = []
     for m in overloads:
         n = len(f.args)

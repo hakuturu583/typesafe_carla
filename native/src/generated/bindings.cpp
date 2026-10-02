@@ -121,6 +121,12 @@ tsc_status_t tsc_landmark_get_waypoint(const tsc_landmark_handle_t *landmark,
   });
 }
 
+tsc_status_t tsc_landmark_get_lane_validities(
+    const tsc_landmark_handle_t *landmark,
+    tsc_lane_validity_t *out, size_t capacity, size_t *out_count) {
+  return TSC_GUARD({ copy_out(landmark_of(landmark).GetValidities(), out, capacity, out_count); });
+}
+
 // bindings/map.yaml: carla::client::Map
 
 tsc_status_t tsc_map_get_georeference(const tsc_map_t *map, tsc_geo_location_t *out) {
@@ -186,6 +192,11 @@ tsc_status_t tsc_traffic_light_get_opendrive_id(tsc_traffic_light_t *light, tsc_
 tsc_status_t tsc_traffic_light_get_trigger_volume(tsc_traffic_light_t *light,
                                                   tsc_bounding_box_t *out) {
   return TSC_GUARD({ *require_ptr(out, "out") = from_carla(light_of(light).GetTriggerVolume()); });
+}
+
+tsc_status_t tsc_traffic_light_get_light_boxes(
+    tsc_traffic_light_t *light, tsc_bounding_box_t *out, size_t capacity, size_t *out_count) {
+  return TSC_GUARD({ copy_out(light_of(light).GetLightBoxes(), out, capacity, out_count); });
 }
 
 tsc_status_t tsc_traffic_light_get_affected_lane_waypoints(tsc_traffic_light_t *light,
@@ -319,6 +330,36 @@ tsc_status_t tsc_walker_ai_controller_set_max_speed(tsc_walker_ai_controller_t *
 }
 
 // bindings/waypoint.yaml: carla::client::Waypoint
+
+tsc_status_t tsc_waypoint_get_left_lane(const tsc_waypoint_t *waypoint, tsc_waypoint_t **out) {
+  return new_handle(__func__, out, [&] {
+    return waypoint_or_null(waypoint_of(waypoint).GetLeft());
+  });
+}
+
+tsc_status_t tsc_waypoint_get_right_lane(const tsc_waypoint_t *waypoint, tsc_waypoint_t **out) {
+  return new_handle(__func__, out, [&] {
+    return waypoint_or_null(waypoint_of(waypoint).GetRight());
+  });
+}
+
+tsc_status_t tsc_waypoint_is_rht(const tsc_waypoint_t *waypoint, int32_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = waypoint_is_rht(waypoint_of(waypoint)) ? 1 : 0; });
+}
+
+tsc_status_t tsc_waypoint_get_left_lane_marking(const tsc_waypoint_t *waypoint,
+                                                int32_t *has_value, tsc_lane_marking_t *out) {
+  return TSC_GUARD({
+    assign_optional(waypoint_of(waypoint).GetLeftLaneMarking(), has_value, out);
+  });
+}
+
+tsc_status_t tsc_waypoint_get_right_lane_marking(const tsc_waypoint_t *waypoint,
+                                                 int32_t *has_value, tsc_lane_marking_t *out) {
+  return TSC_GUARD({
+    assign_optional(waypoint_of(waypoint).GetRightLaneMarking(), has_value, out);
+  });
+}
 
 tsc_status_t tsc_waypoint_get_lane_change(const tsc_waypoint_t *waypoint, int32_t *out) {
   return TSC_GUARD({

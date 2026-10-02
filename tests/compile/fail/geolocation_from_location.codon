@@ -1,5 +1,5 @@
 # geolocation_to_transform takes a GeoLocation, not a Location.
-# expect-error: no function 'Map.geolocation_to_transform' with arguments (Map, Location)
+# expect-error: 'Location' does not match expected type 'GeoLocation'
 import typesafe_carla as carla
 
 def back(m: carla.Map) -> carla.Location:

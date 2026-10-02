@@ -47,9 +47,9 @@ class Type:
     # An opaque handle pointer. As an output, from_carla creates the handle
     # (or yields NULL) and the C function returns it through `T **out`.
     handle: bool = False
-    # C parameter(s) for an input, if not `c name`; `{name}` is the argument
-    # name, e.g. "const char *{name}, size_t {name}_len" (codon and invalid
-    # then list one value per C parameter).
+    # C parameter(s), if not the default for an input or output; `{name}` is
+    # the argument name, e.g. "const char *{name}, size_t {name}_len" (codon
+    # and invalid then list one value per C parameter).
     c_param_template: str | None = None
     cpp: tuple[str, ...] = ()
     invalid: str = "0"  # a C value the conversion rejects, for test_generated
@@ -90,6 +90,7 @@ class Function:
     spec_file: str
     cpp_class: str
     call: str  # the LibCarla method
+    via: str | None  # a tsc:: helper called as via(self, args...) instead (version differences)
     self_type: str
     self_name: str
     self_get: str
@@ -101,19 +102,24 @@ class Function:
         params = [f"{self.self_type} *{self.self_name}"]
         params += [a.type.c_param(a.name) for a in self.args]
         if self.out:
-            stars = "**" if self.out.type.handle else "*"
-            params.append(f"{self.out.type.c} {stars}{self.out.name}")
+            t = self.out.type
+            stars = "**" if t.handle else "*"
+            params.append(t.c_param(self.out.name) if t.c_param_template
+                          else f"{t.c} {stars}{self.out.name}")
         return params
 
     def codon_params(self) -> list[str]:
         params = ["cobj"] + [a.type.codon_param() for a in self.args]
         if self.out:
-            params.append(f"Ptr[{self.out.type.codon}]")
+            t = self.out.type
+            params.append(t.codon if t.c_param_template else f"Ptr[{t.codon}]")
         return params
 
     def body(self) -> str:
-        call = (f"{self.self_get}({self.self_name}).{self.call}"
-                f"({', '.join(a.to_carla() for a in self.args)})")
+        self_ = f"{self.self_get}({self.self_name})"
+        args = [a.to_carla() for a in self.args]
+        call = (f"{self.via}({', '.join([self_] + args)})" if self.via
+                else f"{self_}.{self.call}({', '.join(args)})")
         if self.out is None:
             return f"{call};"
         t = self.out.type
@@ -179,7 +185,7 @@ def load(bindings: Path = BINDINGS) -> Spec:
         for block, entries in raw["blocks"].items():
             for short, entry in entries.items():
                 where = f"{path.name}: {short}"
-                unknown = set(entry) - {"call", "args", "out", "doc"}
+                unknown = set(entry) - {"call", "via", "args", "out", "doc"}
                 if unknown:
                     raise SpecError(f"{where}: unknown keys {sorted(unknown)}")
                 args = tuple(Arg(n, type_of(t, where)) for n, t in (entry.get("args") or {}).items())
@@ -200,7 +206,7 @@ def load(bindings: Path = BINDINGS) -> Spec:
                 seen[name] = path.name
                 functions.append(Function(
                     name=name, block=block, spec_file=path.name, cpp_class=raw["class"],
-                    call=entry["call"], self_type=self_["type"], self_name=self_["name"],
+                    call=entry["call"], via=entry.get("via"), self_type=self_["type"], self_name=self_["name"],
                     self_get=self_["get"], args=args, out=out, doc=entry.get("doc")))
     blocks: dict[str, str] = {}
     for f in functions:

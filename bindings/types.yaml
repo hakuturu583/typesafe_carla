@@ -9,6 +9,11 @@
 #              default: `{}`
 #   invalid    a C value the conversion rejects (tests/native/test_generated.c
 #              passes it next to a NULL handle); default: 0
+#   c_param    C parameter(s) when not the default `c name` (input) or
+#              `c *name` (output); `{name}` is the parameter name. codon and
+#              invalid then list one value per C parameter.
+#   assign     an output written by a statement instead of `*out = ...`
+#              (`{out}` is the output name)
 #   cpp        regexes, one of which the canonical LibCarla parameter or
 #              return type must match (checked with libclang)
 
@@ -168,3 +173,27 @@ traffic_light_list:
   codon: cobj
   from_carla: "new tsc_traffic_light_list(without_nulls({}))"
   cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::TrafficLight>.*>"]
+# Output buffers, two-call pattern: fills up to `capacity` values and reports
+# the total in *out_count (out may be NULL to only count).
+bounding_box_buffer:
+  c: tsc_bounding_box_t
+  c_param: "tsc_bounding_box_t *{name}, size_t capacity, size_t *{name}_count"
+  codon: "Ptr[CBoundingBox], int, Ptr[int]"
+  assign: "copy_out({}, {out}, capacity, {out}_count)"
+  invalid: "NULL, 0, NULL"
+  cpp: ["std::vector<carla::geom::BoundingBox.*>"]
+lane_validity_buffer:
+  c: tsc_lane_validity_t
+  c_param: "tsc_lane_validity_t *{name}, size_t capacity, size_t *{name}_count"
+  codon: "Ptr[CLaneValidity], int, Ptr[int]"
+  assign: "copy_out({}, {out}, capacity, {out}_count)"
+  invalid: "NULL, 0, NULL"
+  cpp: ["std::vector<carla::road::LaneValidity.*>"]
+# An optional lane marking: *has_value = 0 (and *out zeroed) when there is none.
+optional_lane_marking:
+  c: tsc_lane_marking_t
+  c_param: "int32_t *has_value, tsc_lane_marking_t *{name}"
+  codon: "Ptr[i32], Ptr[CLaneMarking]"
+  assign: "assign_optional({}, has_value, {out})"
+  invalid: "NULL, NULL"
+  cpp: ["(boost|std)::optional<carla::road::element::LaneMarking>"]

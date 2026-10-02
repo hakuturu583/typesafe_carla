@@ -102,8 +102,29 @@ Two kinds of types in `types.yaml` go beyond a single value (issue #22):
     invalid: "NULL, 1"
   ```
 
+  `c_param` works for outputs too, with `assign` writing them. A buffer
+  (two-call pattern) and an optional struct:
+
+  ```yaml
+  bounding_box_buffer:
+    c_param: "tsc_bounding_box_t *{name}, size_t capacity, size_t *{name}_count"
+    codon: "Ptr[CBoundingBox], int, Ptr[int]"
+    assign: "copy_out({}, {out}, capacity, {out}_count)"
+  optional_lane_marking:
+    c_param: "int32_t *has_value, tsc_lane_marking_t *{name}"
+    assign: "assign_optional({}, has_value, {out})"
+  ```
+
 A handle *input* (`handle: true` without `from_carla`, e.g. `vehicle`,
 `landmark`) converts with `to_carla` as before.
+
+A call that differs between LibCarla versions names a `carla_compat.hpp`
+helper with `via`; the function then calls `via(self, args...)`, and
+`validate` accepts a LibCarla without the method:
+
+```yaml
+is_rht: {call: IsRHT, via: waypoint_is_rht, out: bool}
+```
 
 ## Commands
 
@@ -150,5 +171,5 @@ If the new C function is a handle check, conversions and a single LibCarla call:
 3. Write the Codon wrapper and the tests as for any new API (see CLAUDE.md).
 
 Anything more involved stays hand-written in `native/src/*.cpp`. That includes
-structs with many fields, list accessors and buffers, optional struct outputs,
-callbacks, and calls that differ between LibCarla versions.
+structs with many fields, list accessors, callbacks, and calls that differ
+between LibCarla versions in more than which method exists.

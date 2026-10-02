@@ -12,3 +12,7 @@ blocks:
       call: GetWaypoint
       out: waypoint_or_null
       doc: "*out = NULL (TSC_OK) when the landmark has no waypoint (Map.get_all_landmarks*)."
+    get_lane_validities:
+      call: GetValidities
+      out: lane_validity_buffer
+      doc: "Two-call pattern, like tsc_map_get_spawn_points."

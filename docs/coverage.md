@@ -8,7 +8,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**195 of 326 methods bound (59%), 62 of them generated.**
+**195 of 326 methods bound (59%), 68 of them generated.**
 
 | class | bound |
 |---|---|
@@ -154,14 +154,14 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetLaneChange` | generated |
 | `GetLaneId` | hand-written |
 | `GetLaneWidth` | hand-written |
-| `GetLeft` | hand-written |
-| `GetLeftLaneMarking` | hand-written |
+| `GetLeft` | generated |
+| `GetLeftLaneMarking` | generated |
 | `GetNext` | — |
 | `GetNextUntilLaneEnd` | — |
 | `GetPrevious` | — |
 | `GetPreviousUntilLaneStart` | — |
-| `GetRight` | hand-written |
-| `GetRightLaneMarking` | hand-written |
+| `GetRight` | generated |
+| `GetRightLaneMarking` | generated |
 | `GetRoadId` | hand-written |
 | `GetSectionId` | hand-written |
 | `GetTransform` | hand-written |
@@ -196,7 +196,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetTransform` | hand-written |
 | `GetType` | hand-written |
 | `GetUnit` | hand-written |
-| `GetValidities` | hand-written |
+| `GetValidities` | generated |
 | `GetValue` | hand-written |
 | `GetWaypoint` | generated |
 | `GetWidth` | hand-written |
@@ -306,7 +306,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetElapsedTime` | hand-written |
 | `GetGreenTime` | hand-written |
 | `GetGroupTrafficLights` | generated |
-| `GetLightBoxes` | hand-written |
+| `GetLightBoxes` | generated |
 | `GetOpenDRIVEID` | generated |
 | `GetPoleIndex` | hand-written |
 | `GetRedTime` | hand-written |

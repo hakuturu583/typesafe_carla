@@ -99,7 +99,7 @@ def null_handle_test(spec: Spec) -> str:
         if f.out and f.out.type.handle:  # a valid out, so the NULL handle is what fails
             call.append(f"({f.out.type.c} *[1]){{NULL}}")
         elif f.out:
-            call.append("NULL")
+            call.append(f.out.type.invalid if f.out.type.c_param_template else "NULL")
         lines.append(f'  expect_null_rejected({f.name}({", ".join(call)}), "{f.name}");')
     lines += ["  if (g_failures != 0) return 1;",
               f'  printf("test_generated: {len(spec.functions)} generated functions reject NULL handles\\n");',

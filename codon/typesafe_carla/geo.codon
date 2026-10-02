@@ -206,6 +206,15 @@ def _projection_arg(p) -> CGeoProjection:
         compile_error("a geo projection must be a GeoProjectionTM, GeoProjectionUTM, "
                       "GeoProjectionWebMerc or GeoProjectionLCC2SP")
 
+def _projection_ptr(projection) -> Ptr[CGeoProjection]:
+    """An optional projection argument for the C ABI: NULL (the map's) for None."""
+    if isinstance(projection, Optional[NoneType]):  # the default None
+        return Ptr[CGeoProjection]()
+    else:
+        p = Ptr[CGeoProjection](1)
+        p[0] = _projection_arg(projection)
+        return p
+
 def _projection_from_c(c: CGeoProjection) -> GeoProjection:
     e = GeoEllipsoid(c.ellipsoid_a, c.ellipsoid_f_inv)
     kind = int(c.type)

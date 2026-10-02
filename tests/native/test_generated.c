@@ -44,6 +44,7 @@ int main(void) {
   expect_null_rejected(tsc_landmark_get_roll(NULL, NULL), "tsc_landmark_get_roll");
   expect_null_rejected(tsc_landmark_is_dynamic(NULL, NULL), "tsc_landmark_is_dynamic");
   expect_null_rejected(tsc_landmark_get_waypoint(NULL, (tsc_waypoint_t *[1]){NULL}), "tsc_landmark_get_waypoint");
+  expect_null_rejected(tsc_landmark_get_lane_validities(NULL, NULL, 0, NULL), "tsc_landmark_get_lane_validities");
   expect_null_rejected(tsc_map_get_georeference(NULL, NULL), "tsc_map_get_georeference");
   expect_null_rejected(tsc_map_get_waypoint_xodr(NULL, 0, 0, NAN, (tsc_waypoint_t *[1]){NULL}), "tsc_map_get_waypoint_xodr");
   expect_null_rejected(tsc_map_get_landmarks_from_id(NULL, NULL, 1, (tsc_landmark_list_t *[1]){NULL}), "tsc_map_get_landmarks_from_id");
@@ -57,6 +58,7 @@ int main(void) {
   expect_null_rejected(tsc_traffic_light_reset_group(NULL), "tsc_traffic_light_reset_group");
   expect_null_rejected(tsc_traffic_light_get_opendrive_id(NULL, NULL), "tsc_traffic_light_get_opendrive_id");
   expect_null_rejected(tsc_traffic_light_get_trigger_volume(NULL, NULL), "tsc_traffic_light_get_trigger_volume");
+  expect_null_rejected(tsc_traffic_light_get_light_boxes(NULL, NULL, 0, NULL), "tsc_traffic_light_get_light_boxes");
   expect_null_rejected(tsc_traffic_light_get_affected_lane_waypoints(NULL, (tsc_waypoint_list_t *[1]){NULL}), "tsc_traffic_light_get_affected_lane_waypoints");
   expect_null_rejected(tsc_traffic_light_get_stop_waypoints(NULL, (tsc_waypoint_list_t *[1]){NULL}), "tsc_traffic_light_get_stop_waypoints");
   expect_null_rejected(tsc_traffic_light_get_group_traffic_lights(NULL, (tsc_traffic_light_list_t *[1]){NULL}), "tsc_traffic_light_get_group_traffic_lights");
@@ -79,10 +81,15 @@ int main(void) {
   expect_null_rejected(tsc_walker_ai_controller_stop(NULL), "tsc_walker_ai_controller_stop");
   expect_null_rejected(tsc_walker_ai_controller_go_to_location(NULL, NULL), "tsc_walker_ai_controller_go_to_location");
   expect_null_rejected(tsc_walker_ai_controller_set_max_speed(NULL, NAN), "tsc_walker_ai_controller_set_max_speed");
+  expect_null_rejected(tsc_waypoint_get_left_lane(NULL, (tsc_waypoint_t *[1]){NULL}), "tsc_waypoint_get_left_lane");
+  expect_null_rejected(tsc_waypoint_get_right_lane(NULL, (tsc_waypoint_t *[1]){NULL}), "tsc_waypoint_get_right_lane");
+  expect_null_rejected(tsc_waypoint_is_rht(NULL, NULL), "tsc_waypoint_is_rht");
+  expect_null_rejected(tsc_waypoint_get_left_lane_marking(NULL, NULL, NULL), "tsc_waypoint_get_left_lane_marking");
+  expect_null_rejected(tsc_waypoint_get_right_lane_marking(NULL, NULL, NULL), "tsc_waypoint_get_right_lane_marking");
   expect_null_rejected(tsc_waypoint_get_lane_change(NULL, NULL), "tsc_waypoint_get_lane_change");
   expect_null_rejected(tsc_waypoint_get_landmarks(NULL, NAN, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks");
   expect_null_rejected(tsc_waypoint_get_landmarks_of_type(NULL, NAN, NULL, 1, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks_of_type");
   if (g_failures != 0) return 1;
-  printf("test_generated: 62 generated functions reject NULL handles\n");
+  printf("test_generated: 69 generated functions reject NULL handles\n");
   return 0;
 }

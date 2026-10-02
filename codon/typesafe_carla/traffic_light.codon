@@ -15,7 +15,7 @@ from ._ffi import (Handle, CTrafficLightInfo, TSC_KIND_TRAFFIC_LIGHT, tsc_handle
 from .errors import _check, _check_traffic_light_state
 from .actor import Actor, Vehicle
 from .geometry import BoundingBox
-from .map import Waypoint, _take_list
+from .map import Waypoint, _waypoints, _read_buffer
 
 class TrafficLight(Actor):
     def __init__(self, h: Handle):
@@ -85,11 +85,11 @@ class TrafficLight(Actor):
 
     def get_affected_lane_waypoints(self) -> List[Waypoint]:
         """A waypoint at the signal on each lane the light controls."""
-        return _waypoint_list(tsc_traffic_light_get_affected_lane_waypoints, self._h.ptr)
+        return _waypoints(tsc_traffic_light_get_affected_lane_waypoints, self._h.ptr)
 
     def get_stop_waypoints(self) -> List[Waypoint]:
         """A waypoint per lane where vehicles stop for the light."""
-        return _waypoint_list(tsc_traffic_light_get_stop_waypoints, self._h.ptr)
+        return _waypoints(tsc_traffic_light_get_stop_waypoints, self._h.ptr)
 
     def get_group_traffic_lights(self) -> List[TrafficLight]:
         """Every traffic light in this light's group, itself included."""
@@ -107,24 +107,11 @@ class TrafficLight(Actor):
     def get_light_boxes(self) -> List[BoundingBox]:
         """The bounding boxes of the light's lamps (world coordinates)."""
         # One server call per attempt: guess a size, retry only if too small.
-        n = 8
-        count = Ptr[int](1)
-        buf = Ptr[CBoundingBox](n)
-        _check(tsc_traffic_light_get_light_boxes(self._h.ptr, buf, n, count))
-        if count[0] > n:
-            n = count[0]
-            buf = Ptr[CBoundingBox](n)
-            _check(tsc_traffic_light_get_light_boxes(self._h.ptr, buf, n, count))
-        return [BoundingBox._from_c(buf[i]) for i in range(min(n, count[0]))]
+        buf, n = _read_buffer(tsc_traffic_light_get_light_boxes, self._h.ptr, CBoundingBox, 8)
+        return [BoundingBox._from_c(buf[i]) for i in range(n)]
 
     def __repr__(self) -> str:
         return f"TrafficLight(id={self.id}, state={self.get_state()})"
-
-def _waypoint_list(fn, h: cobj) -> List[Waypoint]:
-    """Calls a tsc_*(handle, out) waypoint-list function."""
-    out = Ptr[cobj](1)
-    _check(fn(h, out))
-    return _take_list(out[0])
 
 @extend
 class Actor:

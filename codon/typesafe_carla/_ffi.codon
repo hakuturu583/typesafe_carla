@@ -487,8 +487,6 @@ from C import LIB.tsc_waypoint_next(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_previous(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_next_until_lane_end(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_previous_until_lane_start(cobj, float, Ptr[cobj]) -> i32
-from C import LIB.tsc_waypoint_get_left_lane(cobj, Ptr[cobj]) -> i32
-from C import LIB.tsc_waypoint_get_right_lane(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_list_size(cobj) -> int
 from C import LIB.tsc_waypoint_list_get(cobj, int, Ptr[cobj]) -> i32
 from C import LIB.tsc_vehicle_get_physics_control(cobj, Ptr[cobj]) -> i32
@@ -601,22 +599,24 @@ from C import LIB.tsc_landmark_get_pitch(cobj, Ptr[float]) -> i32
 from C import LIB.tsc_landmark_get_roll(cobj, Ptr[float]) -> i32
 from C import LIB.tsc_landmark_is_dynamic(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_landmark_get_waypoint(cobj, Ptr[cobj]) -> i32
-# END GENERATED landmark
 from C import LIB.tsc_landmark_get_lane_validities(cobj, Ptr[CLaneValidity], int, Ptr[int]) -> i32
+# END GENERATED landmark
+# BEGIN GENERATED waypoint from bindings/waypoint.yaml, do not edit
+from C import LIB.tsc_waypoint_get_left_lane(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_get_right_lane(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_is_rht(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_waypoint_get_left_lane_marking(cobj, Ptr[i32], Ptr[CLaneMarking]) -> i32
 from C import LIB.tsc_waypoint_get_right_lane_marking(cobj, Ptr[i32], Ptr[CLaneMarking]) -> i32
-from C import LIB.tsc_waypoint_is_rht(cobj, Ptr[i32]) -> i32
-# BEGIN GENERATED waypoint from bindings/waypoint.yaml, do not edit
 from C import LIB.tsc_waypoint_get_lane_change(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_waypoint_get_landmarks(cobj, float, i32, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_get_landmarks_of_type(cobj, float, cobj, int, i32, Ptr[cobj]) -> i32
 # END GENERATED waypoint
 from C import LIB.tsc_traffic_light_list_size(cobj) -> int
 from C import LIB.tsc_traffic_light_list_get(cobj, int, Ptr[cobj]) -> i32
-from C import LIB.tsc_traffic_light_get_light_boxes(cobj, Ptr[CBoundingBox], int, Ptr[int]) -> i32
 # BEGIN GENERATED traffic_light_geometry from bindings/traffic_light.yaml, do not edit
 from C import LIB.tsc_traffic_light_get_opendrive_id(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_traffic_light_get_trigger_volume(cobj, Ptr[CBoundingBox]) -> i32
+from C import LIB.tsc_traffic_light_get_light_boxes(cobj, Ptr[CBoundingBox], int, Ptr[int]) -> i32
 from C import LIB.tsc_traffic_light_get_affected_lane_waypoints(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_traffic_light_get_stop_waypoints(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_traffic_light_get_group_traffic_lights(cobj, Ptr[cobj]) -> i32
