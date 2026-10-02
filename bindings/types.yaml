@@ -328,3 +328,107 @@ uint8_buffer:
   assign: "copy_out({}, {out}, capacity, {out}_count)"
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<unsigned char.*>"]
+# --- #21 ---
+# rpc::MapLayer bit flags (uint16_t): any combination is valid.
+map_layer:
+  c: uint16_t
+  codon: u16
+  to_carla: "static_cast<carla::rpc::MapLayer>({})"
+  cpp: ["carla::rpc::MapLayer"]
+# A CityObjectLabel tag in [0, 255] (LibCarla takes a uint8_t).
+city_object_label:
+  c: int32_t
+  codon: i32
+  to_carla: 'check_u8({}, "{name}")'
+  invalid: 999
+  cpp: ["unsigned char", "uint8_t"]
+# tsc_light_group_t; out-of-range values are rejected.
+light_group:
+  c: int32_t
+  codon: i32
+  to_carla: 'to_enum<carla::rpc::LightState::LightGroup>({}, TSC_LIGHT_GROUP_NONE, TSC_LIGHT_GROUP_OTHER, "light group")'
+  invalid: 99
+  cpp: ["carla::rpc::LightState::LightGroup"]
+# A waypoint handle argument.
+waypoint:
+  c: const tsc_waypoint_t
+  handle: true
+  codon: cobj
+  to_carla: "waypoint_of({})"
+  cpp: ["carla::client::Waypoint"]
+# Arrays: (pointer, count). NULL is accepted for count 0.
+uint64_array:
+  c: uint64_t
+  c_param: "const uint64_t *{name}, size_t count"
+  codon: "Ptr[u64], int"
+  to_carla: 'to_vector({name}, count, "{name}")'
+  invalid: "NULL, 1"
+  cpp: ["std::vector<unsigned long.*>"]
+# Object names (read only, need not be NUL terminated); at least one.
+name_list:
+  c: tsc_string_t
+  c_param: "const tsc_string_t *{name}, size_t count"
+  codon: "Ptr[CString], int"
+  to_carla: 'to_names({name}, count, "{name}")'
+  invalid: "NULL, 1"
+  cpp: ["std::vector<std::(__cxx11::)?basic_string<char.*>.*>"]
+# Handle outputs: a new handle, or NULL when LibCarla returns none.
+traffic_light_handle:
+  c: tsc_traffic_light_t
+  handle: true
+  codon: cobj
+  from_carla: "make_traffic_light_handle({})"
+  cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]
+light_manager_handle:
+  c: tsc_light_manager_t
+  handle: true
+  codon: cobj
+  from_carla: "make_light_manager_handle({})"
+  cpp: ["(boost|std)::shared_ptr<carla::client::LightManager>"]
+# World returns traffic lights as plain actors: a tsc_traffic_light_list of
+# those that are traffic lights.
+actor_traffic_light_list:
+  c: tsc_traffic_light_list_t
+  handle: true
+  codon: cobj
+  from_carla: "new tsc_traffic_light_list(traffic_lights_of({}))"
+  cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Actor>.*>"]
+# Lists the caller frees with tsc_<type>_free.
+vehicle_light_state_list:
+  c: tsc_vehicle_light_state_list_t
+  struct: true
+  codon: CVehicleLightStateList
+  assign: "vehicle_light_state_list_assign({out}, {})"
+  cpp: ["std::vector<std::pair<unsigned int, unsigned int>.*"]
+bounding_box_list:
+  c: tsc_bounding_box_list_t
+  struct: true
+  codon: CBoundingBoxList
+  assign: "bounding_box_list_assign({out}, {})"
+  cpp: ["std::vector<carla::geom::BoundingBox.*"]
+environment_object_list:
+  c: tsc_environment_object_list_t
+  struct: true
+  codon: CEnvironmentObjectList
+  assign: "environment_object_list_assign({out}, {})"
+  cpp: ["std::vector<carla::rpc::EnvironmentObject.*"]
+labelled_point_list:
+  c: tsc_labelled_point_list_t
+  struct: true
+  codon: CLabelledPointList
+  assign: "labelled_point_list_assign({out}, {})"
+  cpp: ["std::vector<carla::rpc::LabelledPoint.*"]
+light_list:
+  c: tsc_light_list_t
+  struct: true
+  codon: CLightList
+  assign: "light_list_assign({out}, {})"
+  cpp: ["std::vector<carla::client::Light.*"]
+# An optional labelled point: *has_value = 0 (and *out zeroed) when nothing is hit.
+optional_labelled_point:
+  c: tsc_labelled_point_t
+  c_param: "int32_t *has_value, tsc_labelled_point_t *{name}"
+  codon: "Ptr[i32], Ptr[CLabelledPoint]"
+  assign: "assign_optional({}, has_value, {out})"
+  invalid: "NULL, NULL"
+  cpp: ["(boost|std)::optional<carla::rpc::LabelledPoint>"]

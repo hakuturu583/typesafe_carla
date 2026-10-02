@@ -396,4 +396,25 @@ else:
     out("quaternion", f"{q23.x:.3f},{q23.y:.3f},{q23.z:.3f},{q23.w:.3f},{r23.pitch:.3f},{r23.yaw:.3f},"
                       f"{r23.roll:.3f}," + vec(q23.get_forward_vector()) + "," + vec(q23.get_right_vector())
         + "," + vec(q23.get_up_vector()))
+# Issue #21: world queries.
+out("i21_spectator", world.get_spectator().type_id)
+out("i21_environment", f"{len(world.get_environment_objects())},"
+                       f"{len(world.get_environment_objects(carla.CityObjectLabel.Buildings))},"
+                       f"{len(world.get_level_bbs(carla.CityObjectLabel.TrafficLight))},"
+                       f"{len(world.get_names_of_all_objects())}")
+tl_marks = m.get_all_landmarks_of_type("1000001")
+tl0 = world.get_traffic_light_from_opendrive_id(tl_marks[0].id) if tl_marks else None
+out("i21_traffic_lights", f"{len(tl_marks)},{int(tl0 is not None)},"
+                          f"{int(world.get_traffic_light_from_opendrive_id('no-such-signal') is None)},"
+                          f"{len(world.get_traffic_lights_in_junction(jn.id))},"
+                          f"{len(world.get_traffic_lights_from_waypoint(junction_wp, 100.0))}")
+out("i21_landmark_lookup", f"{int(world.get_traffic_light(tl_marks[0]) is not None)},"
+                           f"{int(world.get_traffic_sign(tl_marks[0]) is not None)}")
+out("i21_vehicle_light_states", len(world.get_vehicles_light_states()))
+p0_above = carla.Location(p0.location.x, p0.location.y, p0.location.z + 5.0)
+ground = world.ground_projection(p0_above)
+ray = world.cast_ray(p0_above, carla.Location(p0_above.x, p0_above.y, p0_above.z - 20.0))
+out("i21_ground", f"{int(ground.label)},{ground.location.z:.3f},{int(ray[0].label)},{ray[0].location.z:.3f}")
+sky = world.project_point(p0_above, carla.Vector3D(0.0, 0.0, 1.0), 50.0)
+out("i21_projections", f"{int(sky is None)},{len(ray) > 0:d}")
 sys.stdout.flush()

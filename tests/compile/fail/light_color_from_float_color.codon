@@ -1,0 +1,10 @@
+# Lights take an 8-bit Color, not a FloatColor.
+# expect-error: 'FloatColor' does not match expected type 'Color'
+import typesafe_carla as carla
+
+def tint(world: carla.World):
+    lm = world.get_lightmanager()
+    lm.set_color(lm.get_all_lights(), carla.FloatColor(1.0, 0.0, 0.0))
+
+# Compile-only: Codon type-checks a function only when it is called.
+tint(carla.Client("localhost", 2000).get_world())

@@ -8,13 +8,13 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**246 of 326 methods bound (75%), 112 of them generated.**
+**285 of 344 methods bound (82%), 140 of them generated.**
 
 | class | bound |
 |---|---|
 | `carla::client::Client` | 26 / 27 |
-| `carla::client::World` | 17 / 48 |
-| `carla::client::Map` | 14 / 18 |
+| `carla::client::World` | 44 / 48 |
+| `carla::client::Map` | 15 / 18 |
 | `carla::client::Waypoint` | 18 / 22 |
 | `carla::client::Junction` | 3 / 3 |
 | `carla::client::Landmark` | 23 / 23 |
@@ -28,8 +28,9 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `carla::client::BlueprintLibrary` | 5 / 10 |
 | `carla::client::ActorBlueprint` | 8 / 11 |
 | `carla::client::ActorList` | 3 / 8 |
-| `carla::client::WorldSnapshot` | 4 / 10 |
+| `carla::client::WorldSnapshot` | 5 / 10 |
 | `carla::client::DebugHelper` | 5 / 5 |
+| `carla::client::LightManager` | 10 / 18 |
 | `carla::traffic_manager::TrafficManager` | 31 / 45 |
 
 ## Methods
@@ -71,51 +72,51 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | method | binding |
 |---|---|
 | `ApplyColorTextureToObject` | — |
-| `ApplyColorTextureToObjects` | — |
+| `ApplyColorTextureToObjects` | generated |
 | `ApplyFloatColorTextureToObject` | — |
-| `ApplyFloatColorTextureToObjects` | — |
+| `ApplyFloatColorTextureToObjects` | generated |
 | `ApplySettings` | hand-written |
 | `ApplyTexturesToObject` | — |
-| `ApplyTexturesToObjects` | — |
-| `CastRay` | — |
-| `EnableEnvironmentObjects` | — |
-| `FreezeAllTrafficLights` | — |
+| `ApplyTexturesToObjects` | generated |
+| `CastRay` | generated |
+| `EnableEnvironmentObjects` | generated |
+| `FreezeAllTrafficLights` | generated |
 | `GetActor` | hand-written |
 | `GetActors` | hand-written |
 | `GetBlueprintLibrary` | hand-written |
-| `GetEnvironmentObjects` | — |
-| `GetEpisode` | — |
+| `GetEnvironmentObjects` | generated |
+| `GetEpisode` | hand-written |
 | `GetId` | hand-written |
-| `GetLevelBBs` | — |
-| `GetLightManager` | — |
+| `GetLevelBBs` | generated |
+| `GetLightManager` | generated |
 | `GetMap` | hand-written |
-| `GetNamesOfAllObjects` | — |
+| `GetNamesOfAllObjects` | generated |
 | `GetRandomLocationFromNavigation` | hand-written |
 | `GetSettings` | hand-written |
 | `GetSnapshot` | hand-written |
-| `GetSpectator` | — |
-| `GetTrafficLight` | — |
-| `GetTrafficLightFromOpenDRIVE` | — |
-| `GetTrafficLightsFromWaypoint` | — |
-| `GetTrafficLightsInJunction` | — |
-| `GetTrafficSign` | — |
-| `GetVehiclesLightStates` | — |
+| `GetSpectator` | generated |
+| `GetTrafficLight` | generated |
+| `GetTrafficLightFromOpenDRIVE` | generated |
+| `GetTrafficLightsFromWaypoint` | generated |
+| `GetTrafficLightsInJunction` | generated |
+| `GetTrafficSign` | generated |
+| `GetVehiclesLightStates` | generated |
 | `GetWeather` | hand-written |
-| `GroundProjection` | — |
+| `GroundProjection` | generated |
 | `IsWeatherEnabled` | hand-written |
-| `LoadLevelLayer` | — |
+| `LoadLevelLayer` | generated |
 | `MakeDebugHelper` | hand-written |
-| `OnTick` | — |
-| `ProjectPoint` | — |
-| `RemoveOnTick` | — |
-| `ResetAllTrafficLights` | — |
-| `SetPedestriansCrossFactor` | — |
-| `SetPedestriansSeed` | — |
+| `OnTick` | hand-written |
+| `ProjectPoint` | generated |
+| `RemoveOnTick` | hand-written |
+| `ResetAllTrafficLights` | generated |
+| `SetPedestriansCrossFactor` | generated |
+| `SetPedestriansSeed` | generated |
 | `SetWeather` | hand-written |
 | `SpawnActor` | hand-written |
 | `Tick` | hand-written |
 | `TrySpawnActor` | hand-written |
-| `UnloadLevelLayer` | — |
+| `UnloadLevelLayer` | generated |
 | `WaitForTick` | hand-written |
 | `operator=` | — |
 
@@ -134,7 +135,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetJunctionWaypoints` | — |
 | `GetLandmarkGroup` | generated |
 | `GetLandmarksFromId` | generated |
-| `GetMap` | — |
+| `GetMap` | hand-written |
 | `GetName` | hand-written |
 | `GetOpenDrive` | hand-written |
 | `GetRecommendedSpawnPoints` | hand-written |
@@ -386,7 +387,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 |---|---|
 | `Contains` | — |
 | `Find` | hand-written |
-| `GetFrame` | — |
+| `GetFrame` | hand-written |
 | `GetId` | hand-written |
 | `GetTimestamp` | hand-written |
 | `begin` | — |
@@ -404,6 +405,29 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `DrawLine` | hand-written |
 | `DrawPoint` | hand-written |
 | `DrawString` | hand-written |
+
+### `carla::client::LightManager`
+
+| method | binding |
+|---|---|
+| `GetAllLights` | generated |
+| `GetColor` | — |
+| `GetIntensity` | — |
+| `GetLightGroup` | — |
+| `GetLightState` | hand-written |
+| `GetTurnedOffLights` | generated |
+| `GetTurnedOnLights` | generated |
+| `IsActive` | — |
+| `SetActive` | hand-written |
+| `SetColor` | hand-written |
+| `SetDayNightCycle` | generated |
+| `SetEpisode` | — |
+| `SetIntensity` | hand-written |
+| `SetLightGroup` | hand-written |
+| `SetLightState` | hand-written |
+| `SetLightStateNoLock` | — |
+| `TurnOff` | — |
+| `TurnOn` | — |
 
 ### `carla::traffic_manager::TrafficManager`
 

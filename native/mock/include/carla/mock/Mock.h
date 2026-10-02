@@ -776,6 +776,11 @@ class Command {
 };
 
 }  // namespace rpc
+}  // namespace carla
+
+#include "carla/mock/WorldExtras.h"  // issue #21
+
+namespace carla {
 
 namespace sensor {
 class SensorData;
@@ -795,6 +800,7 @@ struct ActorData;
 
 class Junction;
 class Landmark;
+class LightManager;
 
 class Timestamp {
  public:
@@ -892,8 +898,10 @@ class Map : public std::enable_shared_from_this<Map> {
   std::vector<SharedPtr<Landmark>> GetLandmarksFromId(std::string id) const;
   std::vector<SharedPtr<Landmark>> GetLandmarkGroup(const Landmark &landmark) const;
   void CookInMemoryMap(const std::string &path) const;
+  const road::Map &GetMap() const { return _road_map; }
 
  private:
+  road::Map _road_map;
   std::string _name;
   geom::GeoLocation _geo_reference;
   geom::GeoProjection _geo_projection;
@@ -1150,6 +1158,7 @@ class TrafficSign : public Actor {
  public:
   using Actor::Actor;
   const geom::BoundingBox &GetTriggerVolume() const { return GetBoundingBox(); }
+  road::SignId GetSignId() const;  // issue #21 (world_extras.cpp)
 };
 
 // Cycles Green -> Yellow -> Red with the configured times unless frozen.
@@ -1254,6 +1263,19 @@ class DebugHelper {
   std::shared_ptr<mock::Episode> _episode;
 };
 
+namespace detail {
+// LibCarla's EpisodeProxy: Lock() gives the client's Simulator (here, the
+// mock server's episode). Issue #21 uses its address as the client identity.
+class EpisodeProxy {
+ public:
+  explicit EpisodeProxy(std::shared_ptr<mock::Episode> episode) : _episode(std::move(episode)) {}
+  std::shared_ptr<mock::Episode> Lock() const { return _episode; }
+
+ private:
+  std::shared_ptr<mock::Episode> _episode;
+};
+}  // namespace detail
+
 class World {
  public:
   explicit World(std::shared_ptr<mock::Episode> episode) : _episode(std::move(episode)) {}
@@ -1282,6 +1304,49 @@ class World {
   DebugHelper MakeDebugHelper() const { return DebugHelper(_episode); }
   rpc::EpisodeSettings GetSettings() const;
   uint64_t ApplySettings(const rpc::EpisodeSettings &settings, time_duration timeout);
+
+  // Issue #21 (see mock/src/world_extras.cpp).
+  detail::EpisodeProxy GetEpisode() const { return detail::EpisodeProxy(_episode); }
+  SharedPtr<Actor> GetSpectator() const;
+  SharedPtr<Actor> GetTrafficLightFromOpenDRIVE(const road::SignId &sign_id) const;
+  SharedPtr<Actor> GetTrafficSign(const Landmark &landmark) const;
+  SharedPtr<Actor> GetTrafficLight(const Landmark &landmark) const;
+  std::vector<SharedPtr<Actor>> GetTrafficLightsFromWaypoint(const Waypoint &waypoint,
+                                                             double distance) const;
+  std::vector<SharedPtr<Actor>> GetTrafficLightsInJunction(const road::JuncId junc_id) const;
+  void ResetAllTrafficLights();
+  void FreezeAllTrafficLights(bool frozen);
+  rpc::VehicleLightStateList GetVehiclesLightStates() const;
+  std::vector<geom::BoundingBox> GetLevelBBs(uint8_t queried_tag) const;
+  std::vector<rpc::EnvironmentObject> GetEnvironmentObjects(uint8_t queried_tag) const;
+  void EnableEnvironmentObjects(std::vector<uint64_t> env_objects_ids, bool enable) const;
+  std::vector<std::string> GetNamesOfAllObjects() const;
+  std::optional<rpc::LabelledPoint> ProjectPoint(geom::Location location, geom::Vector3D direction,
+                                                 float search_distance = 10000.f) const;
+  std::optional<rpc::LabelledPoint> GroundProjection(geom::Location location,
+                                                     float search_distance = 10000.0) const;
+  std::vector<rpc::LabelledPoint> CastRay(geom::Location start_location,
+                                          geom::Location end_location) const;
+  void LoadLevelLayer(rpc::MapLayer map_layers) const;
+  void UnloadLevelLayer(rpc::MapLayer map_layers) const;
+  void SetPedestriansCrossFactor(float percentage);
+  void SetPedestriansSeed(unsigned int seed);
+  float GetIMUSensorGravity() const;  // ue5-dev only
+  void SetIMUSensorGravity(float gravity);
+  SharedPtr<LightManager> GetLightManager() const;
+  size_t OnTick(std::function<void(WorldSnapshot)> callback);
+  void RemoveOnTick(size_t callback_id);
+  void ApplyColorTextureToObjects(const std::vector<std::string> &objects_names,
+                                  const rpc::MaterialParameter &parameter,
+                                  const rpc::TextureColor &Texture);
+  void ApplyFloatColorTextureToObjects(const std::vector<std::string> &objects_names,
+                                       const rpc::MaterialParameter &parameter,
+                                       const rpc::TextureFloatColor &Texture);
+  void ApplyTexturesToObjects(const std::vector<std::string> &objects_names,
+                              const rpc::TextureColor &diffuse_texture,
+                              const rpc::TextureFloatColor &emissive_texture,
+                              const rpc::TextureFloatColor &normal_texture,
+                              const rpc::TextureFloatColor &ao_roughness_metallic_emissive_texture);
 
  private:
   std::shared_ptr<mock::Episode> _episode;
@@ -1525,3 +1590,5 @@ class CollisionEvent : public SensorData {
 }  // namespace data
 }  // namespace sensor
 }  // namespace carla
+
+#include "carla/mock/Lights.h"  // issue #21

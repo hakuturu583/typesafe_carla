@@ -106,6 +106,15 @@ static void test_layout(void) {
   CHECK(sizeof(tsc_bone_transform_out_t) == 160);
   CHECK(sizeof(tsc_string_list_t) == 16);         /* issue #23 */
   CHECK(sizeof(tsc_world_settings_ext_t) == 32);  /* issue #23 */
+  /* Issue #21 */
+  CHECK(sizeof(tsc_vehicle_light_state_t) == 8);
+  CHECK(sizeof(tsc_environment_object_t) == 152);
+  CHECK(offsetof(tsc_environment_object_t, transform) == 24);
+  CHECK(offsetof(tsc_environment_object_t, type) == 144);
+  CHECK(sizeof(tsc_labelled_point_t) == 32);
+  CHECK(sizeof(tsc_light_t) == 32);
+  CHECK(sizeof(tsc_light_state_t) == 24);
+  CHECK(offsetof(tsc_light_state_t, group) == 12);
 }
 
 /* Issue #23, on any backend: no server needed. */
@@ -1195,6 +1204,149 @@ static void test_mock_issue20(void) {
   CHECK(tsc_live_handle_count() == before);
 }
 
+/* Issue #21: world queries, caller-owned lists, the light manager, on_tick. */
+static void test_mock_issue21(void) {
+  uint64_t before = tsc_live_handle_count();
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2121, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+
+  tsc_actor_t *spectator = NULL;
+  CHECK_OK(tsc_world_get_spectator(world, &spectator));
+  CHECK(spectator != NULL && tsc_handle_kind(H(spectator)) == TSC_KIND_ACTOR);
+  tsc_handle_release(H(spectator));
+
+  tsc_traffic_light_t *light = (tsc_traffic_light_t *)0x1;
+  CHECK_OK(tsc_world_get_traffic_light_from_opendrive_id(world, "nope", 4, &light));
+  CHECK(light == NULL);
+  CHECK_OK(tsc_world_get_traffic_light_from_opendrive_id(world, "1000", 4, &light));
+  CHECK(light != NULL && tsc_handle_kind(H(light)) == TSC_KIND_TRAFFIC_LIGHT);
+  tsc_handle_release(H(light));
+
+  tsc_traffic_light_list_t *lights = NULL;
+  CHECK_OK(tsc_world_get_traffic_lights_in_junction(world, 12345, &lights));
+  CHECK(lights != NULL && tsc_traffic_light_list_size(lights) == 0);
+  tsc_handle_release(H(lights));
+  tsc_waypoint_t *before_light = NULL;
+  tsc_map_t *map = NULL;
+  tsc_location_t at = {90.0, 0.0, 0.0};
+  CHECK_OK(tsc_world_get_map(world, &map));
+  CHECK_OK(tsc_map_get_waypoint(map, &at, 1, 2, &before_light));
+  CHECK_OK(tsc_world_get_traffic_lights_from_waypoint(world, before_light, 20.0, &lights));
+  CHECK(tsc_traffic_light_list_size(lights) == 1);
+  CHECK_OK(tsc_traffic_light_list_get(lights, 0, &light));
+  CHECK(tsc_handle_kind(H(light)) == TSC_KIND_TRAFFIC_LIGHT);
+  tsc_handle_release(H(light));
+  CHECK(tsc_traffic_light_list_get(lights, 1, &light) == TSC_NOT_FOUND && light == NULL);
+  tsc_handle_release(H(lights));
+  tsc_handle_release(H(before_light));
+  tsc_handle_release(H(map));
+
+  tsc_bounding_box_list_t boxes = {NULL, 0};
+  CHECK(tsc_world_get_level_bbs(world, 256, &boxes) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_world_get_level_bbs(world, 255, &boxes));
+  CHECK(boxes.size == 3);
+  tsc_bounding_box_list_free(&boxes);
+  CHECK(boxes.items == NULL && boxes.size == 0);
+  tsc_bounding_box_list_free(&boxes); /* idempotent */
+
+  tsc_environment_object_list_t objects = {NULL, 0};
+  CHECK_OK(tsc_world_get_environment_objects(world, 3 /* Buildings */, &objects));
+  CHECK(objects.size == 1 && strcmp(objects.items[0].name.data, "SM_Building_1") == 0);
+  tsc_environment_object_list_free(&objects);
+
+  tsc_string_list_t names = {NULL, 0};
+  CHECK_OK(tsc_world_get_names_of_all_objects(world, &names));
+  CHECK(names.size == 3);
+  tsc_string_list_free(&names);
+
+  tsc_labelled_point_t point;
+  int32_t found = -1;
+  tsc_location_t above = {10.0, 0.0, 5.0};
+  tsc_vector3d_t up = {0.0, 0.0, 1.0};
+  CHECK_OK(tsc_world_project_point(world, &above, &up, 100.0, &found, &point));
+  CHECK(found == 0);
+  CHECK_OK(tsc_world_ground_projection(world, &above, 100.0, &found, &point));
+  CHECK(found == 1 && point.label == 1 /* Roads */ && point.location.z == 0.0);
+  CHECK(tsc_world_ground_projection(world, &above, -1.0, &found, &point) == TSC_INVALID_ARGUMENT);
+
+  tsc_string_t object = {(char *)"SM_Tree_1", 9};
+  tsc_color_t pixels[2] = {{1, 2, 3, 4}, {5, 6, 7, 8}};
+  tsc_texture_color_t texture = {2, 1, pixels};
+  CHECK_OK(tsc_world_apply_color_texture_to_objects(world, &object, 1, TSC_MATERIAL_DIFFUSE,
+                                                    &texture));
+  CHECK(tsc_world_apply_color_texture_to_objects(world, &object, 1, 7, &texture) ==
+        TSC_INVALID_ARGUMENT);
+  tsc_texture_color_t missing = {2, 1, NULL};
+  CHECK(tsc_world_apply_color_texture_to_objects(world, &object, 1, TSC_MATERIAL_DIFFUSE,
+                                                 &missing) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_world_apply_color_texture_to_objects(world, NULL, 0, TSC_MATERIAL_DIFFUSE,
+                                                 &texture) == TSC_INVALID_ARGUMENT);
+
+  /* Light manager: bulk setters check every id first. */
+  tsc_light_manager_t *manager = NULL;
+  CHECK_OK(tsc_world_get_light_manager(world, &manager));
+  CHECK(tsc_handle_kind(H(manager)) == TSC_KIND_LIGHT_MANAGER);
+  tsc_light_list_t all = {NULL, 0}, on = {NULL, 0};
+  CHECK_OK(tsc_light_manager_get_all_lights(manager, TSC_LIGHT_GROUP_NONE, &all));
+  CHECK(all.size == 4);
+  CHECK_OK(tsc_light_manager_get_turned_on_lights(manager, TSC_LIGHT_GROUP_NONE, &on));
+  CHECK(on.size == 3);
+  uint32_t ids[2] = {all.items[0].id, 999};
+  int32_t active[2] = {0, 0};
+  CHECK(tsc_light_manager_set_active(manager, ids, 2, active) == TSC_NOT_FOUND);
+  tsc_light_state_t state;
+  CHECK_OK(tsc_light_manager_get_light_states(manager, ids, 1, &state));
+  CHECK(state.active == 1); /* unchanged */
+  double intensities[1] = {0.0 / 0.0};
+  CHECK(tsc_light_manager_set_intensity(manager, ids, 1, intensities) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_light_manager_set_active(manager, ids, 1, active));
+  CHECK_OK(tsc_light_manager_get_light_states(manager, ids, 1, &state));
+  CHECK(state.active == 0 && state.color.a == 255);
+  CHECK_OK(tsc_light_manager_set_day_night_cycle(manager, 0));
+  tsc_light_list_free(&all);
+  tsc_light_list_free(&on);
+  tsc_handle_release(H(manager));
+
+  /* on_tick: LibCarla's thread only queues snapshots. */
+  tsc_tick_listener_t *listener = NULL;
+  CHECK_OK(tsc_world_on_tick(world, 0, &listener));
+  CHECK(tsc_handle_kind(H(listener)) == TSC_KIND_TICK_LISTENER);
+  uint64_t frame = 0;
+  size_t pending = 99;
+  CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+  CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+  CHECK_OK(tsc_tick_listener_pending_count(listener, &pending));
+  CHECK(pending == 2);
+  int32_t reached = -1;
+  CHECK_OK(tsc_tick_listener_wait_for_frame(listener, frame, 1.0, &reached));
+  CHECK(reached == 1);
+  CHECK_OK(tsc_tick_listener_wait_for_frame(listener, frame + 100, 0.01, &reached));
+  CHECK(reached == 0);
+  uint64_t token = 0, same = 1;
+  tsc_world_t *again = NULL;
+  CHECK_OK(tsc_client_get_world(client, &again));
+  CHECK_OK(tsc_world_get_client_token(world, &token));
+  CHECK_OK(tsc_world_get_client_token(again, &same));
+  CHECK(token != 0 && token == same);
+  tsc_handle_release(H(again));
+  tsc_world_snapshot_t *snapshot = NULL;
+  CHECK_OK(tsc_tick_listener_poll(listener, &snapshot));
+  CHECK(snapshot != NULL);
+  tsc_handle_release(H(snapshot));
+  CHECK_OK(tsc_tick_listener_stop(listener));
+  CHECK_OK(tsc_tick_listener_stop(listener)); /* idempotent */
+  CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+  CHECK_OK(tsc_tick_listener_pending_count(listener, &pending));
+  CHECK(pending == 0);
+  tsc_handle_release(H(listener));
+
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK(tsc_live_handle_count() == before);
+}
+
 static void test_mock_timeout(void) {
   const char *host = "carla.invalid";
   tsc_client_t *client = NULL;
@@ -1327,6 +1479,7 @@ int main(void) {
     test_mock_issue22();
     test_mock_issue20();
     test_mock_issue19();
+    test_mock_issue21();
     test_mock_timeout();
   } else {
     printf("backend '%s': skipping mock-server checks\n", tsc_backend_name());

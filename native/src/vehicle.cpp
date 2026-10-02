@@ -60,14 +60,6 @@ auto checked_vector(const T *data, size_t size, const char *name) {
   return out;
 }
 
-uint8_t check_u8(int32_t v, const char *name) {
-  if (v < 0 || v > 255) {
-    fail(TSC_INVALID_ARGUMENT,
-         std::string(name) + " must be in [0, 255], got " + std::to_string(v));
-  }
-  return static_cast<uint8_t>(v);
-}
-
 // geom::Location converts from geom::Vector3D, so this serves both.
 carla::geom::Vector3D check_vector(const tsc_vector3d_t &v, const char *name) {
   return carla::geom::Vector3D(check_float(v.x, name), check_float(v.y, name),

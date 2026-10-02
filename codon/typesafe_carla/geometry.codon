@@ -271,6 +271,12 @@ def _vector_or(v, default: Vector3D, what: Literal[str]) -> Vector3D:
 def _upcast_vector(v: Vector3D) -> Vector3D:
     return v
 
+def _loc(l, what: Literal[str]) -> Ptr[CVector3D]:
+    """A Location argument by pointer (a Vector3D is accepted as in the Python API)."""
+    p = Ptr[CVector3D](1)
+    p[0] = _location_arg(l, what)._to_c()
+    return p
+
 def _location_arg(v, what: Literal[str]) -> Location:
     """An API argument documented as Location: a Location, or a Vector3D.
 

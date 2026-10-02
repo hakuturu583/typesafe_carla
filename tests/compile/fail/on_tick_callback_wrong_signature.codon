@@ -1,0 +1,12 @@
+# An on_tick callback receives a WorldSnapshot, not a SensorData.
+# expect-error: 'WorldSnapshot' does not match expected type 'SensorData'
+import typesafe_carla as carla
+
+def on_data(data: carla.SensorData):
+    print(data.frame)
+
+def start(world: carla.World):
+    world.on_tick(on_data)
+
+# Compile-only: Codon type-checks a function only when it is called.
+start(carla.Client("localhost", 2000).get_world())

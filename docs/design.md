@@ -607,6 +607,22 @@ carla.dispatch_sensor_callbacks()     # e.g. in an asynchronous main loop
 - **Exclusive modes.** `poll()` / `wait_for_data()` raise `CarlaError` on a
   sensor in callback mode, so the two consumers never compete for the queue.
 
+**World tick callbacks** (`World.on_tick`, issue #21) use the same registry
+and dispatcher. LibCarla's `World::OnTick` callback only queues the
+`WorldSnapshot` in a native tick listener (`tsc_world_on_tick`); the Codon
+callback receives it at the same dispatch points, in registration order
+together with the sensor callbacks (`carla.dispatch_callbacks()`;
+`dispatch_sensor_callbacks()` is the earlier name). Tick callbacks are keyed
+by (client, LibCarla callback id): LibCarla keeps them per Simulator (one
+per Client), across `load_world`, so any World of the client can remove
+them; `remove_on_tick(id)` removes the LibCarla registration and drops the
+undelivered snapshots. LibCarla's episode publishes a tick's state before it
+runs the OnTick callbacks, so `World.tick()` / `wait_for_tick()` could return
+before the frame is queued. They therefore wait, within their timeout, until
+each of the client's tick listeners has received the returned frame
+(`tsc_tick_listener_wait_for_frame`, a frame counter and a condition
+variable); a timeout there only delays delivery to a later dispatch point.
+
 The callback type is `Callable[[SensorData], None]`. Functions, bound methods,
 lambdas and closures are all accepted (Codon 0.19 cannot convert a capturing
 closure to a `Callable` directly, so `listen` wraps it in a generic adapter

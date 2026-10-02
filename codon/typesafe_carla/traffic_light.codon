@@ -120,14 +120,7 @@ class TrafficLight(Actor):
         """Every traffic light in this light's group, itself included."""
         out = Ptr[cobj](1)
         _check(tsc_traffic_light_get_group_traffic_lights(self._h.ptr, out))
-        h = Handle(out[0])
-        n = tsc_traffic_light_list_size(h.ptr)
-        result = List[TrafficLight](n)
-        for i in range(n):
-            _check(tsc_traffic_light_list_get(h.ptr, i, out))
-            result.append(TrafficLight(Handle(out[0])))
-        h.release()
-        return result
+        return _take_traffic_lights(out[0])
 
     def get_light_boxes(self) -> List[BoundingBox]:
         """The bounding boxes of the light's lamps (world coordinates)."""
@@ -137,6 +130,18 @@ class TrafficLight(Actor):
 
     def __repr__(self) -> str:
         return f"TrafficLight(id={self.id}, state={self.get_state()})"
+
+def _take_traffic_lights(ptr: cobj) -> List[TrafficLight]:
+    """The traffic lights of a tsc_traffic_light_list handle, which it releases."""
+    h = Handle(ptr)
+    n = tsc_traffic_light_list_size(h.ptr)
+    result = List[TrafficLight](n)
+    out = Ptr[cobj](1)
+    for i in range(n):
+        _check(tsc_traffic_light_list_get(h.ptr, i, out))
+        result.append(TrafficLight(Handle(out[0])))
+    h.release()
+    return result
 
 @extend
 class Actor:

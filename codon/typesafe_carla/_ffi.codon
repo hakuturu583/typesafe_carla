@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 3
-TSC_ABI_VERSION_MINOR = 4
+TSC_ABI_VERSION_MINOR = 5
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -31,6 +31,8 @@ TSC_KIND_WALKER_AI_CONTROLLER = 15
 TSC_KIND_TRAFFIC_LIGHT = 16
 TSC_KIND_BONE_LIST = 23  # issue #20
 TSC_KIND_TRAFFIC_SIGN = 24  # issue #19
+TSC_KIND_LIGHT_MANAGER = 25  # issue #21
+TSC_KIND_TICK_LISTENER = 26  # issue #21
 
 # --- POD mirrors (layouts checked by tests/native/test_ffi.c) ---------------
 
@@ -479,6 +481,66 @@ class CTextureFloatColor:
     height: u32
     pixels: Ptr[CFloatColor]
 
+# Issue #21: world queries, environment objects, lights, on_tick.
+@tuple
+class CVehicleLightState:
+    actor_id: u32
+    light_state: u32
+
+@tuple
+class CVehicleLightStateList:
+    items: Ptr[CVehicleLightState]
+    size: int
+
+@tuple
+class CBoundingBoxList:
+    items: Ptr[CBoundingBox]
+    size: int
+
+@tuple
+class CEnvironmentObject:
+    id: u64
+    name: CString
+    transform: CTransform
+    bounding_box: CBoundingBox
+    type: i32
+    reserved0: i32
+
+@tuple
+class CEnvironmentObjectList:
+    items: Ptr[CEnvironmentObject]
+    size: int
+
+@tuple
+class CLabelledPoint:
+    location: CVector3D
+    label: i32
+    reserved0: i32
+
+@tuple
+class CLabelledPointList:
+    items: Ptr[CLabelledPoint]
+    size: int
+
+@tuple
+class CLight:
+    id: u32
+    reserved0: u32
+    location: CVector3D
+
+@tuple
+class CLightList:
+    items: Ptr[CLight]
+    size: int
+
+@tuple
+class CLightState:
+    intensity: float
+    color: CColor
+    group: i32
+    active: i32
+    reserved0: i32
+
 # --- Functions ----------------------------------------------------------------
 
 from C import LIB.tsc_last_error_message() -> cobj
@@ -840,6 +902,60 @@ from C import LIB.tsc_traffic_sign_get_trigger_volume(cobj, Ptr[CBoundingBox]) -
 # END GENERATED traffic_sign
 from C import LIB.tsc_transform_list_free(Ptr[CTransformList]) -> None
 
+# Issue #21: world queries, environment objects, lights, textures, on_tick
+# BEGIN GENERATED world from bindings/world.yaml, do not edit
+from C import LIB.tsc_world_get_spectator(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_traffic_light_from_opendrive_id(cobj, cobj, int, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_traffic_sign(cobj, cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_traffic_light(cobj, cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_traffic_lights_from_waypoint(cobj, cobj, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_traffic_lights_in_junction(cobj, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_freeze_all_traffic_lights(cobj, i32) -> i32
+from C import LIB.tsc_world_reset_all_traffic_lights(cobj) -> i32
+from C import LIB.tsc_world_get_vehicles_light_states(cobj, Ptr[CVehicleLightStateList]) -> i32
+from C import LIB.tsc_world_get_level_bbs(cobj, i32, Ptr[CBoundingBoxList]) -> i32
+from C import LIB.tsc_world_get_environment_objects(cobj, i32, Ptr[CEnvironmentObjectList]) -> i32
+from C import LIB.tsc_world_enable_environment_objects(cobj, Ptr[u64], int, i32) -> i32
+from C import LIB.tsc_world_get_names_of_all_objects(cobj, Ptr[CStringList]) -> i32
+from C import LIB.tsc_world_cast_ray(cobj, Ptr[CVector3D], Ptr[CVector3D], Ptr[CLabelledPointList]) -> i32
+from C import LIB.tsc_world_project_point(cobj, Ptr[CVector3D], Ptr[CVector3D], float, Ptr[i32], Ptr[CLabelledPoint]) -> i32
+from C import LIB.tsc_world_ground_projection(cobj, Ptr[CVector3D], float, Ptr[i32], Ptr[CLabelledPoint]) -> i32
+from C import LIB.tsc_world_load_map_layer(cobj, u16) -> i32
+from C import LIB.tsc_world_unload_map_layer(cobj, u16) -> i32
+from C import LIB.tsc_world_set_pedestrians_seed(cobj, u32) -> i32
+from C import LIB.tsc_world_set_pedestrians_cross_factor(cobj, float) -> i32
+from C import LIB.tsc_world_get_imu_sensor_gravity(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_world_set_imu_sensor_gravity(cobj, float) -> i32
+from C import LIB.tsc_world_apply_color_texture_to_objects(cobj, Ptr[CString], int, i32, Ptr[CTextureColor]) -> i32
+from C import LIB.tsc_world_apply_float_color_texture_to_objects(cobj, Ptr[CString], int, i32, Ptr[CTextureFloatColor]) -> i32
+from C import LIB.tsc_world_apply_textures_to_objects(cobj, Ptr[CString], int, Ptr[CTextureColor], Ptr[CTextureFloatColor], Ptr[CTextureFloatColor], Ptr[CTextureFloatColor]) -> i32
+from C import LIB.tsc_world_get_light_manager(cobj, Ptr[cobj]) -> i32
+# END GENERATED world
+from C import LIB.tsc_vehicle_light_state_list_free(Ptr[CVehicleLightStateList]) -> None
+from C import LIB.tsc_bounding_box_list_free(Ptr[CBoundingBoxList]) -> None
+from C import LIB.tsc_environment_object_list_free(Ptr[CEnvironmentObjectList]) -> None
+from C import LIB.tsc_labelled_point_list_free(Ptr[CLabelledPointList]) -> None
+from C import LIB.tsc_light_list_free(Ptr[CLightList]) -> None
+from C import LIB.tsc_light_manager_get_light_states(cobj, Ptr[u32], int, Ptr[CLightState]) -> i32
+from C import LIB.tsc_light_manager_set_active(cobj, Ptr[u32], int, Ptr[i32]) -> i32
+from C import LIB.tsc_light_manager_set_color(cobj, Ptr[u32], int, Ptr[CColor]) -> i32
+from C import LIB.tsc_light_manager_set_intensity(cobj, Ptr[u32], int, Ptr[float]) -> i32
+from C import LIB.tsc_light_manager_set_light_group(cobj, Ptr[u32], int, Ptr[i32]) -> i32
+from C import LIB.tsc_light_manager_set_light_state(cobj, Ptr[u32], int, Ptr[CLightState]) -> i32
+# BEGIN GENERATED light_manager from bindings/light_manager.yaml, do not edit
+from C import LIB.tsc_light_manager_get_all_lights(cobj, i32, Ptr[CLightList]) -> i32
+from C import LIB.tsc_light_manager_get_turned_on_lights(cobj, i32, Ptr[CLightList]) -> i32
+from C import LIB.tsc_light_manager_get_turned_off_lights(cobj, i32, Ptr[CLightList]) -> i32
+from C import LIB.tsc_light_manager_set_day_night_cycle(cobj, i32) -> i32
+# END GENERATED light_manager
+from C import LIB.tsc_world_on_tick(cobj, int, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_client_token(cobj, Ptr[u64]) -> i32
+from C import LIB.tsc_tick_listener_wait_for_frame(cobj, u64, float, Ptr[i32]) -> i32
+from C import LIB.tsc_tick_listener_get_id(cobj, Ptr[u64]) -> i32
+from C import LIB.tsc_tick_listener_pending_count(cobj, Ptr[int]) -> i32
+from C import LIB.tsc_tick_listener_poll(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_tick_listener_stop(cobj) -> i32
+
 # --- Helpers --------------------------------------------------------------------
 
 def c_str(p: cobj) -> str:
@@ -869,6 +985,27 @@ def take_string_list(l: Ptr[CStringList]) -> List[str]:
     result = [copy_string(v.items[i]) for i in range(v.size)]
     tsc_string_list_free(l)
     return result
+
+def take_list(lst, convert, free):
+    """Converts the items of a caller-owned list struct, then frees it."""
+    l = lst[0]
+    try:
+        return [convert(l.items[i]) for i in range(l.size)]
+    finally:
+        free(lst)
+
+def ref(v: T, T: type) -> Ptr[T]:
+    """A pointer to a copy of v, for a `const T *` argument."""
+    p = Ptr[T](1)
+    p[0] = v
+    return p
+
+def array(values: List[T], T: type) -> Ptr[T]:
+    """The values as a C array, for a `const T *, size_t` argument."""
+    p = Ptr[T](len(values))
+    for i in range(len(values)):
+        p[i] = values[i]
+    return p
 
 class Handle:
     """Owns one reference to a native handle.

@@ -99,7 +99,6 @@ def test_generated_functions_are_not_hand_written():
     assert not duplicates, duplicates
 
 
-
 def test_bindgen_handle_outputs_and_multi_parameter_inputs(tmp_path):
     """Generator extensions (issue #22): a handle output is made inside
     new_handle (so *out is NULL on failure) and crosses as `T **out`; an input

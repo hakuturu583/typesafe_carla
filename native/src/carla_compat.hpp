@@ -18,6 +18,7 @@
 #include <carla/client/DebugHelper.h>
 #include <carla/client/Junction.h>
 #include <carla/client/Landmark.h>
+#include <carla/client/LightManager.h>
 #include <carla/client/Map.h>
 #include <carla/client/Sensor.h>
 #include <carla/client/Timestamp.h>
@@ -176,6 +177,26 @@ TSC_SKELETON_QUERY(get_socket_world_transforms, GetSocketWorldTransforms,
 TSC_SKELETON_QUERY(get_socket_relative_transforms, GetSocketRelativeTransforms,
                    std::vector<carla::geom::Transform>)
 #undef TSC_SKELETON_QUERY
+
+// World::GetIMUSensorGravity / SetIMUSensorGravity are in ue5-dev, not in
+// LibCarla 0.10.0's source (issue #21); there both throw (TSC_ERROR).
+template <typename W>
+float get_imu_sensor_gravity(const W &world) {
+  if constexpr (requires { world.GetIMUSensorGravity(); }) {
+    return world.GetIMUSensorGravity();
+  } else {
+    throw missing_in_libcarla("World::GetIMUSensorGravity");
+  }
+}
+
+template <typename W>
+void set_imu_sensor_gravity(W &world, float gravity) {
+  if constexpr (requires { world.SetIMUSensorGravity(gravity); }) {
+    world.SetIMUSensorGravity(gravity);
+  } else {
+    throw missing_in_libcarla("World::SetIMUSensorGravity");
+  }
+}
 
 #ifdef TSC_MOCK_LIBCARLA
 inline constexpr const char *kBackendName = "mock";

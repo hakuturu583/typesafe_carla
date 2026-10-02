@@ -1,0 +1,8 @@
+# In strict mode project_point's direction must be a Vector3D, not a Location.
+# expect-error: strict mode: convert with location.as_vector() (Location as Vector3D is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def look(world: carla.World, target: carla.Location):
+    print(world.project_point(carla.Location(0.0, 0.0, 10.0), target))
+
+look(carla.Client("localhost", 2000).get_world(), carla.Location(0.0, 0.0, -1.0))
