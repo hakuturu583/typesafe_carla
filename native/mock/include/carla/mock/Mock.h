@@ -689,7 +689,9 @@ class Waypoint : public std::enable_shared_from_this<Waypoint> {
                                                              bool stop_at_junction = false) const;
   std::vector<SharedPtr<Landmark>> GetLandmarksOfTypeInDistance(
       double distance, std::string filter_type, bool stop_at_junction = false) const;
-  bool IsRHT() const { return true; }
+  // Left-hand traffic beyond s = 150, so the tests can tell a working
+  // IsRHT() call from the 0.10.0 fallback (always true).
+  bool IsRHT() const { return _s <= 150.0; }
 
  private:
   int32_t _lane_id;

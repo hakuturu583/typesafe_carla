@@ -115,12 +115,18 @@ Two kinds of types in `types.yaml` go beyond a single value (issue #22):
     assign: "assign_optional({}, has_value, {out})"
   ```
 
+  `capacity` and `has_value` are fixed parameter names (not derived from
+  `{name}`), so a function can have at most one buffer or optional output:
+  two would declare the same C parameter twice.
+
 A handle *input* (`handle: true` without `from_carla`, e.g. `vehicle`,
 `landmark`) converts with `to_carla` as before.
 
 A call that differs between LibCarla versions names a `carla_compat.hpp`
 helper with `via`; the function then calls `via(self, args...)`, and
-`validate` accepts a LibCarla without the method:
+`validate` accepts a real LibCarla without the method (CARLA 0.10.0). The mock
+mirrors the newest LibCarla, so `validate` against the mock requires the method,
+which catches a misspelt `call`:
 
 ```yaml
 is_rht: {call: IsRHT, via: waypoint_is_rht, out: bool}

@@ -35,9 +35,11 @@ extern "C" {
  * 2.0: tsc_command_t gained `scalar` (and new command types), Milestone 4.
  * 2.1: tsc_sensor_pending_count; tsc_sensor_listen queue_capacity 0 = unbounded.
  * 3.0: VehiclePhysicsControl with every LibCarla field: physics-control
- *      snapshot handles, new vehicle/wheel structs (issue #12). */
+ *      snapshot handles, new vehicle/wheel structs (issue #12).
+ * 3.1: map geo-reference, XODR waypoints, landmarks as handles, lane markings,
+ *      traffic light geometry (#22). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 0
+#define TSC_ABI_VERSION_MINOR 1
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */

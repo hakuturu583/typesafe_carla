@@ -30,7 +30,7 @@ Milestones (design section 43):
 | 2: sensors | ✅ verified against a CARLA 0.10.0 server |
 | 3: distribution | ✅ release pipeline verified end to end (manylinux wheels from CI, clean-container `uv sync` → `build` → `./main` against a CARLA server); publishing to PyPI needs the one-time setup in [docs/releasing.md](docs/releasing.md) |
 | 4: broader compatibility | ✅ verified against a CARLA 0.10.0 server |
-| 5: binding generation | ✅ 44 C ABI functions generated from `bindings/*.yaml`, spec validated against LibCarla 0.10.0 and ue5-dev with libclang, [coverage report](docs/coverage.md) |
+| 5: binding generation | ✅ 69 C ABI functions generated from `bindings/*.yaml`, spec validated against LibCarla 0.10.0 and ue5-dev with libclang, [coverage report](docs/coverage.md) |
 
 | Area | Implemented |
 |---|---|
@@ -75,6 +75,12 @@ Notes on issue #22 (map, waypoint, landmark and traffic light gaps):
 - `TrafficLight.get_affected_lane_waypoints()` / `get_stop_waypoints()` /
   `get_group_traffic_lights()` skip the null entries LibCarla can return
   (the Python API would put `None` in the list).
+- `Waypoint.get_landmarks*` with a negative or non-finite distance raises
+  `CarlaError`. `Map.get_waypoint_xodr` with a road id outside uint32 or a
+  lane id outside int32 returns `None` (the Python API raises `OverflowError`).
+- `Actor.trigger_volume` (the compatibility shortcut on a plain `Actor`)
+  works for traffic lights only; stop and yield signs need the `TrafficSign`
+  class (TrafficSign support: #19).
 - `Map.save_to_disk` raises `CarlaError` when the file cannot be written (the
   Python API ignores it); `cook_in_memory_map`, like LibCarla, only logs it.
 
@@ -85,7 +91,7 @@ Notes on Milestone 4:
 - **Enumerations.** `TrafficLightState`, `VehicleLightState` and `LaneType` are integer constants, as in the Python API (`VehicleLightState` values combine with `|`).
 
 Notes on Milestone 5:
-- **Generated plumbing, hand-written API.** 44 C ABI functions are generated from
+- **Generated plumbing, hand-written API.** 69 C ABI functions are generated from
   `bindings/*.yaml`: the C declarations, the C++ shim and the Codon FFI. Each one is a handle check,
   argument conversions and a single LibCarla call. The ABI is unchanged; libclang compared every
   prototype and struct size before and after the migration. See [docs/bindgen.md](docs/bindgen.md).
@@ -129,7 +135,7 @@ resolved commit are compiled in: `typesafe-codon info`,
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
-| 0.1.0 | 3.0 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
+| 0.1.0 | 3.1 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
 
 ### Backends
 

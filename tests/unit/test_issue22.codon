@@ -66,6 +66,9 @@ assert raised
 w1 = m.get_waypoint(carla.Location(20.0, 0.0, 0.0))
 w2 = w1.get_right_lane()
 assert w1.lane_id == -1 and w2 is not None
+# The mock drives on the left beyond s = 150: is_rht really asks LibCarla.
+far_wp = m.get_waypoint_xodr(1, -1, 180.0)
+assert far_wp is not None and not far_wp.is_rht
 assert w1.is_rht and not w1.is_intersection and w1.is_intersection == w1.is_junction
 assert w1.lane_change == carla.LaneChange.Right and w2.lane_change == carla.LaneChange.Left
 left = w1.left_lane_marking
@@ -92,7 +95,7 @@ same = m.get_all_landmarks_from_id(lm.id)
 assert len(same) == 1 and same[0].id == lm.id
 assert len(m.get_all_landmarks_from_id("no such id")) == 0
 group = m.get_landmark_group(lm)
-assert [g.id for g in group] == ["1000"]
+assert len(group) == 0  # a stop sign has no controllers
 ahead = w1.get_landmarks(100.0)
 assert len(ahead) == 1 and ahead[0].distance == 80.0
 lw = ahead[0].waypoint

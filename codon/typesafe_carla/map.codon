@@ -504,10 +504,10 @@ class Map:
         _check(tsc_map_transform_to_geolocation(self._h.ptr, loc, _projection_ptr(projection), out))
         return GeoLocation._from_c(out[0])
 
-    def geolocation_to_transform(self, geolocation: GeoLocation, projection=None) -> Location:
+    def geolocation_to_transform(self, geo_location: GeoLocation, projection=None) -> Location:
         """The inverse of transform_to_geolocation (needs CARLA ue5-dev)."""
         geo = Ptr[CGeoLocation](1)
-        geo[0] = geolocation._to_c()
+        geo[0] = geo_location._to_c()
         out = Ptr[CVector3D](1)
         _check(tsc_map_geolocation_to_transform(self._h.ptr, geo, _projection_ptr(projection), out))
         return Location._from_c(out[0])
@@ -527,7 +527,7 @@ class Map:
         return _take_landmarks(out[0])
 
     def get_landmark_group(self, landmark: Landmark) -> List[Landmark]:
-        """The landmarks controlled together with `landmark`, itself included."""
+        """The landmarks of the controllers of `landmark` (empty if it has none)."""
         out = Ptr[cobj](1)
         _check(tsc_map_get_landmark_group(self._h.ptr, landmark._h.ptr, out))
         return _take_landmarks(out[0])

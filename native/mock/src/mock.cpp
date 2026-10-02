@@ -1318,9 +1318,10 @@ std::vector<SharedPtr<Landmark>> Map::GetLandmarksFromId(std::string id) const {
   return result;
 }
 
-std::vector<SharedPtr<Landmark>> Map::GetLandmarkGroup(const Landmark &landmark) const {
-  // One controller per signal, controlling only that signal.
-  return GetLandmarksFromId(landmark.GetId());
+std::vector<SharedPtr<Landmark>> Map::GetLandmarkGroup(const Landmark &) const {
+  // LibCarla returns the landmarks of the signal's controllers. The mock's
+  // only signal is a stop sign, which (as in CARLA's towns) has none.
+  return {};
 }
 
 void Map::CookInMemoryMap(const std::string &path) const {

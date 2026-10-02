@@ -841,6 +841,11 @@ static void test_mock_issue22(void) {
   CHECK(lane_change == 1 /* Right */);
   CHECK_OK(tsc_waypoint_is_rht(wp, &rht));
   CHECK(rht == 1);
+  tsc_waypoint_t *far = NULL; /* the mock drives on the left beyond s = 150 */
+  CHECK_OK(tsc_map_get_waypoint_xodr(map, 1, -1, 180.0, &far));
+  CHECK_OK(tsc_waypoint_is_rht(far, &rht));
+  CHECK(rht == 0);
+  tsc_handle_release(H(far));
   CHECK(tsc_waypoint_get_left_lane_marking(wp, NULL, &marking) == TSC_INVALID_ARGUMENT);
 
   /* Landmarks ahead, as handles. */
@@ -861,14 +866,14 @@ static void test_mock_issue22(void) {
   CHECK_OK(tsc_landmark_get_h_offset(landmark, &h_offset));
   CHECK(h_offset == 0.25);
   CHECK_OK(tsc_map_get_landmark_group(map, landmark, &group));
-  CHECK(tsc_landmark_list_size(group) == 1);
+  CHECK(tsc_landmark_list_size(group) == 0); /* a stop sign has no controllers */
   tsc_landmark_handle_t *missing = NULL;
   tsc_landmark_list_t *rejected = NULL;
   CHECK(tsc_landmark_list_get_landmark(ahead, 1, &missing) == TSC_NOT_FOUND && missing == NULL);
   CHECK(tsc_waypoint_get_landmarks(wp, -1.0, 0, &rejected) == TSC_INVALID_ARGUMENT &&
         rejected == NULL);
   /* A landmark handle is not a waypoint handle. */
-  CHECK(tsc_waypoint_get_lane_change((const tsc_waypoint_t *)group, &lane_change) ==
+  CHECK(tsc_waypoint_get_lane_change((const tsc_waypoint_t *)landmark, &lane_change) ==
         TSC_INVALID_ARGUMENT);
 
   /* Traffic light geometry. */

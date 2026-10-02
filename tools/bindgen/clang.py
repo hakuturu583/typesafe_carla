@@ -202,12 +202,14 @@ def _matches(patterns: tuple[str, ...], canonical: str) -> bool:
     return any(re.fullmatch(p, canonical) for p in patterns)
 
 
-def _check(f: Function, overloads: list[Method]) -> str | None:
+def _check(f: Function, overloads: list[Method], allow_missing_via: bool = False) -> str | None:
     """None if one overload accepts the spec's arguments, else why not. A
-    result the spec does not output is ignored (e.g. Destroy's bool). A `via`
-    helper stands in for a method this LibCarla does not have."""
+    result the spec does not output is ignored (e.g. Destroy's bool). With
+    allow_missing_via (a real LibCarla build), a `via` helper stands in for a
+    method that LibCarla does not have; the mock, which mirrors the newest
+    LibCarla, must have it, so a misspelt `call` still fails there."""
     if f.via and not overloads:
-        return None
+        return None if allow_missing_via else "no such method (a `via` call must exist in the mock)"
     reasons = []
     for m in overloads:
         n = len(f.args)
@@ -244,11 +246,12 @@ def validate(spec: Spec, build_dir: Path) -> int:
     defs = _class_definitions(_parse(source, args, bodies=False))
     methods = {cls: _methods(defs, cls) for cls in spec.classes()}
     failures = []
+    backend = _cache_var(build_dir, "TSC_BACKEND")
     for f in spec.functions:
-        why = _check(f, methods[f.cpp_class].get(f.call, []))
+        why = _check(f, methods[f.cpp_class].get(f.call, []),
+                     allow_missing_via=backend == "libcarla")
         if why:
             failures.append(f"{f.spec_file}: {f.name} -> {f.cpp_class}::{f.call}: {why}")
-    backend = _cache_var(build_dir, "TSC_BACKEND")
     if failures:
         print(f"bindgen validate ({backend}): {len(failures)} of {len(spec.functions)} functions "
               "do not match the headers:", file=sys.stderr)
