@@ -24,7 +24,7 @@ You don't need:
 - a LibCarla installation;
 - the CARLA Python package.
 
-`typesafe-codon build` does need a system C compiler (`cc`), because Codon links executables with it. `run` does not.
+`typesafe-codon build` does need a system C++ compiler and zlib (Ubuntu: `apt install g++ zlib1g-dev`), because Codon links executables with `g++ ... -lz`. `run` does not.
 
 The executable produced by `build` finds the native library through its
 RPATH. It runs without the launcher, as long as the virtual environment it

@@ -5,7 +5,7 @@
 #
 # with no system CARLA Python package, no manually installed Codon, no
 # CODON_PATH and no LibCarla installation. The container gets only uv, a C
-# compiler (Codon links executables with `cc`) and a directory of wheels
+# C++ compiler and zlib (Codon links executables with `g++ ... -lz`) and a directory of wheels
 # (typesafe-carla + typesafe-carla-toolchain) standing in for PyPI.
 #
 # usage: tests/distribution/clean_env.sh WHEEL_DIR [CARLA_PORT] [IMAGE]
@@ -21,7 +21,7 @@ docker run --rm --net=host \
   -v "$wheels":/wheels:ro -v "$here":/src:ro -v "$uv_bin":/usr/local/bin/uv:ro \
   -e CARLA_PORT="$port" "$image" bash -euo pipefail -c '
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq >/dev/null && apt-get install -y -qq gcc ca-certificates >/dev/null
+    apt-get update -qq >/dev/null && apt-get install -y -qq g++ zlib1g-dev ca-certificates >/dev/null
     echo "== clean environment"
     ! command -v codon && echo "no codon on PATH"
     ! python3 -c "import carla" 2>/dev/null && echo "no CARLA Python package"
@@ -52,6 +52,7 @@ TOML
 
     echo "== typesafe-codon build -release main.py && ./main"
     uv run typesafe-codon build -release -o main main.py
-    ldd ./main | grep -c python && { echo "main links libpython"; exit 1; } || echo "main does not link libpython"
+    if ldd ./main | grep -q libpython; then echo "main links libpython"; exit 1; fi
+    echo "main does not link libpython"; ldd ./main | grep -E "codon|typesafe"
     ./main
   '
