@@ -100,6 +100,32 @@ def test_generated_functions_are_not_hand_written():
 
 
 
+def test_bindgen_handle_outputs_and_multi_parameter_inputs(tmp_path):
+    """Generator extensions (issue #22): a handle output is made inside
+    new_handle (so *out is NULL on failure) and crosses as `T **out`; an input
+    type with a c_param template (string_in) expands to several C parameters."""
+    from tools.bindgen import emit, spec
+
+    s = spec.load()
+    by_name = {f.name: f for f in s.functions}
+    f = by_name["tsc_map_get_landmarks_from_id"]
+    assert f.c_params() == ["const tsc_map_t *map", "const char *opendrive_id, size_t opendrive_id_len",
+                            "tsc_landmark_list_t **out"]
+    assert f.codon_params() == ["cobj", "cobj, int", "Ptr[cobj]"]
+    shim = emit.shim(s)
+    assert "return new_handle(__func__, out, [&] {" in shim
+    assert "return waypoint_or_null(map_of(map).GetWaypointXODR(" in shim
+    # A handle output type must say how to make the handle.
+    (tmp_path / "types.yaml").write_text(
+        "bad:\n  c: tsc_waypoint_t\n  handle: true\n  codon: cobj\n")
+    (tmp_path / "x.yaml").write_text(
+        "class: carla::client::Map\nprefix: map\nself: {type: tsc_map_t, name: map, get: map_of}\n"
+        "blocks:\n  x:\n    f: {call: F, out: bad}\n")
+    import pytest
+    with pytest.raises(spec.SpecError, match="no from_carla"):
+        spec.load(tmp_path)
+
+
 def actor_shortcuts() -> list[tuple[str, str, str, str]]:
     """(name, parameters, first statement, second statement) of each public
     method _actor_compat.codon adds to Actor (docstrings skipped)."""
@@ -118,7 +144,7 @@ def test_actor_shortcuts_reject_subclasses_and_are_marked():
     _plain_actor_only() see the real static type and reject it.
     """
     shortcuts = actor_shortcuts()
-    assert len(shortcuts) == 34
+    assert len(shortcuts) == 40
     for name, params, first, second in shortcuts:
         assert params.startswith("self: S") and "S: type" in params, name
         assert first.strip().startswith(f'_plain_actor_only(self, "{name}'), name

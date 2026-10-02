@@ -1,0 +1,14 @@
+# One landmark (a tsc_landmark_handle_t): tsc_landmark_<name> (issue #22).
+class: carla::client::Landmark
+prefix: landmark
+self: {type: const tsc_landmark_handle_t, name: landmark, get: landmark_of}
+blocks:
+  landmark:
+    get_h_offset: {call: GethOffset, out: double}
+    get_pitch: {call: GetPitch, out: double}
+    get_roll: {call: GetRoll, out: double}
+    is_dynamic: {call: IsDynamic, out: bool}
+    get_waypoint:
+      call: GetWaypoint
+      out: waypoint_or_null
+      doc: "*out = NULL (TSC_OK) when the landmark has no waypoint (Map.get_all_landmarks*)."

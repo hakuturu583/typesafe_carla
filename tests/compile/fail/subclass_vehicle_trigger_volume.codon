@@ -1,0 +1,9 @@
+# A typed Vehicle has no traffic-light geometry, in every mode.
+# expect-error: Vehicle has no method trigger_volume (it is an Actor compatibility shortcut; call it on the right actor type)
+import typesafe_carla as carla
+
+def trigger(vehicle: carla.Vehicle) -> carla.BoundingBox:
+    return vehicle.trigger_volume
+
+# Compile-only: Codon type-checks a function only when it is called.
+trigger(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

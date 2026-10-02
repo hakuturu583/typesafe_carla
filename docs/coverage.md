@@ -8,21 +8,21 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**173 of 326 methods bound (53%), 44 of them generated.**
+**195 of 326 methods bound (59%), 62 of them generated.**
 
 | class | bound |
 |---|---|
 | `carla::client::Client` | 19 / 27 |
 | `carla::client::World` | 17 / 48 |
-| `carla::client::Map` | 9 / 18 |
-| `carla::client::Waypoint` | 13 / 22 |
+| `carla::client::Map` | 14 / 18 |
+| `carla::client::Waypoint` | 18 / 22 |
 | `carla::client::Junction` | 3 / 3 |
-| `carla::client::Landmark` | 17 / 23 |
+| `carla::client::Landmark` | 23 / 23 |
 | `carla::client::Actor` | 20 / 37 |
 | `carla::client::Vehicle` | 11 / 23 |
 | `carla::client::Walker` | 2 / 8 |
 | `carla::client::WalkerAIController` | 4 / 5 |
-| `carla::client::TrafficLight` | 13 / 20 |
+| `carla::client::TrafficLight` | 19 / 20 |
 | `carla::client::Sensor` | 3 / 3 |
 | `carla::client::BlueprintLibrary` | 4 / 10 |
 | `carla::client::ActorBlueprint` | 6 / 11 |
@@ -123,45 +123,45 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | method | binding |
 |---|---|
 | `CalculateCrossedLanes` | — |
-| `CookInMemoryMap` | — |
+| `CookInMemoryMap` | generated |
 | `GenerateWaypoints` | hand-written |
 | `GetAllCrosswalkZones` | hand-written |
 | `GetAllLandmarks` | hand-written |
 | `GetAllLandmarksOfType` | hand-written |
-| `GetGeoReference` | — |
+| `GetGeoReference` | generated |
 | `GetJunction` | — |
 | `GetJunctionWaypoints` | — |
-| `GetLandmarkGroup` | — |
-| `GetLandmarksFromId` | — |
+| `GetLandmarkGroup` | generated |
+| `GetLandmarksFromId` | generated |
 | `GetMap` | — |
 | `GetName` | hand-written |
 | `GetOpenDrive` | hand-written |
 | `GetRecommendedSpawnPoints` | hand-written |
 | `GetTopology` | hand-written |
 | `GetWaypoint` | hand-written |
-| `GetWaypointXODR` | — |
+| `GetWaypointXODR` | generated |
 
 ### `carla::client::Waypoint`
 
 | method | binding |
 |---|---|
-| `GetAllLandmarksInDistance` | — |
+| `GetAllLandmarksInDistance` | generated |
 | `GetDistance` | hand-written |
 | `GetId` | hand-written |
 | `GetJunction` | hand-written |
 | `GetJunctionId` | hand-written |
-| `GetLandmarksOfTypeInDistance` | — |
-| `GetLaneChange` | — |
+| `GetLandmarksOfTypeInDistance` | generated |
+| `GetLaneChange` | generated |
 | `GetLaneId` | hand-written |
 | `GetLaneWidth` | hand-written |
 | `GetLeft` | hand-written |
-| `GetLeftLaneMarking` | — |
+| `GetLeftLaneMarking` | hand-written |
 | `GetNext` | — |
 | `GetNextUntilLaneEnd` | — |
 | `GetPrevious` | — |
 | `GetPreviousUntilLaneStart` | — |
 | `GetRight` | hand-written |
-| `GetRightLaneMarking` | — |
+| `GetRightLaneMarking` | hand-written |
 | `GetRoadId` | hand-written |
 | `GetSectionId` | hand-written |
 | `GetTransform` | hand-written |
@@ -186,9 +186,9 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetId` | hand-written |
 | `GetName` | hand-written |
 | `GetOrientation` | hand-written |
-| `GetPitch` | — |
+| `GetPitch` | generated |
 | `GetRoadId` | hand-written |
-| `GetRoll` | — |
+| `GetRoll` | generated |
 | `GetS` | hand-written |
 | `GetSubType` | hand-written |
 | `GetT` | hand-written |
@@ -196,13 +196,13 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetTransform` | hand-written |
 | `GetType` | hand-written |
 | `GetUnit` | hand-written |
-| `GetValidities` | — |
+| `GetValidities` | hand-written |
 | `GetValue` | hand-written |
-| `GetWaypoint` | — |
+| `GetWaypoint` | generated |
 | `GetWidth` | hand-written |
 | `GetZOffset` | hand-written |
-| `GethOffset` | — |
-| `IsDynamic` | — |
+| `GethOffset` | generated |
+| `IsDynamic` | generated |
 
 ### `carla::client::Actor`
 
@@ -302,18 +302,18 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | method | binding |
 |---|---|
 | `Freeze` | generated |
-| `GetAffectedLaneWaypoints` | — |
+| `GetAffectedLaneWaypoints` | generated |
 | `GetElapsedTime` | hand-written |
 | `GetGreenTime` | hand-written |
-| `GetGroupTrafficLights` | — |
-| `GetLightBoxes` | — |
-| `GetOpenDRIVEID` | — |
+| `GetGroupTrafficLights` | generated |
+| `GetLightBoxes` | hand-written |
+| `GetOpenDRIVEID` | generated |
 | `GetPoleIndex` | hand-written |
 | `GetRedTime` | hand-written |
 | `GetSignId` | — |
 | `GetState` | hand-written |
-| `GetStopWaypoints` | — |
-| `GetTriggerVolume` | — |
+| `GetStopWaypoints` | generated |
+| `GetTriggerVolume` | generated |
 | `GetYellowTime` | hand-written |
 | `IsFrozen` | hand-written |
 | `ResetGroup` | generated |

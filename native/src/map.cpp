@@ -7,10 +7,6 @@ namespace {
 
 using WaypointPtr = carla::SharedPtr<carla::client::Waypoint>;
 
-tsc_waypoint_t *make_waypoint(WaypointPtr w) {
-  return w == nullptr ? nullptr : new tsc_waypoint(std::move(w));
-}
-
 double check_distance(double distance) {
   if (!(distance > 0.0) || !std::isfinite(distance)) {
     fail(TSC_INVALID_ARGUMENT, "distance must be a positive finite number of meters");
@@ -55,7 +51,7 @@ tsc_status_t tsc_map_get_waypoint(const tsc_map_t *map, const tsc_location_t *lo
                                   int32_t project_to_road, int32_t lane_type,
                                   tsc_waypoint_t **out) {
   return new_handle(__func__, out, [&]() {
-    return make_waypoint(map_of(map).GetWaypoint(to_carla(*require_ptr(location, "location")),
+    return waypoint_or_null(map_of(map).GetWaypoint(to_carla(*require_ptr(location, "location")),
                                                  project_to_road != 0, lane_type));
   });
 }
@@ -108,11 +104,11 @@ tsc_status_t tsc_waypoint_previous_until_lane_start(const tsc_waypoint_t *wp, do
 }
 
 tsc_status_t tsc_waypoint_get_left_lane(const tsc_waypoint_t *wp, tsc_waypoint_t **out) {
-  return new_handle(__func__, out, [&]() { return make_waypoint(waypoint_of(wp).GetLeft()); });
+  return new_handle(__func__, out, [&]() { return waypoint_or_null(waypoint_of(wp).GetLeft()); });
 }
 
 tsc_status_t tsc_waypoint_get_right_lane(const tsc_waypoint_t *wp, tsc_waypoint_t **out) {
-  return new_handle(__func__, out, [&]() { return make_waypoint(waypoint_of(wp).GetRight()); });
+  return new_handle(__func__, out, [&]() { return waypoint_or_null(waypoint_of(wp).GetRight()); });
 }
 
 size_t tsc_waypoint_list_size(const tsc_waypoint_list_t *list) {

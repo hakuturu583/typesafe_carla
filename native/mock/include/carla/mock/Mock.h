@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <functional>
+#include <limits>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -99,9 +100,171 @@ class BoundingBox {
   Rotation rotation;
 };
 
+// Issue #22: geo-reference and projections, mirroring LibCarla ue5-dev
+// (carla/geom/GeoLocation.h, GeoProjection.h, GeoProjectionsParams.h). The
+// mock's projections are a local equirectangular approximation, not the real
+// ones: they only need to round-trip.
+class GeoLocation {
+ public:
+  double latitude = 0.0;
+  double longitude = 0.0;
+  double altitude = 0.0;
+  GeoLocation() = default;
+  GeoLocation(double latitude, double longitude, double altitude)
+      : latitude(latitude), longitude(longitude), altitude(altitude) {}
+  bool operator==(const GeoLocation &rhs) const {
+    return latitude == rhs.latitude && longitude == rhs.longitude && altitude == rhs.altitude;
+  }
+  bool operator!=(const GeoLocation &rhs) const { return !(*this == rhs); }
+};
+
+class Ellipsoid {
+ public:
+  Ellipsoid() = default;
+  Ellipsoid(double a, double f_inv) : a(a), f_inv(f_inv) {}
+  double a = 6378137.0;
+  double f_inv = std::numeric_limits<double>::infinity();
+};
+
+class OffsetTransform {
+ public:
+  OffsetTransform() = default;
+  double offset_x = 0.0;
+  double offset_y = 0.0;
+  double offset_z = 0.0;
+  double offset_cos_h = 1.0;
+  double offset_sin_h = 0.0;
+};
+
+class TransverseMercatorParams {
+ public:
+  TransverseMercatorParams() = default;
+  TransverseMercatorParams(double lat_0, double lon_0, double k, double x_0, double y_0,
+                           Ellipsoid ellps)
+      : lat_0(lat_0), lon_0(lon_0), k(k), x_0(x_0), y_0(y_0), ellps(ellps) {}
+  double lat_0 = 0.0;
+  double lon_0 = 0.0;
+  double k = 1.0;
+  double x_0 = 0.0;
+  double y_0 = 0.0;
+  Ellipsoid ellps = Ellipsoid();
+};
+
+class UniversalTransverseMercatorParams {
+ public:
+  UniversalTransverseMercatorParams() = default;
+  UniversalTransverseMercatorParams(int zone, bool north, Ellipsoid ellps,
+                                    std::optional<OffsetTransform> offset = std::nullopt)
+      : zone(zone), north(north), ellps(ellps), offset(offset) {}
+  int zone = 31;
+  bool north = true;
+  Ellipsoid ellps = Ellipsoid();
+  std::optional<OffsetTransform> offset;  // boost::optional in LibCarla
+};
+
+class WebMercatorParams {
+ public:
+  WebMercatorParams() = default;
+  WebMercatorParams(Ellipsoid ellps) : ellps(ellps) {}
+  Ellipsoid ellps = Ellipsoid();
+};
+
+class LambertConformalConicParams {
+ public:
+  LambertConformalConicParams() = default;
+  LambertConformalConicParams(double lat_0, double lat_1, double lat_2, double lon_0, double x_0,
+                              double y_0, Ellipsoid ellps)
+      : lat_0(lat_0), lat_1(lat_1), lat_2(lat_2), lon_0(lon_0), x_0(x_0), y_0(y_0), ellps(ellps) {}
+  double lat_0 = 0.0;
+  double lat_1 = -5.0;
+  double lat_2 = 5.0;
+  double lon_0 = 0.0;
+  double x_0 = 0.0;
+  double y_0 = 0.0;
+  Ellipsoid ellps = Ellipsoid();
+};
+
+enum class ProjectionType {
+  TransverseMercator,
+  UniversalTransverseMercator,
+  WebMercator,
+  LambertConformalConic,
+};
+
+// boost::variant2::variant in LibCarla.
+using ProjectionParams = std::variant<TransverseMercatorParams, UniversalTransverseMercatorParams,
+                                      WebMercatorParams, LambertConformalConicParams>;
+
+struct GeoProjection {
+  template <typename T>
+  static GeoProjection Make(T &&args) {
+    GeoProjection r = {};
+    r.params = ProjectionParams(std::forward<T>(args));
+    return r;
+  }
+  ProjectionType GetType() const { return static_cast<ProjectionType>(params.index()); }
+  const ProjectionParams &GetParams() const { return params; }
+  ProjectionParams params;
+  std::string proj_string;
+  Location GeoLocationToTransform(const GeoLocation &geolocation) const;
+  GeoLocation TransformToGeoLocation(const Location &location) const;
+};
+
 }  // namespace geom
 
+class FileSystem {
+ public:
+  static void ValidateFilePath(std::string &filepath, const std::string &ext = "");
+};
+
 namespace road {
+
+using RoadId = uint32_t;
+using LaneId = int32_t;
+using SignId = std::string;
+
+struct LaneValidity {
+ public:
+  LaneValidity(LaneId from_lane, LaneId to_lane) : _from_lane(from_lane), _to_lane(to_lane) {}
+  road::LaneId _from_lane;
+  road::LaneId _to_lane;
+};
+
+namespace element {
+
+// road::element::LaneMarking (constructed from a RoadInfoMarkRecord in LibCarla).
+struct LaneMarking {
+  enum class Type {
+    Other,
+    Broken,
+    Solid,
+    SolidSolid,
+    SolidBroken,
+    BrokenSolid,
+    BrokenBroken,
+    BottsDots,
+    Grass,
+    Curb,
+    None
+  };
+  enum class Color : uint8_t {
+    Standard = 0u,
+    Blue = 1u,
+    Green = 2u,
+    Red = 3u,
+    White = Standard,
+    Yellow = 4u,
+    Other = 5u
+  };
+  enum class LaneChange : uint8_t { None = 0x00, Right = 0x01, Left = 0x02, Both = 0x03 };
+  LaneMarking(Type t, Color c, LaneChange l, double w) : type(t), color(c), lane_change(l), width(w) {}
+  Type type = Type::None;
+  Color color = Color::Standard;
+  LaneChange lane_change = LaneChange::None;
+  double width = 0.0;
+};
+
+}  // namespace element
 
 class Lane {
  public:
@@ -531,6 +694,17 @@ class Waypoint : public std::enable_shared_from_this<Waypoint> {
   SharedPtr<Waypoint> GetRight() const;
   SharedPtr<Waypoint> GetLeft() const;
   SharedPtr<Junction> GetJunction() const { return nullptr; }  // the mock road has none
+  // Issue #22. Lane -1 has the yellow center line on its left; a broken line
+  // separates the lanes; lane -2 has a solid edge line on its right.
+  std::optional<road::element::LaneMarking> GetRightLaneMarking() const;
+  std::optional<road::element::LaneMarking> GetLeftLaneMarking() const;
+  road::element::LaneMarking::LaneChange GetLaneChange() const;
+  std::vector<SharedPtr<Landmark>> GetAllLandmarksInDistance(double distance,
+                                                             bool stop_at_junction = false) const;
+  std::vector<SharedPtr<Landmark>> GetLandmarksOfTypeInDistance(
+      double distance, std::string filter_type, bool stop_at_junction = false) const;
+  bool IsPositiveDirection() const { return true; }
+  bool IsRHT() const { return true; }
 
  private:
   int32_t _lane_id;
@@ -551,9 +725,18 @@ class Map : public std::enable_shared_from_this<Map> {
   std::vector<geom::Location> GetAllCrosswalkZones() const;
   std::vector<SharedPtr<Landmark>> GetAllLandmarks() const;
   std::vector<SharedPtr<Landmark>> GetAllLandmarksOfType(std::string type) const;
+  // Issue #22.
+  SharedPtr<Waypoint> GetWaypointXODR(road::RoadId road_id, road::LaneId lane_id, float s) const;
+  const geom::GeoLocation &GetGeoReference() const { return _geo_reference; }
+  const geom::GeoProjection &GetGeoProjection() const { return _geo_projection; }
+  std::vector<SharedPtr<Landmark>> GetLandmarksFromId(std::string id) const;
+  std::vector<SharedPtr<Landmark>> GetLandmarkGroup(const Landmark &landmark) const;
+  void CookInMemoryMap(const std::string &path) const;
 
  private:
   std::string _name;
+  geom::GeoLocation _geo_reference;
+  geom::GeoProjection _geo_projection;
   std::string _xodr;
   std::vector<geom::Transform> _spawn_points;
 };
@@ -733,12 +916,23 @@ class TrafficLight : public Actor {
   bool IsFrozen() const;
   uint32_t GetPoleIndex() { return 0u; }
   void ResetGroup();
+  // Issue #22. The mock's light controls both lanes at s = 100 (OpenDRIVE
+  // signal "1000"); it is alone in its group.
+  std::vector<SharedPtr<TrafficLight>> GetGroupTrafficLights();
+  std::vector<SharedPtr<Waypoint>> GetAffectedLaneWaypoints() const;
+  std::vector<geom::BoundingBox> GetLightBoxes() const;
+  road::SignId GetOpenDRIVEID() const { return "1000"; }
+  std::vector<SharedPtr<Waypoint>> GetStopWaypoints() const;
+  // TrafficSign::GetTriggerVolume in LibCarla: the actor's bounding box.
+  const geom::BoundingBox &GetTriggerVolume() const { return GetBoundingBox(); }
 };
 
 class Landmark {
  public:
-  Landmark(std::string id, std::string name, std::string type, double s, geom::Transform t)
-      : _id(std::move(id)), _name(std::move(name)), _type(std::move(type)), _s(s), _transform(t) {}
+  Landmark(std::string id, std::string name, std::string type, double s, geom::Transform t,
+           SharedPtr<Waypoint> waypoint = nullptr, double distance = 0.0)
+      : _id(std::move(id)), _name(std::move(name)), _type(std::move(type)), _s(s), _transform(t),
+        _waypoint(std::move(waypoint)), _distance(distance) {}
   std::string GetId() const { return _id; }
   std::string GetName() const { return _name; }
   std::string GetType() const { return _type; }
@@ -750,17 +944,27 @@ class Landmark {
   int32_t GetOrientation() const { return 0; }
   double GetS() const { return _s; }
   double GetT() const { return 3.0; }
-  double GetDistance() const { return 0.0; }
+  double GetDistance() const { return _distance; }
   double GetZOffset() const { return 0.0; }
   double GetValue() const { return -1.0; }
   double GetHeight() const { return 1.0; }
   double GetWidth() const { return 0.5; }
   const geom::Transform &GetTransform() const { return _transform; }
+  // Issue #22.
+  SharedPtr<Waypoint> GetWaypoint() const { return _waypoint; }
+  bool IsDynamic() const { return false; }
+  double GethOffset() const { return 0.25; }
+  double GetPitch() const { return 0.0; }
+  double GetRoll() const { return 0.0; }
+  const std::vector<road::LaneValidity> &GetValidities() const { return _validities; }
 
  private:
   std::string _id, _name, _type;
   double _s;
   geom::Transform _transform;
+  SharedPtr<Waypoint> _waypoint;
+  double _distance;
+  std::vector<road::LaneValidity> _validities{road::LaneValidity(-1, -2)};
 };
 
 class Junction {

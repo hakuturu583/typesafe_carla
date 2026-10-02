@@ -1,0 +1,18 @@
+# Waypoint operations: tsc_waypoint_<name> (issue #22).
+class: carla::client::Waypoint
+prefix: waypoint
+self: {type: const tsc_waypoint_t, name: waypoint, get: waypoint_of}
+blocks:
+  waypoint:
+    get_lane_change:
+      call: GetLaneChange
+      out: lane_change
+      doc: "lane_change: LaneMarking::LaneChange flags."
+    get_landmarks:
+      call: GetAllLandmarksInDistance
+      args: {distance: distance, stop_at_junction: bool}
+      out: landmark_list
+    get_landmarks_of_type:
+      call: GetLandmarksOfTypeInDistance
+      args: {distance: distance, type: string_in, stop_at_junction: bool}
+      out: landmark_list

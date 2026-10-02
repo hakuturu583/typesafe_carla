@@ -2,6 +2,7 @@
 // library and the in-memory mock backend (native/mock) differ.
 #pragma once
 
+#include <carla/FileSystem.h>
 #include <carla/Memory.h>
 #include <carla/Time.h>
 #include <carla/Version.h>
@@ -25,8 +26,10 @@
 #include <carla/client/World.h>
 #include <carla/client/WorldSnapshot.h>
 #include <carla/geom/BoundingBox.h>
+#include <carla/geom/GeoLocation.h>
 #include <carla/geom/Transform.h>
 #include <carla/road/Lane.h>
+#include <carla/road/element/LaneMarking.h>
 #include <carla/rpc/Command.h>
 #include <carla/rpc/CommandResponse.h>
 #include <carla/rpc/EpisodeSettings.h>
@@ -45,6 +48,13 @@
 #include <carla/sensor/data/LidarMeasurement.h>
 #include <carla/rpc/VehicleControl.h>
 
+// Geo projections (geom::GeoProjection, Map::GetGeoProjection) are newer than
+// CARLA 0.10.0, whose GeoLocation instead has a Mercator Transform().
+#if __has_include(<carla/geom/GeoProjection.h>)
+#include <carla/geom/GeoProjection.h>
+#define TSC_HAS_GEO_PROJECTION 1
+#endif
+
 namespace tsc {
 
 // carla::SharedPtr is std::shared_ptr in CARLA UE5 (it was boost::shared_ptr
@@ -62,6 +72,17 @@ void set_keep_right_percentage(TM &tm, const A &actor, float percentage) {
     tm.SetKeepSlowLanePercentage(actor, percentage);
   } else {
     tm.SetKeepRightPercentage(actor, percentage);
+  }
+}
+
+// Waypoint::IsRHT is newer than CARLA 0.10.0, which has no left-hand traffic:
+// its lane markings and lane changes always use the right-hand layout.
+template <typename W>
+bool waypoint_is_rht(const W &waypoint) {
+  if constexpr (requires { waypoint.IsRHT(); }) {
+    return waypoint.IsRHT();
+  } else {
+    return true;
   }
 }
 

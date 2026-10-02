@@ -44,11 +44,19 @@ class Type:
     from_carla: str = "{}"
     assign: str | None = None  # output via a function instead of `*out = ...`
     struct: bool = False  # crosses the ABI by pointer
-    handle: bool = False  # an opaque handle pointer
+    # An opaque handle pointer. As an output, from_carla creates the handle
+    # (or yields NULL) and the C function returns it through `T **out`.
+    handle: bool = False
+    # C parameter(s) for an input, if not `c name`; `{name}` is the argument
+    # name, e.g. "const char *{name}, size_t {name}_len" (codon and invalid
+    # then list one value per C parameter).
+    c_param_template: str | None = None
     cpp: tuple[str, ...] = ()
     invalid: str = "0"  # a C value the conversion rejects, for test_generated
 
     def c_param(self, name: str) -> str:
+        if self.c_param_template:
+            return self.c_param_template.replace("{name}", name)
         if self.struct:
             return f"const {self.c} *{name}"
         if self.handle:
@@ -93,7 +101,8 @@ class Function:
         params = [f"{self.self_type} *{self.self_name}"]
         params += [a.type.c_param(a.name) for a in self.args]
         if self.out:
-            params.append(f"{self.out.type.c} *{self.out.name}")
+            stars = "**" if self.out.type.handle else "*"
+            params.append(f"{self.out.type.c} {stars}{self.out.name}")
         return params
 
     def codon_params(self) -> list[str]:
@@ -108,6 +117,8 @@ class Function:
         if self.out is None:
             return f"{call};"
         t = self.out.type
+        if t.handle:  # the statement of new_handle's lambda (see emit.shim)
+            return f"return {t.from_carla.replace('{}', call)};"
         if t.assign:
             return t.assign.replace("{out}", self.out.name).replace("{}", call) + ";"
         return f'*require_ptr({self.out.name}, "{self.out.name}") = {t.from_carla.replace("{}", call)};'
@@ -136,13 +147,14 @@ def _load_types(path: Path) -> dict[str, Type]:
     types = {}
     for name, t in raw.items():
         unknown = set(t) - {"c", "codon", "to_carla", "from_carla", "assign", "struct", "handle", "cpp",
-                             "invalid"}
+                             "invalid", "c_param"}
         if unknown:
             raise SpecError(f"{path.name}: {name}: unknown keys {sorted(unknown)}")
         types[name] = Type(name=name, c=t["c"], codon=t["codon"], to_carla=t.get("to_carla", "{}"),
                            from_carla=t.get("from_carla", "{}"), assign=t.get("assign"),
                            struct=t.get("struct", False), handle=t.get("handle", False),
-                           cpp=tuple(t.get("cpp", ())), invalid=str(t.get("invalid", "0")))
+                           cpp=tuple(t.get("cpp", ())), invalid=str(t.get("invalid", "0")),
+                           c_param_template=t.get("c_param"))
     return types
 
 
@@ -179,8 +191,9 @@ def load(bindings: Path = BINDINGS) -> Spec:
                     o = entry["out"]
                     o = {"type": o} if isinstance(o, str) else o
                     out = Out(o.get("name", "out"), type_of(o["type"], where))
-                    if out.type.handle:
-                        raise SpecError(f"{where}: handles are not generated outputs")
+                    if out.type.handle and out.type.from_carla == "{}":
+                        raise SpecError(f"{where}: {out.type.name} has no from_carla to create "
+                                        "the output handle")
                 name = f"tsc_{raw['prefix']}_{short}"
                 if name in seen:
                     raise SpecError(f"{where}: {name} is also defined in {seen[name]}")

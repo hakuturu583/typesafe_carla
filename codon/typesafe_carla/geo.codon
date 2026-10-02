@@ -1,0 +1,224 @@
+# Geo-referencing (issue #22): GeoLocation, and the geo projections of CARLA
+# ue5-dev (geom::GeoProjection). Map.get_geoprojection returns one of the four
+# projection classes as a GeoProjection (a Union); isinstance() tells which.
+
+from math import cos, sin, inf
+from ._ffi import CGeoLocation, CGeoProjection
+from .geometry import Location, _location_arg
+
+TSC_GEO_PROJECTION_TM = 0
+TSC_GEO_PROJECTION_UTM = 1
+TSC_GEO_PROJECTION_WEB_MERC = 2
+TSC_GEO_PROJECTION_LCC2SP = 3
+
+class GeoLocation:
+    latitude: float
+    longitude: float
+    altitude: float
+
+    def __init__(self, latitude: float = 0.0, longitude: float = 0.0, altitude: float = 0.0):
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = altitude
+
+    def __eq__(self, other: GeoLocation) -> bool:
+        return (self.latitude == other.latitude and self.longitude == other.longitude and
+                self.altitude == other.altitude)
+
+    def __ne__(self, other: GeoLocation) -> bool:
+        return not (self == other)
+
+    def _to_c(self) -> CGeoLocation:
+        return CGeoLocation(self.latitude, self.longitude, self.altitude)
+
+    @staticmethod
+    def _from_c(c: CGeoLocation) -> GeoLocation:
+        return GeoLocation(c.latitude, c.longitude, c.altitude)
+
+    def __repr__(self) -> str:
+        return (f"GeoLocation(latitude={self.latitude}, longitude={self.longitude}, "
+                f"altitude={self.altitude})")
+
+class GeoEllipsoid:
+    """Semi-major axis `a` (m) and inverse flattening `f_inv` (inf: a sphere)."""
+    a: float
+    f_inv: float
+
+    def __init__(self, a: float = 6378137.0, f_inv: float = inf):
+        self.a = a
+        self.f_inv = f_inv
+
+    def __repr__(self) -> str:
+        return f"GeoEllipsoid(a={self.a}, f_inv={self.f_inv})"
+
+class GeoOffsetTransform:
+    """The offset of a UTM projection (OpenDRIVE <offset>)."""
+    offset_x: float
+    offset_y: float
+    offset_z: float
+    offset_cos_h: float
+    offset_sin_h: float
+
+    def __init__(self, offset_x: float = 0.0, offset_y: float = 0.0, offset_z: float = 0.0,
+                 offset_hdg: float = 0.0):
+        self.offset_x = offset_x
+        self.offset_y = offset_y
+        self.offset_z = offset_z
+        self.offset_cos_h = cos(-offset_hdg)
+        self.offset_sin_h = sin(-offset_hdg)
+
+    def ApplyTransformation(self, location) -> Location:
+        """As LibCarla's OffsetTransform::ApplyTransformation (float results).
+
+        location: Location (a Vector3D is accepted as in the Python API)."""
+        loc = _location_arg(
+            location, "[tsc-compat] a Vector3D passed as a Location to GeoOffsetTransform.ApplyTransformation")
+        tx = loc.x + self.offset_x
+        ty = -loc.y + self.offset_y
+        x = tx * self.offset_cos_h - ty * self.offset_sin_h
+        y = tx * self.offset_sin_h + ty * self.offset_cos_h
+        return Location(float(float32(x)), float(float32(y)), float(float32(loc.z + self.offset_z)))
+
+    def __repr__(self) -> str:
+        return (f"GeoOffsetTransform(offset_x={self.offset_x}, offset_y={self.offset_y}, "
+                f"offset_z={self.offset_z}, offset_cos_h={self.offset_cos_h}, "
+                f"offset_sin_h={self.offset_sin_h})")
+
+def _ellipsoid_or_default(ellps: Optional[GeoEllipsoid]) -> GeoEllipsoid:
+    return GeoEllipsoid() if ellps is None else unwrap(ellps)
+
+def _c_projection(kind: int, ellps: GeoEllipsoid, lat_0: float = 0.0, lat_1: float = 0.0,
+                  lat_2: float = 0.0, lon_0: float = 0.0, k: float = 0.0, x_0: float = 0.0,
+                  y_0: float = 0.0, zone: int = 0, north: bool = False,
+                  offset: Optional[GeoOffsetTransform] = None) -> CGeoProjection:
+    o = GeoOffsetTransform() if offset is None else unwrap(offset)
+    return CGeoProjection(i32(kind), i32(zone), i32(int(north)), i32(int(offset is not None)),
+                          ellps.a, ellps.f_inv, lat_0, lat_1, lat_2, lon_0, k, x_0, y_0,
+                          o.offset_x, o.offset_y, o.offset_z, o.offset_cos_h, o.offset_sin_h)
+
+class GeoProjectionTM:
+    """Transverse Mercator."""
+    lat_0: float
+    lon_0: float
+    k: float
+    x_0: float
+    y_0: float
+    ellps: GeoEllipsoid
+
+    def __init__(self, lat_0: float = 0.0, lon_0: float = 0.0, k: float = 1.0, x_0: float = 0.0,
+                 y_0: float = 0.0, ellps: Optional[GeoEllipsoid] = None):
+        self.lat_0 = lat_0
+        self.lon_0 = lon_0
+        self.k = k
+        self.x_0 = x_0
+        self.y_0 = y_0
+        self.ellps = _ellipsoid_or_default(ellps)
+
+    def _to_c(self) -> CGeoProjection:
+        return _c_projection(TSC_GEO_PROJECTION_TM, self.ellps, lat_0=self.lat_0, lon_0=self.lon_0,
+                             k=self.k, x_0=self.x_0, y_0=self.y_0)
+
+    def __repr__(self) -> str:
+        return (f"GeoProjectionTM(lat_0={self.lat_0}, lon_0={self.lon_0}, k={self.k}, "
+                f"x_0={self.x_0}, y_0={self.y_0}, ellps={self.ellps})")
+
+class GeoProjectionUTM:
+    """Universal Transverse Mercator."""
+    zone: int
+    north: bool
+    ellps: GeoEllipsoid
+    offset: Optional[GeoOffsetTransform]
+
+    def __init__(self, zone: int = 31, north: bool = True, ellps: Optional[GeoEllipsoid] = None,
+                 offset: Optional[GeoOffsetTransform] = None):
+        self.zone = zone
+        self.north = north
+        self.ellps = _ellipsoid_or_default(ellps)
+        self.offset = offset
+
+    def _to_c(self) -> CGeoProjection:
+        return _c_projection(TSC_GEO_PROJECTION_UTM, self.ellps, zone=self.zone, north=self.north,
+                             offset=self.offset)
+
+    def __repr__(self) -> str:
+        return f"GeoProjectionUTM(zone={self.zone}, north={self.north}, ellps={self.ellps})"
+
+class GeoProjectionWebMerc:
+    """Web Mercator."""
+    ellps: GeoEllipsoid
+
+    def __init__(self, ellps: Optional[GeoEllipsoid] = None):
+        self.ellps = _ellipsoid_or_default(ellps)
+
+    def _to_c(self) -> CGeoProjection:
+        return _c_projection(TSC_GEO_PROJECTION_WEB_MERC, self.ellps)
+
+    def __repr__(self) -> str:
+        return f"GeoProjectionWebMerc(ellps={self.ellps})"
+
+class GeoProjectionLCC2SP:
+    """Lambert Conformal Conic with two standard parallels."""
+    lat_0: float
+    lat_1: float
+    lat_2: float
+    lon_0: float
+    x_0: float
+    y_0: float
+    ellps: GeoEllipsoid
+
+    def __init__(self, lat_0: float = 0.0, lat_1: float = 0.0, lat_2: float = 0.0,
+                 lon_0: float = 0.0, x_0: float = 0.0, y_0: float = 0.0,
+                 ellps: Optional[GeoEllipsoid] = None):
+        self.lat_0 = lat_0
+        self.lat_1 = lat_1
+        self.lat_2 = lat_2
+        self.lon_0 = lon_0
+        self.x_0 = x_0
+        self.y_0 = y_0
+        self.ellps = _ellipsoid_or_default(ellps)
+
+    def _to_c(self) -> CGeoProjection:
+        return _c_projection(TSC_GEO_PROJECTION_LCC2SP, self.ellps, lat_0=self.lat_0,
+                             lat_1=self.lat_1, lat_2=self.lat_2, lon_0=self.lon_0, x_0=self.x_0,
+                             y_0=self.y_0)
+
+    def __repr__(self) -> str:
+        return (f"GeoProjectionLCC2SP(lat_0={self.lat_0}, lat_1={self.lat_1}, "
+                f"lat_2={self.lat_2}, lon_0={self.lon_0}, x_0={self.x_0}, y_0={self.y_0}, "
+                f"ellps={self.ellps})")
+
+# What Map.get_geoprojection returns.
+GeoProjection = Union[GeoProjectionTM, GeoProjectionUTM, GeoProjectionWebMerc,
+                      GeoProjectionLCC2SP]
+
+def _projection_arg(p) -> CGeoProjection:
+    """A projection argument: one of the four classes, or a GeoProjection. A
+    Union parameter would accept anything and fail at run time, so this one
+    is generic and rejects other types at compile time."""
+    if isinstance(p, Optional):
+        return _projection_arg(unwrap(p))
+    elif (isinstance(p, GeoProjectionTM) or isinstance(p, GeoProjectionUTM) or
+          isinstance(p, GeoProjectionWebMerc) or isinstance(p, GeoProjectionLCC2SP)):
+        return p._to_c()
+    elif isinstance(p, Union):
+        return p._to_c()  # a GeoProjection (any member without _to_c fails to compile)
+    else:
+        compile_error("a geo projection must be a GeoProjectionTM, GeoProjectionUTM, "
+                      "GeoProjectionWebMerc or GeoProjectionLCC2SP")
+
+def _projection_from_c(c: CGeoProjection) -> GeoProjection:
+    e = GeoEllipsoid(c.ellipsoid_a, c.ellipsoid_f_inv)
+    kind = int(c.type)
+    if kind == TSC_GEO_PROJECTION_UTM:
+        offset: Optional[GeoOffsetTransform] = None
+        if int(c.utm_has_offset) != 0:
+            o = GeoOffsetTransform(c.offset_x, c.offset_y, c.offset_z)
+            o.offset_cos_h = c.offset_cos_h
+            o.offset_sin_h = c.offset_sin_h
+            offset = o
+        return GeoProjectionUTM(int(c.utm_zone), int(c.utm_north) != 0, e, offset)
+    if kind == TSC_GEO_PROJECTION_WEB_MERC:
+        return GeoProjectionWebMerc(e)
+    if kind == TSC_GEO_PROJECTION_LCC2SP:
+        return GeoProjectionLCC2SP(c.lat_0, c.lat_1, c.lat_2, c.lon_0, c.x_0, c.y_0, e)
+    return GeoProjectionTM(c.lat_0, c.lon_0, c.k, c.x_0, c.y_0, e)

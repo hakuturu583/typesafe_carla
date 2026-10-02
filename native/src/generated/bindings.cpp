@@ -96,6 +96,63 @@ tsc_status_t tsc_actor_set_enable_gravity(tsc_actor_t *actor, int32_t enabled) {
   return TSC_GUARD({ actor_of(actor).SetEnableGravity(enabled != 0); });
 }
 
+// bindings/landmark.yaml: carla::client::Landmark
+
+tsc_status_t tsc_landmark_get_h_offset(const tsc_landmark_handle_t *landmark, double *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = landmark_of(landmark).GethOffset(); });
+}
+
+tsc_status_t tsc_landmark_get_pitch(const tsc_landmark_handle_t *landmark, double *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = landmark_of(landmark).GetPitch(); });
+}
+
+tsc_status_t tsc_landmark_get_roll(const tsc_landmark_handle_t *landmark, double *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = landmark_of(landmark).GetRoll(); });
+}
+
+tsc_status_t tsc_landmark_is_dynamic(const tsc_landmark_handle_t *landmark, int32_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = landmark_of(landmark).IsDynamic() ? 1 : 0; });
+}
+
+tsc_status_t tsc_landmark_get_waypoint(const tsc_landmark_handle_t *landmark,
+                                       tsc_waypoint_t **out) {
+  return new_handle(__func__, out, [&] {
+    return waypoint_or_null(landmark_of(landmark).GetWaypoint());
+  });
+}
+
+// bindings/map.yaml: carla::client::Map
+
+tsc_status_t tsc_map_get_georeference(const tsc_map_t *map, tsc_geo_location_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = from_carla(map_of(map).GetGeoReference()); });
+}
+
+tsc_status_t tsc_map_get_waypoint_xodr(const tsc_map_t *map, uint32_t road_id, int32_t lane_id,
+                                       double s, tsc_waypoint_t **out) {
+  return new_handle(__func__, out, [&] {
+    return waypoint_or_null(map_of(map).GetWaypointXODR(road_id, lane_id, check_finite(s, "s")));
+  });
+}
+
+tsc_status_t tsc_map_get_landmarks_from_id(const tsc_map_t *map,
+                                           const char *opendrive_id, size_t opendrive_id_len,
+                                           tsc_landmark_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_landmark_list(without_nulls(map_of(map).GetLandmarksFromId(to_string(opendrive_id, opendrive_id_len, "opendrive_id"))));
+  });
+}
+
+tsc_status_t tsc_map_get_landmark_group(const tsc_map_t *map, const tsc_landmark_handle_t *landmark,
+                                        tsc_landmark_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_landmark_list(without_nulls(map_of(map).GetLandmarkGroup(landmark_of(landmark, "landmark"))));
+  });
+}
+
+tsc_status_t tsc_map_cook_in_memory_map(const tsc_map_t *map, const char *path, size_t path_len) {
+  return TSC_GUARD({ map_of(map).CookInMemoryMap(to_string(path, path_len, "path")); });
+}
+
 // bindings/traffic_light.yaml: carla::client::TrafficLight
 
 tsc_status_t tsc_traffic_light_set_state(tsc_traffic_light_t *light, int32_t state) {
@@ -120,6 +177,36 @@ tsc_status_t tsc_traffic_light_freeze(tsc_traffic_light_t *light, int32_t freeze
 
 tsc_status_t tsc_traffic_light_reset_group(tsc_traffic_light_t *light) {
   return TSC_GUARD({ light_of(light).ResetGroup(); });
+}
+
+tsc_status_t tsc_traffic_light_get_opendrive_id(tsc_traffic_light_t *light, tsc_string_t *out) {
+  return TSC_GUARD({ string_assign(out, light_of(light).GetOpenDRIVEID()); });
+}
+
+tsc_status_t tsc_traffic_light_get_trigger_volume(tsc_traffic_light_t *light,
+                                                  tsc_bounding_box_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = from_carla(light_of(light).GetTriggerVolume()); });
+}
+
+tsc_status_t tsc_traffic_light_get_affected_lane_waypoints(tsc_traffic_light_t *light,
+                                                           tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint_list(without_nulls(light_of(light).GetAffectedLaneWaypoints()));
+  });
+}
+
+tsc_status_t tsc_traffic_light_get_stop_waypoints(tsc_traffic_light_t *light,
+                                                  tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint_list(without_nulls(light_of(light).GetStopWaypoints()));
+  });
+}
+
+tsc_status_t tsc_traffic_light_get_group_traffic_lights(tsc_traffic_light_t *light,
+                                                        tsc_traffic_light_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_traffic_light_list(without_nulls(light_of(light).GetGroupTrafficLights()));
+  });
 }
 
 // bindings/traffic_manager.yaml: carla::traffic_manager::TrafficManager
@@ -228,6 +315,30 @@ tsc_status_t tsc_walker_ai_controller_set_max_speed(tsc_walker_ai_controller_t *
                                                     double max_speed) {
   return TSC_GUARD({
     controller_of(controller).SetMaxSpeed(check_non_negative(max_speed, "max_speed"));
+  });
+}
+
+// bindings/waypoint.yaml: carla::client::Waypoint
+
+tsc_status_t tsc_waypoint_get_lane_change(const tsc_waypoint_t *waypoint, int32_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = static_cast<int32_t>(waypoint_of(waypoint).GetLaneChange());
+  });
+}
+
+tsc_status_t tsc_waypoint_get_landmarks(const tsc_waypoint_t *waypoint, double distance,
+                                        int32_t stop_at_junction, tsc_landmark_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_landmark_list(without_nulls(waypoint_of(waypoint).GetAllLandmarksInDistance(check_search_distance(distance, "distance"), stop_at_junction != 0)));
+  });
+}
+
+tsc_status_t tsc_waypoint_get_landmarks_of_type(const tsc_waypoint_t *waypoint, double distance,
+                                                const char *type, size_t type_len,
+                                                int32_t stop_at_junction,
+                                                tsc_landmark_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_landmark_list(without_nulls(waypoint_of(waypoint).GetLandmarksOfTypeInDistance(check_search_distance(distance, "distance"), to_string(type, type_len, "type"), stop_at_junction != 0)));
   });
 }
 

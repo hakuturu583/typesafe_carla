@@ -67,11 +67,15 @@ def shim(spec: Spec) -> str:
             lines += ["", f"// bindings/{f.spec_file}: {f.cpp_class}"]
         lines.append("")
         lines.append(signature("tsc_status_t ", f.name, f.c_params(), " {"))
-        one = f"  return TSC_GUARD({{ {f.body()} }});"
+        if f.out and f.out.type.handle:  # *out is NULL unless the new handle is made
+            head, tail = f"return new_handle(__func__, {f.out.name}, [&] {{", "});"
+        else:
+            head, tail = "return TSC_GUARD({", "});"
+        one = f"  {head} {f.body()} {tail}"
         if len(one) <= WIDTH:
             lines.append(one)
         else:
-            lines += ["  return TSC_GUARD({", f"    {f.body()}", "  });"]
+            lines += [f"  {head}", f"    {f.body()}", f"  {tail}"]
         lines.append("}")
     lines += ["", '}  // extern "C"', ""]
     return "\n".join(lines)
@@ -92,7 +96,9 @@ def null_handle_test(spec: Spec) -> str:
     for f in spec.functions:
         call = ["NULL"] + ["NULL" if a.type.struct or a.type.handle else a.type.invalid
                            for a in f.args]
-        if f.out:
+        if f.out and f.out.type.handle:  # a valid out, so the NULL handle is what fails
+            call.append(f"({f.out.type.c} *[1]){{NULL}}")
+        elif f.out:
             call.append("NULL")
         lines.append(f'  expect_null_rejected({f.name}({", ".join(call)}), "{f.name}");')
     lines += ["  if (g_failures != 0) return 1;",

@@ -349,6 +349,48 @@ class CLandmark:
     width: float
     transform: CTransform
 
+# tsc_lane_marking_t (shared with #24, LaneInvasionEvent).
+@tuple
+class CLaneMarking:
+    type: i32
+    color: i32
+    lane_change: i32
+    reserved0: i32
+    width: float
+
+# Issue #22.
+@tuple
+class CGeoLocation:
+    latitude: float
+    longitude: float
+    altitude: float
+
+@tuple
+class CGeoProjection:
+    type: i32
+    utm_zone: i32
+    utm_north: i32
+    utm_has_offset: i32
+    ellipsoid_a: float
+    ellipsoid_f_inv: float
+    lat_0: float
+    lat_1: float
+    lat_2: float
+    lon_0: float
+    k: float
+    x_0: float
+    y_0: float
+    offset_x: float
+    offset_y: float
+    offset_z: float
+    offset_cos_h: float
+    offset_sin_h: float
+
+@tuple
+class CLaneValidity:
+    from_lane: i32
+    to_lane: i32
+
 # --- Functions ----------------------------------------------------------------
 
 from C import LIB.tsc_last_error_message() -> cobj
@@ -540,6 +582,45 @@ from C import LIB.tsc_waypoint_get_junction(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_junction_get_id(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_junction_get_bounding_box(cobj, Ptr[CBoundingBox]) -> i32
 from C import LIB.tsc_junction_get_waypoints(cobj, i32, Ptr[cobj]) -> i32
+# Issue #22.
+# BEGIN GENERATED map from bindings/map.yaml, do not edit
+from C import LIB.tsc_map_get_georeference(cobj, Ptr[CGeoLocation]) -> i32
+from C import LIB.tsc_map_get_waypoint_xodr(cobj, u32, i32, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_landmarks_from_id(cobj, cobj, int, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_landmark_group(cobj, cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_cook_in_memory_map(cobj, cobj, int) -> i32
+# END GENERATED map
+from C import LIB.tsc_map_get_geoprojection(cobj, Ptr[CGeoProjection]) -> i32
+from C import LIB.tsc_map_transform_to_geolocation(cobj, Ptr[CVector3D], Ptr[CGeoProjection], Ptr[CGeoLocation]) -> i32
+from C import LIB.tsc_map_geolocation_to_transform(cobj, Ptr[CGeoLocation], Ptr[CGeoProjection], Ptr[CVector3D]) -> i32
+from C import LIB.tsc_map_save_to_disk(cobj, cobj, int) -> i32
+from C import LIB.tsc_landmark_list_get_landmark(cobj, int, Ptr[cobj]) -> i32
+# BEGIN GENERATED landmark from bindings/landmark.yaml, do not edit
+from C import LIB.tsc_landmark_get_h_offset(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_landmark_get_pitch(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_landmark_get_roll(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_landmark_is_dynamic(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_landmark_get_waypoint(cobj, Ptr[cobj]) -> i32
+# END GENERATED landmark
+from C import LIB.tsc_landmark_get_lane_validities(cobj, Ptr[CLaneValidity], int, Ptr[int]) -> i32
+from C import LIB.tsc_waypoint_get_left_lane_marking(cobj, Ptr[i32], Ptr[CLaneMarking]) -> i32
+from C import LIB.tsc_waypoint_get_right_lane_marking(cobj, Ptr[i32], Ptr[CLaneMarking]) -> i32
+from C import LIB.tsc_waypoint_is_rht(cobj, Ptr[i32]) -> i32
+# BEGIN GENERATED waypoint from bindings/waypoint.yaml, do not edit
+from C import LIB.tsc_waypoint_get_lane_change(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_waypoint_get_landmarks(cobj, float, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_get_landmarks_of_type(cobj, float, cobj, int, i32, Ptr[cobj]) -> i32
+# END GENERATED waypoint
+from C import LIB.tsc_traffic_light_list_size(cobj) -> int
+from C import LIB.tsc_traffic_light_list_get(cobj, int, Ptr[cobj]) -> i32
+from C import LIB.tsc_traffic_light_get_light_boxes(cobj, Ptr[CBoundingBox], int, Ptr[int]) -> i32
+# BEGIN GENERATED traffic_light_geometry from bindings/traffic_light.yaml, do not edit
+from C import LIB.tsc_traffic_light_get_opendrive_id(cobj, Ptr[CString]) -> i32
+from C import LIB.tsc_traffic_light_get_trigger_volume(cobj, Ptr[CBoundingBox]) -> i32
+from C import LIB.tsc_traffic_light_get_affected_lane_waypoints(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_traffic_light_get_stop_waypoints(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_traffic_light_get_group_traffic_lights(cobj, Ptr[cobj]) -> i32
+# END GENERATED traffic_light_geometry
 from C import LIB.tsc_client_get_traffic_manager(cobj, u16, Ptr[cobj]) -> i32
 # BEGIN GENERATED traffic_manager from bindings/traffic_manager.yaml, do not edit
 from C import LIB.tsc_traffic_manager_get_port(cobj, Ptr[u16]) -> i32

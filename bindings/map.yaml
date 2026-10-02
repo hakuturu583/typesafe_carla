@@ -1,0 +1,23 @@
+# Map operations: tsc_map_<name> (issue #22).
+class: carla::client::Map
+prefix: map
+self: {type: const tsc_map_t, name: map, get: map_of}
+blocks:
+  map:
+    get_georeference: {call: GetGeoReference, out: geo_location}
+    get_waypoint_xodr:
+      call: GetWaypointXODR
+      args: {road_id: uint32, lane_id: int32, s: finite}
+      out: waypoint_or_null
+      doc: "*out = NULL (TSC_OK) when the road or lane does not exist."
+    get_landmarks_from_id:
+      call: GetLandmarksFromId
+      args: {opendrive_id: string_in}
+      out: landmark_list
+    get_landmark_group: {call: GetLandmarkGroup, args: {landmark: landmark}, out: landmark_list}
+    cook_in_memory_map:
+      call: CookInMemoryMap
+      args: {path: string_in}
+      doc: >-
+        Writes the Traffic Manager's in-memory map; empty path: "<map name>.bin".
+        LibCarla only logs a file that cannot be opened.
