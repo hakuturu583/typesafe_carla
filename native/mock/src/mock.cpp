@@ -66,6 +66,10 @@ struct Episode : std::enable_shared_from_this<Episode> {
   rpc::ActorId next_actor_id = 1;
   rpc::EpisodeSettings settings;
   std::map<rpc::ActorId, ActorData> actors;  // ordered: GetActors() is deterministic
+  // Actors destroyed in this episode. LibCarla's Episode::GetActorById reads a
+  // client-side cache (CachedActorList) that destroying an actor never clears,
+  // so World::GetActor keeps returning them until the episode changes.
+  std::map<rpc::ActorId, ActorData> destroyed;
   // Listening is per client-side Sensor object, like LibCarla's ServerSideSensor.
   struct Listener {
     const Sensor *owner;
@@ -134,7 +138,19 @@ struct Episode : std::enable_shared_from_this<Episode> {
   // Every actor removal goes through here so listeners never outlive their sensor.
   bool EraseActorLocked(rpc::ActorId id) {
     listeners.erase(id);
-    return actors.erase(id) > 0;
+    auto it = actors.find(id);
+    if (it == actors.end()) return false;
+    destroyed.insert_or_assign(id, it->second);
+    actors.erase(it);
+    return true;
+  }
+
+  // A live actor, or one destroyed in this episode (see `destroyed`).
+  const ActorData *KnownLocked(rpc::ActorId id) const {
+    auto it = actors.find(id);
+    if (it != actors.end()) return &it->second;
+    auto gone = destroyed.find(id);
+    return gone == destroyed.end() ? nullptr : &gone->second;
   }
 
   ActorData &LiveLocked(rpc::ActorId id) {
@@ -165,6 +181,7 @@ struct Episode : std::enable_shared_from_this<Episode> {
   void ResetLocked(bool reset_settings, bool with_parked_vehicle) {
     ++id;
     actors.clear();
+    destroyed.clear();
     listeners.clear();
     if (reset_settings) settings = rpc::EpisodeSettings{};
     if (with_parked_vehicle) {
@@ -464,7 +481,9 @@ BlueprintLibrary::const_pointer BlueprintLibrary::Find(const std::string &key) c
 Actor::Actor(std::shared_ptr<mock::Episode> episode, rpc::ActorId id)
     : _episode(std::move(episode)), _id(id) {
   std::lock_guard<std::mutex> lock(_episode->mutex);
-  const mock::ActorData &data = _episode->actors.at(id);
+  const mock::ActorData *known = _episode->KnownLocked(id);
+  if (known == nullptr) throw std::out_of_range("unknown actor " + std::to_string(id));
+  const mock::ActorData &data = *known;
   _type_id = data.type_id;
   _bounding_box = data.is_vehicle
                       ? geom::BoundingBox(geom::Location(0.0f, 0.0f, 0.7f), geom::Vector3D(2.4f, 1.0f, 0.75f))
@@ -587,9 +606,9 @@ SharedPtr<Actor> World::GetActor(rpc::ActorId id) const {
   mock::ActorData data;
   {
     std::lock_guard<std::mutex> lock(_episode->mutex);
-    auto it = _episode->actors.find(id);
-    if (it == _episode->actors.end()) return nullptr;
-    data = it->second;
+    const mock::ActorData *known = _episode->KnownLocked(id);  // includes destroyed actors
+    if (known == nullptr) return nullptr;
+    data = *known;
   }
   return mock::MakeActor(_episode, data);
 }
@@ -1053,7 +1072,7 @@ std::vector<Delivery> Episode::SenseLocked() {
         const size_t f = frame;
         const geom::Vector3D impulse(1000.0f * (p.x - o.x), 1000.0f * (p.y - o.y), 0.0f);
         out.push_back([self, callback, self_id, other_id, t, f, timestamp, impulse]() {
-          const World world(self);  // GetActor: nullptr once an actor is destroyed
+          const World world(self);  // GetActor: also finds actors destroyed since
           callback(std::make_shared<sensor::data::CollisionEvent>(
               f, timestamp, t, world.GetActor(self_id), world.GetActor(other_id), impulse));
         });

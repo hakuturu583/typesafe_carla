@@ -243,19 +243,29 @@ Deliberate differences, all in favour of static checking:
 the official API: an unknown actor id, an occupied spawn point, no lane at
 the location or beyond the outermost lane, no junction, no traffic light, no
 navigation mesh. (`Sensor.poll`, which has no Python counterpart, returns
-`None` when the queue is empty.) Python-style code runs unchanged:
-`if world.get_actor(id) is None`, `if wp:`, and using the value directly when
-it is known to exist (`world.try_spawn_actor(bp, t).destroy()`,
-`m.get_waypoint(loc).next(2.0)`). The return type is `Optional[T]`, which only
-adds static information: the checker knows what the value is when it is not
-`None`, so `actor.set_transform(m.get_waypoint(loc))` is a compile error.
-Two details differ at run time:
+`None` when the queue is empty.) The tests check these cases against a real
+server, except the navigation-mesh case, which only the mock exercises.
+`get_actor(id)` of an actor destroyed in the same episode still returns an
+`Actor`: LibCarla caches actors on the client and never evicts them, and the
+official API does the same. Use the world snapshot to tell whether an actor
+still exists, not `is_alive`: a real server can report `True` for such an
+actor, while the mock backend reports `False`.
+
+Python-style code works without changes in most cases: `if world.get_actor(id) is None`,
+`if wp:`, and using the value directly when it is known to exist
+(`world.try_spawn_actor(bp, t).destroy()`, `m.get_waypoint(loc).next(2.0)`).
+The exception is a chained lookup passed into *annotated* code, which needs
+an explicit `unwrap()` (see [Codon limitation 5](#codon-limitations-found-while-building-this)).
+The return type is `Optional[T]`, which only adds static information: the
+checker knows what the value is when it is not `None`, so
+`actor.set_transform(m.get_waypoint(loc))` is a compile error. Two details
+differ at run time:
 
 * Using a `None` value raises `ValueError` (`optional unpack failed: expected
   Actor, got None`) where Python raises `AttributeError` (`'NoneType' object
   has no attribute ...`).
-* `get_actor` and the `find` lookups return `None` for a negative id, where
-  the Python API raises Boost.Python's `ArgumentError`.
+* For an id outside the uint32 range (e.g. `-1`), `get_actor` and the `find`
+  lookups return `None`; the official API raises `OverflowError`.
 
 ## Codon limitations found while building this
 

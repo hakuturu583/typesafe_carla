@@ -63,7 +63,7 @@ out("junction", f"{jn.id},{len(jn.get_waypoints(carla.LaneType.Driving))}")
 offroad = m.get_waypoint(carla.Location(10000.0, 10000.0, 0.0), project_to_road=False)
 out("none_lookups", f"{int(world.get_actor(999999) is None)},"
     f"{int(world.get_snapshot().find(999999) is None)},{int(world.get_actors().find(999999) is None)},"
-    f"{int(offroad is None)},{int(wp.get_junction() is None)},{int(jn is None)}")
+    f"{int(offroad is None)},{int(wp.get_junction() is None)}")
 
 
 def lane_walk(w, left):
@@ -139,4 +139,6 @@ try:
 finally:
     world.apply_settings(original)
     out("destroyed", int(vehicle.destroy()))
+# LibCarla's client cache keeps actors destroyed in this episode.
+out("destroyed_lookup", int(world.get_actor(vehicle.id) is None))
 sys.stdout.flush()

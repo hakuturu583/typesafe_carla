@@ -20,7 +20,7 @@ EXACT = ("server_version", "vehicle_blueprints", "color_type", "wheels", "type_i
          "destroyed", "map_name", "spawn_points", "waypoint", "generated", "batch_error",
          "physics_wheels", "camera", "lidar_channels", "topology", "crosswalk_points", "landmarks",
          "landmark0", "traffic_lights", "light0_times", "weather", "junction", "none_lookups",
-         "lane_walk", "try_spawn_occupied")
+         "destroyed_lookup", "lane_walk", "try_spawn_occupied")
 NUMERIC = {"settled": 0.05, "driven": 0.5, "speed": 0.3, "spawn0": 0.001, "waypoint_s": 0.001,
            "next10": 0.001, "bbox": 0.001, "physics": 0.001,
            "gnss": 0.0000005, "imu_compass": 0.01}

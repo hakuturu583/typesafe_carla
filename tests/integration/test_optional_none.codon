@@ -77,11 +77,21 @@ try:
     assert raised
     msg = unwrap_error(lambda: world.try_spawn_actor(bp, spot).destroy())
     assert msg == "optional unpack failed: expected Actor, got None", msg
-    light = vehicle.as_vehicle().get_traffic_light()
-    print("traffic light", "None" if light is None else str(light.id))
+    # Both read the traffic light id from the vehicle's state, so a vehicle
+    # that is not at a light has none (a fresh spawn is normally not at one).
+    v = vehicle.as_vehicle()
+    light = v.get_traffic_light()
+    at_light = v.is_at_traffic_light()
+    print("traffic light", "None" if light is None else str(light.id), "at light", at_light)
+    if not at_light:
+        assert light is None
     found = world.get_actor(vehicle.id)  # used directly when known to exist
     assert found.id == vehicle.id
 finally:
     vehicle.destroy()
+
+# LibCarla's client cache keeps actors destroyed in this episode, so get_actor
+# still finds them, as with the official API.
+assert world.get_actor(vehicle.id) is not None
 
 print("OK")

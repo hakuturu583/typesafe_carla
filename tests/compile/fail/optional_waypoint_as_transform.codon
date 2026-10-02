@@ -1,5 +1,5 @@
 # An Optional result keeps its static type: an Optional[Waypoint] is not a
-# Transform, with or without a None check.
+# Transform. (optional_checked_waypoint_as_transform.codon: with a None check.)
 # expect-error: 'Waypoint' does not match expected type 'Transform'
 import typesafe_carla as carla
 

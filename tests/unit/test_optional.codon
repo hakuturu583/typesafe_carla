@@ -108,9 +108,16 @@ msg = raises_unwrap(lambda: vehicle.get_traffic_light().get_state())
 assert msg == "optional unpack failed: expected TrafficLight, got None", msg
 vehicle.destroy()
 
-# A destroyed actor is gone from get_actor, as in Python.
+# An actor destroyed in this episode is still found by get_actor: LibCarla
+# caches actors client-side and never evicts them (the official API does the
+# same). The snapshot is authoritative. On the mock, the cached actor reports
+# is_alive == False (a real server may still report True until it updates).
 gone = vehicle.id
-assert world.get_actor(gone) is None
+stale = world.get_actor(gone)
+assert stale is not None and stale.id == gone and stale.type_id == "vehicle.audi.tt"
+assert not stale.is_alive
+assert not world.get_snapshot().has_actor(gone)
+assert world.get_actors().find(gone) is None
 
 # get_random_location_from_navigation: a Location when the map has a navmesh.
 nav = world.get_random_location_from_navigation()
