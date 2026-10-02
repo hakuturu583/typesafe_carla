@@ -1,0 +1,105 @@
+# Native statuses become typed exceptions.
+import typesafe_carla as carla
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+spectator = world.get_actors()[1]
+assert spectator.type_id == "spectator"
+assert not spectator.is_vehicle()
+
+raised = False
+try:
+    spectator.as_vehicle()
+except carla.ActorTypeError as e:
+    raised = True
+    assert "is not a vehicle" in e.message
+    assert e.status == 5
+assert raised
+
+raised = False
+try:
+    carla.Client("carla.invalid", 2000).get_world()
+except carla.TimeoutError as e:
+    raised = True
+    assert "time-out" in e.message
+assert raised
+
+raised = False
+try:
+    world.get_blueprint_library().find("vehicle.does.not_exist")
+except IndexError as e:
+    raised = True
+    assert "vehicle.does.not_exist" in e.message
+assert raised
+
+raised = False
+try:
+    world.get_actors()[5]
+except IndexError:
+    raised = True
+assert raised
+assert world.get_actors()[-1].type_id == "spectator"
+
+vehicle = world.get_actors()[0].as_vehicle()
+raised = False
+try:
+    vehicle.apply_control(carla.VehicleControl(throttle=1.5))
+except carla.CarlaError as e:
+    raised = True
+    assert e.status == 2 and "throttle" in e.message
+assert raised
+
+raised = False
+try:
+    carla.Client("localhost", 70000)
+except carla.CarlaError as e:
+    raised = True
+    assert "70000" in e.message
+assert raised
+
+raised = False
+try:
+    client.load_world("NoSuchMap")
+except carla.CarlaError as e:
+    raised = True
+    assert "NoSuchMap" in e.message
+assert raised
+
+bp = world.get_blueprint_library().find("vehicle.audi.tt")
+raised = False
+try:
+    bp.get_attribute("number_of_wheels").as_float()
+except carla.CarlaError as e:
+    raised = True
+    assert "is int, not float" in e.message
+assert raised
+
+raised = False
+try:
+    bp.set_attribute("number_of_wheels", "3")
+except carla.CarlaError as e:
+    raised = True
+    assert "not modifiable" in e.message
+assert raised
+
+raised = False
+try:
+    bp.set_attribute("colour", "1,2,3")
+except IndexError:
+    raised = True
+assert raised
+
+# Operations on a destroyed actor fail cleanly.
+cone = world.spawn_actor(world.get_blueprint_library().find("static.prop.trafficcone01"),
+                         carla.Transform(carla.Location(50.0, 0.0, 0.0)))
+assert cone.destroy()
+assert not cone.destroy()
+assert not cone.is_alive
+raised = False
+try:
+    cone.get_transform()
+except carla.CarlaError as e:
+    raised = True
+    assert "destroyed" in e.message
+assert raised
+print("OK")

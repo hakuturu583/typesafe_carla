@@ -1,0 +1,21 @@
+import typesafe_carla as carla
+
+def safe_vehicle(actor: carla.Actor) -> Optional[carla.Vehicle]:
+    try:
+        return actor.as_vehicle()
+    except carla.ActorTypeError:
+        return None
+
+def safe_world(client: carla.Client) -> Optional[carla.World]:
+    try:
+        return client.get_world()
+    except carla.TimeoutError as e:
+        print(e.message, e.status)
+        return None
+    except carla.CarlaError as e:
+        return None
+
+# Compile-only: Codon type-checks a function only when it is called.
+_client = carla.Client("localhost", 2000)
+print(safe_world(_client))
+print(safe_vehicle(_client.get_world().get_actors()[0]))

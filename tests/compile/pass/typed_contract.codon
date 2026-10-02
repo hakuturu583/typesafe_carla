@@ -1,0 +1,20 @@
+# Typed contracts across library boundaries (design section 42).
+import typesafe_carla as carla
+
+def control(vehicle: carla.Vehicle, command: carla.VehicleControl):
+    vehicle.apply_control(command)
+
+def controller(world: carla.World):
+    for actor in world.get_actors():
+        if actor.is_vehicle():
+            control(actor.as_vehicle(), carla.VehicleControl(throttle=0.1))
+    # A Vehicle is an Actor.
+    def describe(actor: carla.Actor) -> str:
+        return actor.type_id
+    actors = world.get_actors().filter("vehicle.*")
+    if len(actors) > 0:
+        print(describe(actors[0].as_vehicle()))
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+controller(_world)

@@ -1,0 +1,53 @@
+# Client: the connection to a CARLA server.
+
+from ._ffi import (Handle, CString, take_string, tsc_client_create, tsc_client_set_timeout,
+                   tsc_client_get_timeout, tsc_client_get_client_version,
+                   tsc_client_get_server_version, tsc_client_get_world, tsc_client_load_world,
+                   tsc_client_reload_world, TSC_INVALID_ARGUMENT)
+from .errors import _check, CarlaError
+from .world import World
+
+class Client:
+    _h: Handle
+
+    def __init__(self, host: str, port: int = 2000):
+        """Creates a client. Like LibCarla, no connection is made until the first call."""
+        if port < 0 or port > 65535:
+            raise CarlaError(f"port {port} is not a valid TCP port", TSC_INVALID_ARGUMENT)
+        out = Ptr[cobj](1)
+        _check(tsc_client_create(host.ptr, host.len, u16(port), out))
+        self._h = Handle(out[0])
+
+    def set_timeout(self, seconds: float):
+        _check(tsc_client_set_timeout(self._h.ptr, seconds))
+
+    def get_timeout(self) -> float:
+        out = Ptr[float](1)
+        _check(tsc_client_get_timeout(self._h.ptr, out))
+        return out[0]
+
+    def get_client_version(self) -> str:
+        out = Ptr[CString](1)
+        _check(tsc_client_get_client_version(self._h.ptr, out))
+        return take_string(out)
+
+    def get_server_version(self) -> str:
+        out = Ptr[CString](1)
+        _check(tsc_client_get_server_version(self._h.ptr, out))
+        return take_string(out)
+
+    def get_world(self) -> World:
+        out = Ptr[cobj](1)
+        _check(tsc_client_get_world(self._h.ptr, out))
+        return World(Handle(out[0]))
+
+    def load_world(self, map_name: str, reset_settings: bool = True) -> World:
+        out = Ptr[cobj](1)
+        _check(tsc_client_load_world(self._h.ptr, map_name.ptr, map_name.len,
+                                     i32(int(reset_settings)), out))
+        return World(Handle(out[0]))
+
+    def reload_world(self, reset_settings: bool = True) -> World:
+        out = Ptr[cobj](1)
+        _check(tsc_client_reload_world(self._h.ptr, i32(int(reset_settings)), out))
+        return World(Handle(out[0]))

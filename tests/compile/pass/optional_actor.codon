@@ -1,0 +1,11 @@
+import typesafe_carla as carla
+
+def find(world: carla.World, actor_id: int) -> Optional[carla.Transform]:
+    actor = world.get_actor(actor_id)
+    if actor is None:
+        return None
+    return actor.get_transform()
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+print(find(_world, 1))

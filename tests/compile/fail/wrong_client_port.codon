@@ -1,0 +1,4 @@
+# expect-error: no function 'Client.__init__' with arguments (Client, str, str)
+import typesafe_carla as carla
+
+client = carla.Client("localhost", "2000")

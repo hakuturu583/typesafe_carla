@@ -1,0 +1,9 @@
+# expect-error: 'str' does not match expected type 'Transform'
+import typesafe_carla as carla
+
+def move(actor: carla.Actor):
+    actor.set_transform("hello")
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+move(_world.get_actors()[0])

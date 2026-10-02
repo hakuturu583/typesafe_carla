@@ -1,0 +1,129 @@
+# World and WorldSettings.
+
+from ._ffi import (Handle, CTransform, CWorldSettings, tsc_world_get_id, tsc_world_get_actors,
+                   tsc_world_get_actor, tsc_world_get_blueprint_library, tsc_world_spawn_actor,
+                   tsc_world_try_spawn_actor, tsc_world_tick, tsc_world_get_settings,
+                   tsc_world_apply_settings, TSC_NOT_FOUND)
+from .errors import _check
+from .geometry import Transform
+from .actor import Actor, ActorList, _make_actor
+from .blueprint import ActorBlueprint, BlueprintLibrary
+
+class WorldSettings:
+    synchronous_mode: bool
+    no_rendering_mode: bool
+    fixed_delta_seconds: Optional[float]  # None means variable time-step
+    substepping: bool
+    max_substep_delta_time: float
+    max_substeps: int
+
+    def __init__(self, synchronous_mode: bool = False, no_rendering_mode: bool = False,
+                 fixed_delta_seconds: Optional[float] = None, substepping: bool = True,
+                 max_substep_delta_time: float = 0.01, max_substeps: int = 10):
+        self.synchronous_mode = synchronous_mode
+        self.no_rendering_mode = no_rendering_mode
+        self.fixed_delta_seconds = fixed_delta_seconds
+        self.substepping = substepping
+        self.max_substep_delta_time = max_substep_delta_time
+        self.max_substeps = max_substeps
+
+    def __repr__(self) -> str:
+        return (f"WorldSettings(synchronous_mode={self.synchronous_mode}, "
+                f"no_rendering_mode={self.no_rendering_mode}, "
+                f"fixed_delta_seconds={self.fixed_delta_seconds}, "
+                f"substepping={self.substepping}, "
+                f"max_substep_delta_time={self.max_substep_delta_time}, "
+                f"max_substeps={self.max_substeps})")
+
+    def _to_c(self) -> CWorldSettings:
+        fixed = self.fixed_delta_seconds
+        return CWorldSettings(i32(int(self.synchronous_mode)), i32(int(self.no_rendering_mode)),
+                              i32(int(fixed is not None)), i32(int(self.substepping)),
+                              fixed if fixed is not None else 0.0,
+                              self.max_substep_delta_time, i32(self.max_substeps), i32(0))
+
+    @staticmethod
+    def _from_c(s: CWorldSettings) -> WorldSettings:
+        fixed: Optional[float] = None
+        if int(s.has_fixed_delta_seconds) != 0:
+            fixed = s.fixed_delta_seconds
+        return WorldSettings(int(s.synchronous_mode) != 0, int(s.no_rendering_mode) != 0, fixed,
+                             int(s.substepping) != 0, s.max_substep_delta_time,
+                             int(s.max_substeps))
+
+class World:
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    @property
+    def id(self) -> int:
+        out = Ptr[u64](1)
+        _check(tsc_world_get_id(self._h.ptr, out))
+        return int(out[0])
+
+    def get_actors(self) -> ActorList:
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_actors(self._h.ptr, out))
+        return ActorList(Handle(out[0]))
+
+    def get_actor(self, actor_id: int) -> Optional[Actor]:
+        """Returns None if there is no actor with this id."""
+        if actor_id < 0 or actor_id > 0xFFFFFFFF:
+            return None
+        out = Ptr[cobj](1)
+        status = tsc_world_get_actor(self._h.ptr, u32(actor_id), out)
+        if int(status) == TSC_NOT_FOUND:
+            return None
+        _check(status)
+        return _make_actor(out[0])
+
+    def get_blueprint_library(self) -> BlueprintLibrary:
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_blueprint_library(self._h.ptr, out))
+        return BlueprintLibrary(Handle(out[0]))
+
+    def spawn_actor(self, blueprint: ActorBlueprint, transform: Transform,
+                    attach_to: Optional[Actor] = None) -> Actor:
+        """Raises CarlaError if the actor cannot be spawned (e.g. collision)."""
+        t = Ptr[CTransform](1)
+        t[0] = transform._to_c()
+        parent = attach_to._h.ptr if attach_to is not None else cobj()
+        out = Ptr[cobj](1)
+        _check(tsc_world_spawn_actor(self._h.ptr, blueprint._h.ptr, t, parent, out))
+        return _make_actor(out[0])
+
+    def try_spawn_actor(self, blueprint: ActorBlueprint, transform: Transform,
+                        attach_to: Optional[Actor] = None) -> Optional[Actor]:
+        """Returns None if the actor cannot be spawned."""
+        t = Ptr[CTransform](1)
+        t[0] = transform._to_c()
+        parent = attach_to._h.ptr if attach_to is not None else cobj()
+        out = Ptr[cobj](1)
+        _check(tsc_world_try_spawn_actor(self._h.ptr, blueprint._h.ptr, t, parent, out))
+        if out[0] == cobj():
+            return None
+        return _make_actor(out[0])
+
+    def tick(self, seconds: float = 10.0) -> int:
+        """Advances the simulation (synchronous mode). Returns the new frame id."""
+        out = Ptr[u64](1)
+        _check(tsc_world_tick(self._h.ptr, seconds, out))
+        return int(out[0])
+
+    def get_settings(self) -> WorldSettings:
+        out = Ptr[CWorldSettings](1)
+        _check(tsc_world_get_settings(self._h.ptr, out))
+        return WorldSettings._from_c(out[0])
+
+    def apply_settings(self, settings: WorldSettings, seconds: float = 10.0) -> int:
+        """Applies settings. Returns the frame id at which they take effect."""
+        s = Ptr[CWorldSettings](1)
+        s[0] = settings._to_c()
+        out = Ptr[u64](1)
+        _check(tsc_world_apply_settings(self._h.ptr, s, seconds, out))
+        return int(out[0])
+
+    def __repr__(self) -> str:
+        return f"World(id={self.id})"

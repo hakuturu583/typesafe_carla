@@ -1,0 +1,40 @@
+[build-system]
+requires = ["scikit-build-core>=0.10"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "typesafe-carla"
+version = "0.1.0"
+description = "A statically typed native CARLA client for Codon"
+readme = "README.md"
+requires-python = ">=3.11"
+# typesafe-carla-toolchain (a pinned Codon) will be added here once it is
+# published; until then the launcher finds Codon as described in
+# python/typesafe_carla/toolchain.py.
+dependencies = []
+classifiers = [
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: C++",
+]
+
+[project.scripts]
+typesafe-codon = "typesafe_carla.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+build-dir = "build/{wheel_tag}"
+cmake.build-type = "Release"
+wheel.packages = ["python/typesafe_carla"]
+wheel.py-api = "py3"
+sdist.exclude = ["build/"]
+
+[tool.scikit-build.cmake.define]
+TSC_BUILD_TESTS = "OFF"
+# auto: LibCarla when LIBCARLA_ROOT is set, otherwise the mock backend.
+TSC_BACKEND = { env = "TSC_BACKEND", default = "auto" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

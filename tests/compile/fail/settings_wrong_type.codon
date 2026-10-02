@@ -1,0 +1,9 @@
+# expect-error: does not match expected type 'Optional[float]'
+import typesafe_carla as carla
+
+def configure(world: carla.World):
+    settings = world.get_settings()
+    settings.fixed_delta_seconds = "0.05"
+
+# Compile-only: Codon type-checks a function only when it is called.
+configure(carla.Client("localhost", 2000).get_world())

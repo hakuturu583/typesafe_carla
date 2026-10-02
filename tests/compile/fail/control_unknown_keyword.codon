@@ -1,0 +1,4 @@
+# expect-error: no function 'VehicleControl.__init__' with arguments (VehicleControl, float)
+import typesafe_carla as carla
+
+c = carla.VehicleControl(thrust=0.5)

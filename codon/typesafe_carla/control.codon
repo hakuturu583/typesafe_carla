@@ -1,0 +1,47 @@
+# Control value types.
+
+from ._ffi import CVehicleControl
+
+class VehicleControl:
+    throttle: float  # [0, 1]
+    steer: float  # [-1, 1]
+    brake: float  # [0, 1]
+    hand_brake: bool
+    reverse: bool
+    manual_gear_shift: bool
+    gear: int
+
+    def __init__(self, throttle: float = 0.0, steer: float = 0.0, brake: float = 0.0,
+                 hand_brake: bool = False, reverse: bool = False,
+                 manual_gear_shift: bool = False, gear: int = 0):
+        self.throttle = throttle
+        self.steer = steer
+        self.brake = brake
+        self.hand_brake = hand_brake
+        self.reverse = reverse
+        self.manual_gear_shift = manual_gear_shift
+        self.gear = gear
+
+    def __eq__(self, other: VehicleControl) -> bool:
+        return (self.throttle == other.throttle and self.steer == other.steer and
+                self.brake == other.brake and self.hand_brake == other.hand_brake and
+                self.reverse == other.reverse and
+                self.manual_gear_shift == other.manual_gear_shift and self.gear == other.gear)
+
+    def __ne__(self, other: VehicleControl) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return (f"VehicleControl(throttle={self.throttle}, steer={self.steer}, "
+                f"brake={self.brake}, hand_brake={self.hand_brake}, reverse={self.reverse}, "
+                f"manual_gear_shift={self.manual_gear_shift}, gear={self.gear})")
+
+    def _to_c(self) -> CVehicleControl:
+        return CVehicleControl(self.throttle, self.steer, self.brake, i32(int(self.hand_brake)),
+                               i32(int(self.reverse)), i32(int(self.manual_gear_shift)),
+                               i32(self.gear))
+
+    @staticmethod
+    def _from_c(c: CVehicleControl) -> VehicleControl:
+        return VehicleControl(c.throttle, c.steer, c.brake, int(c.hand_brake) != 0,
+                              int(c.reverse) != 0, int(c.manual_gear_shift) != 0, int(c.gear))

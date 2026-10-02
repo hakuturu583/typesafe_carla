@@ -1,0 +1,17 @@
+import typesafe_carla as carla
+
+def step(world: carla.World, n: int) -> int:
+    settings = world.get_settings()
+    settings.synchronous_mode = True
+    settings.fixed_delta_seconds = 0.05
+    world.apply_settings(settings)
+    frame = 0
+    for _ in range(n):
+        frame = world.tick()
+    settings.fixed_delta_seconds = None
+    world.apply_settings(settings)
+    return frame
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+print(step(_world, 10))

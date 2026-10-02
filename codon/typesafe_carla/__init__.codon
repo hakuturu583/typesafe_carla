@@ -1,0 +1,46 @@
+# typesafe_carla: a statically typed CARLA client for Codon.
+#
+#     import typesafe_carla as carla
+#
+#     client = carla.Client("localhost", 2000)
+#     world = client.get_world()
+
+from ._ffi import (tsc_abi_version, tsc_libcarla_version, tsc_build_commit, tsc_backend_name,
+                   tsc_live_handle_count, c_str, TSC_ABI_VERSION_MAJOR, TSC_ABI_VERSION_MINOR)
+from .errors import CarlaError, TimeoutError, ActorTypeError, VersionError
+from .geometry import Vector2D, Vector3D, Location, Rotation, Transform
+from .control import VehicleControl
+from .blueprint import (ActorAttribute, ActorAttributeType, ActorBlueprint, BlueprintLibrary,
+                        Color)
+from .actor import Actor, Vehicle, ActorList, TM_DEFAULT_PORT
+from .world import World, WorldSettings
+from .client import Client
+
+__version__ = "0.1.0"
+
+def abi_version() -> Tuple[int, int]:
+    v = int(tsc_abi_version())
+    return (v >> 16, v & 0xFFFF)
+
+def libcarla_version() -> str:
+    return c_str(tsc_libcarla_version())
+
+def build_commit() -> str:
+    return c_str(tsc_build_commit())
+
+def backend() -> str:
+    """'libcarla' for the real backend, 'mock' for the in-memory test backend."""
+    return c_str(tsc_backend_name())
+
+def _live_handle_count() -> int:
+    return int(tsc_live_handle_count())
+
+def _check_abi():
+    major, minor = abi_version()
+    if major != TSC_ABI_VERSION_MAJOR or minor < TSC_ABI_VERSION_MINOR:
+        raise VersionError(
+            f"native library ABI {major}.{minor} is incompatible with typesafe_carla "
+            f"{__version__} (needs {TSC_ABI_VERSION_MAJOR}.>={TSC_ABI_VERSION_MINOR}); "
+            "reinstall typesafe-carla so the Codon sources and the native library match")
+
+_check_abi()

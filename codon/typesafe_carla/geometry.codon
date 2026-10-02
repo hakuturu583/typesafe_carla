@@ -1,0 +1,173 @@
+# Geometry value types. Plain Codon classes; copied across the C ABI.
+
+from ._ffi import CVector3D, CRotation, CTransform
+
+class Vector3D:
+    x: float
+    y: float
+    z: float
+
+    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def length(self) -> float:
+        return (self.x * self.x + self.y * self.y + self.z * self.z) ** 0.5
+
+    def __add__(self, other: Vector3D) -> Vector3D:
+        return Vector3D(self.x + other.x, self.y + other.y, self.z + other.z)
+
+    def __sub__(self, other: Vector3D) -> Vector3D:
+        return Vector3D(self.x - other.x, self.y - other.y, self.z - other.z)
+
+    def __mul__(self, k: float) -> Vector3D:
+        return Vector3D(self.x * k, self.y * k, self.z * k)
+
+    def __eq__(self, other: Vector3D) -> bool:
+        return self.x == other.x and self.y == other.y and self.z == other.z
+
+    def __ne__(self, other: Vector3D) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return f"Vector3D(x={self.x}, y={self.y}, z={self.z})"
+
+    def _to_c(self) -> CVector3D:
+        return CVector3D(self.x, self.y, self.z)
+
+    @staticmethod
+    def _from_c(v: CVector3D) -> Vector3D:
+        return Vector3D(v.x, v.y, v.z)
+
+class Vector2D:
+    x: float
+    y: float
+
+    def __init__(self, x: float = 0.0, y: float = 0.0):
+        self.x = x
+        self.y = y
+
+    def length(self) -> float:
+        return (self.x * self.x + self.y * self.y) ** 0.5
+
+    def __eq__(self, other: Vector2D) -> bool:
+        return self.x == other.x and self.y == other.y
+
+    def __ne__(self, other: Vector2D) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return f"Vector2D(x={self.x}, y={self.y})"
+
+class Location:
+    """A point in world space, in meters.
+
+    Unlike the CARLA Python API, Location is not a Vector3D subclass: a
+    position cannot be passed where a velocity is expected. Convert with
+    as_vector() / Location.from_vector() when that is really intended.
+    """
+    x: float
+    y: float
+    z: float
+
+    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    @staticmethod
+    def from_vector(v: Vector3D) -> Location:
+        return Location(v.x, v.y, v.z)
+
+    def as_vector(self) -> Vector3D:
+        return Vector3D(self.x, self.y, self.z)
+
+    def distance(self, other: Location) -> float:
+        dx = self.x - other.x
+        dy = self.y - other.y
+        dz = self.z - other.z
+        return (dx * dx + dy * dy + dz * dz) ** 0.5
+
+    def __add__(self, offset: Location) -> Location:
+        return Location(self.x + offset.x, self.y + offset.y, self.z + offset.z)
+
+    def __sub__(self, other: Location) -> Location:
+        return Location(self.x - other.x, self.y - other.y, self.z - other.z)
+
+    def __eq__(self, other: Location) -> bool:
+        return self.x == other.x and self.y == other.y and self.z == other.z
+
+    def __ne__(self, other: Location) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return f"Location(x={self.x}, y={self.y}, z={self.z})"
+
+    def _to_c(self) -> CVector3D:
+        return CVector3D(self.x, self.y, self.z)
+
+    @staticmethod
+    def _from_c(v: CVector3D) -> Location:
+        return Location(v.x, v.y, v.z)
+
+class Rotation:
+    """Orientation in degrees (Unreal convention: pitch, yaw, roll)."""
+    pitch: float
+    yaw: float
+    roll: float
+
+    def __init__(self, pitch: float = 0.0, yaw: float = 0.0, roll: float = 0.0):
+        self.pitch = pitch
+        self.yaw = yaw
+        self.roll = roll
+
+    def get_forward_vector(self) -> Vector3D:
+        from math import cos, sin, radians
+        cp = cos(radians(self.pitch))
+        return Vector3D(cp * cos(radians(self.yaw)), cp * sin(radians(self.yaw)),
+                        sin(radians(self.pitch)))
+
+    def __eq__(self, other: Rotation) -> bool:
+        return self.pitch == other.pitch and self.yaw == other.yaw and self.roll == other.roll
+
+    def __ne__(self, other: Rotation) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return f"Rotation(pitch={self.pitch}, yaw={self.yaw}, roll={self.roll})"
+
+    def _to_c(self) -> CRotation:
+        return CRotation(self.pitch, self.yaw, self.roll)
+
+    @staticmethod
+    def _from_c(r: CRotation) -> Rotation:
+        return Rotation(r.pitch, r.yaw, r.roll)
+
+class Transform:
+    location: Location
+    rotation: Rotation
+
+    def __init__(self, location: Optional[Location] = None,
+                 rotation: Optional[Rotation] = None):
+        self.location = location if location is not None else Location()
+        self.rotation = rotation if rotation is not None else Rotation()
+
+    def get_forward_vector(self) -> Vector3D:
+        return self.rotation.get_forward_vector()
+
+    def __eq__(self, other: Transform) -> bool:
+        return self.location == other.location and self.rotation == other.rotation
+
+    def __ne__(self, other: Transform) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return f"Transform({self.location}, {self.rotation})"
+
+    def _to_c(self) -> CTransform:
+        return CTransform(self.location._to_c(), self.rotation._to_c())
+
+    @staticmethod
+    def _from_c(t: CTransform) -> Transform:
+        return Transform(Location._from_c(t.location), Rotation._from_c(t.rotation))

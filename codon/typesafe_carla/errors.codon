@@ -1,0 +1,57 @@
+# Exceptions raised by typesafe_carla.
+#
+# Codon exceptions do not form a catchable hierarchy: `except CarlaError`
+# does not catch TimeoutError. Catch the specific classes you care about.
+# Every class carries the native status code in `.status`.
+
+from ._ffi import (TSC_ERROR, TSC_INVALID_ARGUMENT, TSC_TIMEOUT, TSC_NOT_FOUND,
+                   TSC_TYPE_ERROR, TSC_VERSION_ERROR, TSC_OK, last_error)
+
+class CarlaError(Static[Exception]):
+    """Generic failure reported by LibCarla or by argument validation."""
+    status: int
+
+    def __init__(self, message: str = "", status: int = TSC_ERROR):
+        super().__init__("CarlaError", message)
+        self.status = status
+
+class TimeoutError(Static[Exception]):
+    """The CARLA server did not answer within the client timeout."""
+    status: int
+
+    def __init__(self, message: str = ""):
+        super().__init__("TimeoutError", message)
+        self.status = TSC_TIMEOUT
+
+class ActorTypeError(Static[Exception]):
+    """A checked conversion (e.g. Actor.as_vehicle) did not match the runtime type."""
+    status: int
+
+    def __init__(self, message: str = ""):
+        super().__init__("ActorTypeError", message)
+        self.status = TSC_TYPE_ERROR
+
+class VersionError(Static[Exception]):
+    """Mismatched typesafe_carla / native library / CARLA versions."""
+    status: int
+
+    def __init__(self, message: str = ""):
+        super().__init__("VersionError", message)
+        self.status = TSC_VERSION_ERROR
+
+def _check(status: i32):
+    """Converts a native status into the matching exception."""
+    s = int(status)
+    if s == TSC_OK:
+        return
+    message = last_error()
+    if s == TSC_TIMEOUT:
+        raise TimeoutError(message)
+    if s == TSC_TYPE_ERROR:
+        raise ActorTypeError(message)
+    if s == TSC_VERSION_ERROR:
+        raise VersionError(message)
+    if s == TSC_NOT_FOUND:
+        # Lookups by key or index raise IndexError, as in the CARLA Python API.
+        raise IndexError(message)
+    raise CarlaError(message, s)

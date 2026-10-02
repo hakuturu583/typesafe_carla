@@ -1,0 +1,9 @@
+import typesafe_carla as carla
+
+def connect(host: str, port: int) -> carla.World:
+    client = carla.Client(host, port)
+    client.set_timeout(5.0)
+    version: str = client.get_server_version()
+    return client.get_world()
+
+world = connect("localhost", 2000)

@@ -1,0 +1,19 @@
+import typesafe_carla as carla
+
+def move(actor: carla.Actor):
+    transform: carla.Transform = actor.get_transform()
+    transform.location.z += 1.0
+    actor.set_transform(transform)
+    actor.set_transform(carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(yaw=90.0)))
+    location: carla.Location = actor.get_location()
+    velocity: carla.Vector3D = actor.get_velocity()
+    actor.set_target_velocity(carla.Vector3D(1.0, 0.0, 0.0))
+    d: float = location.distance(carla.Location())
+    speed: float = velocity.length()
+
+# Integer literals are accepted where floats are expected, as in Python.
+l = carla.Location(10, 20, 0)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+move(_world.get_actors()[0])
