@@ -36,7 +36,7 @@ NUMERIC = {"i21_object_names": 5.0, "settled": 0.05, "driven": 0.5, "speed": 0.3
            "georeference": 0.0000005, "geo_origin": 0.0000005, "waypoint_xodr_loc": 0.002,
            "light_trigger": 0.002, "wheel_steer": 0.5, "ackermann_speed": 0.3,
            "walker_pose": 0.01, "settings_ext": 0.001, "geometry_yaw": 0.002,
-           "geometry_misc": 0.002, "quaternion": 0.002, "trigger_extent": 0.001,
+           "geometry_misc": 0.002, "unit_vector": 0.002, "quaternion": 0.002, "trigger_extent": 0.001,
            "constant_velocity": 0.3, "i21_ground": 0.01, "depth_log_mean": 1.0}
 
 
