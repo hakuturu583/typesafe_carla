@@ -25,10 +25,7 @@ from .map import _read_buffer
 from .geometry import Transform
 from .actor import Vehicle
 from .control import _fields_eq, _fields_repr
-
-def _enum_repr(name: str, names: List[str], value: int) -> str:
-    """The member's name, as the Python API prints it, else name(value)."""
-    return names[value] if 0 <= value < len(names) else f"{name}({value})"
+from .constants import _enum_repr
 
 @tuple
 class VehicleDoor:

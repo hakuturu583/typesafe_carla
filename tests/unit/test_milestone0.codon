@@ -2,7 +2,7 @@
 import typesafe_carla as carla
 
 assert carla.backend() == "mock"
-assert carla.abi_version() == (3, 8)
+assert carla.abi_version() == (4, 0)
 assert carla.libcarla_git_ref() == "mock" and carla.libcarla_git_commit() == "mock"
 
 client = carla.Client("localhost", 2000)

@@ -222,10 +222,8 @@ int main(void) {
   expect_null_rejected(tsc_world_get_id(NULL, (uint64_t[1]){0}), "tsc_world_get_id");
   expect_null_rejected(tsc_world_get_actors(NULL, (tsc_actor_list_t *[1]){NULL}), "tsc_world_get_actors");
   expect_null_rejected(tsc_world_get_blueprint_library(NULL, (tsc_blueprint_library_t *[1]){NULL}), "tsc_world_get_blueprint_library");
-  expect_null_rejected(tsc_world_spawn_actor(NULL, NULL, NULL, NULL, (tsc_actor_t *[1]){NULL}), "tsc_world_spawn_actor");
-  expect_null_rejected(tsc_world_try_spawn_actor(NULL, NULL, NULL, NULL, (tsc_actor_t *[1]){NULL}), "tsc_world_try_spawn_actor");
-  expect_null_rejected(tsc_world_spawn_actor_attached(NULL, NULL, NULL, NULL, 99, (tsc_actor_t *[1]){NULL}), "tsc_world_spawn_actor_attached");
-  expect_null_rejected(tsc_world_try_spawn_actor_attached(NULL, NULL, NULL, NULL, 99, (tsc_actor_t *[1]){NULL}), "tsc_world_try_spawn_actor_attached");
+  expect_null_rejected(tsc_world_spawn_actor(NULL, NULL, NULL, NULL, 99, (tsc_actor_t *[1]){NULL}), "tsc_world_spawn_actor");
+  expect_null_rejected(tsc_world_try_spawn_actor(NULL, NULL, NULL, NULL, 99, (tsc_actor_t *[1]){NULL}), "tsc_world_try_spawn_actor");
   expect_null_rejected(tsc_world_tick(NULL, NAN, (uint64_t[1]){0}), "tsc_world_tick");
   expect_null_rejected(tsc_world_get_snapshot(NULL, (tsc_world_snapshot_t *[1]){NULL}), "tsc_world_get_snapshot");
   expect_null_rejected(tsc_world_wait_for_tick(NULL, NAN, (tsc_world_snapshot_t *[1]){NULL}), "tsc_world_wait_for_tick");
@@ -278,6 +276,6 @@ int main(void) {
   if (tsc_world_snapshot_size(NULL) != 0) { fputs("tsc_world_snapshot_size(NULL)\n", stderr); ++g_failures; }
   expect_null_rejected(tsc_world_snapshot_get(NULL, 0, (tsc_actor_snapshot_t[1]){0}), "tsc_world_snapshot_get");
   if (g_failures != 0) return 1;
-  printf("test_generated: 257 generated functions reject NULL handles\n");
+  printf("test_generated: 255 generated functions reject NULL handles\n");
   return 0;
 }

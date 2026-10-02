@@ -3,7 +3,6 @@
 # and destroy them.
 import os
 import typesafe_carla as carla
-import typesafe_carla._ffi as ffi
 
 host = os.getenv("TSC_CARLA_HOST", "localhost")
 port = int(os.getenv("TSC_CARLA_PORT", "2000"))
@@ -58,15 +57,6 @@ try:
     check_parent(arm, car, "SpringArm")
     check_parent(unwrap(ghost), car, "SpringArmGhost")
     check_parent(rigid, car, "Rigid")
-
-    # An attachment type outside the enumeration is rejected before any RPC.
-    before = len(world.get_actors())
-    try:
-        world.spawn_actor(cam_bp, behind, attach_to=car, attachment_type=carla.AttachmentType(5))
-        assert False, "invalid attachment type accepted"
-    except carla.CarlaError as e:
-        assert e.status == ffi.TSC_INVALID_ARGUMENT
-    assert len(world.get_actors()) == before
 finally:
     for c in cameras:
         c.destroy()

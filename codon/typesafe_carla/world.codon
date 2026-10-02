@@ -1,8 +1,8 @@
 # World and WorldSettings.
 
 from ._ffi import (Handle, CTransform, CWorldSettings, tsc_world_get_id, tsc_world_get_actors,
-                   tsc_world_get_actor, tsc_world_get_blueprint_library, tsc_world_spawn_actor_attached,
-                   tsc_world_try_spawn_actor_attached, tsc_world_tick,
+                   tsc_world_get_actor, tsc_world_get_blueprint_library, tsc_world_spawn_actor,
+                   tsc_world_try_spawn_actor, tsc_world_tick,
                    TSC_NOT_FOUND, tsc_world_get_map,
                    tsc_world_get_snapshot, tsc_world_wait_for_tick)
 from ._ffi import CWorldSettingsExt, tsc_world_get_settings_ext, tsc_world_apply_settings_ext
@@ -143,7 +143,7 @@ class World:
         t[0] = transform._to_c()
         parent = _parent_ptr(attach_to)
         out = Ptr[cobj](1)
-        _check(tsc_world_spawn_actor_attached(
+        _check(tsc_world_spawn_actor(
             self._h.ptr, blueprint._h.ptr, t, parent,
             _i32(attachment_type.value, "attachment_type"), out))
         return _make_actor(out[0])
@@ -157,7 +157,7 @@ class World:
         t[0] = transform._to_c()
         parent = _parent_ptr(attach_to)
         out = Ptr[cobj](1)
-        _check(tsc_world_try_spawn_actor_attached(
+        _check(tsc_world_try_spawn_actor(
             self._h.ptr, blueprint._h.ptr, t, parent,
             _i32(attachment_type.value, "attachment_type"), out))
         if out[0] == cobj():
