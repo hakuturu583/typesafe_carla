@@ -47,9 +47,10 @@ extern "C" {
  * 3.5: world spectator, traffic light/sign queries, environment objects, ray casts,
  *      map layers, IMU gravity, textures, on_tick, light manager (#21).
  * 3.6: sensor data frame_number, image convert/save, point cloud save, collision
- *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24). */
+ *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24).
+ * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 6
+#define TSC_ABI_VERSION_MINOR 7
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -1020,20 +1021,24 @@ typedef struct {
 
 /* BEGIN GENERATED debug_draw from bindings/debug.yaml, do not edit */
 TSC_API tsc_status_t tsc_debug_draw_point(tsc_world_t *world, const tsc_location_t *location,
-                                          double size, const tsc_color_t *color, double life_time);
+                                          double size, const tsc_color_t *color, double life_time,
+                                          int32_t persistent_lines);
 TSC_API tsc_status_t tsc_debug_draw_line(tsc_world_t *world, const tsc_location_t *begin,
                                          const tsc_location_t *end, double thickness,
-                                         const tsc_color_t *color, double life_time);
+                                         const tsc_color_t *color, double life_time,
+                                         int32_t persistent_lines);
 TSC_API tsc_status_t tsc_debug_draw_arrow(tsc_world_t *world, const tsc_location_t *begin,
                                           const tsc_location_t *end, double thickness,
                                           double arrow_size, const tsc_color_t *color,
-                                          double life_time);
+                                          double life_time, int32_t persistent_lines);
 TSC_API tsc_status_t tsc_debug_draw_box(tsc_world_t *world, const tsc_bounding_box_t *box,
                                         const tsc_rotation_t *rotation, double thickness,
-                                        const tsc_color_t *color, double life_time);
+                                        const tsc_color_t *color, double life_time,
+                                        int32_t persistent_lines);
 TSC_API tsc_status_t tsc_debug_draw_string(tsc_world_t *world, const tsc_location_t *location,
                                            const char *text, size_t text_len, int32_t draw_shadow,
-                                           const tsc_color_t *color, double life_time);
+                                           const tsc_color_t *color, double life_time,
+                                           int32_t persistent_lines);
 /* END GENERATED debug_draw */
 
 /* --- Recorder ---------------------------------------------------------------- */
