@@ -33,27 +33,25 @@ struct StatusError : std::runtime_error {
 // message. This is the only place exceptions are allowed to stop.
 template <typename F>
 tsc_status_t guard(const char *function, F &&fn) noexcept {
+  auto report = [function](tsc_status_t status, const char *message) {
+    set_last_error(std::string(function) + ": " + message);
+    return status;
+  };
   try {
     fn();
     return TSC_OK;
   } catch (const StatusError &e) {
-    set_last_error(std::string(function) + ": " + e.what());
-    return e.status;
+    return report(e.status, e.what());
   } catch (const carla::client::TimeoutException &e) {
-    set_last_error(std::string(function) + ": " + e.what());
-    return TSC_TIMEOUT;
+    return report(TSC_TIMEOUT, e.what());
   } catch (const std::out_of_range &e) {
-    set_last_error(std::string(function) + ": " + e.what());
-    return TSC_NOT_FOUND;
+    return report(TSC_NOT_FOUND, e.what());
   } catch (const std::invalid_argument &e) {
-    set_last_error(std::string(function) + ": " + e.what());
-    return TSC_INVALID_ARGUMENT;
+    return report(TSC_INVALID_ARGUMENT, e.what());
   } catch (const std::exception &e) {
-    set_last_error(std::string(function) + ": " + e.what());
-    return TSC_ERROR;
+    return report(TSC_ERROR, e.what());
   } catch (...) {
-    set_last_error(std::string(function) + ": unknown C++ exception");
-    return TSC_ERROR;
+    return report(TSC_ERROR, "unknown C++ exception");
   }
 }
 
@@ -109,10 +107,11 @@ struct tsc_actor : tsc_handle {
       : tsc_handle(k), actor(std::move(a)) {}
 };
 
+// A vehicle handle is an actor handle whose `actor` is known (by its kind tag)
+// to point at a carla::client::Vehicle.
 struct tsc_vehicle : tsc_actor {
-  carla::SharedPtr<carla::client::Vehicle> vehicle;
   explicit tsc_vehicle(carla::SharedPtr<carla::client::Vehicle> v)
-      : tsc_actor(v, TSC_KIND_VEHICLE), vehicle(std::move(v)) {}
+      : tsc_actor(std::move(v), TSC_KIND_VEHICLE) {}
 };
 
 struct tsc_actor_list : tsc_handle {

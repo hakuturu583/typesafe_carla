@@ -7,14 +7,12 @@ backend's in-memory server; with the real LibCarla backend they are skipped
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
 
 UNIT = sorted((Path(__file__).resolve().parent / "unit").glob("test_*.codon"))
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 @pytest.fixture(autouse=True)
@@ -26,14 +24,14 @@ def _require_mock(backend):
 @pytest.mark.parametrize("source", UNIT, ids=lambda p: p.stem)
 def test_unit(launcher, source):
     result = launcher("run", str(source))
-    assert result.returncode == 0, ANSI.sub("", result.stdout + result.stderr)
+    assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.strip().endswith("OK"), result.stdout
 
 
 @pytest.mark.parametrize("example", sorted(EXAMPLES.glob("*.py")), ids=lambda p: p.stem)
 def test_example_runs(launcher, example):
     result = launcher("run", str(example))
-    assert result.returncode == 0, ANSI.sub("", result.stdout + result.stderr)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_built_executable_is_self_contained(launcher, tmp_path):
@@ -43,7 +41,7 @@ def test_built_executable_is_self_contained(launcher, tmp_path):
 
     exe = tmp_path / "connect"
     result = launcher("build", "-release", "-o", str(exe), str(EXAMPLES / "connect.py"))
-    assert result.returncode == 0, ANSI.sub("", result.stderr)
+    assert result.returncode == 0, result.stderr
     env = {k: v for k, v in os.environ.items()
            if k not in ("TYPESAFE_CARLA_LIB", "LD_LIBRARY_PATH", "CODON_PATH")}
     run = subprocess.run([str(exe)], capture_output=True, text=True, env=env, timeout=60)

@@ -9,8 +9,19 @@ const carla::SharedPtr<carla::client::BlueprintLibrary> &library_of(
   return check_handle(l, "library", TSC_KIND_BLUEPRINT_LIBRARY)->library;
 }
 
+carla::client::ActorBlueprint &blueprint_of(tsc_actor_blueprint_t *b) {
+  return check_handle(b, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
+}
+
 const carla::client::ActorBlueprint &blueprint_of(const tsc_actor_blueprint_t *b) {
   return check_handle(b, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
+}
+
+// Fails with TSC_NOT_FOUND unless the blueprint has attribute `key`.
+void require_attribute(const carla::client::ActorBlueprint &bp, const std::string &key) {
+  if (!bp.ContainsAttribute(key)) {
+    fail(TSC_NOT_FOUND, "blueprint '" + bp.GetId() + "' has no attribute '" + key + "'");
+  }
 }
 
 }  // namespace
@@ -88,9 +99,7 @@ tsc_status_t tsc_actor_blueprint_get_attribute(const tsc_actor_blueprint_t *blue
     *out = tsc_actor_attribute_t{};
     const auto &bp = blueprint_of(blueprint);
     const std::string key = to_string(id, id_len, "id");
-    if (!bp.ContainsAttribute(key)) {
-      fail(TSC_NOT_FOUND, "blueprint '" + bp.GetId() + "' has no attribute '" + key + "'");
-    }
+    require_attribute(bp, key);
     const carla::client::ActorAttribute &attribute = bp.GetAttribute(key);
     tsc_actor_attribute_t result{};
     try {
@@ -110,11 +119,9 @@ tsc_status_t tsc_actor_blueprint_set_attribute(tsc_actor_blueprint_t *blueprint,
                                                size_t id_len, const char *value,
                                                size_t value_len) {
   return TSC_GUARD({
-    auto &bp = check_handle(blueprint, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
+    auto &bp = blueprint_of(blueprint);
     const std::string key = to_string(id, id_len, "id");
-    if (!bp.ContainsAttribute(key)) {
-      fail(TSC_NOT_FOUND, "blueprint '" + bp.GetId() + "' has no attribute '" + key + "'");
-    }
+    require_attribute(bp, key);
     if (!bp.GetAttribute(key).IsModifiable()) {
       fail(TSC_INVALID_ARGUMENT, "attribute '" + key + "' of '" + bp.GetId() + "' is not modifiable");
     }

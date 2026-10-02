@@ -10,7 +10,6 @@ Codon sources are present. Used by the release workflow before publishing.
 from __future__ import annotations
 
 import argparse
-import ctypes
 import subprocess
 import sys
 
@@ -24,18 +23,14 @@ def main() -> int:
     from typesafe_carla import paths
 
     lib = paths.native_library()
-    so = ctypes.CDLL(str(lib))
-    for name in ("tsc_backend_name", "tsc_libcarla_version", "tsc_libcarla_git_ref",
-                 "tsc_libcarla_git_commit"):
-        getattr(so, name).restype = ctypes.c_char_p
-    backend = so.tsc_backend_name().decode()
-    ref = so.tsc_libcarla_git_ref().decode()
-    commit = so.tsc_libcarla_git_commit().decode()
-    abi = so.tsc_abi_version()
+    native = paths.native_info(lib)
+    backend = native["backend"]
+    ref = native["carla_git_ref"]
+    commit = native["carla_git_commit"]
     print(f"library  {lib}")
-    print(f"abi      {abi >> 16}.{abi & 0xFFFF}")
+    print(f"abi      {native['abi']}")
     print(f"backend  {backend}")
-    print(f"libcarla {so.tsc_libcarla_version().decode()} ({ref} {commit})")
+    print(f"libcarla {native['libcarla_version']} ({ref} {commit})")
 
     errors = []
     if backend != args.backend:
@@ -45,8 +40,10 @@ def main() -> int:
     info = paths.build_info()
     if info.get("carla_git_commit") != commit:
         errors.append(f"BUILD_INFO.json disagrees with the library: {info}")
-    if not (paths.codon_modules_dir() / "typesafe_carla" / "__init__.codon").is_file():
-        errors.append("Codon sources missing")
+    try:
+        paths.codon_modules_dir()
+    except paths.PathError as e:
+        errors.append(str(e))
     ldd = subprocess.run(["ldd", str(lib)], capture_output=True, text=True).stdout
     if "libpython" in ldd:
         errors.append("native library links libpython")

@@ -12,6 +12,19 @@ carla::client::Actor *parent_of(tsc_actor_t *parent) {
   return parent == nullptr ? nullptr : check_actor(parent, "parent")->actor.get();
 }
 
+// Shared body of spawn_actor / try_spawn_actor. TrySpawnActor returns NULL
+// when the spot is occupied; SpawnActor failing that way is an error.
+tsc_actor_t *spawn(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
+                   const tsc_transform_t *transform, tsc_actor_t *parent, bool try_spawn) {
+  auto &w = world_of(world);
+  const auto &bp = check_handle(blueprint, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
+  const auto t = to_carla(*require_ptr(transform, "transform"));
+  auto actor = try_spawn ? w.TrySpawnActor(bp, t, parent_of(parent))
+                         : w.SpawnActor(bp, t, parent_of(parent));
+  if (actor == nullptr && !try_spawn) fail(TSC_ERROR, "spawn failed for " + bp.GetId());
+  return make_actor_handle(actor);
+}
+
 }  // namespace
 
 extern "C" {
@@ -53,11 +66,7 @@ tsc_status_t tsc_world_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint
   return TSC_GUARD({
     require_ptr(out_actor, "out_actor");
     *out_actor = nullptr;
-    auto &w = world_of(world);
-    const auto &bp = check_handle(blueprint, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
-    auto actor = w.SpawnActor(bp, to_carla(*require_ptr(transform, "transform")), parent_of(parent));
-    if (actor == nullptr) fail(TSC_ERROR, "spawn failed for " + bp.GetId());
-    *out_actor = make_actor_handle(actor);
+    *out_actor = spawn(world, blueprint, transform, parent, false);
   });
 }
 
@@ -67,11 +76,7 @@ tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world, const tsc_actor_bluep
   return TSC_GUARD({
     require_ptr(out_actor, "out_actor");
     *out_actor = nullptr;
-    auto &w = world_of(world);
-    const auto &bp = check_handle(blueprint, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
-    auto actor =
-        w.TrySpawnActor(bp, to_carla(*require_ptr(transform, "transform")), parent_of(parent));
-    *out_actor = make_actor_handle(actor);
+    *out_actor = spawn(world, blueprint, transform, parent, true);
   });
 }
 

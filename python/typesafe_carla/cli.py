@@ -78,27 +78,17 @@ def _info(tc: toolchain.Toolchain | None, error: str | None) -> int:
         print(f"native library     NOT FOUND: {e}")
         return 1
     print(f"native library     {lib}")
-    import ctypes
-
     try:
-        so = ctypes.CDLL(str(lib))
+        native = paths.native_info(lib)
     except OSError as e:
         print(f"                   cannot be loaded: {e}")
         return 1
-    def text(name: str) -> str:
-        fn = getattr(so, name, None)
-        if fn is None:
-            return "n/a (older ABI)"
-        fn.restype = ctypes.c_char_p
-        return fn().decode()
-
-    abi = so.tsc_abi_version()
-    print(f"native ABI         {abi >> 16}.{abi & 0xFFFF}")
-    print(f"backend            {text('tsc_backend_name')}")
-    print(f"libcarla           {text('tsc_libcarla_version')}")
-    print(f"carla ref          {text('tsc_libcarla_git_ref')}")
-    print(f"carla commit       {text('tsc_libcarla_git_commit')}")
-    print(f"build commit       {text('tsc_build_commit')}")
+    print(f"native ABI         {native['abi']}")
+    print(f"backend            {native['backend']}")
+    print(f"libcarla           {native['libcarla_version']}")
+    print(f"carla ref          {native['carla_git_ref']}")
+    print(f"carla commit       {native['carla_git_commit']}")
+    print(f"build commit       {native['build_commit']}")
     return 0 if tc is not None else 1
 
 
@@ -131,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args[0] == "build":
-        args = add_rpath(args, str(paths.native_library().parent))
+        args = add_rpath(args, os.path.dirname(env[paths.ENV_LIB]))
 
     cmd = [str(tc.executable)] + args
     sys.stdout.flush()

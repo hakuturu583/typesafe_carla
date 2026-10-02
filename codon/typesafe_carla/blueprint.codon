@@ -6,7 +6,7 @@ from ._ffi import (Handle, CString, CActorAttribute, take_string, copy_string, t
                    tsc_actor_blueprint_get_id, tsc_actor_blueprint_has_tag,
                    tsc_actor_blueprint_has_attribute, tsc_actor_blueprint_get_attribute,
                    tsc_actor_blueprint_set_attribute, TSC_TYPE_ERROR)
-from .errors import _check, CarlaError
+from .errors import _check, _normalize_index, CarlaError
 
 class ActorAttributeType:
     Bool: ClassVar[int] = 0
@@ -145,18 +145,17 @@ class BlueprintLibrary:
     def __len__(self) -> int:
         return tsc_blueprint_library_size(self._h.ptr)
 
-    def __getitem__(self, index: int) -> ActorBlueprint:
-        n = len(self)
-        i = index + n if index < 0 else index
-        if i < 0 or i >= n:
-            raise IndexError(f"blueprint library index {index} out of range")
+    def _get(self, i: int) -> ActorBlueprint:
         out = Ptr[cobj](1)
         _check(tsc_blueprint_library_get(self._h.ptr, i, out))
         return ActorBlueprint(Handle(out[0]))
 
+    def __getitem__(self, index: int) -> ActorBlueprint:
+        return self._get(_normalize_index(index, len(self), "blueprint library"))
+
     def __iter__(self) -> Generator[ActorBlueprint]:
         for i in range(len(self)):
-            yield self[i]
+            yield self._get(i)
 
     def find(self, id: str) -> ActorBlueprint:
         """Raises IndexError if no blueprint has this id."""

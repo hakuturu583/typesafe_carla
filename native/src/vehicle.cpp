@@ -5,7 +5,7 @@ using namespace tsc;
 namespace {
 
 carla::client::Vehicle &vehicle_of(tsc_vehicle_t *v) {
-  return *check_handle(v, "vehicle", TSC_KIND_VEHICLE)->vehicle;
+  return static_cast<carla::client::Vehicle &>(*check_handle(v, "vehicle", TSC_KIND_VEHICLE)->actor);
 }
 
 }  // namespace

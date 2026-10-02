@@ -10,13 +10,11 @@ Skipped unless TSC_CARLA_PORT is set and the library is the libcarla backend.
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 
 import pytest
 
 PROGRAMS = sorted((Path(__file__).resolve().parent / "integration").glob("test_*.codon"))
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 @pytest.fixture(autouse=True)
@@ -30,7 +28,7 @@ def _require_server(backend):
 @pytest.mark.parametrize("source", PROGRAMS, ids=lambda p: p.stem)
 def test_integration(launcher, source):
     result = launcher("run", "-release", str(source), timeout=900)
-    output = ANSI.sub("", result.stdout + result.stderr)
+    output = result.stdout + result.stderr
     print(output)
     assert result.returncode == 0, output
     assert result.stdout.strip().endswith("OK"), output

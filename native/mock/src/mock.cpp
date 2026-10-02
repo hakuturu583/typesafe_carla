@@ -15,7 +15,6 @@ struct ActorData {
   rpc::ActorId id = 0;
   std::string type_id;
   bool is_vehicle = false;
-  bool alive = true;
   geom::Transform transform;
   geom::Vector3D velocity;
   geom::Vector3D acceleration;
@@ -27,7 +26,6 @@ struct ActorData {
 struct Episode {
   std::mutex mutex;
   uint64_t id = 1;
-  std::string map_name = "Town10HD_Opt";
   uint64_t frame = 0;
   rpc::ActorId next_actor_id = 1;
   rpc::EpisodeSettings settings;
@@ -61,7 +59,7 @@ struct Episode {
     const double dt = settings.fixed_delta_seconds.value_or(kDefaultDeltaSeconds);
     for (auto &entry : actors) {
       ActorData &a = entry.second;
-      if (!a.alive || !a.is_vehicle) continue;
+      if (!a.is_vehicle) continue;
       rpc::VehicleControl c = a.control;
       if (a.autopilot) c = rpc::VehicleControl(0.5f, 0.0f, 0.0f, false, false, false, 0);
       const double yaw = a.transform.rotation.yaw * M_PI / 180.0;
@@ -270,7 +268,7 @@ template <typename F>
 auto Actor::WithData(F &&fn) const {
   std::lock_guard<std::mutex> lock(_episode->mutex);
   auto it = _episode->actors.find(_id);
-  if (it == _episode->actors.end() || !it->second.alive) {
+  if (it == _episode->actors.end()) {
     throw std::runtime_error(
         "trying to operate on a destroyed actor; an actor's function was called, but the actor "
         "is already destroyed.");
@@ -281,7 +279,7 @@ auto Actor::WithData(F &&fn) const {
 bool Actor::IsAlive() const {
   std::lock_guard<std::mutex> lock(_episode->mutex);
   auto it = _episode->actors.find(_id);
-  return it != _episode->actors.end() && it->second.alive;
+  return it != _episode->actors.end();
 }
 
 geom::Location Actor::GetLocation() const {
@@ -319,7 +317,7 @@ void Actor::SetTargetVelocity(const geom::Vector3D &vector) {
 bool Actor::Destroy() {
   std::lock_guard<std::mutex> lock(_episode->mutex);
   auto it = _episode->actors.find(_id);
-  if (it == _episode->actors.end() || !it->second.alive) return false;
+  if (it == _episode->actors.end()) return false;
   _episode->actors.erase(it);
   return true;
 }
@@ -474,7 +472,6 @@ World Client::LoadWorld(std::string map_name, bool reset_settings, rpc::MapLayer
   auto episode = mock::Connect(_endpoint, _timeout);
   {
     std::lock_guard<std::mutex> lock(episode->mutex);
-    episode->map_name = map_name;
     episode->ResetLocked(reset_settings, false);
   }
   return World(episode);

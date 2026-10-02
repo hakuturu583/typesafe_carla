@@ -3,8 +3,8 @@
 from ._ffi import (Handle, CString, take_string, tsc_client_create, tsc_client_set_timeout,
                    tsc_client_get_timeout, tsc_client_get_client_version,
                    tsc_client_get_server_version, tsc_client_get_world, tsc_client_load_world,
-                   tsc_client_reload_world, TSC_INVALID_ARGUMENT)
-from .errors import _check, CarlaError
+                   tsc_client_reload_world)
+from .errors import _check, _check_port
 from .world import World
 
 class Client:
@@ -12,8 +12,7 @@ class Client:
 
     def __init__(self, host: str, port: int = 2000):
         """Creates a client. Like LibCarla, no connection is made until the first call."""
-        if port < 0 or port > 65535:
-            raise CarlaError(f"port {port} is not a valid TCP port", TSC_INVALID_ARGUMENT)
+        _check_port("port", port)
         out = Ptr[cobj](1)
         _check(tsc_client_create(host.ptr, host.len, u16(port), out))
         self._h = Handle(out[0])

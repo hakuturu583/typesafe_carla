@@ -58,5 +58,7 @@ def test_toolchain_matches_supported_codon():
     tc_version = re.search(r'^version = "(.+)"', tc_pyproject, re.MULTILINE).group(1)
     hook = (ROOT / "toolchain" / "hatch_build.py").read_text()
     codon = re.search(r'^CODON_VERSION = "(.+)"', hook, re.MULTILINE).group(1)
+    package = (ROOT / "toolchain" / "src" / "typesafe_carla_toolchain" / "__init__.py").read_text()
+    assert re.search(r'^CODON_VERSION = "(.+)"', package, re.MULTILINE).group(1) == codon
     assert tc_version.split(".post")[0] == codon
     assert toolchain.is_supported_version(codon)

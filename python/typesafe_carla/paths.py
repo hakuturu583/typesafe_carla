@@ -102,3 +102,33 @@ def build_info() -> dict[str, str]:
     if not info.is_file():
         return {}
     return json.loads(info.read_text())
+
+
+_NATIVE_STRINGS = {
+    "backend": "tsc_backend_name",
+    "libcarla_version": "tsc_libcarla_version",
+    "carla_git_ref": "tsc_libcarla_git_ref",
+    "carla_git_commit": "tsc_libcarla_git_commit",
+    "build_commit": "tsc_build_commit",
+}
+
+
+def native_info(lib: Path | None = None) -> dict[str, str]:
+    """Version strings reported by the loaded native library.
+
+    Keys: abi ("major.minor") plus those of ``_NATIVE_STRINGS``; getters an
+    older ABI lacks read "n/a (older ABI)". Raises OSError if it cannot load.
+    """
+    import ctypes
+
+    so = ctypes.CDLL(str(lib or native_library()))
+    abi = so.tsc_abi_version()
+    info = {"abi": f"{abi >> 16}.{abi & 0xFFFF}"}
+    for key, name in _NATIVE_STRINGS.items():
+        fn = getattr(so, name, None)
+        if fn is None:
+            info[key] = "n/a (older ABI)"
+        else:
+            fn.restype = ctypes.c_char_p
+            info[key] = fn().decode()
+    return info

@@ -55,3 +55,15 @@ def _check(status: i32):
         # Lookups by key or index raise IndexError, as in the CARLA Python API.
         raise IndexError(message)
     raise CarlaError(message, s)
+
+def _check_port(name: str, port: int):
+    """Raises CarlaError (TSC_INVALID_ARGUMENT) unless port fits a TCP port."""
+    if port < 0 or port > 65535:
+        raise CarlaError(f"{name} {port} is not a valid TCP port", TSC_INVALID_ARGUMENT)
+
+def _normalize_index(index: int, n: int, what: str) -> int:
+    """Python-style indexing: maps a negative index from the end, checks bounds."""
+    i = index + n if index < 0 else index
+    if i < 0 or i >= n:
+        raise IndexError(f"{what} index {index} out of range")
+    return i

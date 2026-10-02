@@ -8,7 +8,6 @@ not count as a pass. Programs are compiled to LLVM IR only; never run.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -16,7 +15,6 @@ import pytest
 COMPILE_DIR = Path(__file__).resolve().parent / "compile"
 PASS = sorted((COMPILE_DIR / "pass").glob("*.codon"))
 FAIL = sorted((COMPILE_DIR / "fail").glob("*.codon"))
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def _compile(launcher, source: Path, tmp_path: Path):
@@ -37,12 +35,11 @@ def test_suites_are_not_empty():
 @pytest.mark.parametrize("source", PASS, ids=lambda p: p.stem)
 def test_compile_pass(launcher, source, tmp_path):
     result = _compile(launcher, source, tmp_path)
-    assert result.returncode == 0, ANSI.sub("", result.stderr)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize("source", FAIL, ids=lambda p: p.stem)
 def test_compile_fail(launcher, source, tmp_path):
     result = _compile(launcher, source, tmp_path)
-    stderr = ANSI.sub("", result.stderr)
     assert result.returncode != 0, f"{source.name} compiled but must not"
-    assert expected_error(source) in stderr, stderr
+    assert expected_error(source) in result.stderr, result.stderr

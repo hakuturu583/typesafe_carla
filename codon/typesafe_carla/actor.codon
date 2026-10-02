@@ -14,8 +14,8 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_actor_as_vehicle, tsc_vehicle_apply_control, tsc_vehicle_get_control,
                    tsc_vehicle_set_autopilot, tsc_actor_list_size, tsc_actor_list_get,
                    tsc_actor_list_filter, take_string)
-from .errors import _check, CarlaError
-from .geometry import Location, Rotation, Transform, Vector3D
+from .errors import _check, _check_port, _normalize_index
+from .geometry import Location, Transform, Vector3D
 from .control import VehicleControl
 
 TM_DEFAULT_PORT = 8000
@@ -117,8 +117,7 @@ class Vehicle(Actor):
         return VehicleControl._from_c(out[0])
 
     def set_autopilot(self, enabled: bool = True, tm_port: int = TM_DEFAULT_PORT):
-        if tm_port < 0 or tm_port > 65535:
-            raise CarlaError(f"tm_port {tm_port} is not a valid TCP port", 2)
+        _check_port("tm_port", tm_port)
         _check(tsc_vehicle_set_autopilot(self._h.ptr, i32(int(enabled)), u16(tm_port)))
 
     def __repr__(self) -> str:
@@ -145,18 +144,17 @@ class ActorList:
     def __len__(self) -> int:
         return tsc_actor_list_size(self._h.ptr)
 
-    def __getitem__(self, index: int) -> Actor:
-        n = len(self)
-        i = index + n if index < 0 else index
-        if i < 0 or i >= n:
-            raise IndexError(f"actor list index {index} out of range")
+    def _get(self, i: int) -> Actor:
         out = Ptr[cobj](1)
         _check(tsc_actor_list_get(self._h.ptr, i, out))
         return _make_actor(out[0])
 
+    def __getitem__(self, index: int) -> Actor:
+        return self._get(_normalize_index(index, len(self), "actor list"))
+
     def __iter__(self) -> Generator[Actor]:
         for i in range(len(self)):
-            yield self[i]
+            yield self._get(i)
 
     def find(self, actor_id: int) -> Optional[Actor]:
         for actor in self:

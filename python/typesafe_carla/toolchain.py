@@ -4,7 +4,7 @@ Search order:
 
 1. ``TYPESAFE_CODON``: path to a ``codon`` executable.
 2. The ``typesafe-carla-toolchain`` package (a pinned, bundled Codon), once
-   it is installed. It must provide ``typesafe_carla_toolchain.codon_dir()``.
+   it is installed. It must provide ``typesafe_carla_toolchain.codon_executable()``.
 3. ``CODON_DIR``: a Codon installation directory (``$CODON_DIR/bin/codon``).
 4. ``~/.codon/bin/codon`` (the official installer's location).
 5. ``codon`` on ``PATH``.
@@ -54,8 +54,8 @@ def _bundled() -> Toolchain | None:
         import typesafe_carla_toolchain  # type: ignore[import-not-found]
     except ImportError:
         return None
-    codon_dir = Path(typesafe_carla_toolchain.codon_dir())
-    return _from_executable(codon_dir / "bin" / "codon", "typesafe-carla-toolchain")
+    return _from_executable(Path(typesafe_carla_toolchain.codon_executable()),
+                            "typesafe-carla-toolchain")
 
 
 def find_codon() -> Toolchain:
