@@ -8,7 +8,7 @@ name = "typesafe-carla-toolchain"
 version = "0.19.3"
 description = "Pinned Codon compiler for typesafe-carla"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE.typesafe-carla-toolchain"]
 classifiers = [

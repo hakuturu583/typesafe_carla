@@ -131,6 +131,8 @@ uv add typesafe-carla        # or: pip install typesafe-carla
 uv run typesafe-codon run main.py
 ```
 
+Python 3.10 or newer (tested on 3.10–3.14). Python only runs the
+`typesafe-codon` launcher; your programs are compiled by Codon.
 `typesafe-carla` depends on `typesafe-carla-toolchain`, which bundles a
 pinned Codon. Requirements and building for another CARLA ref are in
 [docs/usage.md](docs/usage.md); the release process is in

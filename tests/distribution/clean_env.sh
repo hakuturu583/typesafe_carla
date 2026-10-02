@@ -38,7 +38,7 @@ docker run --rm --net=host \
 [project]
 name = "my-carla-project"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = ["typesafe-carla==${TSC_VERSION}"]
 
 [tool.uv]
