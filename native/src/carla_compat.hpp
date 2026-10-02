@@ -54,6 +54,17 @@ carla::SharedPtr<To> downcast(const carla::SharedPtr<From> &p) {
   return std::dynamic_pointer_cast<To>(p);
 }
 
+// ue5-dev renamed TrafficManager::SetKeepRightPercentage (CARLA 0.10.0) to
+// SetKeepSlowLanePercentage.
+template <typename TM, typename A>
+void set_keep_right_percentage(TM &tm, const A &actor, float percentage) {
+  if constexpr (requires { tm.SetKeepSlowLanePercentage(actor, percentage); }) {
+    tm.SetKeepSlowLanePercentage(actor, percentage);
+  } else {
+    tm.SetKeepRightPercentage(actor, percentage);
+  }
+}
+
 #ifdef TSC_MOCK_LIBCARLA
 inline constexpr const char *kBackendName = "mock";
 #else

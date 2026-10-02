@@ -80,7 +80,7 @@ tsc_status_t tsc_traffic_manager_set_vehicle_value(tsc_traffic_manager_t *tm, ts
       case TSC_TM_IGNORE_SIGNS_PERCENTAGE: t.SetPercentageRunningSign(v, percentage()); break;
       case TSC_TM_IGNORE_VEHICLES_PERCENTAGE: t.SetPercentageIgnoreVehicles(v, percentage()); break;
       case TSC_TM_IGNORE_WALKERS_PERCENTAGE: t.SetPercentageIgnoreWalkers(v, percentage()); break;
-      case TSC_TM_KEEP_RIGHT_PERCENTAGE: t.SetKeepRightPercentage(v, percentage()); break;
+      case TSC_TM_KEEP_RIGHT_PERCENTAGE: set_keep_right_percentage(t, v, percentage()); break;
       case TSC_TM_DESIRED_SPEED:
         if (x < 0.0f) fail(TSC_INVALID_ARGUMENT, "desired speed must be non-negative");
         t.SetDesiredSpeed(v, x);
