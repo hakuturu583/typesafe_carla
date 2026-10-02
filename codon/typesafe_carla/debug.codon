@@ -11,9 +11,6 @@ from .world import World
 def _color(c: Color) -> Ptr[CColor]:
     return ref(c._to_c())
 
-def _pl(persistent_lines: bool) -> i32:
-    return i32(int(persistent_lines))
-
 class DebugHelper:
     """Shapes drawn in the simulator. life_time < 0 means "until the end".
     persistent_lines=False draws a shape for the current frame only (as carla.DebugHelper)."""
@@ -27,7 +24,7 @@ class DebugHelper:
                    persistent_lines: bool = True):
         p = _loc(location, "[tsc-compat] a Vector3D passed as a Location to debug.draw_point")
         _check(tsc_debug_draw_point(self._world._h.ptr, p, size, _color(color), life_time,
-                                    _pl(persistent_lines)))
+                                    i32(int(persistent_lines))))
 
     def draw_line(self, begin, end, thickness: float = 0.1,
                   color: Color = Color(255, 0, 0), life_time: float = -1.0,
@@ -35,7 +32,7 @@ class DebugHelper:
         b = _loc(begin, "[tsc-compat] a Vector3D passed as a Location to debug.draw_line")
         e = _loc(end, "[tsc-compat] a Vector3D passed as a Location to debug.draw_line")
         _check(tsc_debug_draw_line(self._world._h.ptr, b, e, thickness, _color(color), life_time,
-                                   _pl(persistent_lines)))
+                                   i32(int(persistent_lines))))
 
     def draw_arrow(self, begin, end, thickness: float = 0.1,
                    arrow_size: float = 0.1, color: Color = Color(255, 0, 0),
@@ -43,7 +40,7 @@ class DebugHelper:
         b = _loc(begin, "[tsc-compat] a Vector3D passed as a Location to debug.draw_arrow")
         e = _loc(end, "[tsc-compat] a Vector3D passed as a Location to debug.draw_arrow")
         _check(tsc_debug_draw_arrow(self._world._h.ptr, b, e, thickness, arrow_size, _color(color),
-                                    life_time, _pl(persistent_lines)))
+                                    life_time, i32(int(persistent_lines))))
 
     def draw_box(self, box: BoundingBox, rotation: Rotation, thickness: float = 0.1,
                  color: Color = Color(255, 0, 0), life_time: float = -1.0,
@@ -53,7 +50,7 @@ class DebugHelper:
         r = Ptr[CRotation](1)
         r[0] = rotation._to_c()
         _check(tsc_debug_draw_box(self._world._h.ptr, b, r, thickness, _color(color), life_time,
-                                  _pl(persistent_lines)))
+                                  i32(int(persistent_lines))))
 
     def draw_string(self, location, text: str, draw_shadow: bool = False,
                     color: Color = Color(255, 0, 0), life_time: float = -1.0,
@@ -61,7 +58,7 @@ class DebugHelper:
         p = _loc(location, "[tsc-compat] a Vector3D passed as a Location to debug.draw_string")
         _check(tsc_debug_draw_string(self._world._h.ptr, p, text.ptr, text.len,
                                      i32(int(draw_shadow)), _color(color), life_time,
-                                     _pl(persistent_lines)))
+                                     i32(int(persistent_lines))))
 
     def clear_debug_shape(self):
         """Removes the persistent shapes (LibCarla ue5-dev and a server with this
