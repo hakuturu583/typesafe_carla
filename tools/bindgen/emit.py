@@ -128,16 +128,15 @@ def null_handle_test(spec: Spec) -> str:
             lines.append(f'  if ({f.name}(NULL) != 0) {{ fputs("{f.name}(NULL)\\n", stderr); '
                          '++g_failures; }')
             continue
-        call = [] if f.constructor else ["NULL"]
-        call += ["NULL" if a.type.struct or a.type.handle else a.type.invalid for a in f.args]
+        call = ["NULL" if a.type.struct or a.type.handle else a.type.invalid for a in f.args]
         if f.constructor:
-            out = "out"
             # A non-NULL sentinel: the failed call must reset *out to NULL.
             # The status is taken first: C evaluates the arguments in no fixed order.
-            lines += [f"  {{", f"    {f.out.type.c} *{out} = ({f.out.type.c} *)&g_failures;",
-                      f'    tsc_status_t status = {f.name}({", ".join(call + ["&" + out])});',
-                      f'    expect_args_rejected(status, {out}, "{f.name}");', "  }"]
+            lines += ["  {", f"    {f.out.type.c} *out = ({f.out.type.c} *)&g_failures;",
+                      f'    tsc_status_t status = {f.name}({", ".join(call + ["&out"])});',
+                      f'    expect_args_rejected(status, out, "{f.name}");', "  }"]
             continue
+        call.insert(0, "NULL")
         if f.out:  # valid outputs, so the NULL handle is what fails
             call.append(_valid_out(f.out.type))
         lines.append(f'  expect_null_rejected({f.name}({", ".join(call)}), "{f.name}");')

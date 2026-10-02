@@ -281,7 +281,7 @@ def load(bindings: Path = BINDINGS) -> Spec:
                 if unknown:
                     raise SpecError(f"{where}: unknown keys {sorted(unknown)}")
                 constructor = entry.get("new", False)
-                if constructor is not False and constructor is not True:
+                if not isinstance(constructor, bool):
                     raise SpecError(f"{where}: new must be true or false")
                 if constructor and set(entry) & {"call", "via", "optional"}:
                     raise SpecError(f"{where}: a constructor (new: true) has no call, via or optional")
