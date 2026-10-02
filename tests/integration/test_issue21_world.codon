@@ -24,7 +24,10 @@ assert spectator.type_id == "spectator"
 view = carla.Transform(carla.Location(points[0].location.x, points[0].location.y, 60.0),
                        carla.Rotation(-90.0, 0.0, 0.0))
 spectator.set_transform(view)
-world.wait_for_tick(10.0)
+for _ in range(10):  # the client sees the move a few ticks later
+    world.wait_for_tick(10.0)
+    if abs(world.get_spectator().get_location().z - 60.0) < 1.0:
+        break
 assert abs(world.get_spectator().get_location().z - 60.0) < 1.0
 
 # --- Traffic lights ---------------------------------------------------------------------------

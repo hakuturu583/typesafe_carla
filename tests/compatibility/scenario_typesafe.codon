@@ -420,8 +420,9 @@ out("quaternion", fmt(q23.x) + "," + fmt(q23.y) + "," + fmt(q23.z) + "," + fmt(q
 out("i21_spectator", world.get_spectator().type_id)
 out("i21_environment", str(len(world.get_environment_objects())) + "," +
     str(len(world.get_environment_objects(carla.CityObjectLabel.Buildings))) + "," +
-    str(len(world.get_level_bbs(carla.CityObjectLabel.TrafficLight))) + "," +
-    str(len(world.get_names_of_all_objects())))
+    str(len(world.get_level_bbs(carla.CityObjectLabel.TrafficLight))))
+# The object names include live actors, so the count can differ by a few.
+out("i21_object_names", str(len(world.get_names_of_all_objects())))
 tl_marks = m.get_all_landmarks_of_type("1000001")
 tl0: Optional[carla.TrafficLight] = None
 if len(tl_marks) > 0:

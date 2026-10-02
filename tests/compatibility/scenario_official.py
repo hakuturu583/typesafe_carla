@@ -400,8 +400,9 @@ else:
 out("i21_spectator", world.get_spectator().type_id)
 out("i21_environment", f"{len(world.get_environment_objects())},"
                        f"{len(world.get_environment_objects(carla.CityObjectLabel.Buildings))},"
-                       f"{len(world.get_level_bbs(carla.CityObjectLabel.TrafficLight))},"
-                       f"{len(world.get_names_of_all_objects())}")
+                       f"{len(world.get_level_bbs(carla.CityObjectLabel.TrafficLight))}")
+# The object names include live actors, so the count can differ by a few.
+out("i21_object_names", len(world.get_names_of_all_objects()))
 tl_marks = m.get_all_landmarks_of_type("1000001")
 tl0 = world.get_traffic_light_from_opendrive_id(tl_marks[0].id) if tl_marks else None
 out("i21_traffic_lights", f"{len(tl_marks)},{int(tl0 is not None)},"
