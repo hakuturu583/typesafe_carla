@@ -37,11 +37,22 @@ was built from still exists.
 The published wheel contains LibCarla built from a CARLA UE5 ref.
 `typesafe-codon info` shows which one, under `carla ref` and `carla commit`.
 Use a client built from the same ref as your server (for example `0.10.0`
-for a CARLA 0.10.0 server). To build one for another ref, build from source:
+for a CARLA 0.10.0 server). To build one for another ref, have uv build
+typesafe-carla from its source distribution:
+
+```toml
+[tool.uv]
+no-binary-package = ["typesafe-carla"]
+```
 
 ```sh
-CARLA_GIT_REF=0.10.0 uv pip install --no-binary typesafe-carla typesafe-carla
+CARLA_GIT_REF=0.10.0 uv sync --reinstall-package typesafe-carla
 ```
+
+`--reinstall-package` forces a rebuild: uv's build cache does not know about
+`CARLA_GIT_REF`. The build fetches CARLA and compiles LibCarla, so it needs
+git, a C++20 compiler, network access to GitHub and some time. CMake is
+installed automatically if the system one is older than 3.27.2.
 
 ## Writing programs
 

@@ -16,7 +16,7 @@ wheels=$(realpath "${1:?usage: clean_env.sh WHEEL_DIR [CARLA_PORT] [IMAGE]}")
 port=${2:-2000}
 image=${3:-ubuntu:24.04}
 tests=$(cd "$(dirname "$0")/.." && pwd)
-version=$(sed -n 's/^__version__ = "\([0-9]*\.[0-9]*\)\..*"/\1/p' "$tests/../python/typesafe_carla/__init__.py")
+version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$tests/../python/typesafe_carla/__init__.py")
 : "${version:?could not read __version__}"
 uv_bin=$(command -v uv)
 
@@ -26,9 +26,10 @@ docker run --rm --net=host \
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq >/dev/null && apt-get install -y -qq g++ zlib1g-dev ca-certificates >/dev/null
     echo "== clean environment"
-    ! command -v codon && echo "no codon on PATH"
-    ! python3 -c "import carla" 2>/dev/null && echo "no CARLA Python package"
-    echo "CODON_PATH=${CODON_PATH:-<unset>}"
+    if command -v codon; then echo "codon is on PATH"; exit 1; fi
+    echo "no codon on PATH"
+    if [ -n "${CODON_PATH:-}" ]; then echo "CODON_PATH is set"; exit 1; fi
+    echo "CODON_PATH unset"
 
     mkdir /app && cd /app
     cp /src/distribution/main.py .
@@ -38,21 +39,30 @@ docker run --rm --net=host \
 name = "my-carla-project"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["typesafe-carla==${TSC_VERSION}.*"]
+dependencies = ["typesafe-carla==${TSC_VERSION}"]
 
 [tool.uv]
+# Only the wheels under test, never a published release.
 find-links = ["/wheels"]
+no-index = true
 TOML
     echo "== uv sync"
     uv sync 2>&1 | tail -3
+    if uv run python -c "import carla" 2>/dev/null; then echo "a CARLA Python package is installed"; exit 1; fi
+    echo "no CARLA Python package"
     uv run typesafe-codon info
 
     echo "== compile-time rejection"
     if uv run typesafe-codon build -release -o bad bad.py 2>err.txt; then
       echo "bad.py compiled but must not"; exit 1
     fi
+    expected=$(sed -n "s/^# expect-error: //p" bad.py)
+    if ! sed "s/\x1b\[[0-9;]*m//g" err.txt | grep -qF "$expected"; then
+      echo "bad.py failed for another reason:"; cat err.txt; exit 1
+    fi
     sed "s/\x1b\[[0-9;]*m//g" err.txt | head -1
-    test ! -e bad && echo "no executable produced"
+    if [ -e bad ]; then echo "an executable was produced"; exit 1; fi
+    echo "no executable produced"
 
     echo "== typesafe-codon build -release main.py && ./main"
     uv run typesafe-codon build -release -o main main.py

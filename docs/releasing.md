@@ -89,10 +89,10 @@ a tag or SHA. The tag-triggered release uses `ue5-dev`.
 Users who need a specific CARLA ref can build the sdist themselves:
 
 ```sh
-CARLA_GIT_REF=<branch|tag|sha> pip install --no-binary typesafe-carla typesafe-carla
-# or with uv:
-CARLA_GIT_REF=<ref> uv pip install --no-binary typesafe-carla typesafe-carla
+CARLA_GIT_REF=<branch|tag|sha> pip install --no-binary typesafe-carla --force-reinstall typesafe-carla
 ```
+
+or, in a uv project, as described in [usage.md](usage.md#which-carla).
 
 This needs git, a C++20 compiler and network access to GitHub. CMake is
 installed automatically if the system one is older than 3.27.2.
