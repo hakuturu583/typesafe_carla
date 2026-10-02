@@ -15,8 +15,9 @@ blocks:
     set_target_velocity: {call: SetTargetVelocity, args: {velocity: vector3d}}
     get_acceleration: {call: GetAcceleration, out: vector3d}
     get_angular_velocity: {call: GetAngularVelocity, out: vector3d}
-  actor_physics:
+  actor_bounding_box:
     get_bounding_box: {call: GetBoundingBox, out: bounding_box}
+  actor_physics:
     set_target_angular_velocity: {call: SetTargetAngularVelocity, args: {v: vector3d}}
     add_impulse: {call: AddImpulse, args: {impulse: vector3d}}
     add_force: {call: AddForce, args: {force: vector3d}}

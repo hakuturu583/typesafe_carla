@@ -32,7 +32,7 @@ COVERAGE_CLASSES = [
     "carla::client::Waypoint", "carla::client::Junction", "carla::client::Landmark",
     "carla::client::Actor", "carla::client::Vehicle", "carla::client::Walker",
     "carla::client::WalkerAIController", "carla::client::TrafficLight",
-    "carla::client::Sensor", "carla::client::ServerSideSensor",
+    "carla::client::Sensor",
     "carla::client::BlueprintLibrary", "carla::client::ActorBlueprint",
     "carla::client::ActorList", "carla::client::WorldSnapshot", "carla::client::DebugHelper",
     "carla::traffic_manager::TrafficManager",
@@ -157,36 +157,44 @@ def _method(cls: str, m: cindex.Cursor) -> Method:
 
 def _methods(defs: dict[str, cindex.Cursor], cls: str,
              stop: set[str] = frozenset()) -> dict[str, list[Method]]:
-    """Public methods of `cls` by name (overloads listed), including those
-    inherited publicly from bases that are not in `stop`. `defs` is
-    _class_definitions() of the translation unit."""
+    """Methods callable on `cls` from outside, by name (overloads listed), as
+    C++ name lookup finds them: a name declared (or `using`-declared) in a
+    class hides that name in its bases; inherited methods count when reached
+    through public bases, or when a public `using` exposes them. Bases in
+    `stop` are not searched. `defs` is _class_definitions() of the TU."""
     out: dict[str, list[Method]] = {}
     if cls not in defs:
         return out
-    seen: set[tuple[str, str]] = set()
-    exposed: set[str] = set()  # `using Base::Method;` in a public section
+    hidden: set[str] = set()  # names a more-derived class already declares
+    exposed: set[str] = set()  # names a public `using Base::name;` brings in
     pending = [(defs[cls], True)]  # (class, reached through public bases only)
     while pending:
         node, public_path = pending.pop(0)
         owner = _qualified(node)
+        declared = set()
         for c in node.get_children():
-            if c.kind == cindex.CursorKind.USING_DECLARATION \
-                    and c.access_specifier == cindex.AccessSpecifier.PUBLIC:
-                exposed.add(c.spelling)
-            elif c.kind == cindex.CursorKind.CXX_METHOD \
-                    and ((public_path and c.access_specifier == cindex.AccessSpecifier.PUBLIC)
-                         or c.spelling in exposed):
-                key = (c.spelling, c.type.spelling)
-                if key not in seen:  # an override hides the base's declaration
-                    seen.add(key)
+            if c.kind == cindex.CursorKind.USING_DECLARATION:
+                if c.spelling in hidden:
+                    continue
+                declared.add(c.spelling)
+                if c.access_specifier == cindex.AccessSpecifier.PUBLIC:
+                    exposed.add(c.spelling)  # found in a base below
+            elif c.kind == cindex.CursorKind.CXX_METHOD:
+                if c.spelling in hidden and c.spelling not in exposed:
+                    continue
+                declared.add(c.spelling)
+                public = public_path and c.access_specifier == cindex.AccessSpecifier.PUBLIC
+                if (public or c.spelling in exposed) and not c.is_deleted_method():
                     out.setdefault(c.spelling, []).append(_method(owner, c))
             elif c.kind == cindex.CursorKind.CXX_BASE_SPECIFIER:
-                # Private bases matter only for the methods `using` exposes.
                 base = c.type.get_canonical().get_declaration()
                 base = defs.get(_qualified(base), base)
                 if _qualified(base) not in stop and base.is_definition():
                     pending.append((base, public_path and c.access_specifier
                                     == cindex.AccessSpecifier.PUBLIC))
+        # Names declared here hide the bases' declarations, except those a
+        # `using` declaration brings in from them.
+        hidden |= declared - exposed
     return out
 
 
@@ -254,13 +262,16 @@ def _calls(tu: cindex.TranslationUnit, classes: set[str]) -> set[str]:
     for node in tu.cursor.walk_preorder():
         if node.kind != cindex.CursorKind.CALL_EXPR:
             continue
+        # Only calls the shim makes, not those inside LibCarla's inline code.
+        f = node.location.file
+        if f is None or SHIM_SOURCES.resolve() not in Path(f.name).resolve().parents:
+            continue
         ref = node.referenced
         if ref is None:
             # A dependent call in carla_compat.hpp, which picks between
             # methods renamed across CARLA versions: only the name is known,
             # and libclang leaves it unspelled (it is the member's last token).
-            f = node.location.file
-            if f and Path(f.name).resolve() == COMPAT_HEADER:
+            if Path(f.name).resolve() == COMPAT_HEADER:
                 member = next((c for c in node.get_children()
                                if c.kind == cindex.CursorKind.MEMBER_REF_EXPR), None)
                 tokens = list(member.get_tokens()) if member else []
@@ -293,6 +304,9 @@ def coverage(spec: Spec, build_dir: Path, output: Path | None) -> int:
     classes = set(COVERAGE_CLASSES)
     tu = _parse(source, args)
     defs = _class_definitions(tu)
+    missing = [cls for cls in COVERAGE_CLASSES if cls not in defs]
+    if missing:
+        print(f"bindgen coverage: not in the shim's headers, skipped: {missing}", file=sys.stderr)
     by_class = {cls: _methods(defs, cls, stop=classes - {cls}) for cls in COVERAGE_CLASSES}
     owners = {m.cls for methods in by_class.values() for overloads in methods.values()
               for m in overloads}

@@ -63,10 +63,10 @@ jobs:
       # --no-project: only the generator's dependencies, not a second
       # LibCarla build of the package.
       - name: Binding spec vs LibCarla headers
-        run: uv run --no-project --with pyyaml --with 'libclang>=18' python -m tools.bindgen validate --build-dir build
+        run: uv run --no-project --with pyyaml --with libclang==18.1.1 python -m tools.bindgen validate --build-dir build
       - name: LibCarla API coverage report
         run: |
-          uv run --no-project --with pyyaml --with 'libclang>=18' python -m tools.bindgen coverage --build-dir build -o coverage.md
+          uv run --no-project --with pyyaml --with libclang==18.1.1 python -m tools.bindgen coverage --build-dir build -o coverage.md
           cat coverage.md >> "$GITHUB_STEP_SUMMARY"
 
   wheel:

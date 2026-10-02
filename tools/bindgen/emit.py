@@ -80,8 +80,9 @@ def shim(spec: Spec) -> str:
 def null_handle_test(spec: Spec) -> str:
     """A C test: every generated function rejects a NULL handle."""
     lines = [f"/* {NOTICE}", " * Every generated function rejects a NULL handle with TSC_INVALID_ARGUMENT",
-             " * before touching its other arguments. */", '#include "typesafe_carla/ffi.h"', "",
-             "#include <stdio.h>", "#include <string.h>", "", "static int g_failures = 0;", "",
+             " * before looking at its other arguments, which are all invalid here (NULL",
+             " * pointers, NaN, out-of-range values). */", '#include "typesafe_carla/ffi.h"', "",
+             "#include <math.h>", "#include <stdio.h>", "#include <string.h>", "", "static int g_failures = 0;", "",
              "static void expect_null_rejected(tsc_status_t status, const char *function) {",
              "  if (status != TSC_INVALID_ARGUMENT ||",
              '      strstr(tsc_last_error_message(), "must not be NULL") == NULL) {',
@@ -89,22 +90,11 @@ def null_handle_test(spec: Spec) -> str:
              "            tsc_last_error_message());", "    ++g_failures;", "  }", "}", "",
              "int main(void) {"]
     for f in spec.functions:
-        decls, call = [], ["NULL"]
-        for a in f.args:
-            if a.type.struct:
-                decls.append(f"static {a.type.c} {a.name};")
-                call.append(f"&{a.name}")
-            elif a.type.handle:
-                call.append("NULL")
-            else:
-                call.append("0")
+        call = ["NULL"] + ["NULL" if a.type.struct or a.type.handle else a.type.invalid
+                           for a in f.args]
         if f.out:
-            decls.append(f"static {f.out.type.c} {f.out.name};")
-            call.append(f"&{f.out.name}")
-        lines.append("  {")
-        lines += [f"    {d}" for d in decls]
-        lines.append(f'    expect_null_rejected({f.name}({", ".join(call)}), "{f.name}");')
-        lines.append("  }")
+            call.append("NULL")
+        lines.append(f'  expect_null_rejected({f.name}({", ".join(call)}), "{f.name}");')
     lines += ["  if (g_failures != 0) return 1;",
               f'  printf("test_generated: {len(spec.functions)} generated functions reject NULL handles\\n");',
               "  return 0;", "}", ""]
@@ -119,9 +109,12 @@ def splice(text: str, style: str, blocks: dict[str, list[Function]], render) -> 
     """Replaces the body of every generated block; all blocks must be present."""
     open_, close = COMMENTS[style]
     for block, functions in blocks.items():
-        begin = (f"{open_}BEGIN GENERATED {block} (bindings/{functions[0].spec_file} "
-                 f"via tools/bindgen; do not edit){close}")
+        begin = f"{open_}BEGIN GENERATED {block} from bindings/{functions[0].spec_file}, do not edit{close}"
         end = f"{open_}END GENERATED {block}{close}"
+        for marker in (rf"{re.escape(f'{open_}BEGIN GENERATED {block} ')}.*", re.escape(end)):
+            n = len(re.findall(rf"^{marker}$", text, re.MULTILINE))
+            if n > 1:
+                raise SystemExit(f"generated block {block!r}: a marker occurs {n} times")
         pattern = re.compile(rf"^{re.escape(open_)}BEGIN GENERATED {re.escape(block)} .*?\n(.*?)"
                              rf"^{re.escape(end)}$", re.MULTILINE | re.DOTALL)
         if not pattern.search(text):

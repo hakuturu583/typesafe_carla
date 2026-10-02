@@ -7,6 +7,26 @@ from pathlib import Path
 
 import yaml
 
+
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """Rejects duplicate mapping keys, which PyYAML otherwise silently collapses
+    (a repeated function name would replace the earlier binding)."""
+
+    def construct_mapping(self, node, deep=False):
+        keys = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in keys:
+                raise SpecError(f"{node.start_mark.name}:{key_node.start_mark.line + 1}: "
+                                f"duplicate key {key!r}")
+            keys.add(key)
+        return super().construct_mapping(node, deep)
+
+
+def _load_yaml(path: Path):
+    with path.open() as stream:  # a stream, so errors name the file
+        return yaml.load(stream, Loader=_UniqueKeyLoader)
+
 ROOT = Path(__file__).resolve().parents[2]
 BINDINGS = ROOT / "bindings"
 
@@ -26,6 +46,7 @@ class Type:
     struct: bool = False  # crosses the ABI by pointer
     handle: bool = False  # an opaque handle pointer
     cpp: tuple[str, ...] = ()
+    invalid: str = "0"  # a C value the conversion rejects, for test_generated
 
     def c_param(self, name: str) -> str:
         if self.struct:
@@ -111,16 +132,17 @@ class Spec:
 
 
 def _load_types(path: Path) -> dict[str, Type]:
-    raw = yaml.safe_load(path.read_text())
+    raw = _load_yaml(path)
     types = {}
     for name, t in raw.items():
-        unknown = set(t) - {"c", "codon", "to_carla", "from_carla", "assign", "struct", "handle", "cpp"}
+        unknown = set(t) - {"c", "codon", "to_carla", "from_carla", "assign", "struct", "handle", "cpp",
+                             "invalid"}
         if unknown:
             raise SpecError(f"{path.name}: {name}: unknown keys {sorted(unknown)}")
         types[name] = Type(name=name, c=t["c"], codon=t["codon"], to_carla=t.get("to_carla", "{}"),
                            from_carla=t.get("from_carla", "{}"), assign=t.get("assign"),
                            struct=t.get("struct", False), handle=t.get("handle", False),
-                           cpp=tuple(t.get("cpp", ())))
+                           cpp=tuple(t.get("cpp", ())), invalid=str(t.get("invalid", "0")))
     return types
 
 
@@ -137,7 +159,7 @@ def load(bindings: Path = BINDINGS) -> Spec:
     for path in sorted(bindings.glob("*.yaml")):
         if path.name == "types.yaml":
             continue
-        raw = yaml.safe_load(path.read_text())
+        raw = _load_yaml(path)
         unknown = set(raw) - {"class", "prefix", "self", "blocks"}
         if unknown:
             raise SpecError(f"{path.name}: unknown keys {sorted(unknown)}")

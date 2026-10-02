@@ -7,6 +7,8 @@
 #              (`{name}` is the parameter name); default: `{}`
 #   from_carla C++ expression converting the LibCarla value `{}` to C;
 #              default: `{}`
+#   invalid    a C value the conversion rejects (tests/native/test_generated.c
+#              passes it next to a NULL handle); default: 0
 #   cpp        regexes, one of which the canonical LibCarla parameter or
 #              return type must match (checked with libclang)
 
@@ -37,12 +39,14 @@ finite:
   c: double
   codon: float
   to_carla: 'check_finite({}, "{name}")'
+  invalid: NAN
   cpp: ["float"]
 # A finite, non-negative float (durations, distances, speeds).
 non_negative:
   c: double
   codon: float
   to_carla: 'check_non_negative({}, "{name}")'
+  invalid: NAN
   cpp: ["float"]
 vector3d:
   c: tsc_vector3d_t
@@ -90,6 +94,7 @@ traffic_light_state:
   c: int32_t
   codon: i32
   to_carla: "to_light_state({})"
+  invalid: 99
   from_carla: "static_cast<int32_t>({})"
   cpp: ["carla::rpc::TrafficLightState"]
 # A vehicle handle passed to the Traffic Manager.

@@ -8,7 +8,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**177 of 326 methods bound (54%), 44 of them generated.**
+**173 of 326 methods bound (53%), 44 of them generated.**
 
 | class | bound |
 |---|---|
@@ -18,16 +18,16 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `carla::client::Waypoint` | 13 / 22 |
 | `carla::client::Junction` | 3 / 3 |
 | `carla::client::Landmark` | 17 / 23 |
-| `carla::client::Actor` | 22 / 37 |
+| `carla::client::Actor` | 20 / 37 |
 | `carla::client::Vehicle` | 11 / 23 |
-| `carla::client::Walker` | 3 / 8 |
+| `carla::client::Walker` | 2 / 8 |
 | `carla::client::WalkerAIController` | 4 / 5 |
 | `carla::client::TrafficLight` | 13 / 20 |
 | `carla::client::Sensor` | 3 / 3 |
 | `carla::client::BlueprintLibrary` | 4 / 10 |
 | `carla::client::ActorBlueprint` | 6 / 11 |
 | `carla::client::ActorList` | 3 / 8 |
-| `carla::client::WorldSnapshot` | 5 / 10 |
+| `carla::client::WorldSnapshot` | 4 / 10 |
 | `carla::client::DebugHelper` | 5 / 5 |
 | `carla::traffic_manager::TrafficManager` | 20 / 45 |
 
@@ -219,7 +219,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetAcceleration` | generated |
 | `GetActorClassName` | — |
 | `GetActorName` | — |
-| `GetActorState` | hand-written |
+| `GetActorState` | — |
 | `GetAngularVelocity` | generated |
 | `GetAttributes` | — |
 | `GetBoundingBox` | generated |
@@ -236,7 +236,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `IsActive` | — |
 | `IsAlive` | generated |
 | `IsDormant` | — |
-| `Serialize` | hand-written |
+| `Serialize` | — |
 | `SetActorDead` | — |
 | `SetCollisions` | — |
 | `SetEnableGravity` | generated |
@@ -279,7 +279,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | method | binding |
 |---|---|
 | `ApplyControl` | hand-written |
-| `BlendPose` | hand-written |
+| `BlendPose` | — |
 | `GetBonesTransform` | — |
 | `GetPoseFromAnimation` | — |
 | `GetWalkerControl` | hand-written |
@@ -386,7 +386,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `begin` | — |
 | `end` | — |
 | `operator!=` | — |
-| `operator==` | hand-written |
+| `operator==` | — |
 | `size` | hand-written |
 
 ### `carla::client::DebugHelper`
