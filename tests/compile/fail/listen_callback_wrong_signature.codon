@@ -1,9 +1,9 @@
-# No callbacks from LibCarla threads (design section 15): listen() takes a queue size.
-# expect-error: does not match expected type 'int'
+# A listen() callback receives a SensorData; convert it with as_image() etc.
+# expect-error: 'SensorData' does not match expected type 'Image'
 import typesafe_carla as carla
 
-def on_image(data: carla.SensorData):
-    print(data)
+def on_image(image: carla.Image):
+    print(image.width)
 
 def start(camera: carla.Sensor):
     camera.listen(on_image)

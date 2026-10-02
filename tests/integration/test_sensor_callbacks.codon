@@ -1,0 +1,154 @@
+# Issue #11 against a real CARLA server: Sensor.listen(callback). Callbacks run
+# on this program's thread at tick / wait_for_tick / dispatch_sensor_callbacks().
+import os
+import time
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+lib = world.get_blueprint_library()
+points = world.get_map().get_spawn_points()
+
+original = world.get_settings()
+settings = world.get_settings()
+settings.synchronous_mode = True
+settings.fixed_delta_seconds = 0.05
+world.apply_settings(settings)
+
+def drain_until(done, seconds: float = 20.0) -> bool:
+    """Dispatches until done() holds: in synchronous mode a measurement of frame
+    N can reach the client just after tick() returned N."""
+    deadline = time.time() + seconds
+    while not done():
+        if time.time() > deadline:
+            return False
+        time.sleep(0.005)
+        carla.dispatch_sensor_callbacks()
+    return True
+
+def tick_without_dispatch() -> int:
+    """World.tick() through the C ABI, which does not run callbacks."""
+    out = Ptr[u64](1)
+    assert int(ffi.tsc_world_tick(world._h.ptr, 10.0, out)) == ffi.TSC_OK
+    return int(out[0])
+
+class Counter:
+    frames: List[int]
+    altitudes: List[float]
+    gravity: List[float]
+
+    def __init__(self):
+        self.frames = []
+        self.altitudes = []
+        self.gravity = []
+
+    def on_gnss(self, data: carla.SensorData):
+        fix = data.as_gnss()
+        assert -90.0 <= fix.latitude <= 90.0 and -180.0 <= fix.longitude <= 180.0
+        self.altitudes.append(fix.altitude)
+
+    def on_imu(self, data: carla.SensorData):
+        self.gravity.append(data.as_imu().accelerometer.length())
+
+spawned = List[int]()
+try:
+    ego = world.spawn_actor(lib.find("vehicle.lincoln.mkz"), points[0]).as_vehicle()
+    spawned.append(ego.id)
+    cam_bp = lib.find("sensor.camera.rgb")
+    cam_bp.set_attribute("image_size_x", "160")
+    cam_bp.set_attribute("image_size_y", "120")
+    camera = world.spawn_actor(cam_bp, carla.Transform(carla.Location(1.5, 0.0, 2.0)),
+                               attach_to=ego).as_sensor()
+    gnss = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform(),
+                             attach_to=ego).as_sensor()
+    imu = world.spawn_actor(lib.find("sensor.other.imu"), carla.Transform(),
+                            attach_to=ego).as_sensor()
+    for s in (camera, gnss, imu):
+        spawned.append(s.id)
+    for _ in range(10):  # let the vehicle settle
+        world.tick()
+
+    # Camera: one image per synchronous tick, delivered in frame order, each
+    # with the frame id that tick returned.
+    images = List[int]()
+    sizes = List[int]()
+
+    def on_image(data: carla.SensorData):
+        images.append(data.frame)
+        sizes.append(data.as_image().raw_size())
+    camera.listen(on_image)
+    counter = Counter()
+    gnss.listen(counter.on_gnss)
+    imu.listen(counter.on_imu)
+    assert camera.has_callback and camera.is_listening
+
+    ticked = List[int]()
+    for _ in range(40):
+        ticked.append(world.tick())
+        assert len(images) <= len(ticked)
+    print("images delivered inside tick():", len(images), "of", len(ticked))
+    assert drain_until(lambda: len(images) >= len(ticked)), f"only {len(images)} images"
+    print("first frames", images[:5], "ticked", ticked[:5])
+    assert images == ticked, f"frames {images} != ticked {ticked}"
+    assert all(n == 160 * 120 * 4 for n in sizes)
+    assert camera.dropped_count == 0
+    assert drain_until(lambda: len(counter.altitudes) >= 40 and len(counter.gravity) >= 40)
+    print("gnss", len(counter.altitudes), "imu", len(counter.gravity))
+    # At rest the accelerometer measures gravity.
+    assert 7.0 < counter.gravity[-1] < 12.5, counter.gravity[-1]
+
+    # Unbounded by default: 60 ticks without any dispatch lose nothing.
+    before = len(images)
+    for _ in range(60):
+        ticked.append(tick_without_dispatch())
+    print("queued without dispatch:", camera.pending_count)
+    assert drain_until(lambda: len(images) >= len(ticked))
+    assert images == ticked and camera.dropped_count == 0
+    print("after 60 more ticks:", len(images) - before, "images")
+
+    # stop() unregisters: nothing more is delivered.
+    camera.stop()
+    assert not camera.has_callback and not camera.is_listening
+    n = len(images)
+    for _ in range(5):
+        world.tick()
+    time.sleep(0.2)
+    carla.dispatch_sensor_callbacks()
+    assert len(images) == n, "callback ran after stop()"
+
+    # Asynchronous mode: wait_for_tick() dispatches, and so does the explicit call.
+    async_frames = List[int]()
+    camera.listen(lambda data: async_frames.append(data.frame))
+    settings.synchronous_mode = False
+    world.apply_settings(settings)
+    for _ in range(20):
+        world.wait_for_tick()
+    assert drain_until(lambda: len(async_frames) >= 5)
+    print("async images", len(async_frames))
+    assert all(async_frames[i] < async_frames[i + 1] for i in range(len(async_frames) - 1))
+
+    # Destroying through any handle unregisters: the Sensor itself, another
+    # handle of the actor, and a batch DestroyActor.
+    assert camera.destroy()
+    assert not camera.has_callback
+    other = world.get_actor(gnss.id)
+    assert other is not None and other.destroy()
+    assert not gnss.has_callback
+    responses = client.apply_batch_sync([carla.command.DestroyActor(imu.id)])
+    assert not responses[0].has_error() and not imu.has_callback
+    n_alt = len(counter.altitudes)
+    n_g = len(counter.gravity)
+    for _ in range(3):
+        world.wait_for_tick()
+    assert len(counter.altitudes) == n_alt and len(counter.gravity) == n_g
+    spawned = [ego.id]
+finally:
+    world.apply_settings(original)
+    client.apply_batch_sync([carla.command.DestroyActor(i) for i in reversed(spawned)])
+print("OK")

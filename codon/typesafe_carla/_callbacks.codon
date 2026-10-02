@@ -1,0 +1,134 @@
+# Sensor callback registry and dispatcher (design section 15).
+#
+# LibCarla's threads only fill each sensor's native queue. Callbacks run on
+# the program's thread, at the dispatch points (World.tick(),
+# World.wait_for_tick(), Client.apply_batch(_sync)(do_tick=True)) and in
+# dispatch_sensor_callbacks().
+#
+# The registry is keyed by actor id, so destroying a sensor through any
+# handle (an Actor, a world.get_actor(id) handle, a batch DestroyActor)
+# drops its callback. It lives in this small module so that actor.codon can
+# reach it without importing sensor.codon. It is not thread-safe: register,
+# stop and dispatch from one thread (the program's main thread).
+
+from ._ffi import Handle, tsc_sensor_poll, tsc_sensor_pending_count, tsc_sensor_stop
+from .errors import _check
+
+class _Listener:
+    actor_id: int
+    handle: Handle  # the listening sensor handle; keeps the stream alive
+    # Takes ownership of one new SensorData handle (sensor.codon wraps it).
+    callback: Callable[[cobj], None]
+    active: bool  # False once unregistered (the list may be iterated meanwhile)
+
+    def __init__(self, actor_id: int, handle: Handle, callback: Callable[[cobj], None]):
+        self.actor_id = actor_id
+        self.handle = handle
+        self.callback = callback
+        self.active = True
+
+_listeners = List[_Listener]()  # in registration order
+_dispatching = False
+
+def _find_callback(actor_id: int) -> int:
+    for i in range(len(_listeners)):
+        if _listeners[i].actor_id == actor_id:
+            return i
+    return -1
+
+def _pop(h: Handle) -> cobj:
+    """The oldest queued measurement (a new handle), or a null pointer."""
+    out = Ptr[cobj](1)
+    _check(tsc_sensor_poll(h.ptr, out))
+    return out[0]
+
+def _discard_pending(h: Handle):
+    while True:
+        p = _pop(h)
+        if p == cobj():
+            break
+        Handle(p).release()  # now, not at GC: it may own a large buffer
+
+def _unregister_callback(actor_id: int) -> bool:
+    """Drops the callback of this sensor actor, if any: stops its stream and
+    discards what it has not received. Returns whether there was one."""
+    if len(_listeners) == 0:
+        return False
+    i = _find_callback(actor_id)
+    if i < 0:
+        return False
+    listener = _listeners.pop(i)
+    listener.active = False
+    # Best effort: the stream may already be gone (e.g. the actor was destroyed).
+    tsc_sensor_stop(listener.handle.ptr)
+    _discard_pending(listener.handle)
+    return True
+
+def _register_callback(actor_id: int, handle: Handle, callback: Callable[[cobj], None]):
+    _unregister_callback(actor_id)
+    _listeners.append(_Listener(actor_id, handle, callback))
+
+def _deliver(listener: _Listener) -> int:
+    """Delivers what was queued when the sensor's turn began, in arrival order."""
+    count = 0
+    pending = Ptr[int](1)
+    _check(tsc_sensor_pending_count(listener.handle.ptr, pending))
+    for _ in range(pending[0]):
+        if not listener.active:
+            break
+        p = _pop(listener.handle)
+        if p == cobj():
+            break
+        count += 1
+        listener.callback(p)
+    return count
+
+def dispatch_sensor_callbacks() -> int:
+    """Runs the callbacks of every sensor in callback mode on the queued
+    measurements, and returns how many measurements were delivered.
+
+    Sensors are visited in the order their callbacks were registered; each
+    sensor's measurements are delivered in arrival order. Only measurements
+    already queued when a sensor's turn starts are delivered, so a call always
+    returns. Never blocks.
+
+    World.tick(), World.wait_for_tick() and Client.apply_batch_sync(...,
+    do_tick=True) call this after the server has answered;
+    Client.apply_batch(..., do_tick=True) calls it after sending the batch
+    (it does not wait for the server). Call it yourself in asynchronous mode,
+    or to deliver data that arrived after a tick returned. Call it from one
+    thread only.
+
+    If a callback raises, the pass still visits every other sensor, then the
+    first exception propagates to the caller (e.g. out of World.tick(), after
+    the simulation has advanced); later exceptions of the same pass are
+    dropped. The raising sensor's remaining measurements stay queued for the
+    next dispatch. A dispatch started from inside a callback (e.g. a callback
+    that ticks) does nothing and returns 0.
+    """
+    global _dispatching
+    if _dispatching or len(_listeners) == 0:
+        return 0
+    _dispatching = True
+    snapshot = list(_listeners)  # callbacks may stop or listen
+    count = 0
+    k = 0
+    finished = False
+    try:
+        while k < len(snapshot):
+            if snapshot[k].active:
+                count += _deliver(snapshot[k])
+            k += 1
+        finished = True
+    finally:
+        if not finished:
+            # snapshot[k] raised: still drain the others, so one failing
+            # callback cannot starve them, then let the first exception go on.
+            for j in range(k + 1, len(snapshot)):
+                if snapshot[j].active:
+                    try:
+                        _deliver(snapshot[j])
+                    except:
+                        pass
+        _dispatching = False
+    return count

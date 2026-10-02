@@ -1,5 +1,6 @@
 # The compatibility scenario using typesafe_carla. Mirrors scenario_official.py.
 import os
+import time
 import typesafe_carla as carla
 
 host = os.getenv("TSC_CARLA_HOST", "localhost")
@@ -145,6 +146,19 @@ try:
     for s in sensors:
         s.stop()
         s.destroy()
+    # Issue #11: Sensor.listen(callback); one image per synchronous tick.
+    cb_frames = List[int]()
+    cam = world.spawn_actor(cam_bp, carla.Transform(carla.Location(0.0, 0.0, 2.0)),
+                            attach_to=vehicle).as_sensor()
+    cam.listen(lambda image: cb_frames.append(image.frame))
+    ticked = [world.tick() for _ in range(5)]
+    deadline = time.time() + 20.0
+    while len(cb_frames) < 5 and time.time() < deadline:
+        time.sleep(0.01)
+        carla.dispatch_sensor_callbacks()  # images that arrived after their tick returned
+    cam.stop()
+    cam.destroy()
+    out("callback_frames", str(len(cb_frames[:5])) + "," + str(int(cb_frames[:5] == ticked)))
     vehicle.apply_control(carla.VehicleControl(throttle=0.6, steer=0.0))
     for _ in range(40):
         world.tick()

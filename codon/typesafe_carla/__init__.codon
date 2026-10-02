@@ -20,7 +20,7 @@ from .map import Map, Waypoint, LaneType, Junction, Landmark
 from .snapshot import WorldSnapshot, ActorSnapshot, Timestamp
 from .command import Command, CommandResponse
 from .sensor import (Sensor, SensorData, SensorDataType, Image, LidarMeasurement, LidarDetection,
-                     GnssMeasurement, IMUMeasurement, CollisionEvent)
+                     GnssMeasurement, IMUMeasurement, CollisionEvent, dispatch_sensor_callbacks)
 from .client import Client, OpendriveGenerationParameters
 from .walker import Walker, WalkerAIController
 from .traffic_light import TrafficLight

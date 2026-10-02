@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 2
-TSC_ABI_VERSION_MINOR = 0
+TSC_ABI_VERSION_MINOR = 1
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -404,6 +404,7 @@ from C import LIB.tsc_sensor_listen(cobj, int) -> i32
 from C import LIB.tsc_sensor_stop(cobj) -> i32
 from C import LIB.tsc_sensor_is_listening(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_sensor_dropped_count(cobj, Ptr[u64]) -> i32
+from C import LIB.tsc_sensor_pending_count(cobj, Ptr[int]) -> i32  # ABI 2.1
 from C import LIB.tsc_sensor_poll(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_wait_for_data(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_data_get_info(cobj, Ptr[CSensorDataInfo]) -> i32

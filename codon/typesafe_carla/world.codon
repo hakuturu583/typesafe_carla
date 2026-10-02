@@ -11,6 +11,7 @@ from .actor import Actor, ActorList, _make_actor
 from .blueprint import ActorBlueprint, BlueprintLibrary
 from .map import Map
 from .snapshot import WorldSnapshot
+from ._callbacks import dispatch_sensor_callbacks
 
 class WorldSettings:
     synchronous_mode: bool
@@ -136,16 +137,26 @@ class World:
         return WorldSnapshot(Handle(out[0]))
 
     def wait_for_tick(self, seconds: float = 10.0) -> WorldSnapshot:
-        """Blocks until the server's next frame (asynchronous mode). Raises TimeoutError."""
+        """Blocks until the server's next frame (asynchronous mode). Raises TimeoutError.
+
+        Then runs the queued sensor callbacks (dispatch_sensor_callbacks()).
+        """
         out = Ptr[cobj](1)
         _check(tsc_world_wait_for_tick(self._h.ptr, seconds, out))
-        return WorldSnapshot(Handle(out[0]))
+        snapshot = WorldSnapshot(Handle(out[0]))
+        dispatch_sensor_callbacks()
+        return snapshot
 
     def tick(self, seconds: float = 10.0) -> int:
-        """Advances the simulation (synchronous mode). Returns the new frame id."""
+        """Advances the simulation (synchronous mode). Returns the new frame id.
+
+        Then runs the queued sensor callbacks (dispatch_sensor_callbacks()).
+        """
         out = Ptr[u64](1)
         _check(tsc_world_tick(self._h.ptr, seconds, out))
-        return int(out[0])
+        frame = int(out[0])
+        dispatch_sensor_callbacks()
+        return frame
 
     def get_settings(self) -> WorldSettings:
         out = Ptr[CWorldSettings](1)

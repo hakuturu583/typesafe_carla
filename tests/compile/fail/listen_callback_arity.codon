@@ -1,0 +1,12 @@
+# A listen() callback takes exactly one argument (the SensorData).
+# expect-error: missing 1 required positional argument
+import typesafe_carla as carla
+
+def on_data(data: carla.SensorData, index: int):
+    print(data, index)
+
+def start(camera: carla.Sensor):
+    camera.listen(on_data)
+
+# Compile-only: Codon type-checks a function only when it is called.
+start(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor())

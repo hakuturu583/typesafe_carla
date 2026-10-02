@@ -404,8 +404,10 @@ static void test_mock_sensors(void) {
 
   tsc_sensor_data_t *data = (tsc_sensor_data_t *)0x1;
   CHECK(tsc_sensor_poll(camera, &data) == TSC_ERROR); /* not listening yet */
-  CHECK(tsc_sensor_listen(camera, 0) == TSC_INVALID_ARGUMENT);
+  size_t pending = 1;
+  CHECK(tsc_sensor_pending_count(camera, &pending) == TSC_ERROR); /* not listening yet */
   CHECK_OK(tsc_sensor_listen(camera, 2));
+  CHECK(tsc_sensor_pending_count(camera, NULL) == TSC_INVALID_ARGUMENT);
   int32_t listening = 0;
   CHECK_OK(tsc_sensor_is_listening(camera, &listening));
   CHECK(listening == 1);
@@ -418,7 +420,11 @@ static void test_mock_sensors(void) {
   uint64_t dropped = 0;
   CHECK_OK(tsc_sensor_dropped_count(camera, &dropped));
   CHECK(dropped == 1); /* capacity 2, three frames */
+  CHECK_OK(tsc_sensor_pending_count(camera, &pending));
+  CHECK(pending == 2);
   CHECK_OK(tsc_sensor_wait_for_data(camera, 1.0, &data));
+  CHECK_OK(tsc_sensor_pending_count(camera, &pending));
+  CHECK(pending == 1);
   tsc_sensor_data_info_t info;
   CHECK_OK(tsc_sensor_data_get_info(data, &info));
   CHECK(info.type == TSC_SENSOR_DATA_IMAGE && info.frame == frame - 1);
@@ -432,6 +438,28 @@ static void test_mock_sensors(void) {
   CHECK_OK(tsc_sensor_stop(camera));
   CHECK_OK(tsc_sensor_is_listening(camera, &listening));
   CHECK(listening == 0);
+
+  /* Capacity 0: unbounded, nothing is dropped; arrival order is kept. */
+  CHECK_OK(tsc_sensor_listen(camera, 0));
+  CHECK_OK(tsc_sensor_pending_count(camera, &pending));
+  CHECK(pending == 0); /* listening again replaces the queue */
+  uint64_t first = frame + 1;
+  for (int i = 0; i < 100; ++i) CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+  CHECK_OK(tsc_sensor_dropped_count(camera, &dropped));
+  CHECK(dropped == 0);
+  CHECK_OK(tsc_sensor_pending_count(camera, &pending));
+  CHECK(pending == 100);
+  for (uint64_t f = first; f <= frame; ++f) {
+    tsc_sensor_data_t *d = NULL;
+    CHECK_OK(tsc_sensor_poll(camera, &d));
+    CHECK(d != NULL);
+    CHECK_OK(tsc_sensor_data_get_info(d, &info));
+    CHECK(info.frame == f);
+    tsc_handle_release(H(d));
+  }
+  CHECK_OK(tsc_sensor_pending_count(camera, &pending));
+  CHECK(pending == 0);
+  CHECK_OK(tsc_sensor_stop(camera));
 
   tsc_handle_release(H(data));
   tsc_handle_release(H(camera));

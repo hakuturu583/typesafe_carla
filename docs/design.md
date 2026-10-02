@@ -533,7 +533,81 @@ data = sensor.wait_for_data(timeout=1.0)
 
 This prevents C++ worker threads from unexpectedly entering the Codon runtime.
 
-A later version may implement `sensor.listen(callback)` through a controlled callback dispatcher.
+### Callbacks through a controlled dispatcher
+
+`sensor.listen(callback)` keeps that guarantee. The callback does not go to
+LibCarla: LibCarla's threads still only fill the sensor's queue, and the
+callback runs on the program's thread when the program reaches a dispatch
+point:
+
+```
+CARLA sensor callback ──▶ native queue (unbounded by default)
+                                 │
+World.tick() / World.wait_for_tick() / Client.apply_batch(_sync)(do_tick=True)
+carla.dispatch_sensor_callbacks()
+                                 │
+                                 ▼
+                    callback(data) on the program's thread
+```
+
+```python
+frames = List[int]()
+camera.listen(lambda data: frames.append(data.frame))
+world.tick()                          # callbacks for the data queued so far
+carla.dispatch_sensor_callbacks()     # e.g. in an asynchronous main loop
+```
+
+- **Registry.** A Codon-side, process-wide list of the sensors in callback
+  mode, in registration order, keyed by actor id (`_callbacks.codon`, which
+  `actor.codon` imports without depending on `sensor.codon`). A World handle
+  does not know its sensors, so every dispatch point drains every registered
+  sensor. The registry holds the listening sensor handle, so the stream lives
+  on without a reference in user code (as in the Python API) until it is
+  unregistered. There is one callback per sensor actor: listening through
+  another handle of the same actor replaces it. The registry is not
+  thread-safe; register, stop and dispatch from one thread.
+- **Order.** Per sensor, measurements are delivered in arrival order. Sensors
+  are visited in registration order. One dispatch delivers only what was
+  queued when the sensor's turn began (`tsc_sensor_pending_count`), so it
+  returns even when a sensor produces data faster than its callback runs.
+- **When.** `World.tick()`, `World.wait_for_tick()` and
+  `Client.apply_batch_sync(..., do_tick=True)` dispatch after the server has
+  answered; `Client.apply_batch(..., do_tick=True)` is fire-and-forget and
+  dispatches right after sending, so it only delivers what had already
+  arrived. In
+  synchronous mode a measurement of frame N can reach the client just after
+  `tick()` returned N; it is delivered at the next dispatch point, or by an
+  explicit `dispatch_sensor_callbacks()`.
+- **Queue.** Callback mode uses an unbounded queue by default (capacity 0 at
+  the C ABI) so no measurement is lost; `listen(cb, queue_size=n)` bounds it
+  and drops the oldest. Polling mode keeps its bounded default (64).
+- **Errors.** If a callback raises, the pass still visits every other
+  sensor (so one failing callback cannot starve the rest or let their
+  unbounded queues grow), then the first exception propagates to the caller
+  of the dispatching call (after the simulation has advanced, for `tick()`);
+  later exceptions of the same pass are dropped. The raising sensor's
+  undelivered measurements stay queued. A dispatch started from inside
+  a callback (e.g. a callback that ticks) does nothing, so callbacks never
+  nest.
+- **Lifetime.** `stop()` or `destroy()` through any handle of the sensor
+  actor (a `Sensor`, an `Actor`, a `world.get_actor(id)` handle), and a batch
+  `DestroyActor` of its id (`apply_batch_sync`: when its response succeeds;
+  `apply_batch`: always, as there is no response), unregister the callback,
+  stop its stream and discard what it has not received; later measurements
+  are never delivered. Native calls come first, so a failing `stop()` or
+  `destroy()` leaves the callback registered and its queue drained. If
+  `listen()` fails in LibCarla, the previous callback is gone and none is
+  registered. Callbacks still registered at program exit are not released
+  explicitly (Codon has no `atexit`); stop or destroy sensors before exiting,
+  as with polling sensors.
+- **Exclusive modes.** `poll()` / `wait_for_data()` raise `CarlaError` on a
+  sensor in callback mode, so the two consumers never compete for the queue.
+
+The callback type is `Callable[[SensorData], None]`. Functions, bound methods,
+lambdas and closures are all accepted (Codon 0.19 cannot convert a capturing
+closure to a `Callable` directly, so `listen` wraps it in a generic adapter
+whose bound method is stored). A callback with the wrong signature fails to
+compile.
 
 ## 16. Zero-copy sensor data
 
