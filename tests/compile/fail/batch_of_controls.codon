@@ -1,0 +1,9 @@
+# apply_batch takes commands, not raw controls.
+# expect-error: does not match expected type 'List[Command]'
+import typesafe_carla as carla
+
+def drive(client: carla.Client):
+    client.apply_batch([carla.VehicleControl(throttle=1.0)])
+
+# Compile-only: Codon type-checks a function only when it is called.
+drive(carla.Client("localhost", 2000))

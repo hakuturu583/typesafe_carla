@@ -62,10 +62,13 @@ endif()
 # ---------------------------------------------------------------------------
 add_library(typesafe_carla_ffi SHARED
   native/src/actor.cpp
+  native/src/batch.cpp
   native/src/blueprint.cpp
   native/src/client.cpp
   native/src/error.cpp
   native/src/handle.cpp
+  native/src/map.cpp
+  native/src/snapshot.cpp
   native/src/vehicle.cpp
   native/src/world.cpp
 )

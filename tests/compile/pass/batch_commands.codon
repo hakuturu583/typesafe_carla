@@ -1,0 +1,21 @@
+import typesafe_carla as carla
+
+def spawn_fleet(client: carla.Client, bp: carla.ActorBlueprint,
+                points: List[carla.Transform]) -> List[int]:
+    batch = [carla.command.SpawnActor(bp, p).then(
+                 carla.command.SetAutopilot(carla.command.FutureActor, True))
+             for p in points]
+    batch.append(carla.command.ApplyVehicleControl(1, carla.VehicleControl(throttle=0.5)))
+    batch.append(carla.command.ApplyTransform(1, carla.Transform()))
+    batch.append(carla.command.ApplyTargetVelocity(1, carla.Vector3D(1.0, 0.0, 0.0)))
+    batch.append(carla.command.SetSimulatePhysics(1, False))
+    responses: List[carla.CommandResponse] = client.apply_batch_sync(batch, True)
+    client.apply_batch([carla.command.DestroyActor(r.actor_id) for r in responses
+                        if r.has_error()])
+    return [r.actor_id for r in responses if not r.has_error()]
+
+# Compile-only: Codon type-checks a function only when it is called.
+_client = carla.Client("localhost", 2000)
+_world = _client.get_world()
+print(spawn_fleet(_client, _world.get_blueprint_library().find("vehicle.audi.tt"),
+                  _world.get_map().get_spawn_points()))

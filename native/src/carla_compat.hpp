@@ -7,13 +7,23 @@
 #include <carla/Version.h>
 #include <carla/client/ActorBlueprint.h>
 #include <carla/client/ActorList.h>
+#include <carla/client/ActorSnapshot.h>
 #include <carla/client/BlueprintLibrary.h>
 #include <carla/client/Client.h>
+#include <carla/client/Map.h>
+#include <carla/client/Timestamp.h>
 #include <carla/client/TimeoutException.h>
 #include <carla/client/Vehicle.h>
+#include <carla/client/Waypoint.h>
 #include <carla/client/World.h>
+#include <carla/client/WorldSnapshot.h>
+#include <carla/geom/BoundingBox.h>
 #include <carla/geom/Transform.h>
+#include <carla/road/Lane.h>
+#include <carla/rpc/Command.h>
+#include <carla/rpc/CommandResponse.h>
 #include <carla/rpc/EpisodeSettings.h>
+#include <carla/rpc/VehiclePhysicsControl.h>
 #include <carla/rpc/VehicleControl.h>
 
 namespace tsc {

@@ -1,0 +1,124 @@
+# Milestone 1 against a real CARLA server: map and waypoints, snapshots,
+# physics control, bounding boxes and batch commands.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+tm_port = int(os.getenv("TSC_CARLA_TM_PORT", "8100"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+
+# --- Map and waypoints ----------------------------------------------------------
+m = world.get_map()
+spawn_points = m.get_spawn_points()
+print("map", m.name, "spawn points", len(spawn_points))
+assert len(spawn_points) > 10
+assert len(m.to_opendrive()) > 1000
+
+wp = m.get_waypoint(spawn_points[0].location)
+assert wp is not None
+print("waypoint", wp)
+assert wp.lane_type == carla.LaneType.Driving
+assert wp.lane_width > 2.0
+assert wp.transform.location.distance(spawn_points[0].location) < 2.0
+ahead = wp.next(10.0)
+assert len(ahead) >= 1
+d = ahead[0].transform.location.distance(wp.transform.location)
+print("next(10)", len(ahead), "distance", d)
+assert 8.0 < d < 12.0
+behind = ahead[0].previous(10.0)
+assert len(behind) >= 1
+lane_end = wp.next_until_lane_end(5.0)
+print("next_until_lane_end(5)", len(lane_end))
+neighbours = 0
+for side in (wp.get_left_lane(), wp.get_right_lane()):
+    if side is not None:
+        neighbours += 1
+        assert side.road_id == wp.road_id and side.lane_id != wp.lane_id
+print("adjacent lanes", neighbours)
+# Off-road with no projection gives no waypoint.
+assert m.get_waypoint(carla.Location(5000.0, 5000.0, 0.0), project_to_road=False) is None
+generated = m.generate_waypoints(20.0)
+print("generate_waypoints(20)", len(generated))
+assert len(generated) > 100
+
+# --- Snapshots -------------------------------------------------------------------
+snap = world.wait_for_tick(10.0)
+print("snapshot", snap, snap.timestamp)
+assert snap.frame > 0 and len(snap) == len(world.get_actors())
+assert snap.timestamp.elapsed_seconds > 0.0
+first = snap[0]
+assert snap.find(first.id) is not None and snap.has_actor(first.id)
+assert snap.find(999999) is None
+later = world.wait_for_tick(10.0)
+assert later.frame > snap.frame
+
+# --- Batch: spawn with autopilot, control, destroy ------------------------------------
+lib = world.get_blueprint_library()
+bp = lib.find("vehicle.lincoln.mkz")
+batch = List[carla.Command]()
+for i in range(4):
+    batch.append(carla.command.SpawnActor(bp, spawn_points[i]).then(
+        carla.command.SetAutopilot(carla.command.FutureActor, True, tm_port)))
+batch.append(carla.command.DestroyActor(999999))  # must fail without aborting the batch
+responses = client.apply_batch_sync(batch, False)
+print("batch responses", responses)
+assert len(responses) == 5
+assert responses[4].has_error()
+ids = [r.actor_id for r in responses[:4] if not r.has_error()]
+assert len(ids) == 4, responses
+try:
+    starts = [world.get_actor(i).get_location() for i in ids]
+    for _ in range(300):  # a few seconds of asynchronous simulation (TM start-up included)
+        world.wait_for_tick(10.0)
+    moved = 0
+    for k in range(4):
+        dist = world.get_actor(ids[k]).get_location().distance(starts[k])
+        print("autopilot vehicle", ids[k], "moved", dist)
+        if dist > 3.0:
+            moved += 1
+    assert moved >= 3, "Traffic Manager did not drive the batch-spawned vehicles"
+
+    # Physics control round trip on a real vehicle.
+    vehicle = world.get_actor(ids[0]).as_vehicle()
+    pc = vehicle.get_physics_control()
+    print("physics", pc, pc.wheels[0])
+    assert len(pc.wheels) == 4 and pc.mass > 100.0
+    pc.mass = pc.mass * 2.0
+    vehicle.apply_physics_control(pc)
+    for _ in range(20):  # the server applies physics changes a few frames later
+        world.wait_for_tick(10.0)
+    again = vehicle.get_physics_control()
+    print("physics after", again)
+    assert abs(again.mass - pc.mass) < 1.0
+    assert len(again.wheels) == len(pc.wheels)
+
+    box = vehicle.bounding_box
+    print("bounding box", box)
+    assert box.extent.x > 1.0 and box.extent.y > 0.5 and box.extent.z > 0.3
+
+    # Batch control on a vehicle taken off autopilot.
+    # (Traffic Manager unregistration happens after the batch returns, as in
+    # the Python API, so the control goes in a second batch.)
+    off = client.apply_batch_sync([carla.command.SetAutopilot(ids[0], False, tm_port)])
+    assert not off[0].has_error()
+    world.wait_for_tick(10.0)
+    brake = client.apply_batch_sync(
+        [carla.command.ApplyVehicleControl(ids[0], carla.VehicleControl(brake=1.0))])
+    assert not brake[0].has_error()
+    for _ in range(10):
+        world.wait_for_tick(10.0)
+    assert abs(vehicle.get_control().brake - 1.0) < 1e-3
+finally:
+    cleanup = client.apply_batch_sync([carla.command.DestroyActor(i) for i in ids])
+    print("destroyed", sum(1 for r in cleanup if not r.has_error()), "of", len(ids))
+# The server-side snapshot is authoritative (get_actor reads a client cache).
+after = world.wait_for_tick(10.0)
+after = world.wait_for_tick(10.0)
+for i in ids:
+    assert not after.has_actor(i), i
+print("OK")

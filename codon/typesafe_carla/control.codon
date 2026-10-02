@@ -1,6 +1,8 @@
 # Control value types.
 
-from ._ffi import CVehicleControl
+from ._ffi import (CVehicleControl, CVehiclePhysicsHead, CWheelPhysicsControl, CVector3D,
+                   TSC_MAX_WHEELS, PHYSICS_WHEELS_OFFSET, PHYSICS_SIZE)
+from .geometry import Location
 
 class VehicleControl:
     throttle: float  # [0, 1]
@@ -45,3 +47,116 @@ class VehicleControl:
     def _from_c(c: CVehicleControl) -> VehicleControl:
         return VehicleControl(c.throttle, c.steer, c.brake, int(c.hand_brake) != 0,
                               int(c.reverse) != 0, int(c.manual_gear_shift) != 0, int(c.gear))
+
+class WheelPhysicsControl:
+    """Per-wheel physics (a typed subset of CARLA's WheelPhysicsControl)."""
+    wheel_radius: float  # cm
+    wheel_width: float  # cm
+    wheel_mass: float  # kg
+    max_steer_angle: float  # degrees
+    max_brake_torque: float  # Nm
+    max_hand_brake_torque: float  # Nm
+    friction_force_multiplier: float
+    cornering_stiffness: float
+    affected_by_steering: bool
+    affected_by_brake: bool
+    affected_by_handbrake: bool
+    affected_by_engine: bool
+
+    def __init__(self, wheel_radius: float = 30.0, wheel_width: float = 30.0,
+                 wheel_mass: float = 30.0, max_steer_angle: float = 70.0,
+                 max_brake_torque: float = 1500.0, max_hand_brake_torque: float = 3000.0,
+                 friction_force_multiplier: float = 3.0, cornering_stiffness: float = 1000.0,
+                 affected_by_steering: bool = True, affected_by_brake: bool = True,
+                 affected_by_handbrake: bool = True, affected_by_engine: bool = True):
+        self.wheel_radius = wheel_radius
+        self.wheel_width = wheel_width
+        self.wheel_mass = wheel_mass
+        self.max_steer_angle = max_steer_angle
+        self.max_brake_torque = max_brake_torque
+        self.max_hand_brake_torque = max_hand_brake_torque
+        self.friction_force_multiplier = friction_force_multiplier
+        self.cornering_stiffness = cornering_stiffness
+        self.affected_by_steering = affected_by_steering
+        self.affected_by_brake = affected_by_brake
+        self.affected_by_handbrake = affected_by_handbrake
+        self.affected_by_engine = affected_by_engine
+
+    def __repr__(self) -> str:
+        return (f"WheelPhysicsControl(wheel_radius={self.wheel_radius}, "
+                f"max_steer_angle={self.max_steer_angle}, max_brake_torque={self.max_brake_torque})")
+
+    def _to_c(self) -> CWheelPhysicsControl:
+        return CWheelPhysicsControl(
+            self.wheel_radius, self.wheel_width, self.wheel_mass, self.max_steer_angle,
+            self.max_brake_torque, self.max_hand_brake_torque, self.friction_force_multiplier,
+            self.cornering_stiffness, i32(int(self.affected_by_steering)),
+            i32(int(self.affected_by_brake)), i32(int(self.affected_by_handbrake)),
+            i32(int(self.affected_by_engine)))
+
+    @staticmethod
+    def _from_c(w: CWheelPhysicsControl) -> WheelPhysicsControl:
+        return WheelPhysicsControl(
+            w.wheel_radius, w.wheel_width, w.wheel_mass, w.max_steer_angle, w.max_brake_torque,
+            w.max_hand_brake_torque, w.friction_force_multiplier, w.cornering_stiffness,
+            int(w.affected_by_steering) != 0, int(w.affected_by_brake) != 0,
+            int(w.affected_by_handbrake) != 0, int(w.affected_by_engine) != 0)
+
+class VehiclePhysicsControl:
+    """A typed subset of CARLA's VehiclePhysicsControl.
+
+    Vehicle.apply_physics_control() changes only these fields; everything else
+    (torque curve, gear ratios, suspension, ...) keeps the vehicle's values.
+    The number of wheels must match the vehicle's.
+    """
+    max_torque: float
+    max_rpm: float
+    final_ratio: float
+    gear_change_time: float
+    mass: float  # kg
+    drag_coefficient: float
+    center_of_mass: Location
+    use_automatic_gears: bool
+    wheels: List[WheelPhysicsControl]
+
+    def __init__(self, max_torque: float = 300.0, max_rpm: float = 5000.0,
+                 final_ratio: float = 4.0, gear_change_time: float = 0.5, mass: float = 1000.0,
+                 drag_coefficient: float = 0.3, center_of_mass: Optional[Location] = None,
+                 use_automatic_gears: bool = True,
+                 wheels: Optional[List[WheelPhysicsControl]] = None):
+        self.max_torque = max_torque
+        self.max_rpm = max_rpm
+        self.final_ratio = final_ratio
+        self.gear_change_time = gear_change_time
+        self.mass = mass
+        self.drag_coefficient = drag_coefficient
+        self.center_of_mass = center_of_mass if center_of_mass is not None else Location()
+        self.use_automatic_gears = use_automatic_gears
+        self.wheels = wheels if wheels is not None else List[WheelPhysicsControl]()
+
+    def __repr__(self) -> str:
+        return (f"VehiclePhysicsControl(mass={self.mass}, max_torque={self.max_torque}, "
+                f"max_rpm={self.max_rpm}, drag_coefficient={self.drag_coefficient}, "
+                f"wheels={len(self.wheels)})")
+
+    def _write(self, buf: cobj):
+        """Serializes into a PHYSICS_SIZE-byte tsc_vehicle_physics_control_t."""
+        if len(self.wheels) > TSC_MAX_WHEELS:
+            raise ValueError(f"at most {TSC_MAX_WHEELS} wheels are supported")
+        c = self.center_of_mass
+        Ptr[CVehiclePhysicsHead](buf)[0] = CVehiclePhysicsHead(
+            self.max_torque, self.max_rpm, self.final_ratio, self.gear_change_time, self.mass,
+            self.drag_coefficient, CVector3D(c.x, c.y, c.z), i32(int(self.use_automatic_gears)),
+            i32(len(self.wheels)))
+        wheels = Ptr[CWheelPhysicsControl](buf + PHYSICS_WHEELS_OFFSET)
+        for i in range(len(self.wheels)):
+            wheels[i] = self.wheels[i]._to_c()
+
+    @staticmethod
+    def _read(buf: cobj) -> VehiclePhysicsControl:
+        h = Ptr[CVehiclePhysicsHead](buf)[0]
+        wheels = Ptr[CWheelPhysicsControl](buf + PHYSICS_WHEELS_OFFSET)
+        return VehiclePhysicsControl(
+            h.max_torque, h.max_rpm, h.final_ratio, h.gear_change_time, h.mass,
+            h.drag_coefficient, Location._from_c(h.center_of_mass), int(h.use_automatic_gears) != 0,
+            [WheelPhysicsControl._from_c(wheels[i]) for i in range(int(h.wheel_count))])

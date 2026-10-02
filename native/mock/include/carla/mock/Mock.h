@@ -16,6 +16,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
 #define TSC_MOCK_LIBCARLA 1
@@ -80,7 +81,31 @@ class Transform {
   Transform(const Location &l, const Rotation &r) : location(l), rotation(r) {}
 };
 
+class BoundingBox {
+ public:
+  BoundingBox() = default;
+  BoundingBox(const Location &l, const Vector3D &e, const Rotation &r = Rotation())
+      : location(l), extent(e), rotation(r) {}
+  Location location;
+  Vector3D extent;
+  Rotation rotation;
+};
+
 }  // namespace geom
+
+namespace road {
+
+class Lane {
+ public:
+  enum class LaneType : int32_t {
+    None = 0x1,
+    Driving = 0x1 << 1,
+    Sidewalk = 0x1 << 5,
+    Any = -2
+  };
+};
+
+}  // namespace road
 
 namespace rpc {
 
@@ -123,6 +148,121 @@ class EpisodeSettings {
   bool spectator_as_ego = true;
 };
 
+struct WheelPhysicsControl {
+  float wheel_radius = 37.0f;
+  float wheel_width = 30.0f;
+  float wheel_mass = 30.0f;
+  float cornering_stiffness = 1000.0f;
+  float friction_force_multiplier = 3.0f;
+  float max_steer_angle = 70.0f;
+  bool affected_by_steering = true;
+  bool affected_by_brake = true;
+  bool affected_by_handbrake = true;
+  bool affected_by_engine = true;
+  float max_brake_torque = 1500.0f;
+  float max_hand_brake_torque = 3000.0f;
+};
+
+struct VehiclePhysicsControl {
+  float max_torque = 300.0f;
+  float max_rpm = 5000.0f;
+  bool use_automatic_gears = true;
+  float gear_change_time = 0.5f;
+  float final_ratio = 4.0f;
+  float mass = 1000.0f;
+  float drag_coefficient = 0.3f;
+  geom::Location center_of_mass = geom::Location(0, 0, 0);
+  std::vector<WheelPhysicsControl> wheels;
+};
+
+class ActorDescription {
+ public:
+  std::string id;
+};
+
+class ResponseError {
+ public:
+  ResponseError() = default;
+  explicit ResponseError(std::string message) : _what(std::move(message)) {}
+  const std::string &What() const { return _what; }
+
+ private:
+  std::string _what;
+};
+
+template <typename T>
+class Response {
+ public:
+  using value_type = T;
+  using error_type = ResponseError;
+  Response() = default;
+  Response(T value) : _data(std::move(value)) {}
+  Response(ResponseError error) : _data(std::move(error)) {}
+  bool HasError() const { return _data.index() == 0; }
+  const error_type &GetError() const { return std::get<ResponseError>(_data); }
+  value_type &Get() { return std::get<T>(_data); }
+  const value_type &Get() const { return std::get<T>(_data); }
+
+ private:
+  std::variant<ResponseError, T> _data;
+};
+
+using CommandResponse = Response<ActorId>;
+
+class Command {
+ private:
+  template <typename T>
+  struct CommandBase {
+    operator Command() const { return Command{*static_cast<const T *>(this)}; }
+  };
+
+ public:
+  struct SpawnActor : CommandBase<SpawnActor> {
+    SpawnActor() = default;
+    SpawnActor(ActorDescription d, const geom::Transform &t) : description(std::move(d)), transform(t) {}
+    SpawnActor(ActorDescription d, const geom::Transform &t, ActorId p)
+        : description(std::move(d)), transform(t), parent(p) {}
+    ActorDescription description;
+    geom::Transform transform;
+    std::optional<ActorId> parent;
+    std::vector<Command> do_after;
+  };
+  struct DestroyActor : CommandBase<DestroyActor> {
+    DestroyActor(ActorId id) : actor(id) {}
+    ActorId actor;
+  };
+  struct ApplyVehicleControl : CommandBase<ApplyVehicleControl> {
+    ApplyVehicleControl(ActorId id, const VehicleControl &value) : actor(id), control(value) {}
+    ActorId actor;
+    VehicleControl control;
+  };
+  struct ApplyTransform : CommandBase<ApplyTransform> {
+    ApplyTransform(ActorId id, const geom::Transform &value) : actor(id), transform(value) {}
+    ActorId actor;
+    geom::Transform transform;
+  };
+  struct ApplyTargetVelocity : CommandBase<ApplyTargetVelocity> {
+    ApplyTargetVelocity(ActorId id, const geom::Vector3D &value) : actor(id), velocity(value) {}
+    ActorId actor;
+    geom::Vector3D velocity;
+  };
+  struct SetSimulatePhysics : CommandBase<SetSimulatePhysics> {
+    SetSimulatePhysics(ActorId id, bool value) : actor(id), enabled(value) {}
+    ActorId actor;
+    bool enabled;
+  };
+  struct SetAutopilot : CommandBase<SetAutopilot> {
+    SetAutopilot(ActorId id, bool value, uint16_t port) : actor(id), enabled(value), tm_port(port) {}
+    ActorId actor;
+    bool enabled;
+    uint16_t tm_port;
+  };
+
+  using CommandType = std::variant<SpawnActor, DestroyActor, ApplyVehicleControl, ApplyTransform,
+                                   ApplyTargetVelocity, SetSimulatePhysics, SetAutopilot>;
+  CommandType command;
+};
+
 }  // namespace rpc
 
 namespace client {
@@ -136,6 +276,85 @@ namespace mock {
 struct Episode;
 struct ActorData;
 }  // namespace mock
+
+class Timestamp {
+ public:
+  std::size_t frame = 0u;
+  double elapsed_seconds = 0.0;
+  double delta_seconds = 0.0;
+  double platform_timestamp = 0.0;
+};
+
+struct ActorSnapshot {
+  rpc::ActorId id = 0u;
+  geom::Transform transform;
+  geom::Vector3D velocity;
+  geom::Vector3D angular_velocity;
+  geom::Vector3D acceleration;
+};
+
+class WorldSnapshot {
+ public:
+  WorldSnapshot(uint64_t id, Timestamp timestamp, std::vector<ActorSnapshot> actors)
+      : _id(id), _timestamp(timestamp), _actors(std::move(actors)) {}
+  uint64_t GetId() const { return _id; }
+  size_t GetFrame() const { return _timestamp.frame; }
+  const Timestamp &GetTimestamp() const { return _timestamp; }
+  bool Contains(rpc::ActorId id) const { return Find(id).has_value(); }
+  std::optional<ActorSnapshot> Find(rpc::ActorId id) const;
+  size_t size() const { return _actors.size(); }
+  auto begin() const { return _actors.begin(); }
+  auto end() const { return _actors.end(); }
+
+ private:
+  uint64_t _id;
+  Timestamp _timestamp;
+  std::vector<ActorSnapshot> _actors;
+};
+
+// The mock map: one straight road (id 1) along +x from x=0 to x=200 with two
+// driving lanes, lane -1 at y=0 and lane -2 at y=3.5.
+class Waypoint : public std::enable_shared_from_this<Waypoint> {
+ public:
+  Waypoint(int32_t lane_id, double s) : _lane_id(lane_id), _s(s) {}
+  uint64_t GetId() const;
+  uint32_t GetRoadId() const { return 1u; }
+  uint32_t GetSectionId() const { return 0u; }
+  int32_t GetLaneId() const { return _lane_id; }
+  double GetDistance() const { return _s; }
+  const geom::Transform &GetTransform() const;
+  int32_t GetJunctionId() const { return -1; }
+  bool IsJunction() const { return false; }
+  double GetLaneWidth() const { return 3.5; }
+  road::Lane::LaneType GetType() const { return road::Lane::LaneType::Driving; }
+  std::vector<SharedPtr<Waypoint>> GetNext(double distance) const;
+  std::vector<SharedPtr<Waypoint>> GetPrevious(double distance) const;
+  std::vector<SharedPtr<Waypoint>> GetNextUntilLaneEnd(double distance) const;
+  std::vector<SharedPtr<Waypoint>> GetPreviousUntilLaneStart(double distance) const;
+  SharedPtr<Waypoint> GetRight() const;
+  SharedPtr<Waypoint> GetLeft() const;
+
+ private:
+  int32_t _lane_id;
+  double _s;
+  mutable std::optional<geom::Transform> _transform;
+};
+
+class Map : public std::enable_shared_from_this<Map> {
+ public:
+  Map();
+  const std::string &GetName() const { return _name; }
+  const std::string &GetOpenDrive() const { return _xodr; }
+  const std::vector<geom::Transform> &GetRecommendedSpawnPoints() const { return _spawn_points; }
+  SharedPtr<Waypoint> GetWaypoint(const geom::Location &location, bool project_to_road = true,
+                                  int32_t lane_type = static_cast<int32_t>(road::Lane::LaneType::Driving)) const;
+  std::vector<SharedPtr<Waypoint>> GenerateWaypoints(double distance) const;
+
+ private:
+  std::string _name;
+  std::string _xodr;
+  std::vector<geom::Transform> _spawn_points;
+};
 
 class ActorAttribute {
  public:
@@ -168,6 +387,7 @@ class ActorBlueprint {
   const ActorAttribute &GetAttribute(const std::string &id) const;
   void SetAttribute(const std::string &id, std::string value);
   size_t size() const { return _attributes.size(); }
+  rpc::ActorDescription MakeActorDescription() const { return rpc::ActorDescription{_id}; }
 
  private:
   std::string _id;
@@ -208,6 +428,7 @@ class Actor : public std::enable_shared_from_this<Actor> {
   void SetLocation(const geom::Location &location);
   void SetTransform(const geom::Transform &transform);
   void SetTargetVelocity(const geom::Vector3D &vector);
+  const geom::BoundingBox &GetBoundingBox() const { return _bounding_box; }
   virtual bool Destroy();
 
  protected:
@@ -218,6 +439,7 @@ class Actor : public std::enable_shared_from_this<Actor> {
   std::shared_ptr<mock::Episode> _episode;
   rpc::ActorId _id;
   std::string _type_id;
+  geom::BoundingBox _bounding_box;
 };
 
 class Vehicle : public Actor {
@@ -227,6 +449,9 @@ class Vehicle : public Actor {
   void SetAutopilot(bool enabled = true, uint16_t tm_port = 8000);
   void ApplyControl(const Control &control);
   Control GetControl() const;
+  using PhysicsControl = rpc::VehiclePhysicsControl;
+  void ApplyPhysicsControl(const PhysicsControl &physics_control);
+  PhysicsControl GetPhysicsControl() const;
 };
 
 class ActorList : public std::enable_shared_from_this<ActorList> {
@@ -259,6 +484,11 @@ class World {
                                  rpc::AttachmentType attachment_type = rpc::AttachmentType::Rigid,
                                  const std::string &socket_name = "") noexcept;
   uint64_t Tick(time_duration timeout);
+  SharedPtr<Map> GetMap() const;
+  WorldSnapshot GetSnapshot() const;
+  // Asynchronous mode: the mock server "ticks on its own", so this steps once.
+  // Synchronous mode: nobody else ticks, so this times out.
+  WorldSnapshot WaitForTick(time_duration timeout) const;
   rpc::EpisodeSettings GetSettings() const;
   uint64_t ApplySettings(const rpc::EpisodeSettings &settings, time_duration timeout);
 
@@ -277,6 +507,9 @@ class Client {
   World ReloadWorld(bool reset_settings = true) const;
   World LoadWorld(std::string map_name, bool reset_settings = true,
                   rpc::MapLayer map_layers = rpc::MapLayer::All) const;
+  void ApplyBatch(std::vector<rpc::Command> commands, bool do_tick_cue = false) const;
+  std::vector<rpc::CommandResponse> ApplyBatchSync(std::vector<rpc::Command> commands,
+                                                   bool do_tick_cue = false) const;
 
  private:
   std::string _endpoint;

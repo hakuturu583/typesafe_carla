@@ -3,11 +3,14 @@
 from ._ffi import (Handle, CTransform, CWorldSettings, tsc_world_get_id, tsc_world_get_actors,
                    tsc_world_get_actor, tsc_world_get_blueprint_library, tsc_world_spawn_actor,
                    tsc_world_try_spawn_actor, tsc_world_tick, tsc_world_get_settings,
-                   tsc_world_apply_settings, TSC_NOT_FOUND)
+                   tsc_world_apply_settings, TSC_NOT_FOUND, tsc_world_get_map,
+                   tsc_world_get_snapshot, tsc_world_wait_for_tick)
 from .errors import _check
 from .geometry import Transform
 from .actor import Actor, ActorList, _make_actor
 from .blueprint import ActorBlueprint, BlueprintLibrary
+from .map import Map
+from .snapshot import WorldSnapshot
 
 class WorldSettings:
     synchronous_mode: bool
@@ -105,6 +108,23 @@ class World:
         if out[0] == cobj():
             return None
         return _make_actor(out[0])
+
+    def get_map(self) -> Map:
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_map(self._h.ptr, out))
+        return Map(Handle(out[0]))
+
+    def get_snapshot(self) -> WorldSnapshot:
+        """The state of every actor at the current frame."""
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_snapshot(self._h.ptr, out))
+        return WorldSnapshot(Handle(out[0]))
+
+    def wait_for_tick(self, seconds: float = 10.0) -> WorldSnapshot:
+        """Blocks until the server's next frame (asynchronous mode). Raises TimeoutError."""
+        out = Ptr[cobj](1)
+        _check(tsc_world_wait_for_tick(self._h.ptr, seconds, out))
+        return WorldSnapshot(Handle(out[0]))
 
     def tick(self, seconds: float = 10.0) -> int:
         """Advances the simulation (synchronous mode). Returns the new frame id."""

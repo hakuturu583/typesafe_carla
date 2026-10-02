@@ -8,9 +8,12 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <iterator>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -56,7 +59,7 @@ tsc_status_t guard(const char *function, F &&fn) noexcept {
   }
 }
 
-#define TSC_GUARD(body) ::tsc::guard(__func__, [&]() body)
+#define TSC_GUARD(...) ::tsc::guard(__func__, [&]() __VA_ARGS__)
 
 template <typename T>
 T *require_ptr(T *p, const char *name) {
@@ -132,6 +135,30 @@ struct tsc_actor_blueprint : tsc_handle {
   carla::client::ActorBlueprint blueprint;
   explicit tsc_actor_blueprint(carla::client::ActorBlueprint b)
       : tsc_handle(TSC_KIND_ACTOR_BLUEPRINT), blueprint(std::move(b)) {}
+};
+
+struct tsc_world_snapshot : tsc_handle {
+  carla::client::WorldSnapshot snapshot;
+  explicit tsc_world_snapshot(carla::client::WorldSnapshot s)
+      : tsc_handle(TSC_KIND_WORLD_SNAPSHOT), snapshot(std::move(s)) {}
+};
+
+struct tsc_map : tsc_handle {
+  carla::SharedPtr<carla::client::Map> map;
+  explicit tsc_map(carla::SharedPtr<carla::client::Map> m)
+      : tsc_handle(TSC_KIND_MAP), map(std::move(m)) {}
+};
+
+struct tsc_waypoint : tsc_handle {
+  carla::SharedPtr<carla::client::Waypoint> waypoint;
+  explicit tsc_waypoint(carla::SharedPtr<carla::client::Waypoint> w)
+      : tsc_handle(TSC_KIND_WAYPOINT), waypoint(std::move(w)) {}
+};
+
+struct tsc_waypoint_list : tsc_handle {
+  std::vector<carla::SharedPtr<carla::client::Waypoint>> waypoints;
+  explicit tsc_waypoint_list(std::vector<carla::SharedPtr<carla::client::Waypoint>> w)
+      : tsc_handle(TSC_KIND_WAYPOINT_LIST), waypoints(std::move(w)) {}
 };
 
 namespace tsc {

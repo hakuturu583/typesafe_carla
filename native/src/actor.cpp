@@ -63,6 +63,14 @@ tsc_status_t tsc_actor_destroy(tsc_actor_t *actor, int32_t *out_destroyed) {
   });
 }
 
+tsc_status_t tsc_actor_get_bounding_box(tsc_actor_t *actor, tsc_bounding_box_t *out) {
+  return TSC_GUARD({
+    const carla::geom::BoundingBox &b = actor_of(actor).GetBoundingBox();
+    *require_ptr(out, "out") =
+        tsc_bounding_box_t{from_carla(b.location), from_carla(b.extent), from_carla(b.rotation)};
+  });
+}
+
 tsc_status_t tsc_actor_as_vehicle(tsc_actor_t *actor, tsc_vehicle_t **out_vehicle) {
   return TSC_GUARD({
     require_ptr(out_vehicle, "out_vehicle");

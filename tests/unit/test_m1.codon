@@ -1,0 +1,116 @@
+# Milestone 1 on the mock backend: map, waypoints, snapshots, batch commands,
+# physics control and bounding boxes.
+import typesafe_carla as carla
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+
+# Map
+m = world.get_map()
+assert m.name == "Carla/Maps/MockTown"
+assert "OpenDRIVE" in m.to_opendrive()
+points = m.get_spawn_points()
+assert len(points) == 6
+assert points[0].location.distance(carla.Location(10.0, 0.0, 0.6)) < 1e-6
+
+# Waypoints
+wp = m.get_waypoint(carla.Location(12.0, 0.4, 5.0))
+assert wp is not None
+assert wp.road_id == 1 and wp.lane_id == -1 and wp.s == 12.0 and not wp.is_junction
+assert wp.lane_type == carla.LaneType.Driving and wp.lane_width == 3.5
+assert wp.transform.location == carla.Location(12.0, 0.0, 0.0)
+ahead = wp.next(5.0)
+assert len(ahead) == 1 and ahead[0].s == 17.0
+assert len(wp.previous(5.0)) == 1 and len(wp.previous(50.0)) == 0
+assert len(wp.next_until_lane_end(50.0)) == 3
+assert len(wp.previous_until_lane_start(5.0)) == 2
+right = wp.get_right_lane()
+assert right is not None and right.lane_id == -2
+assert wp.get_left_lane() is None
+assert m.get_waypoint(carla.Location(12.0, 30.0, 0.0), project_to_road=False) is None
+assert m.get_waypoint(carla.Location(12.0, 0.0, 0.0), lane_type=carla.LaneType.Sidewalk) is None
+assert len(m.generate_waypoints(50.0)) == 10
+
+raised = False
+try:
+    wp.next(0.0)
+except carla.CarlaError as e:
+    raised = True
+    assert "distance" in e.message
+assert raised
+
+# Snapshots
+snap = world.get_snapshot()
+assert len(snap) == 2
+vehicle_id = world.get_actors()[0].id
+found = snap.find(vehicle_id)
+assert found is not None and found.id == vehicle_id
+assert snap.find(424242) is None and not snap.has_actor(424242)
+assert [a.id for a in snap] == [a.id for a in world.get_actors()]
+frame = snap.frame
+tick = world.wait_for_tick(1.0)  # asynchronous mock: steps once
+assert tick.frame == frame + 1
+assert abs(tick.timestamp.delta_seconds - 0.05) < 1e-9
+
+settings = world.get_settings()
+settings.synchronous_mode = True
+world.apply_settings(settings)
+raised = False
+try:
+    world.wait_for_tick(0.1)  # nobody ticks in synchronous mode
+except carla.TimeoutError:
+    raised = True
+assert raised
+settings.synchronous_mode = False
+world.apply_settings(settings)
+
+# Batch commands
+bp = world.get_blueprint_library().find("vehicle.audi.tt")
+batch = [carla.command.SpawnActor(bp, points[2]).then(
+             carla.command.SetAutopilot(carla.command.FutureActor, True)),
+         carla.command.SpawnActor(bp, points[3]),
+         carla.command.DestroyActor(999)]
+responses = client.apply_batch_sync(batch, True)
+assert len(responses) == 3
+assert not responses[0].has_error() and not responses[1].has_error()
+assert responses[2].has_error() and "not found" in responses[2].error
+a = responses[0].actor_id
+b = responses[1].actor_id
+assert world.get_actor(a) is not None
+
+client.apply_batch([carla.command.ApplyVehicleControl(b, carla.VehicleControl(throttle=0.7)),
+                    carla.command.ApplyTargetVelocity(b, carla.Vector3D(1.0, 0.0, 0.0))])
+vb = world.get_actor(b).as_vehicle()
+assert abs(vb.get_control().throttle - 0.7) < 1e-6
+
+raised = False
+try:
+    batch[2].then(carla.command.DestroyActor(1))  # then() only follows SpawnActor
+except carla.CarlaError:
+    raised = True
+assert raised
+
+# Physics control and bounding box
+pc = vb.get_physics_control()
+assert len(pc.wheels) == 4 and pc.mass == 1500.0
+pc.mass = 2100.0
+pc.wheels[0].max_steer_angle = 55.0
+vb.apply_physics_control(pc)
+again = vb.get_physics_control()
+assert again.mass == 2100.0 and again.wheels[0].max_steer_angle == 55.0
+pc.wheels.pop()
+raised = False
+try:
+    vb.apply_physics_control(pc)
+except carla.CarlaError as e:
+    raised = True
+    assert "wheels" in e.message
+assert raised
+box = vb.bounding_box
+assert (box.extent - carla.Vector3D(2.4, 1.0, 0.75)).length() < 1e-6
+
+# Cleanup through a batch
+cleanup = client.apply_batch_sync([carla.command.DestroyActor(a), carla.command.DestroyActor(b)])
+assert not any(r.has_error() for r in cleanup)
+assert world.get_actor(a) is None
+print("OK")

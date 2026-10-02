@@ -13,10 +13,12 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_actor_get_acceleration, tsc_actor_get_angular_velocity, tsc_actor_destroy,
                    tsc_actor_as_vehicle, tsc_vehicle_apply_control, tsc_vehicle_get_control,
                    tsc_vehicle_set_autopilot, tsc_actor_list_size, tsc_actor_list_get,
-                   tsc_actor_list_filter, take_string)
+                   tsc_actor_list_filter, take_string, CBoundingBox, tsc_actor_get_bounding_box,
+                   tsc_vehicle_get_physics_control, tsc_vehicle_apply_physics_control,
+                   PHYSICS_SIZE)
 from .errors import _check, _check_port, _normalize_index
-from .geometry import Location, Transform, Vector3D
-from .control import VehicleControl
+from .geometry import BoundingBox, Location, Transform, Vector3D
+from .control import VehicleControl, VehiclePhysicsControl
 
 TM_DEFAULT_PORT = 8000
 
@@ -79,6 +81,13 @@ class Actor:
         _check(tsc_actor_get_acceleration(self._h.ptr, out))
         return Vector3D._from_c(out[0])
 
+    @property
+    def bounding_box(self) -> BoundingBox:
+        """The actor's bounding box in its local space."""
+        out = Ptr[CBoundingBox](1)
+        _check(tsc_actor_get_bounding_box(self._h.ptr, out))
+        return BoundingBox._from_c(out[0])
+
     def get_angular_velocity(self) -> Vector3D:
         out = Ptr[CVector3D](1)
         _check(tsc_actor_get_angular_velocity(self._h.ptr, out))
@@ -115,6 +124,17 @@ class Vehicle(Actor):
         out = Ptr[CVehicleControl](1)
         _check(tsc_vehicle_get_control(self._h.ptr, out))
         return VehicleControl._from_c(out[0])
+
+    def get_physics_control(self) -> VehiclePhysicsControl:
+        buf = Ptr[byte](PHYSICS_SIZE)
+        _check(tsc_vehicle_get_physics_control(self._h.ptr, buf))
+        return VehiclePhysicsControl._read(buf)
+
+    def apply_physics_control(self, physics_control: VehiclePhysicsControl):
+        """Changes the typed subset; the vehicle's other physics settings are kept."""
+        buf = Ptr[byte](PHYSICS_SIZE)
+        physics_control._write(buf)
+        _check(tsc_vehicle_apply_physics_control(self._h.ptr, buf))
 
     def set_autopilot(self, enabled: bool = True, tm_port: int = TM_DEFAULT_PORT):
         _check_port("tm_port", tm_port)

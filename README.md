@@ -21,21 +21,35 @@ See [docs/design.md](docs/design.md) for the full design.
 
 ## Status
 
-This is **Milestone 0** of the design (section 43), plus parts of Milestone 1:
+Milestones (design section 43):
+
+| Milestone | Status |
+|---|---|
+| 0: proof of concept | ✅ verified against a CARLA 0.10.0 server |
+| 1: usable vehicle API | ✅ verified against a CARLA 0.10.0 server |
+| 2: sensors | not started |
+| 3: distribution | packaging and release workflows done; not yet published |
+| 4: broader compatibility | not started |
+| 5: binding generation | not started |
 
 | Area | Implemented |
 |---|---|
-| Client | `Client`, `set_timeout`, `get_timeout`, `get_world`, `load_world`, `reload_world`, `get_server_version`, `get_client_version` |
-| World | `id`, `get_actors`, `get_actor` (→ `Optional[Actor]`), `get_blueprint_library`, `spawn_actor`, `try_spawn_actor` (→ `Optional[Actor]`), `tick`, `get_settings`, `apply_settings` |
-| Actor | `id`, `type_id`, `is_alive`, `get/set_transform`, `get/set_location`, `get_velocity`, `set_target_velocity`, `get_acceleration`, `get_angular_velocity`, `destroy`, `is_vehicle`, `as_vehicle` (checked) |
-| Vehicle | `apply_control`, `get_control`, `set_autopilot` |
+| Client | `Client`, `set_timeout`, `get_timeout`, `get_world`, `load_world`, `reload_world`, `get_server_version`, `get_client_version`, `apply_batch`, `apply_batch_sync` |
+| World | `id`, `get_actors`, `get_actor` (→ `Optional[Actor]`), `get_blueprint_library`, `spawn_actor`, `try_spawn_actor` (→ `Optional[Actor]`), `tick`, `wait_for_tick`, `get_snapshot`, `get_map`, `get_settings`, `apply_settings` |
+| Actor | `id`, `type_id`, `is_alive`, `bounding_box`, `get/set_transform`, `get/set_location`, `get_velocity`, `set_target_velocity`, `get_acceleration`, `get_angular_velocity`, `destroy`, `is_vehicle`, `as_vehicle` (checked) |
+| Vehicle | `apply_control`, `get_control`, `set_autopilot`, `get_physics_control`, `apply_physics_control` |
+| Map | `name`, `get_spawn_points`, `get_waypoint` (→ `Optional[Waypoint]`), `generate_waypoints`, `to_opendrive`; `LaneType` |
+| Waypoint | `id`, `transform`, `road_id`, `section_id`, `lane_id`, `s`, `is_junction`, `junction_id`, `lane_width`, `lane_type`, `next`, `previous`, `next_until_lane_end`, `previous_until_lane_start`, `get_left_lane` / `get_right_lane` (→ `Optional`) |
+| Snapshots | `WorldSnapshot` (`id`, `frame`, `timestamp`, `find` → `Optional`, `has_actor`, indexing, iteration), `ActorSnapshot`, `Timestamp` |
+| Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyTransform`, `ApplyTargetVelocity`, `SetAutopilot`, `SetSimulatePhysics`; `CommandResponse` |
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, indexing, iteration), `ActorBlueprint` (`id`, `has_tag`, `has_attribute`, `get_attribute`, `set_attribute`), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`) |
-| Values | `Location`, `Rotation`, `Transform`, `Vector2D`, `Vector3D`, `VehicleControl`, `WorldSettings`, `Color` |
+| Values | `Location`, `Rotation`, `Transform`, `Vector2D`, `Vector3D`, `BoundingBox`, `VehicleControl`, `VehiclePhysicsControl`, `WheelPhysicsControl`, `WorldSettings`, `Color` |
 | Errors | `CarlaError`, `TimeoutError`, `ActorTypeError`, `VersionError` (plus `IndexError` for lookups by key or index) |
 | Tooling | `typesafe-codon` launcher, `typesafe-carla-toolchain` (bundled Codon), uv workspace + `uv.lock`, CI, PyPI release workflow |
 
-Not implemented yet: sensors, batch commands, Traffic Manager, maps and
-waypoints, physics control, snapshots.
+Notes on Milestone 1:
+- **Physics control.** `VehiclePhysicsControl` is a typed subset (mass, drag, torque, rpm, gearing, center of mass, and per-wheel radius/width/mass/steer/brake/friction). `apply_physics_control` overwrites only these fields and keeps the vehicle's other settings. CARLA 0.10.0 applies changes a few frames later, and it ignores some per-wheel fields (e.g. `max_brake_torque`), exactly as the official Python API does.
+- **Batch commands.** These take actor ids (`actor.id`), and every constructor returns one `Command` type, so one list can mix command kinds. `SetAutopilot` in `apply_batch_sync` also registers the vehicle with the Traffic Manager, like the Python API.
 
 ### Supported CARLA versions
 
@@ -210,7 +224,11 @@ These affect how the design's guarantees should be read:
 4. **`-D` defines take integer values only**, so the library path can't be
    baked in at compile time. It comes from `TYPESAFE_CARLA_LIB` at run time,
    with the RPATH as the fallback.
-5. Float format specifiers (`f"{x:.6f}"`) need an installed `en_US` locale in
+5. **`Optional[T]` is implicitly unwrapped.** Codon accepts an
+   `Optional[Waypoint]` where a `Waypoint` is expected and raises at run
+   time if it is `None`, so forgetting the `is None` check after
+   `get_actor`, `get_left_lane` and similar calls is not a compile error.
+6. Float format specifiers (`f"{x:.6f}"`) need an installed `en_US` locale in
    Codon 0.19.3, so `repr`s use plain `str(float)`.
 
 ## License

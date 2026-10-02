@@ -1,0 +1,164 @@
+# Batch commands (carla.command): many actor operations in one RPC.
+#
+#     import typesafe_carla as carla
+#     cmd = carla.command
+#     batch = [cmd.SpawnActor(bp, transform).then(cmd.SetAutopilot(cmd.FutureActor, True)),
+#              cmd.DestroyActor(old.id)]
+#     for response in client.apply_batch_sync(batch, True):
+#         if response.has_error(): print(response.error)
+#
+# Every constructor returns a Command, so one list can mix command kinds.
+# Actors are given by id (`actor.id`).
+
+from ._ffi import (CCommand, CCommandResponse, CTransform, CVehicleControl, CVector3D, CString,
+                   copy_string, tsc_string_free, TSC_INVALID_ARGUMENT)
+from .errors import CarlaError, _check_port
+from .geometry import Transform, Vector3D
+from .control import VehicleControl
+from .blueprint import ActorBlueprint
+
+# In a command passed to SpawnActor(...).then(...), the actor being spawned.
+FutureActor: int = 0
+
+_SPAWN_ACTOR = 1
+_DESTROY_ACTOR = 2
+_APPLY_VEHICLE_CONTROL = 3
+_APPLY_TRANSFORM = 4
+_APPLY_TARGET_VELOCITY = 5
+_SET_AUTOPILOT = 6
+_SET_SIMULATE_PHYSICS = 7
+
+def _actor_id(actor_id: int) -> u32:
+    if actor_id < 0 or actor_id > 0xFFFFFFFF:
+        raise CarlaError(f"actor id {actor_id} is out of range", TSC_INVALID_ARGUMENT)
+    return u32(actor_id)
+
+class Command:
+    _type: int
+    _actor_id: int
+    _parent_id: int
+    _blueprint: Optional[ActorBlueprint]
+    _transform: Transform
+    _control: VehicleControl
+    _vector: Vector3D
+    _flag: bool
+    _tm_port: int
+    _then: List[Command]
+
+    def __init__(self, kind: int, actor_id: int = 0):
+        _actor_id(actor_id)
+        self._type = kind
+        self._actor_id = actor_id
+        self._parent_id = 0
+        self._blueprint = None
+        self._transform = Transform()
+        self._control = VehicleControl()
+        self._vector = Vector3D()
+        self._flag = False
+        self._tm_port = 0
+        self._then = List[Command]()
+
+    def then(self, command: Command) -> Command:
+        """Runs `command` after this SpawnActor succeeds; use FutureActor as its actor id."""
+        if self._type != _SPAWN_ACTOR:
+            raise CarlaError("then() is only available on SpawnActor commands",
+                             TSC_INVALID_ARGUMENT)
+        if command._type == _SPAWN_ACTOR:
+            raise CarlaError("SpawnActor cannot run after another SpawnActor", TSC_INVALID_ARGUMENT)
+        self._then.append(command)
+        return self
+
+    def _to_c(self, then_of: int) -> CCommand:
+        c = self._control._to_c()
+        v = self._vector
+        bp = self._blueprint
+        return CCommand(i32(self._type), i32(then_of), u32(self._actor_id), u32(self._parent_id),
+                        bp._h.ptr if bp is not None else cobj(), self._transform._to_c(), c,
+                        CVector3D(v.x, v.y, v.z), i32(int(self._flag)), u16(self._tm_port), u16(0))
+
+    def __repr__(self) -> str:
+        names = ["", "SpawnActor", "DestroyActor", "ApplyVehicleControl", "ApplyTransform",
+                 "ApplyTargetVelocity", "SetAutopilot", "SetSimulatePhysics"]
+        return f"command.{names[self._type]}(actor_id={self._actor_id}, then={len(self._then)})"
+
+class CommandResponse:
+    actor_id: int  # the spawned actor, or the actor the command applied to
+    error: str  # empty unless has_error()
+
+    def __init__(self, actor_id: int, error: str):
+        self.actor_id = actor_id
+        self.error = error
+
+    def has_error(self) -> bool:
+        return self.error != ""
+
+    def __repr__(self) -> str:
+        return (f"CommandResponse(error={self.error})" if self.has_error()
+                else f"CommandResponse(actor_id={self.actor_id})")
+
+def SpawnActor(blueprint: ActorBlueprint, transform: Transform, parent_id: int = 0) -> Command:
+    c = Command(_SPAWN_ACTOR)
+    c._blueprint = blueprint
+    c._transform = transform
+    c._parent_id = int(_actor_id(parent_id))
+    return c
+
+def DestroyActor(actor_id: int) -> Command:
+    return Command(_DESTROY_ACTOR, actor_id)
+
+def ApplyVehicleControl(actor_id: int, control: VehicleControl) -> Command:
+    c = Command(_APPLY_VEHICLE_CONTROL, actor_id)
+    c._control = control
+    return c
+
+def ApplyTransform(actor_id: int, transform: Transform) -> Command:
+    c = Command(_APPLY_TRANSFORM, actor_id)
+    c._transform = transform
+    return c
+
+def ApplyTargetVelocity(actor_id: int, velocity: Vector3D) -> Command:
+    c = Command(_APPLY_TARGET_VELOCITY, actor_id)
+    c._vector = velocity
+    return c
+
+def SetAutopilot(actor_id: int, enabled: bool, tm_port: int = 8000) -> Command:
+    _check_port("tm_port", tm_port)
+    c = Command(_SET_AUTOPILOT, actor_id)
+    c._flag = enabled
+    c._tm_port = tm_port
+    return c
+
+def SetSimulatePhysics(actor_id: int, enabled: bool) -> Command:
+    c = Command(_SET_SIMULATE_PHYSICS, actor_id)
+    c._flag = enabled
+    return c
+
+def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int, int]:
+    """C records for `commands` (then-commands follow their SpawnActor).
+
+    Returns (records, record count, top-level count). The Command objects
+    (which hold the blueprints) must stay alive for the duration of the call.
+    """
+    n = 0
+    for c in commands:
+        n += 1 + len(c._then)
+    records = Ptr[CCommand](n if n > 0 else 1)
+    i = 0
+    for c in commands:
+        top = i
+        records[i] = c._to_c(-1)
+        i += 1
+        for after in c._then:
+            records[i] = after._to_c(top)
+            i += 1
+    return (records, n, len(commands))
+
+def _responses(buf: Ptr[CCommandResponse], n: int) -> List[CommandResponse]:
+    result = List[CommandResponse](n)
+    for i in range(n):
+        r = buf[i]
+        error = copy_string(r.error) if int(r.has_error) != 0 else ""
+        # Free the string in place: `error` sits after two 4-byte fields.
+        tsc_string_free(Ptr[CString]((buf + i).as_byte() + 8))
+        result.append(CommandResponse(int(r.actor_id), error))
+    return result
