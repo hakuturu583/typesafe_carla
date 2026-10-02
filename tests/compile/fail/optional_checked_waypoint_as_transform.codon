@@ -1,0 +1,14 @@
+# An Optional result keeps its static type after a None check: the checked
+# Waypoint is still not a Transform. (A separate file: Codon stops at the
+# first failing function, so one file cannot cover both variants.)
+# expect-error: 'Waypoint' does not match expected type 'Transform'
+import typesafe_carla as carla
+
+def teleport_checked(world: carla.World, actor: carla.Actor):
+    wp = world.get_map().get_waypoint(actor.get_location())
+    if wp is not None:
+        actor.set_transform(wp)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+teleport_checked(_world, _world.get_actors()[0])

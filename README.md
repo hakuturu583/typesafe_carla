@@ -226,8 +226,6 @@ Deliberate differences, all in favour of static checking:
 * **Actors must be converted before using subclass methods.**
   `world.get_actor(id).apply_control(...)` does not compile; use
   `as_vehicle()`, which raises `ActorTypeError` if the actor is not a vehicle.
-* **Lookups that can miss return `Optional`.** `World.get_actor` and
-  `World.try_spawn_actor` return `Optional[Actor]`.
 * **`Location` is not a `Vector3D`.** A position cannot be passed where a
   velocity is expected (`set_target_velocity(actor.get_location())` fails to
   compile). Convert explicitly with `as_vector()` / `Location.from_vector()`.
@@ -236,6 +234,38 @@ Deliberate differences, all in favour of static checking:
 * **Float precision.** Values cross into LibCarla as float32, as they do in
   the Python API, so `get_control().throttle` after setting `0.2` is
   `0.2000000029802322`.
+
+**Not a difference: lookups that can miss return `None`, as in Python.**
+`World.get_actor`, `World.try_spawn_actor`, `ActorList.find`,
+`WorldSnapshot.find`, `Map.get_waypoint`, `Waypoint.get_left_lane` /
+`get_right_lane` / `get_junction`, `Vehicle.get_traffic_light` and
+`World.get_random_location_from_navigation` return `None` in the same cases as
+the official API: an unknown actor id, an occupied spawn point, no lane at
+the location or beyond the outermost lane, no junction, no traffic light, no
+navigation mesh. (`Sensor.poll`, which has no Python counterpart, returns
+`None` when the queue is empty.) The tests check these cases against a real
+server, except the navigation-mesh case, which only the mock exercises.
+`get_actor(id)` of an actor destroyed in the same episode still returns an
+`Actor`: LibCarla caches actors on the client and never evicts them, and the
+official API does the same. Use the world snapshot to tell whether an actor
+still exists, not `is_alive`: a real server can report `True` for such an
+actor, while the mock backend reports `False`.
+
+Python-style code works without changes in most cases: `if world.get_actor(id) is None`,
+`if wp:`, and using the value directly when it is known to exist
+(`world.try_spawn_actor(bp, t).destroy()`, `m.get_waypoint(loc).next(2.0)`).
+The exception is a chained lookup passed into *annotated* code, which needs
+an explicit `unwrap()` (see [Codon limitation 5](#codon-limitations-found-while-building-this)).
+The return type is `Optional[T]`, which only adds static information: the
+checker knows what the value is when it is not `None`, so
+`actor.set_transform(m.get_waypoint(loc))` is a compile error. Two details
+differ at run time:
+
+* Using a `None` value raises `ValueError` (`optional unpack failed: expected
+  Actor, got None`) where Python raises `AttributeError` (`'NoneType' object
+  has no attribute ...`).
+* For an id outside the uint32 range (e.g. `-1`), `get_actor` and the `find`
+  lookups return `None`; the official API raises `OverflowError`.
 
 ## Codon limitations found while building this
 
@@ -261,6 +291,15 @@ These affect how the design's guarantees should be read:
    `Optional[Waypoint]` where a `Waypoint` is expected and raises at run
    time if it is `None`, so forgetting the `is None` check after
    `get_actor`, `get_left_lane` and similar calls is not a compile error.
+   Codon does not narrow types after an `is not None` check either.
+   Implicit unwrapping also has a gap: the result of an `Optional`-returning
+   method called on an `Optional` value (`left = wp.get_left_lane()` where
+   `wp = m.get_waypoint(loc)`) cannot go where a non-`Optional` type is
+   *annotated* (a typed parameter, `x: Waypoint = ...`, a `-> Waypoint`
+   return): Codon reports `'Waypoint' does not match expected type
+   'Optional[Waypoint]'`, even after an `is not None` check. Unannotated
+   code is not affected. Unwrap explicitly with Codon's `unwrap()`:
+   `unwrap(wp).get_left_lane()` or `unwrap(wp.get_left_lane())`.
 6. Float format specifiers (`f"{x:.6f}"`) need an installed `en_US` locale in
    Codon 0.19.3, so `repr`s use plain `str(float)`.
 

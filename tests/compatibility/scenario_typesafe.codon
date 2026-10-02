@@ -66,14 +66,46 @@ out("light0_times", fmt(lights[0].get_green_time()) + "," + fmt(lights[0].get_ye
 wthr = world.get_weather()
 out("weather", fmt(wthr.cloudiness) + "," + fmt(wthr.precipitation) + "," +
     fmt(wthr.sun_altitude_angle) + "," + fmt(wthr.rayleigh_scattering_scale))
-junction_wp = [w for w in m.generate_waypoints(10.0) if w.is_junction][0]
+waypoints10 = m.generate_waypoints(10.0)
+junction_wp = [w for w in waypoints10 if w.is_junction][0]
 jn = junction_wp.get_junction()
 out("junction", str(jn.id) + "," + str(len(jn.get_waypoints(carla.LaneType.Driving))))
+
+# Lookups that can miss return None (issue #9).
+offroad = m.get_waypoint(carla.Location(10000.0, 10000.0, 0.0), project_to_road=False)
+out("none_lookups", str(int(world.get_actor(999999) is None)) + "," +
+    str(int(world.get_snapshot().find(999999) is None)) + "," +
+    str(int(world.get_actors().find(999999) is None)) + "," + str(int(offroad is None)) + "," +
+    str(int(wp.get_junction() is None)))
+
+def lane_walk(start: carla.Waypoint, left: bool) -> str:
+    ids = List[str]()
+    w: Optional[carla.Waypoint] = start  # Codon does not widen on reassignment
+    for _ in range(20):
+        w = w.get_left_lane() if left else w.get_right_lane()
+        if w is None:
+            break
+        ids.append(str(w.lane_id))
+    return "/".join(ids)
+
+# Start from a waypoint that has a lane to its left, so the walk visits real
+# lanes before reaching None. generate_waypoints' order depends on the LibCarla
+# build (it iterates an unordered_map), so pick the smallest (road, lane, s).
+candidates = [w for w in waypoints10 if w.get_left_lane() is not None]
+multi = candidates[0]
+for w in candidates:
+    if (w.road_id, w.lane_id, w.s) < (multi.road_id, multi.lane_id, multi.s):
+        multi = w
+out("lane_walk", str(multi.lane_id) + ":" + lane_walk(multi, True) + ";" + lane_walk(multi, False))
 
 spawn = carla.Transform(carla.Location(-64.644844, 24.471010, 0.6), carla.Rotation(0.0, 0.159198, 0.0))
 original = world.get_settings()
 vehicle = world.spawn_actor(bp, spawn).as_vehicle()
 try:
+    blocked = world.try_spawn_actor(bp, spawn)
+    out("try_spawn_occupied", str(int(blocked is None)))
+    if blocked is not None:
+        blocked.destroy()
     settings = world.get_settings()
     settings.synchronous_mode = True
     settings.fixed_delta_seconds = 0.05
@@ -125,3 +157,5 @@ try:
 finally:
     world.apply_settings(original)
     out("destroyed", str(int(vehicle.destroy())))
+# LibCarla's client cache keeps actors destroyed in this episode.
+out("destroyed_lookup", str(int(world.get_actor(vehicle.id) is None)))

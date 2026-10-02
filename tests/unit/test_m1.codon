@@ -142,5 +142,6 @@ assert (box.extent - carla.Vector3D(2.4, 1.0, 0.75)).length() < 1e-6
 # Cleanup through a batch
 cleanup = client.apply_batch_sync([carla.command.DestroyActor(a), carla.command.DestroyActor(b)])
 assert not any(r.has_error() for r in cleanup)
-assert world.get_actor(a) is None
+assert not world.get_snapshot().has_actor(a)
+assert world.get_actor(a) is not None  # LibCarla's client cache keeps destroyed actors
 print("OK")

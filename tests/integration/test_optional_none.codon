@@ -1,0 +1,97 @@
+# Issue #9 against a real CARLA server: lookups that can miss return None in
+# the same cases as the official Python API, and Python-style code handles them.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+def unwrap_error(f) -> str:
+    try:
+        f()
+    except ValueError as e:
+        return e.message
+    return ""
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+m = world.get_map()
+lib = world.get_blueprint_library()
+
+# Unknown ids.
+assert world.get_actor(999999) is None and not world.get_actor(999999)
+assert world.get_actors().find(999999) is None
+assert world.get_snapshot().find(999999) is None
+msg = unwrap_error(lambda: world.get_actor(999999).destroy())
+assert msg == "optional unpack failed: expected Actor, got None", msg
+
+# Waypoints: off the road without projection, and past the outermost lanes.
+assert m.get_waypoint(carla.Location(10000.0, 10000.0, 0.0), project_to_road=False) is None
+points = m.get_spawn_points()
+wp = m.get_waypoint(points[0].location)
+assert wp
+assert len(m.get_waypoint(points[0].location).next(2.0)) >= 1  # chained, no check
+waypoints = m.generate_waypoints(10.0)
+# A waypoint with a lane to its left, so the walks visit lanes before None.
+multi = [x for x in waypoints if x.get_left_lane() is not None][0]
+for left in (True, False):
+    w: Optional[carla.Waypoint] = multi
+    steps = 0
+    while True:
+        w = w.get_left_lane() if left else w.get_right_lane()
+        if w is None:
+            break
+        steps += 1
+        assert steps < 20, "lane walk did not end"
+    print("left" if left else "right", "lanes", steps)
+non_junction = [x for x in waypoints if not x.is_junction][0]
+assert non_junction.get_junction() is None
+junction = [x for x in waypoints if x.is_junction][0]
+assert junction.get_junction() is not None
+
+# try_spawn_actor: None at an occupied spot; spawn_actor raises there.
+bp = lib.find("vehicle.lincoln.mkz")
+spot = points[0]
+vehicle = world.try_spawn_actor(bp, spot)
+i = 1
+while vehicle is None and i < len(points):
+    spot = points[i]
+    vehicle = world.try_spawn_actor(bp, spot)
+    i += 1
+assert vehicle is not None
+try:
+    # The spawn transform, not get_transform(): before the next tick the
+    # client may not have the vehicle's position yet.
+    blocked = world.try_spawn_actor(bp, spot)
+    if blocked is not None:
+        blocked.destroy()
+        assert False, "try_spawn_actor succeeded at an occupied spot"
+    raised = False
+    try:
+        world.spawn_actor(bp, spot)
+    except carla.CarlaError as e:
+        raised = True
+        print("spawn_actor at occupied spot:", e.message)
+    assert raised
+    msg = unwrap_error(lambda: world.try_spawn_actor(bp, spot).destroy())
+    assert msg == "optional unpack failed: expected Actor, got None", msg
+    # Both read the traffic light id from the vehicle's state, so a vehicle
+    # that is not at a light has none (a fresh spawn is normally not at one).
+    v = vehicle.as_vehicle()
+    light = v.get_traffic_light()
+    at_light = v.is_at_traffic_light()
+    print("traffic light", "None" if light is None else str(light.id), "at light", at_light)
+    if not at_light:
+        assert light is None
+    found = world.get_actor(vehicle.id)  # used directly when known to exist
+    assert found.id == vehicle.id
+finally:
+    vehicle.destroy()
+
+# LibCarla's client cache keeps actors destroyed in this episode, so get_actor
+# still finds them, as with the official API.
+assert world.get_actor(vehicle.id) is not None
+
+print("OK")
