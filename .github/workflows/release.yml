@@ -1,7 +1,8 @@
 # Builds and publishes typesafe-carla and typesafe-carla-toolchain.
 #
 #   * push a tag vX.Y.Z (must equal python/typesafe_carla/__init__.py) -> PyPI
-#   * run manually (workflow_dispatch)                                 -> TestPyPI
+#   * run manually (workflow_dispatch): builds and checks everything; with
+#     publish=true it also uploads to TestPyPI (a dry run otherwise)
 #
 # Publishing uses PyPI Trusted Publishing (OIDC): configure the "pypi" and
 # "testpypi" environments and register this workflow as a trusted publisher
@@ -17,6 +18,10 @@ on:
         description: "CARLA branch, tag or commit SHA to build LibCarla from (UE5 only)"
         default: "ue5-dev"
         required: true
+      publish:
+        description: "Upload to TestPyPI (otherwise build and check only)"
+        type: boolean
+        default: false
 
 env:
   CARLA_GIT_REF: ${{ inputs.carla_ref || 'ue5-dev' }}
@@ -90,6 +95,7 @@ jobs:
 
   publish:
     needs: [sdist, wheel, toolchain]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
     runs-on: ubuntu-24.04
     environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'pypi' || 'testpypi' }}
     permissions:
