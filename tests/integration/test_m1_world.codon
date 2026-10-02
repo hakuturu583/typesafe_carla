@@ -78,14 +78,13 @@ try:
     # rate vary, so a fixed tick count is not enough time on a fast server.
     # Wait (bounded by wall-clock time) until three of the four have driven.
     dists = [0.0] * 4
+    moved = 0
     deadline = time.time() + 60.0
-    while True:
+    while moved < 3 and time.time() < deadline:
         world.wait_for_tick(10.0)
         dists = [world.get_actor(ids[k]).get_location().distance(starts[k]) for k in range(4)]
-        if sum(1 for d in dists if d > 3.0) >= 3 or time.time() > deadline:
-            break
+        moved = sum(1 for d in dists if d > 3.0)
     print("autopilot vehicles", ids, "moved", dists)
-    moved = sum(1 for d in dists if d > 3.0)
     assert moved >= 3, "Traffic Manager did not drive the batch-spawned vehicles"
 
     # Physics control round trip on a real vehicle.
