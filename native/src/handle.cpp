@@ -4,6 +4,12 @@
 #ifndef TSC_BUILD_COMMIT
 #define TSC_BUILD_COMMIT "unknown"
 #endif
+#ifndef TSC_CARLA_GIT_REF
+#define TSC_CARLA_GIT_REF "unknown"
+#endif
+#ifndef TSC_CARLA_GIT_COMMIT
+#define TSC_CARLA_GIT_COMMIT "unknown"
+#endif
 
 namespace {
 std::atomic<uint64_t> g_live_handles{0};
@@ -56,6 +62,10 @@ uint64_t tsc_live_handle_count(void) { return g_live_handles.load(); }
 uint32_t tsc_abi_version(void) { return TSC_ABI_VERSION; }
 
 const char *tsc_libcarla_version(void) { return carla::version(); }
+
+const char *tsc_libcarla_git_ref(void) { return TSC_CARLA_GIT_REF; }
+
+const char *tsc_libcarla_git_commit(void) { return TSC_CARLA_GIT_COMMIT; }
 
 const char *tsc_build_commit(void) { return TSC_BUILD_COMMIT; }
 

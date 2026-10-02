@@ -4,73 +4,76 @@ on:
   push:
     branches: [main]
   pull_request:
-
-env:
-  CODON_VERSION: "0.19.3"
+  schedule:
+    # Daily: catch ue5-dev changes that break the shim before a release does.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      carla_ref:
+        description: "Extra CARLA ref (branch, tag or SHA) to build LibCarla from"
+        required: false
 
 jobs:
   test:
-    # Mock backend: no CARLA server or LibCarla build needed.
+    # Mock backend: compile-pass/fail, runtime and launcher tests, no CARLA needed.
     runs-on: ubuntu-24.04
+    env:
+      TSC_BACKEND: mock
     steps:
       - uses: actions/checkout@v4
-
       - uses: astral-sh/setup-uv@v6
-
-      - name: Install Codon ${{ env.CODON_VERSION }}
-        run: |
-          curl -fsSL -o codon.tar.gz \
-            "https://github.com/exaloop/codon/releases/download/v${CODON_VERSION}/codon-linux-x86_64.tar.gz"
-          mkdir -p "$RUNNER_TEMP/codon"
-          tar xzf codon.tar.gz -C "$RUNNER_TEMP/codon" --strip-components=1
-          echo "TYPESAFE_CODON=$RUNNER_TEMP/codon/bin/codon" >> "$GITHUB_ENV"
 
       - name: C++ build (mock backend)
         run: |
           cmake -S . -B build -DTSC_BACKEND=mock
           cmake --build build -j
-
       - name: Native ABI tests
         run: ctest --test-dir build --output-on-failure
 
+      # Builds the toolchain workspace member, i.e. installs the pinned Codon:
+      # no Codon is preinstalled on the runner.
       - name: uv sync (locked)
         run: uv sync --frozen
-
+      - run: uv run typesafe-codon info
       - name: Compile-pass, compile-fail, runtime and launcher tests
         run: uv run pytest -v
 
+  libcarla:
+    # The shim compiled and linked against real LibCarla built from CARLA
+    # sources. Runs the C ABI tests that need no server.
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        carla_ref: ${{ fromJSON(inputs.carla_ref && format('["ue5-dev","{0}"]', inputs.carla_ref) || '["ue5-dev"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure (CARLA ${{ matrix.carla_ref }})
+        run: cmake -S . -B build -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF=${{ matrix.carla_ref }}
+      - name: Build
+        run: cmake --build build -j --target typesafe_carla_ffi test_ffi
+      - name: Native ABI tests
+        run: ctest --test-dir build --output-on-failure
+
   wheel:
-    # Builds the wheel and uses it from a clean environment outside the
-    # checkout, so nothing can fall back to repository paths.
+    # The wheel used from a clean environment outside the checkout, so nothing
+    # can fall back to repository paths. (Mock backend to keep it fast; the
+    # release workflow builds and checks the LibCarla wheel.)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
       - uses: astral-sh/setup-uv@v6
-
-      - name: Install Codon ${{ env.CODON_VERSION }}
+      - name: Build wheels
         run: |
-          curl -fsSL -o codon.tar.gz \
-            "https://github.com/exaloop/codon/releases/download/v${CODON_VERSION}/codon-linux-x86_64.tar.gz"
-          mkdir -p "$RUNNER_TEMP/codon"
-          tar xzf codon.tar.gz -C "$RUNNER_TEMP/codon" --strip-components=1
-          echo "TYPESAFE_CODON=$RUNNER_TEMP/codon/bin/codon" >> "$GITHUB_ENV"
-
-      - name: Build wheel
-        run: TSC_BACKEND=mock uv build --wheel -o dist
-
+          uv build --wheel toolchain -o dist
+          TSC_BACKEND=mock uv build --wheel -o dist
       - name: Install into a clean environment and run an example
         run: |
           mkdir "$RUNNER_TEMP/clean" && cp examples/connect.py "$RUNNER_TEMP/clean/"
           cd "$RUNNER_TEMP/clean"
           uv venv
-          uv pip install "$GITHUB_WORKSPACE"/dist/*.whl
+          uv pip install --find-links "$GITHUB_WORKSPACE/dist" typesafe-carla
           .venv/bin/typesafe-codon info
           .venv/bin/typesafe-codon run connect.py
           .venv/bin/typesafe-codon build -release -o connect connect.py
           env -u TYPESAFE_CARLA_LIB ./connect
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheel
-          path: dist/*.whl

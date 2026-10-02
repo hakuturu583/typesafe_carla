@@ -38,6 +38,14 @@ static void test_versions(void) {
   CHECK(strlen(tsc_libcarla_version()) > 0);
   CHECK(strlen(tsc_build_commit()) > 0);
   CHECK(strlen(tsc_backend_name()) > 0);
+  CHECK(strlen(tsc_libcarla_git_ref()) > 0);
+  CHECK(strlen(tsc_libcarla_git_commit()) > 0);
+  if (strcmp(tsc_backend_name(), "libcarla") == 0) {
+    /* UE5 only: LibCarla 0.10 or later. */
+    CHECK(strncmp(tsc_libcarla_version(), "0.9", 3) != 0);
+    printf("libcarla %s (%s %s)\n", tsc_libcarla_version(), tsc_libcarla_git_ref(),
+           tsc_libcarla_git_commit());
+  }
 }
 
 static void test_layout(void) {

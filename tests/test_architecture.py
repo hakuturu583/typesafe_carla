@@ -39,3 +39,24 @@ def test_abi_version_matches_header():
         h = re.search(rf"#define TSC_ABI_VERSION_{part} (\d+)", header).group(1)
         c = re.search(rf"^TSC_ABI_VERSION_{part} = (\d+)", ffi, re.MULTILINE).group(1)
         assert h == c, f"ABI {part}: ffi.h={h} _ffi.codon={c}"
+
+
+def test_versions_agree():
+    """One version for the Python package, the Codon module and CMake."""
+    py = re.search(r'^__version__ = "(.+)"', (ROOT / "python" / "typesafe_carla" / "__init__.py")
+                   .read_text(), re.MULTILINE).group(1)
+    codon = re.search(r'^__version__ = "(.+)"', (ROOT / "codon" / "typesafe_carla" /
+                                                  "__init__.codon").read_text(),
+                      re.MULTILINE).group(1)
+    assert py == codon
+
+
+def test_toolchain_matches_supported_codon():
+    from typesafe_carla import toolchain
+
+    tc_pyproject = (ROOT / "toolchain" / "pyproject.toml").read_text()
+    tc_version = re.search(r'^version = "(.+)"', tc_pyproject, re.MULTILINE).group(1)
+    hook = (ROOT / "toolchain" / "hatch_build.py").read_text()
+    codon = re.search(r'^CODON_VERSION = "(.+)"', hook, re.MULTILINE).group(1)
+    assert tc_version.split(".post")[0] == codon
+    assert toolchain.is_supported_version(codon)

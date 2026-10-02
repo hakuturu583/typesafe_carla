@@ -2,6 +2,12 @@ version = 1
 revision = 3
 requires-python = ">=3.11"
 
+[manifest]
+members = [
+    "typesafe-carla",
+    "typesafe-carla-toolchain",
+]
+
 [[package]]
 name = "colorama"
 version = "0.4.6"
@@ -65,8 +71,10 @@ wheels = [
 
 [[package]]
 name = "typesafe-carla"
-version = "0.1.0"
 source = { editable = "." }
+dependencies = [
+    { name = "typesafe-carla-toolchain" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -74,6 +82,12 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "typesafe-carla-toolchain", editable = "toolchain" }]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8" }]
+
+[[package]]
+name = "typesafe-carla-toolchain"
+version = "0.19.3"
+source = { editable = "toolchain" }

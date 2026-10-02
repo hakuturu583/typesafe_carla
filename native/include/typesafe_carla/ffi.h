@@ -33,7 +33,7 @@ extern "C" {
 
 /* ABI version. Bump MAJOR on any incompatible change to this header. */
 #define TSC_ABI_VERSION_MAJOR 1
-#define TSC_ABI_VERSION_MINOR 0
+#define TSC_ABI_VERSION_MINOR 1
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -61,8 +61,13 @@ TSC_API void tsc_clear_last_error(void);
 
 /* (TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR of the built library. */
 TSC_API uint32_t tsc_abi_version(void);
-/* LibCarla version the library was built against, e.g. "0.9.15". */
+/* LibCarla version the library was built against, e.g. "0.10.0". */
 TSC_API const char *tsc_libcarla_version(void);
+/* CARLA git ref LibCarla was built from (e.g. "ue5-dev", a tag or a SHA),
+ * "local" for a local source tree, "mock" for the mock backend. (ABI 1.1) */
+TSC_API const char *tsc_libcarla_git_ref(void);
+/* Resolved CARLA commit SHA, or "unknown" / "mock". (ABI 1.1) */
+TSC_API const char *tsc_libcarla_git_commit(void);
 /* Source revision of typesafe_carla the library was built from. */
 TSC_API const char *tsc_build_commit(void);
 /* "libcarla" for the real backend, "mock" for the in-memory test backend. */

@@ -1,0 +1,105 @@
+# Builds and publishes typesafe-carla and typesafe-carla-toolchain.
+#
+#   * push a tag vX.Y.Z (must equal python/typesafe_carla/__init__.py) -> PyPI
+#   * run manually (workflow_dispatch)                                 -> TestPyPI
+#
+# Publishing uses PyPI Trusted Publishing (OIDC): configure the "pypi" and
+# "testpypi" environments and register this workflow as a trusted publisher
+# for both projects on (Test)PyPI. No API tokens are stored.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      carla_ref:
+        description: "CARLA branch, tag or commit SHA to build LibCarla from (UE5 only)"
+        default: "ue5-dev"
+        required: true
+
+env:
+  CARLA_GIT_REF: ${{ inputs.carla_ref || 'ue5-dev' }}
+
+jobs:
+  check-version:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' python/typesafe_carla/__init__.py)
+          test "v${version}" = "${GITHUB_REF_NAME}" || {
+            echo "tag ${GITHUB_REF_NAME} != package version ${version}"; exit 1; }
+
+  sdist:
+    needs: check-version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build --sdist -o dist
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-sdist, path: dist/*.tar.gz }
+
+  wheel:
+    # LibCarla is built from CARLA sources at $CARLA_GIT_REF inside the
+    # manylinux_2_28 image; the wheel is py3-none (no CPython extension).
+    needs: check-version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pypa/cibuildwheel@v3.1
+        env:
+          CIBW_BUILD: cp312-manylinux_x86_64
+          CIBW_ARCHS: x86_64
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_ENVIRONMENT_PASS_LINUX: CARLA_GIT_REF
+          CIBW_CONFIG_SETTINGS: cmake.define.TSC_BACKEND=libcarla
+          # The toolchain is not needed to check the native library.
+          CIBW_BEFORE_TEST: pip install --no-deps {wheel}
+          CIBW_TEST_COMMAND: >
+            python {project}/tools/check_wheel.py --backend libcarla --carla-ref "$CARLA_GIT_REF"
+          CIBW_TEST_ENVIRONMENT_PASS_LINUX: CARLA_GIT_REF
+        with:
+          output-dir: dist
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-wheel, path: dist/*.whl }
+
+  toolchain:
+    needs: check-version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build --wheel --sdist toolchain -o dist
+      - name: Bundled Codon runs
+        run: |
+          uv venv /tmp/tc && uv pip install --python /tmp/tc dist/*.whl
+          /tmp/tc/bin/python -c "import typesafe_carla_toolchain as t, subprocess; subprocess.run([t.codon_executable(), '--version'], check=True)"
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-toolchain, path: dist/* }
+
+  publish:
+    needs: [sdist, wheel, toolchain]
+    runs-on: ubuntu-24.04
+    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'pypi' || 'testpypi' }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: dist-*, path: dist, merge-multiple: true }
+      - run: ls -l dist
+      - name: Publish to PyPI
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # The toolchain version only changes with Codon; re-releases skip it.
+          skip-existing: true
+      - name: Publish to TestPyPI
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true

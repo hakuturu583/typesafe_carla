@@ -32,47 +32,91 @@ This is **Milestone 0** of the design (section 43), plus parts of Milestone 1:
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, indexing, iteration), `ActorBlueprint` (`id`, `has_tag`, `has_attribute`, `get_attribute`, `set_attribute`), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`) |
 | Values | `Location`, `Rotation`, `Transform`, `Vector2D`, `Vector3D`, `VehicleControl`, `WorldSettings`, `Color` |
 | Errors | `CarlaError`, `TimeoutError`, `ActorTypeError`, `VersionError` (plus `IndexError` for lookups by key or index) |
-| Tooling | `typesafe-codon` launcher, wheel layout, `uv.lock`, CI |
+| Tooling | `typesafe-codon` launcher, `typesafe-carla-toolchain` (bundled Codon), uv workspace + `uv.lock`, CI, PyPI release workflow |
 
 Not implemented yet: sensors, batch commands, Traffic Manager, maps and
-waypoints, physics control, snapshots, the `typesafe-carla-toolchain` wheel.
+waypoints, physics control, snapshots.
+
+### Supported CARLA versions
+
+**CARLA UE5 only** (the CMake-based `ue5-dev` branch, 0.10.x and later).
+UE4 (0.9.x, `ue4-dev`) is not supported.
+
+LibCarla is built from CARLA sources as part of the build. The default is the
+latest `ue5-dev`; any branch, tag or commit SHA can be selected:
+
+| How | Example |
+|---|---|
+| environment variable | `CARLA_GIT_REF=0.10.0` |
+| CMake | `-DTSC_CARLA_GIT_REF=<branch\|tag\|sha>` |
+| pip / uv build setting | `-C cmake.define.TSC_CARLA_GIT_REF=<ref>` |
+| local checkout | `CARLA_SOURCE_DIR=~/carla` or `-DTSC_CARLA_SOURCE_DIR=...` |
+| other repository (fork) | `-DTSC_CARLA_GIT_REPOSITORY=https://github.com/<you>/carla.git` |
+
+Only `CMakeLists.txt`, `CMake/` and `LibCarla/` are fetched, as a shallow,
+blob-filtered, sparse checkout (a few MB, not the multi-GB repository). A
+moving branch is re-fetched only on `-DTSC_CARLA_REFRESH=ON`. The ref and the
+resolved commit are compiled in: `typesafe-codon info`,
+`carla.libcarla_git_ref()` / `carla.libcarla_git_commit()` in Codon, and
+`_native/BUILD_INFO.json` in the wheel.
+
+| typesafe_carla | ABI | Codon | CARLA | Platform | Tested |
+|---|---|---|---|---|---|
+| 0.1.0 | 1.1 | 0.19.x | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | Builds and links against `ue5-dev` @ 1360bb9a; C ABI tests pass. Not yet run against a CARLA server |
 
 ### Backends
 
-The C ABI shim (`native/src`) is written once against the LibCarla API and
-compiles against one of two backends, selected by `TSC_BACKEND`:
+`TSC_BACKEND` selects the implementation behind the C ABI. The shim in
+`native/src` is shared by both:
 
-* **`libcarla`**: the real LibCarla client library (set `LIBCARLA_ROOT`).
-  **Not yet compiled or tested against a real LibCarla build or CARLA server.**
-  The shim follows the LibCarla 0.9.15 headers, but expect build fixes the
-  first time it meets them (link line, Boost and rpclib flags).
+* **`libcarla`** (default): LibCarla built from CARLA UE5 sources as above,
+  linked statically into `libtypesafe_carla_ffi.so`. The resulting library
+  depends only on libstdc++/libc and exports only the `tsc_*` functions.
 * **`mock`**: an in-memory stand-in for LibCarla (`native/mock`) with the same
   class and method signatures, a fake "server" per `host:port`, and a toy
-  vehicle model. It exists so the shim, the Codon layer and the tooling can
-  be built and tested without CARLA. It is not a simulator.
-* **`auto`** (default): `libcarla` if `LIBCARLA_ROOT` points at a LibCarla
-  install, otherwise `mock` with a CMake warning.
+  vehicle model. It is used for the compile and runtime test suites and for
+  development without CARLA. It is not a simulator.
 
 `typesafe-codon info` and `typesafe_carla.backend()` report which one you
 have.
 
-## Quick start (development)
-
-Requirements: Linux x86_64, a C++17 compiler, CMake ≥ 3.20, uv, and
-Codon 0.19.x (until the toolchain wheel exists).
+## Installation (once published)
 
 ```sh
-uv sync
-uv run cmake -S . -B build              # add -DTSC_BACKEND=libcarla -DLIBCARLA_ROOT=... for CARLA
-uv run cmake --build build
-ctest --test-dir build                  # C ABI tests
-
-export TYPESAFE_CODON=/path/to/codon    # not needed if Codon is in ~/.codon or on PATH
-uv run typesafe-codon info
-uv run typesafe-codon run examples/connect.py
-uv run typesafe-codon build -release -o connect examples/connect.py && ./connect
-uv run pytest                           # compile-pass/fail, runtime and launcher tests
+uv add typesafe-carla        # or: pip install typesafe-carla
+uv run typesafe-codon run main.py
 ```
+
+`typesafe-carla` depends on `typesafe-carla-toolchain`, which bundles a
+pinned Codon, so no separate Codon install and no `CODON_PATH` setup is
+needed. To use a different CARLA ref than the published wheel's, build from
+the sdist: `CARLA_GIT_REF=<ref> pip install --no-binary typesafe-carla
+typesafe-carla`. See [docs/releasing.md](docs/releasing.md) for the release
+process.
+
+## Quick start (development)
+
+Requirements: Linux x86_64, a C++20 compiler, git, CMake ≥ 3.27.2, and uv.
+Codon is installed by `uv sync` from the `toolchain/` workspace member.
+
+```sh
+TSC_BACKEND=mock uv sync                # fast: editable install with the mock backend
+uv run typesafe-codon info
+
+# Mock backend: everything the test suites need.
+cmake -S . -B build -DTSC_BACKEND=mock && cmake --build build -j
+ctest --test-dir build                  # C ABI tests
+uv run pytest                           # compile-pass/fail, runtime and launcher tests
+uv run typesafe-codon run examples/connect.py
+
+# Real backend: LibCarla from CARLA ue5-dev (first build fetches and compiles
+# LibCarla and its dependencies; takes a while).
+cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-carla -j
+TYPESAFE_CARLA_BUILD_DIR=build-carla uv run typesafe-codon run examples/connect.py
+```
+
+If GitHub archive downloads are blocked by your network but git works, add
+`-DPREFER_CLONE=ON`; CARLA then clones its dependencies instead.
 
 `typesafe-codon` passes its arguments to `codon` after setting `CODON_PATH`
 (the Codon sources), `TYPESAFE_CARLA_LIB` (the native library) and
@@ -82,12 +126,16 @@ native library, so the result runs without the launcher.
 ## Repository layout
 
 ```
+cmake/FetchCarla.cmake     fetches CARLA UE5 sources at a ref (default ue5-dev)
 codon/typesafe_carla/      Codon API (what users import)
   _ffi.codon               raw C declarations, POD mirrors, handle ownership
 native/include/.../ffi.h   the C ABI
 native/src/                C ABI implementation over LibCarla
 native/mock/               in-memory LibCarla stand-in (mock backend)
 python/typesafe_carla/     typesafe-codon launcher, path and toolchain discovery
+toolchain/                 typesafe-carla-toolchain: pinned Codon as a wheel
+tools/check_wheel.py       release checks on a built wheel
+.github/workflows/         CI (mock + LibCarla builds) and PyPI release
 tests/native/              C ABI tests (ctest)
 tests/compile/pass|fail/   programs that must / must not compile
 tests/unit/                Codon runtime tests against the mock backend
@@ -136,12 +184,9 @@ These affect how the design's guarantees should be read:
 5. Float format specifiers (`f"{x:.6f}"`) need an installed `en_US` locale in
    Codon 0.19.3, so `repr`s use plain `str(float)`.
 
-## Compatibility matrix
-
-| typesafe_carla | ABI | Codon | LibCarla / CARLA | Platform | Tested |
-|---|---|---|---|---|---|
-| 0.1.0 | 1.0 | 0.19.x | 0.9.15 (target) | Linux x86_64 | mock backend only |
-
 ## License
 
-No license has been chosen yet.
+No license has been chosen yet; one is required before the first PyPI
+release. LibCarla (MIT) is linked into the native library and its license is
+shipped as `_native/LICENSE.CARLA`. Codon (Apache-2.0) is redistributed by
+`typesafe-carla-toolchain` with its license.

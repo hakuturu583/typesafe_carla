@@ -1,6 +1,6 @@
 // In-memory stand-in for the subset of LibCarla used by typesafe_carla.
 //
-// Class names, member names and signatures mirror LibCarla 0.9.15 so that the
+// Class names, member names and signatures mirror LibCarla (CARLA UE5, ue5-dev) so that the
 // shim in native/src compiles unchanged against either. The "server" is a
 // process-wide in-memory episode keyed by host:port with a toy vehicle model.
 // It exists for tests and for developing without a running CARLA server; it is
@@ -25,7 +25,7 @@ namespace carla {
 template <typename T>
 using SharedPtr = std::shared_ptr<T>;
 
-constexpr const char *version() { return "0.9.15-mock"; }
+constexpr const char *version() { return "0.10.0-mock"; }
 
 class time_duration {
  public:
@@ -112,7 +112,7 @@ class EpisodeSettings {
  public:
   bool synchronous_mode = false;
   bool no_rendering_mode = false;
-  std::optional<double> fixed_delta_seconds;  // boost::optional in LibCarla
+  std::optional<double> fixed_delta_seconds;
   bool substepping = true;
   double max_substep_delta_time = 0.01;
   int max_substeps = 10;

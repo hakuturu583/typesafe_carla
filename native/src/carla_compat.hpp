@@ -18,15 +18,11 @@
 
 namespace tsc {
 
-// carla::SharedPtr is boost::shared_ptr in LibCarla and std::shared_ptr in the
-// mock; pick the matching cast.
+// carla::SharedPtr is std::shared_ptr in CARLA UE5 (it was boost::shared_ptr
+// in UE4, which is not supported).
 template <typename To, typename From>
 carla::SharedPtr<To> downcast(const carla::SharedPtr<From> &p) {
-#ifdef TSC_MOCK_LIBCARLA
   return std::dynamic_pointer_cast<To>(p);
-#else
-  return boost::dynamic_pointer_cast<To>(p);
-#endif
 }
 
 #ifdef TSC_MOCK_LIBCARLA

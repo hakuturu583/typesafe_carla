@@ -4,18 +4,27 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "typesafe-carla"
-version = "0.1.0"
-description = "A statically typed native CARLA client for Codon"
+dynamic = ["version"]
+description = "A statically typed native CARLA (UE5) client for Codon"
 readme = "README.md"
 requires-python = ">=3.11"
-# typesafe-carla-toolchain (a pinned Codon) will be added here once it is
-# published; until then the launcher finds Codon as described in
-# python/typesafe_carla/toolchain.py.
-dependencies = []
+dependencies = [
+    # The pinned Codon compiler; the launcher finds it automatically.
+    "typesafe-carla-toolchain>=0.19.3,<0.20",
+]
+keywords = ["carla", "codon", "autonomous-driving", "simulation"]
 classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
 ]
+
+[project.urls]
+Source = "https://github.com/hakuturu583/typesafe_carla"
+Issues = "https://github.com/hakuturu583/typesafe_carla/issues"
 
 [project.scripts]
 typesafe-codon = "typesafe_carla.cli:main"
@@ -23,18 +32,50 @@ typesafe-codon = "typesafe_carla.cli:main"
 [dependency-groups]
 dev = ["pytest>=8"]
 
+# ---------------------------------------------------------------------------
+# uv workspace: the toolchain package is built from ./toolchain, so `uv sync`
+# installs a pinned Codon without any manual setup.
+# ---------------------------------------------------------------------------
+[tool.uv.workspace]
+members = ["toolchain"]
+
+[tool.uv.sources]
+typesafe-carla-toolchain = { workspace = true }
+
+# ---------------------------------------------------------------------------
+# scikit-build-core
+#
+# The native backend defaults to `libcarla`, built from CARLA UE5 sources at
+# the ref given by CARLA_GIT_REF (default: ue5-dev) or from CARLA_SOURCE_DIR.
+# Examples:
+#
+#   pip wheel .                                         # LibCarla @ ue5-dev
+#   CARLA_GIT_REF=0.10.0 pip wheel .                    # LibCarla @ tag 0.10.0
+#   pip wheel . -C cmake.define.TSC_CARLA_GIT_REF=<sha>
+#   CARLA_SOURCE_DIR=~/carla pip wheel .                # local checkout
+#   TSC_BACKEND=mock pip wheel .                        # in-memory mock backend
+# ---------------------------------------------------------------------------
 [tool.scikit-build]
 minimum-version = "build-system.requires"
-build-dir = "build/{wheel_tag}"
+build-dir = "build/{wheel_tag}-{state}"
+cmake.version = ">=3.27.2"
 cmake.build-type = "Release"
+ninja.make-fallback = true
+install.components = ["typesafe_carla"]
 wheel.packages = ["python/typesafe_carla"]
+# The wheel holds no CPython extension: one wheel serves every Python 3.
 wheel.py-api = "py3"
-sdist.exclude = ["build/"]
+wheel.license-files = ["LICENSE*"]
+metadata.version.provider = "scikit_build_core.metadata.regex"
+metadata.version.input = "python/typesafe_carla/__init__.py"
+sdist.exclude = [
+    "build/", "dist/", ".venv/", ".github/", "toolchain/",
+    # The Codon test suites need the mock backend and the repository layout.
+    "tests/compile/", "tests/unit/", "tests/*.py",
+]
 
 [tool.scikit-build.cmake.define]
 TSC_BUILD_TESTS = "OFF"
-# auto: LibCarla when LIBCARLA_ROOT is set, otherwise the mock backend.
-TSC_BACKEND = { env = "TSC_BACKEND", default = "auto" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

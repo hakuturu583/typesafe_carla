@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 1
-TSC_ABI_VERSION_MINOR = 0
+TSC_ABI_VERSION_MINOR = 1
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -84,6 +84,8 @@ from C import LIB.tsc_last_error_message() -> cobj
 from C import LIB.tsc_clear_last_error() -> None
 from C import LIB.tsc_abi_version() -> u32
 from C import LIB.tsc_libcarla_version() -> cobj
+from C import LIB.tsc_libcarla_git_ref() -> cobj
+from C import LIB.tsc_libcarla_git_commit() -> cobj
 from C import LIB.tsc_build_commit() -> cobj
 from C import LIB.tsc_backend_name() -> cobj
 from C import LIB.tsc_string_free(Ptr[CString]) -> None

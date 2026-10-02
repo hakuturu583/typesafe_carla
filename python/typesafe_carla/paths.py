@@ -88,3 +88,17 @@ def native_library() -> Path:
             return (candidate / LIBRARY_NAME).resolve()
     hint = "run `cmake -S . -B build && cmake --build build`" if root else "reinstall typesafe-carla"
     raise PathError(f"{LIBRARY_NAME} not found; {hint} or set {ENV_LIB}")
+
+
+def build_info() -> dict[str, str]:
+    """Contents of BUILD_INFO.json next to the native library (empty if absent).
+
+    Keys: typesafe_carla, build_commit, backend, carla_version, carla_git_ref,
+    carla_git_commit.
+    """
+    import json
+
+    info = native_library().parent / "BUILD_INFO.json"
+    if not info.is_file():
+        return {}
+    return json.loads(info.read_text())
