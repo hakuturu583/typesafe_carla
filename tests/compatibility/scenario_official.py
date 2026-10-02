@@ -54,7 +54,8 @@ out("traffic_lights", len(lights))
 out("light0_times", f"{lights[0].get_green_time():.3f},{lights[0].get_yellow_time():.3f},{lights[0].get_red_time():.3f}")
 wthr = world.get_weather()
 out("weather", f"{wthr.cloudiness:.3f},{wthr.precipitation:.3f},{wthr.sun_altitude_angle:.3f},{wthr.rayleigh_scattering_scale:.3f}")
-junction_wp = [w for w in m.generate_waypoints(10.0) if w.is_junction][0]
+waypoints10 = m.generate_waypoints(10.0)
+junction_wp = [w for w in waypoints10 if w.is_junction][0]
 jn = junction_wp.get_junction()
 out("junction", f"{jn.id},{len(jn.get_waypoints(carla.LaneType.Driving))}")
 
@@ -78,7 +79,7 @@ def lane_walk(w, left):
 # Start from a waypoint that has a lane to its left, so the walk visits real
 # lanes before reaching None. generate_waypoints' order depends on the LibCarla
 # build (it iterates an unordered_map), so pick the smallest (road, lane, s).
-multi = min((w for w in m.generate_waypoints(10.0) if w.get_left_lane() is not None),
+multi = min((w for w in waypoints10 if w.get_left_lane() is not None),
             key=lambda w: (w.road_id, w.lane_id, w.s))
 out("lane_walk", f"{multi.lane_id}:" + lane_walk(multi, True) + ";" + lane_walk(multi, False))
 

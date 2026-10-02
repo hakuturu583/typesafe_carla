@@ -33,8 +33,9 @@ points = m.get_spawn_points()
 wp = m.get_waypoint(points[0].location)
 assert wp
 assert len(m.get_waypoint(points[0].location).next(2.0)) >= 1  # chained, no check
+waypoints = m.generate_waypoints(10.0)
 # A waypoint with a lane to its left, so the walks visit lanes before None.
-multi = [x for x in m.generate_waypoints(10.0) if x.get_left_lane() is not None][0]
+multi = [x for x in waypoints if x.get_left_lane() is not None][0]
 for left in (True, False):
     w: Optional[carla.Waypoint] = multi
     steps = 0
@@ -45,9 +46,9 @@ for left in (True, False):
         steps += 1
         assert steps < 20, "lane walk did not end"
     print("left" if left else "right", "lanes", steps)
-non_junction = [x for x in m.generate_waypoints(10.0) if not x.is_junction][0]
+non_junction = [x for x in waypoints if not x.is_junction][0]
 assert non_junction.get_junction() is None
-junction = [x for x in m.generate_waypoints(10.0) if x.is_junction][0]
+junction = [x for x in waypoints if x.is_junction][0]
 assert junction.get_junction() is not None
 
 # try_spawn_actor: None at an occupied spot; spawn_actor raises there.
