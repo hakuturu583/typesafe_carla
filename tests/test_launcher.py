@@ -116,3 +116,101 @@ def test_info_shows_strict_mode(launcher):
     result = launcher("info", env={"TYPESAFE_CARLA_STRICT": "1"})
     assert "strict mode        on" in result.stdout
     assert "CODON_PATH" in result.stdout
+
+
+_SLEEPER = """
+import sys, time
+from C import getpid() -> i32
+for line in open("/proc/self/status"):  # (read() sees procfs files as empty)
+    if line.startswith("SigIgn:") or line.startswith("SigBlk:"):
+        print(line.strip())
+print("argv0", sys.argv[0])
+print("pid", getpid())
+print("ready")
+sys.stdout.flush()
+time.sleep(60.0)
+print("not interrupted")
+"""
+
+
+def _start_sleeper(launcher, tmp_path):
+    """Starts `typesafe-codon run` on a program that sleeps; returns (proc, info)."""
+    import os
+    import subprocess
+    import sys
+
+    launcher("info")  # skips when Codon or the native library is missing
+    source = tmp_path / "sleeper.codon"
+    source.write_text(_SLEEPER)
+    env = {**os.environ, paths.ENV_CACHE_DIR: str(tmp_path / "cache")}
+    proc = subprocess.Popen([sys.executable, "-m", "typesafe_carla.cli", "run", str(source)],
+                            stdout=subprocess.PIPE, text=True, env=env,
+                            cwd=Path(__file__).resolve().parent.parent)
+    info = {}
+    for line in proc.stdout:
+        key, _, value = line.strip().partition(" ") if not line.startswith("Sig") else \
+            line.strip().partition(":")
+        info[key] = value.strip()
+        if key == "ready":
+            break
+    return proc, info, source
+
+
+def _gone(pid: int) -> bool:
+    import os
+    import time
+
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def test_run_program_gets_default_signals_and_source_argv0(launcher, tmp_path):
+    import signal
+
+    proc, info, source = _start_sleeper(launcher, tmp_path)
+    try:
+        assert int(info["SigIgn"], 16) & (1 << (signal.SIGINT - 1)) == 0, info
+        assert int(info["SigBlk"], 16) == 0, info
+        assert info["argv0"] == str(source)
+        proc.send_signal(signal.SIGINT)  # forwarded: the program dies of it
+        assert proc.wait(timeout=30) == 128 + signal.SIGINT
+        assert _gone(int(info["pid"]))
+    finally:
+        proc.kill()
+
+
+def test_run_forwards_sigterm_without_orphans(launcher, tmp_path):
+    import signal
+
+    proc, info, _ = _start_sleeper(launcher, tmp_path)
+    try:
+        proc.send_signal(signal.SIGTERM)
+        assert proc.wait(timeout=30) == 128 + signal.SIGTERM
+        assert _gone(int(info["pid"])), "the program outlived the launcher"
+        assert list((tmp_path / "cache" / "run").iterdir()) == []  # scratch dir removed
+    finally:
+        proc.kill()
+
+
+def test_run_without_gpp_falls_back_to_jit(launcher, tmp_path):
+    import os
+
+    source = tmp_path / "compat.codon"
+    source.write_text("import typesafe_carla as carla\n"
+                      "a = carla.Client('localhost', 2000).get_world().get_actors()[0]\n"
+                      "a.set_autopilot(False)\n"
+                      "import sys\nprint('argv0', sys.argv[0])\n")
+    empty = tmp_path / "bin"
+    empty.mkdir()
+    result = launcher("run", str(source), env={"PATH": str(empty)})
+    if paths.native_info()["backend"] != "mock":
+        pytest.skip("needs the mock backend")
+    assert result.returncode == 0, result.stderr
+    assert "compile-time warning: Actor.set_autopilot() without as_vehicle()" in result.stderr
+    assert "typesafe_carla: warning: Actor.set_autopilot()" in result.stderr
+    assert os.path.basename(result.stdout.split("argv0", 1)[1].strip()) == "compat.codon"

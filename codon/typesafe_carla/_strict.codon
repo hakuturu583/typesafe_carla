@@ -17,7 +17,7 @@ from _tsc_build_config import TSC_STRICT
 
 STRICT: Static[int] = TSC_STRICT
 
-_warned = Set[str]()
+_warned = Set[str]()  # not thread-safe: take compatibility shortcuts from one thread
 
 def compat_shortcut(name: Literal[str], what: Literal[str], instead: Literal[str]):
     """Marks the Python-API compatibility shortcut `name`: a compile error in strict

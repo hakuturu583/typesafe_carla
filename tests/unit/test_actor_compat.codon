@@ -42,11 +42,13 @@ assert vehicle.is_at_traffic_light() == vehicle.as_vehicle().is_at_traffic_light
 assert (vehicle.get_traffic_light() is None) == (vehicle.as_vehicle().get_traffic_light() is None)
 vehicle.set_autopilot(True)
 vehicle.set_autopilot(enabled=False)
-for other in (walker, ai, light, camera):
+def _wrong_kind_1(other: Optional[carla.Actor]):  # no lambda over a loop variable (Codon -release bug)
     assert raises_type_error(lambda: other.apply_control(carla.VehicleControl(throttle=1.0)))
     assert raises_type_error(lambda: other.set_autopilot(True))
     assert raises_type_error(lambda: other.get_speed_limit())
     assert raises_type_error(lambda: other.get_control())
+for other in (walker, ai, light, camera):
+    _wrong_kind_1(other)
 # Argument checks of the subclass still apply at run time.
 raised = False
 try:
@@ -64,9 +66,11 @@ try:
 except carla.ActorTypeError as e:
     msg = e.message
 assert "as_walker().get_control()" in msg, msg
-for other in (vehicle, ai, light, camera):
+def _wrong_kind_2(other: Optional[carla.Actor]):  # no lambda over a loop variable (Codon -release bug)
     assert raises_type_error(
         lambda: other.apply_control(carla.WalkerControl(carla.Vector3D(1.0, 0.0, 0.0), 1.0)))
+for other in (vehicle, ai, light, camera):
+    _wrong_kind_2(other)
 
 # WalkerAIController
 ai.start()
@@ -76,10 +80,12 @@ for _ in range(40):
     world.tick()
 assert abs(walker.get_location().x - (nav.x + 2.0)) < 1e-3
 ai.stop()
-for other in (vehicle, walker, light, camera):
+def _wrong_kind_3(other: Optional[carla.Actor]):  # no lambda over a loop variable (Codon -release bug)
     assert raises_type_error(lambda: other.start())
     assert raises_type_error(lambda: other.go_to_location(carla.Location()))
     assert raises_type_error(lambda: other.set_max_speed(1.0))
+for other in (vehicle, walker, light, camera):
+    _wrong_kind_3(other)
 
 # TrafficLight
 light.set_state(carla.TrafficLightState.Yellow)
@@ -95,10 +101,12 @@ assert light.is_frozen()
 light.freeze(False)
 assert light.get_pole_index() == light.as_traffic_light().get_pole_index()
 light.reset_group()
-for other in (vehicle, walker, ai, camera):
+def _wrong_kind_4(other: Optional[carla.Actor]):  # no lambda over a loop variable (Codon -release bug)
     assert raises_type_error(lambda: other.get_state())
     assert raises_type_error(lambda: other.set_state(carla.TrafficLightState.Red))
     assert raises_type_error(lambda: other.freeze(True))
+for other in (vehicle, walker, ai, camera):
+    _wrong_kind_4(other)
 
 # Sensor
 camera.listen(queue_size=4)
@@ -109,14 +117,18 @@ assert data.as_image().width > 0
 assert camera.dropped_count >= 0
 camera.stop()
 assert not camera.is_listening
-for other in (vehicle, walker, ai, light):
+def _wrong_kind_5(other: Optional[carla.Actor]):  # no lambda over a loop variable (Codon -release bug)
     assert raises_type_error(lambda: other.listen())
     assert raises_type_error(lambda: other.poll())
     assert raises_type_error(lambda: other.is_listening)
+for other in (vehicle, walker, ai, light):
+    _wrong_kind_5(other)
 
 # stop() is shared by sensors and AI controllers; anything else raises.
-for other in (vehicle, walker, light):
+def _wrong_kind_6(other: Optional[carla.Actor]):  # no lambda over a loop variable (Codon -release bug)
     assert raises_type_error(lambda: other.stop())
+for other in (vehicle, walker, light):
+    _wrong_kind_6(other)
 
 # Typed subclasses keep their own methods (the shortcuts of other kinds are
 # compile errors on them: tests/compile/fail/subclass_*).

@@ -66,3 +66,20 @@ def test_compile_fail_strict(launcher, source, tmp_path):
     result = _compile(launcher, source, tmp_path, strict=True)
     assert result.returncode != 0, f"{source.name} compiled in strict mode but must not"
     assert expected_error(source) in result.stderr, result.stderr
+
+
+def test_every_shortcut_warns_and_fails_in_strict_mode(launcher, tmp_path):
+    """pass/actor_compat.codon uses every Actor shortcut: one compile-time warning
+    per shortcut definition (the two apply_control overloads warn separately),
+    and a compile error in strict mode."""
+    from test_architecture import actor_shortcuts
+
+    source = COMPILE_DIR / "pass" / "actor_compat.codon"
+    result = _compile(launcher, source, tmp_path)
+    assert result.returncode == 0, result.stderr
+    warnings = {line for line in result.stderr.splitlines()
+                if line.startswith("typesafe-codon: compile-time warning: ")}
+    assert len(warnings) == len(actor_shortcuts()) == 34, "\n".join(sorted(warnings))
+    result = _compile(launcher, source, tmp_path, strict=True)
+    assert result.returncode != 0
+    assert "strict mode: " in result.stderr, result.stderr

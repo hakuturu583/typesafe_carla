@@ -227,9 +227,7 @@ class Actor:
     def stop(self: S, S: type):
         """Sensor.stop() or WalkerAIController.stop(), whichever this actor is."""
         _plain_actor_only(self, "stop()")
-        compat_shortcut("Actor.stop",
-                        "[tsc-compat] Actor.stop() without as_sensor() / as_walker_ai_controller()",
-                        "call as_sensor() or as_walker_ai_controller() first")
+        compat_shortcut("Actor.stop", "[tsc-compat] Actor.stop() without as_sensor() / as_walker_ai_controller()", "call as_sensor() or as_walker_ai_controller() first")
         if self.is_sensor():
             self.as_sensor().stop()
         elif int(tsc_handle_kind(self._h.ptr)) == TSC_KIND_WALKER_AI_CONTROLLER:

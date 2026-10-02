@@ -12,6 +12,18 @@ Otherwise ``run`` and ``build`` print a compile-time warning for each
 shortcut the program uses (``TYPESAFE_CARLA_COMPAT_WARNINGS=0`` silences
 them, and the matching run-time warnings).
 
+To print those before the program's output without compiling twice, ``run``
+builds the program into a scratch executable (under the cache directory)
+while the IR pass runs in parallel, and runs it as a child with argv[0] set
+to the source path. The launcher forwards SIGTERM, SIGHUP, SIGQUIT and SIGINT
+sent to it, kills and reaps its children on any exit, and reports a program
+killed by signal N as exit status 128 + N. Building needs g++ (Codon links
+with it): without g++, or if the scratch executable cannot be executed
+(noexec), ``run`` falls back to ``codon run`` (JIT), with the warnings from a
+separate IR compile. With warnings off or in strict mode, ``run`` execs
+``codon run`` directly. ``TYPESAFE_CARLA_LAUNCHER_DEBUG=1`` reports why
+compile-time warnings could not be produced.
+
 The launcher sets:
 
 * ``CODON_PATH``: a generated directory with the typesafe_carla Codon sources
@@ -28,10 +40,10 @@ from __future__ import annotations
 import os
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
-import tempfile
 
 from . import __version__, paths, toolchain
 
@@ -165,8 +177,81 @@ def _print_compat_warnings_from(ir: str) -> None:
         pass
 
 
-def _compile_with_scan(codon: str, build_args: list[str], scan_args: list[str] | None,
-                       ir: str, env: dict[str, str]) -> int:
+ENV_DEBUG = "TYPESAFE_CARLA_LAUNCHER_DEBUG"
+# Signals the launcher passes on to the program (and to compilers it waits for).
+_FORWARDED = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
+
+
+def _debug_enabled() -> bool:
+    return os.environ.get(ENV_DEBUG, "0") not in ("", "0")
+
+
+def _debug(message: str) -> None:
+    if _debug_enabled():
+        print(f"typesafe-codon: debug: {message}", file=sys.stderr)
+
+
+def _unblock_signals() -> None:  # in the child, before exec: start with an empty mask
+    signal.pthread_sigmask(signal.SIG_SETMASK, [])
+
+
+class _Supervisor:
+    """Runs child processes so that the launcher's own termination reaches them.
+
+    The forwarded signals are blocked in the launcher and collected with
+    sigtimedwait while it waits. A signal sent to the launcher by another
+    process (kill, timeout, CI) is passed on to the running children; one the
+    kernel generated (Ctrl-C at the terminal, hangup) already went to the whole
+    foreground process group, children included, so it is not sent twice.
+    Children start with SIG_DFL dispositions and an empty signal mask. On exit
+    every child still running is killed and reaped, so nothing is orphaned.
+    """
+
+    def __init__(self) -> None:
+        self.procs: list[subprocess.Popen] = []
+        self.signalled: int | None = None
+
+    def __enter__(self) -> "_Supervisor":
+        signal.pthread_sigmask(signal.SIG_BLOCK, _FORWARDED)
+        return self
+
+    def __exit__(self, *exc) -> None:
+        for p in self.procs:
+            if p.poll() is None:
+                p.kill()
+            p.wait()
+        # Drop signals still pending (e.g. the Ctrl-C that also ended the
+        # program) so that unblocking does not kill the launcher afterwards.
+        while signal.sigtimedwait(_FORWARDED, 0) is not None:
+            pass
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, _FORWARDED)
+
+    def popen(self, cmd: list[str], **kwargs) -> subprocess.Popen:
+        p = subprocess.Popen(cmd, preexec_fn=_unblock_signals, **kwargs)
+        self.procs.append(p)
+        return p
+
+    def wait(self, proc: subprocess.Popen) -> int:
+        """Waits for `proc`, forwarding signals to all running children."""
+        while proc.poll() is None:
+            info = signal.sigtimedwait(_FORWARDED, 0.05)
+            if info is None:
+                continue
+            self.signalled = info.si_signo
+            if info.si_code <= 0:  # SI_USER, SI_QUEUE, SI_TKILL: sent by a process
+                for p in self.procs:
+                    if p.poll() is None:
+                        p.send_signal(info.si_signo)
+        return proc.returncode
+
+
+def _exit_code(rc: int) -> int:
+    """A child killed by signal N is reported as 128 + N, as shells do."""
+    return 128 - rc if rc < 0 else rc
+
+
+def _compile_with_scan(sup: _Supervisor, codon: str, build_args: list[str],
+                       scan_args: list[str] | None, ir: str, env: dict[str, str]) -> int:
     """Runs `codon <build_args>` while an IR pass (`scan_args`, writing `ir`) runs in
     parallel, then prints the compile-time warnings. Returns the build's exit code.
 
@@ -175,21 +260,24 @@ def _compile_with_scan(codon: str, build_args: list[str], scan_args: list[str] |
     scan = None
     if scan_args is not None:
         try:
-            scan = subprocess.Popen([codon] + scan_args, env=env, stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL)
-        except OSError:
-            pass
-    rc = subprocess.run([codon] + build_args, env=env).returncode
+            scan = sup.popen([codon] + scan_args, env=env, stdout=subprocess.DEVNULL,
+                             stderr=None if _debug_enabled() else subprocess.DEVNULL)
+        except OSError as e:
+            _debug(f"compatibility scan not started: {e}")
+    rc = sup.wait(sup.popen([codon] + build_args, env=env))
     if scan is not None:
-        if rc != 0:
+        if rc != 0 or sup.signalled is not None:
             scan.kill()
-        if scan.wait() == 0 and rc == 0:
+        scan_rc = sup.wait(scan)
+        if scan_rc == 0 and rc == 0:
             _print_compat_warnings_from(ir)
+        elif rc == 0:
+            _debug(f"compatibility scan failed (exit {scan_rc}); no compile-time warnings")
     return rc
 
 
 def _llvm_output(args: list[str]) -> str | None:
-    """The .ll file a `codon build --llvm -o X` command writes, if that is what it is."""
+    """The .ll file a `codon build --llvm` command writes, if that is what it is."""
     if not any(a in ("-llvm", "--llvm") for a in args):
         return None
     for i, arg in enumerate(args):
@@ -197,7 +285,8 @@ def _llvm_output(args: list[str]) -> str | None:
             return args[i + 1]
         if arg.startswith(("-o=", "--o=")):
             return arg.split("=", 1)[1]
-    return None
+    src = _source_index(args)  # without -o: <source stem>.ll next to the source
+    return None if src is None else os.path.splitext(args[src])[0] + ".ll"
 
 
 def _build_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> int:
@@ -207,14 +296,37 @@ def _build_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> in
     runs in parallel with the real build.
     """
     ll = _llvm_output(args)
-    if ll is not None:
-        rc = subprocess.run([codon] + args, env=env).returncode
-        if rc == 0:
-            _print_compat_warnings_from(ll)
-        return rc
-    with tempfile.TemporaryDirectory(prefix="typesafe-codon-") as tmp:
-        ir = os.path.join(tmp, "program.ll")
-        return _compile_with_scan(codon, args, llvm_args(args, ir), ir, env)
+    with _Supervisor() as sup:
+        if ll is not None:
+            rc = sup.wait(sup.popen([codon] + args, env=env))
+            if rc == 0:
+                _print_compat_warnings_from(ll)
+            return _exit_code(rc)
+        tmp = paths.scratch_dir()
+        try:
+            ir = os.path.join(tmp, "program.ll")
+            return _exit_code(_compile_with_scan(sup, codon, args, llvm_args(args, ir), ir, env))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _scan_only(codon: str, args: list[str], env: dict[str, str]) -> None:
+    """Prints the compile-time warnings of `args`' program (a separate IR compile)."""
+    with _Supervisor() as sup:
+        tmp = paths.scratch_dir()
+        try:
+            ir = os.path.join(tmp, "program.ll")
+            cmd = llvm_args(args, ir)
+            if cmd is None:
+                return
+            rc = sup.wait(sup.popen([codon] + cmd, env=env, stdout=subprocess.DEVNULL,
+                                    stderr=None if _debug_enabled() else subprocess.DEVNULL))
+            if rc == 0:
+                _print_compat_warnings_from(ir)
+            else:
+                _debug(f"compatibility scan failed (exit {rc}); no compile-time warnings")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 def _run_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> int | None:
@@ -222,26 +334,44 @@ def _run_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> int 
 
     The warnings must come before the program's output, and the IR pass must
     not double the compile time, so the program is built into a temporary
-    executable while the IR pass runs in parallel, then executed. None if
-    the source file cannot be identified (the caller then runs it plainly).
+    executable (in the cache directory) while the IR pass runs in parallel,
+    then executed with argv[0] set to the source path, as `codon run` does.
+    The launcher stays the program's parent: it forwards termination signals
+    and reports a program killed by signal N as exit status 128 + N.
+
+    Building needs g++ (Codon links with it) and an executable scratch
+    directory. Without g++ the warnings come from a separate IR compile and
+    the program runs with `codon run` (JIT), costing a second compilation; if
+    the built program cannot be executed (noexec), it also falls back to
+    `codon run`. None means: exec `codon run` (also when the source file
+    cannot be identified, then without compile-time warnings).
     """
     src = _source_index(args)
     if src is None:
         return None
-    with tempfile.TemporaryDirectory(prefix="typesafe-codon-") as tmp:
-        ir = os.path.join(tmp, "program.ll")
-        exe = os.path.join(tmp, os.path.splitext(os.path.basename(args[src]))[0] or "program")
-        build = ["build"] + args[1:src] + ["-o", exe, args[src]]
-        rc = _compile_with_scan(codon, build, llvm_args(args, ir), ir, env)
-        if rc != 0:
-            return rc
-        sys.stderr.flush()
-        previous = signal.signal(signal.SIGINT, signal.SIG_IGN)  # the program handles Ctrl-C
+    if shutil.which("g++", path=env.get("PATH")) is None:
+        _debug("g++ not found: separate compatibility scan, then codon run (JIT)")
+        _scan_only(codon, args, env)
+        return None
+    with _Supervisor() as sup:
+        tmp = paths.scratch_dir()
         try:
-            rc = subprocess.run([exe] + args[src + 1:], env=env).returncode
+            ir = os.path.join(tmp, "program.ll")
+            exe = os.path.join(tmp, "program")
+            build = ["build"] + args[1:src] + ["-o", exe, args[src]]
+            rc = _compile_with_scan(sup, codon, build, llvm_args(args, ir), ir, env)
+            if rc != 0 or sup.signalled is not None:
+                return _exit_code(rc) if rc != 0 else 128 + sup.signalled
+            sys.stdout.flush()
+            sys.stderr.flush()
+            try:
+                program = sup.popen([args[src]] + args[src + 1:], executable=exe, env=env)
+            except OSError as e:
+                _debug(f"cannot execute the built program ({e}): codon run (JIT)")
+                return None
+            return _exit_code(sup.wait(program))
         finally:
-            signal.signal(signal.SIGINT, previous)
-        return 128 - rc if rc < 0 else rc
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 def _info(tc: toolchain.Toolchain | None, error: str | None, strict: bool) -> int:

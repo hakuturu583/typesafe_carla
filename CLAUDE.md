@@ -34,13 +34,14 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   Strict mode (`typesafe-codon --strict`): a pass program with a `# strict`
   line must also compile in strict mode; `tests/compile/strict_fail` programs
   must compile normally and fail in strict mode with their `# expect-error:`.
-- Python-API compatibility shortcuts (not statically checked) start with
-  `compat_shortcut("<name>", "[tsc-compat] <what>", "<instead>")` with literal
-  strings (`_strict.codon`): a compile error in strict mode, else a warning;
-  the launcher finds the marker in the LLVM IR to warn at compile time.
-  An Actor shortcut (`_actor_compat.codon`) takes `self: S, S: type` and
-  first calls `_plain_actor_only(self, ...)`, so typed subclasses, which
-  inherit it, get a compile error (checked by `tests/test_architecture.py`).
+- Python-API compatibility shortcuts (not statically checked): an Actor
+  shortcut (`_actor_compat.codon`) takes `self: S, S: type` and starts with
+  `_plain_actor_only(self, "<name>()")`, a compile error on typed subclasses
+  (which inherit it), then
+  `compat_shortcut("Actor.<name>", "[tsc-compat] <what>", "<instead>")` with
+  literal strings (`_strict.codon`): a compile error in strict mode, else a
+  warning. The launcher finds the marker in the LLVM IR to warn at compile
+  time. `tests/test_architecture.py` checks this order for every shortcut.
 - A C function that only checks a handle, converts arguments and calls one
   LibCarla method belongs in `bindings/*.yaml` (generated), not hand-written.
   Never edit generated code (`native/src/generated/`, marked blocks in
@@ -57,3 +58,6 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
 - Forward references in return types: define later and attach with `@extend`.
 - `str.__copy__` does not copy; use `str.memcpy` into a new buffer.
 - No `f"{x:.6f}"` (needs a locale); use `str(float)`.
+- `codon build -release` aborts (capture.cpp:618, "found multiple synthetic
+  assignments for loop var") on a lambda that captures a loop variable;
+  move the loop body into a function taking the variable.
