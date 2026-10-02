@@ -346,6 +346,15 @@ static void test_mock_session(void) {
   uint64_t frame = 0;
   CHECK_OK(tsc_world_tick(world, 1.0, &frame));
   CHECK(frame > 0);
+  /* Outputs are checked before the call: a NULL output fails without ticking,
+   * and is reported even when another argument is invalid too. */
+  uint64_t frame_before = frame;
+  CHECK(tsc_world_tick(world, 1.0, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "out_frame must not be NULL") != NULL);
+  CHECK(tsc_world_tick(world, 0.0 / 0.0, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "out_frame must not be NULL") != NULL);
+  CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+  CHECK(frame == frame_before + 1);
   tsc_location_t loc;
   CHECK_OK(tsc_actor_get_location(actor, &loc));
   CHECK(loc.x > 10.0);
@@ -908,7 +917,12 @@ static void test_mock_milestone4(void) {
   CHECK_OK(tsc_landmark_list_get(landmarks, 0, &landmark));
   CHECK(strcmp(landmark.type.data, "206") == 0 && landmark.s == 100.0);
   tsc_landmark_free(&landmark);
+  /* A failure zeroes *out (nothing to free); a NULL out fails first (no copy). */
+  memset(&landmark, 0xAB, sizeof landmark);
   CHECK(tsc_landmark_list_get(landmarks, 1, &landmark) == TSC_NOT_FOUND);
+  CHECK(landmark.id.data == NULL && landmark.text.data == NULL && landmark.s == 0.0);
+  CHECK(tsc_landmark_list_get(landmarks, 0, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_landmark_list_get(landmarks, 1, NULL) == TSC_INVALID_ARGUMENT);
 
   /* Debug drawing is accepted; OpenDRIVE worlds need an OpenDRIVE document. */
   tsc_color_t red = {255, 0, 0, 255};

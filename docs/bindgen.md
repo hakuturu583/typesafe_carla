@@ -156,6 +156,22 @@ Two kinds of types in `types.yaml` go beyond a single value (issue #22):
   `{name}`), so a function can have at most one buffer or optional output:
   two would declare the same C parameter twice.
 
+### Outputs are checked before the call
+
+A NULL output must fail before LibCarla is called: `tsc_world_tick(w, 1.0,
+NULL)` must not tick. C++17 evaluates the right side of `=` first, so the
+generated code never writes `*require_ptr(out, "out") = call`:
+- a plain output goes through `assign_out(out, "out", [&] { return ...; })`
+  (`internal.hpp`): it checks `out`, runs the call, and zeroes `*out` if the
+  call fails, so a caller never sees (or frees) stale data;
+- an `assign` output first checks the C parameters listed in the type's
+  `require` (default `["{out}"]`, or none with `c_param`; a buffer requires
+  `["{out}_count"]`, since its `out` may be NULL to only count);
+- a handle output goes through `new_handle` (`*out` is NULL on failure).
+
+`test_generated` passes valid outputs next to the NULL handle, so the handle
+check is what it tests; `test_ffi` checks the NULL-output cases.
+
 A handle *input* (`handle: true` with `to_carla`, e.g. `vehicle`, `landmark`)
 converts with `to_carla` as before. A handle type's `codon` defaults to `cobj`,
 and an output's `from_carla` to a new handle of the result (`c: tsc_world_t`:
@@ -166,7 +182,9 @@ and an output's `from_carla` to a new handle of the result (`c: tsc_world_t`:
 `bindings/lists.yaml` gives one line per list handle. Each entry generates
 `size_t tsc_<list>_size` (0 for NULL or another kind of handle) and one element
 getter per output type, which fails with TSC_NOT_FOUND past the end
-(`list_at` in `internal.hpp`):
+(`list_at` in `internal.hpp`). `items` must be an lvalue (a member of the
+handle): a getter's result may refer into it, and `list_at` rejects a
+temporary at compile time. `items` and `what` are required:
 
 ```yaml
 waypoint_list: {items: "{}->waypoints", what: waypoint list, get: waypoint_handle}

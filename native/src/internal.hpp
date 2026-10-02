@@ -87,6 +87,20 @@ void string_assign(tsc_string_t *out, const std::string &value);
 // Fills *out with copies of `values` (all or nothing; *out is zeroed first).
 void string_list_assign(tsc_string_list_t *out, const std::vector<std::string> &values);
 
+// Shared body of the generated entry points with a plain output: *out is
+// checked before make() runs (a NULL output fails with no side effect), and
+// zeroed when make() fails, so a caller never sees (or frees) stale data.
+template <typename T, typename F>
+void assign_out(T *out, const char *name, F &&make) {
+  require_ptr(out, name);
+  try {
+    *out = make();
+  } catch (...) {
+    *out = T{};
+    throw;
+  }
+}
+
 // Shared body of the entry points that return one new handle: *out is NULL
 // unless make() succeeds; make() may itself return NULL ("no such object").
 template <typename H, typename F>
@@ -471,11 +485,15 @@ inline void check_index(size_t index, size_t size, const char *what) {
 }
 
 // Element `index` of a list handle's items (generated tsc_*_get, bindings/lists.yaml).
+// The result may refer into `items`, which must outlive it: an lvalue (the
+// handle's member), never a temporary (the rvalue overload is deleted).
 template <typename Items>
 decltype(auto) list_at(const Items &items, size_t index, const char *what) {
   check_index(index, items.size(), what);
   return items.at(index);
 }
+template <typename Items>
+void list_at(const Items &&items, size_t index, const char *what) = delete;
 
 // List elements (map.cpp, walker.cpp).
 tsc_landmark_t from_carla(const carla::client::Landmark &lm);

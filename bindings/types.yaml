@@ -14,6 +14,8 @@
 #              invalid then list one value per C parameter.
 #   assign     an output written by a statement instead of `*out = ...`
 #              (`{out}` is the output name)
+#   require    for `assign`: the C parameters checked non-NULL before the
+#              call; default ["{out}"], or [] with c_param
 #   cpp        regexes, one of which the canonical LibCarla parameter or
 #              return type must match (checked with libclang)
 
@@ -175,6 +177,7 @@ bounding_box_buffer:
   c_param: "tsc_bounding_box_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[CBoundingBox], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<carla::geom::BoundingBox.*>"]
 lane_validity_buffer:
@@ -182,6 +185,7 @@ lane_validity_buffer:
   c_param: "tsc_lane_validity_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[CLaneValidity], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<carla::road::LaneValidity.*>"]
 # An optional lane marking: *has_value = 0 (and *out zeroed) when there is none.
@@ -190,6 +194,7 @@ optional_lane_marking:
   c_param: "int32_t *has_value, tsc_lane_marking_t *{name}"
   codon: "Ptr[i32], Ptr[CLaneMarking]"
   assign: "assign_optional({}, has_value, {out})"
+  require: [has_value, "{out}"]
   invalid: "NULL, NULL"
   cpp: ["(boost|std)::optional<carla::road::element::LaneMarking>"]
 # --- #20 ---
@@ -232,6 +237,7 @@ transform_buffer:
   c_param: "tsc_transform_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[CTransform], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<carla::geom::Transform.*>"]
 # --- #23 ---
@@ -319,6 +325,7 @@ uint8_buffer:
   c_param: "uint8_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[u8], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<unsigned char.*>"]
 # --- #21 ---
@@ -419,6 +426,7 @@ optional_labelled_point:
   c_param: "int32_t *has_value, tsc_labelled_point_t *{name}"
   codon: "Ptr[i32], Ptr[CLabelledPoint]"
   assign: "assign_optional({}, has_value, {out})"
+  require: [has_value, "{out}"]
   invalid: "NULL, NULL"
   cpp: ["(boost|std)::optional<carla::rpc::LabelledPoint>"]
 # --- #24 ---
@@ -428,6 +436,7 @@ lane_marking_buffer:
   c_param: "tsc_lane_marking_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[CLaneMarking], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<carla::road::element::LaneMarking.*>"]
 # --- #31 ---
@@ -538,6 +547,7 @@ nullable_bool:
   c: int32_t
   codon: i32
   assign: "store_if({out}, {} ? 1 : 0)"
+  require: []
   cpp: ["bool"]
 # An optional location: *{name}_found = 0 (and *out zeroed) when there is none.
 optional_location:
@@ -545,6 +555,7 @@ optional_location:
   c_param: "tsc_location_t *{name}, int32_t *{name}_found"
   codon: "Ptr[CVector3D], Ptr[i32]"
   assign: 'assign_optional({}, {out}_found, {out}, "{out}_found")'
+  require: ["{out}_found", "{out}"]
   invalid: "NULL, NULL"
   cpp: ["(boost|std)::optional<carla::geom::Location>"]
 # Output buffer of locations, two-call pattern (see bounding_box_buffer).
@@ -553,6 +564,7 @@ location_buffer:
   c_param: "tsc_location_t *{name}, size_t capacity, size_t *{name}_count"
   codon: "Ptr[CVector3D], int, Ptr[int]"
   assign: "copy_out({}, {out}, capacity, {out}_count)"
+  require: ["{out}_count"]
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<carla::geom::Location.*>"]
 # A 4x4 matrix as 16 doubles, row major (Transform::GetMatrix).
@@ -561,6 +573,7 @@ matrix4x4:
   c_param: "double *{name}"
   codon: "Ptr[float]"
   assign: "copy_matrix({}, {out})"
+  require: ["{out}"]
   invalid: "NULL"
   cpp: ["std::array<float, 16>"]
 # Handle outputs: a new handle of the result.

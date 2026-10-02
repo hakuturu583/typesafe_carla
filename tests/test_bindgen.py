@@ -52,7 +52,7 @@ g: {call: G, via: g_compat, out: string_list}
     f, g = s.functions
     assert ("[&](auto &self_) { return f_compat(self_, to_string(name, name_len, \"name\")); }"
             "(thing_of(thing))") in f.body()
-    assert g.body() == "string_list_assign(out, g_compat(thing_of(thing)));"
+    assert g.body() == 'require_ptr(out, "out"); string_list_assign(out, g_compat(thing_of(thing)));'
 
 
 @pytest.mark.parametrize("entry, message", [
@@ -88,7 +88,8 @@ def test_self_by_value(tmp_path):
     (m,) = s.functions
     assert m.c_params() == ["const tsc_transform_t *transform", "double *out16"]
     assert m.codon_params() == ["Ptr[CTransform]", "Ptr[float]"]
-    assert m.body() == "copy_matrix(transform_of(transform).GetMatrix(), out16);"
+    assert m.body() == ('require_ptr(out16, "out16"); '
+                        "copy_matrix(transform_of(transform).GetMatrix(), out16);")
 
 
 def test_unknown_self_key(tmp_path):
@@ -132,3 +133,61 @@ def test_list_accessors():
     assert 'list_at(check_handle(snapshot, "snapshot", TSC_KIND_WORLD_SNAPSHOT)->actors' in get.body()
     assert {"tsc_landmark_list_get", "tsc_landmark_list_get_landmark"} <= set(by_name)
     assert not set(by_name) & {f.name for f in s.functions}  # validate skips them
+
+
+def test_outputs_are_checked_before_the_call(tmp_path):
+    """C++17 evaluates the right side of `=` first, so `*require_ptr(out) =
+    call` would run the call (and its side effects) before rejecting a NULL
+    output. Plain outputs go through assign_out (check, then call, zero on
+    failure); `assign` outputs check their `require` parameters first."""
+    s = _load(tmp_path, """
+plain: {call: P, args: {t: finite}, out: {type: uint64, name: out_frame}}
+text: {call: T, out: string}
+buffer: {call: B, out: transform_buffer}
+maybe: {call: M, out: nullable_bool}
+""")
+    plain, text, buffer, maybe = s.functions
+    assert plain.body() == ('assign_out(out_frame, "out_frame", [&] { return '
+                            'thing_of(thing).P(check_finite(t, "t")); });')
+    assert text.body() == 'require_ptr(out, "out"); string_assign(out, thing_of(thing).T());'
+    assert buffer.body().startswith('require_ptr(out_count, "out_count"); copy_out(')
+    assert maybe.body() == "store_if(out, thing_of(thing).M() ? 1 : 0);"
+
+
+def test_handle_type_defaults(tmp_path):
+    """A handle type's codon defaults to cobj; as an output (no to_carla) its
+    from_carla defaults to a new handle of the result."""
+    s = _load(tmp_path, "f: {call: F, out: {type: gadget_handle, name: out_gadget}}",
+              "gadget_handle: {c: tsc_gadget_t, handle: true}\n"
+              "gadget_in: {c: tsc_gadget_t, handle: true, to_carla: 'gadget_of({})'}\n")
+    out, inp = s.types["gadget_handle"], s.types["gadget_in"]
+    assert out.codon == inp.codon == "cobj"
+    assert out.from_carla == "new tsc_gadget({})" and inp.from_carla == "{}"
+    (f,) = s.functions
+    assert f.c_params()[-1] == "tsc_gadget_t **out_gadget"
+    assert f.body() == "return new tsc_gadget(thing_of(thing).F());"
+
+
+def test_new_handle_names_the_output():
+    """emit.shim passes a non-default output name to new_handle, so its NULL
+    check names the C parameter."""
+    from tools.bindgen import emit
+
+    text = emit.shim(spec.load())
+    assert 'return new_handle(__func__, out_world, [&] {' in text
+    assert '}, "out_world");' in text
+    assert '}, "out");' not in text  # the default name is not passed
+
+
+@pytest.mark.parametrize("lists, message", [
+    ("l: {what: thing list, get: actor_handle}", "missing keys ['items']"),
+    ("l: {items: '{}->x', get: actor_handle}", "missing keys ['what']"),
+    ("l: {items: '{}->x', what: w, get: {type: actor_handle, colour: red}}", "unknown keys"),
+    ("l: {items: '{}->x', what: w, get: string_in}", "is input-only"),
+    ("thing: {items: '{}->x', what: w, get: actor_handle}\n", "tsc_thing_get is also defined"),
+])
+def test_list_spec_errors(tmp_path, lists, message):
+    (tmp_path / "lists.yaml").write_text(lists + "\n")
+    with pytest.raises(spec.SpecError) as e:
+        _load(tmp_path, "get: {call: G, out: bool}")
+    assert message in str(e.value)

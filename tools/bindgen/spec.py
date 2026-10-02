@@ -55,6 +55,10 @@ class Type:
     c_param_template: str | None = None
     cpp: tuple[str, ...] = ()
     invalid: str = "0"  # a C value the conversion rejects, for test_generated
+    # For an `assign` output: the C parameters (`{out}` is the output name)
+    # checked non-NULL before the LibCarla call, so a NULL output fails
+    # before anything happens. Default: `{out}`, or none with c_param.
+    require: tuple[str, ...] = ()
 
     def c_param(self, name: str) -> str:
         if self.c_param_template:
@@ -152,9 +156,15 @@ class Function:
         t = self.out.type
         if t.handle:  # the statement of new_handle's lambda (see emit.shim)
             return f"return {t.from_carla.replace('{}', call)};"
+        # The output is checked before the call (C++17 evaluates the right
+        # side of `=` first): a NULL output must fail before any side effect.
         if t.assign:
-            return t.assign.replace("{out}", self.out.name).replace("{}", call) + ";"
-        return f'*require_ptr({self.out.name}, "{self.out.name}") = {t.from_carla.replace("{}", call)};'
+            checks = [f'require_ptr({r}, "{r}"); ' for r in
+                      (r.replace("{out}", self.out.name) for r in t.require)]
+            return "".join(checks) + t.assign.replace("{out}", self.out.name).replace("{}", call) + ";"
+        # assign_out: checks the output, and zeroes it if the call fails.
+        name = self.out.name
+        return f'assign_out({name}, "{name}", [&] {{ return {t.from_carla.replace("{}", call)}; }});'
 
 
 @dataclass(frozen=True)
@@ -184,7 +194,7 @@ def _load_types(path: Path) -> dict[str, Type]:
     types = {}
     for name, t in raw.items():
         unknown = set(t) - {"c", "codon", "to_carla", "from_carla", "assign", "struct", "handle", "cpp",
-                             "invalid", "c_param"}
+                             "invalid", "c_param", "require"}
         if unknown:
             raise SpecError(f"{path.name}: {name}: unknown keys {sorted(unknown)}")
         handle = t.get("handle", False)
@@ -196,7 +206,8 @@ def _load_types(path: Path) -> dict[str, Type]:
                            assign=t.get("assign"),
                            struct=t.get("struct", False), handle=handle,
                            cpp=tuple(t.get("cpp", ())), invalid=str(t.get("invalid", "0")),
-                           c_param_template=t.get("c_param"))
+                           c_param_template=t.get("c_param"),
+                           require=tuple(t.get("require", [] if "c_param" in t else ["{out}"])))
     return types
 
 
@@ -204,6 +215,12 @@ def _load_lists(path: Path, type_of) -> list[Function]:
     """bindings/lists.yaml: tsc_<list>_size and one element getter per output type."""
     functions = []
     for name, entry in (_load_yaml(path) if path.exists() else {}).items():
+        where = f"{path.name}: {name}"
+        if not isinstance(entry, dict):
+            raise SpecError(f"{where}: expected a mapping")
+        missing = {"items", "what"} - set(entry)
+        if missing:
+            raise SpecError(f"{where}: missing keys {sorted(missing)}")
         self_, items = entry.get("self", "list"), entry["items"]
         kind, handle = f"TSC_KIND_{name.upper()}", f"const tsc_{name}_t"
         common = dict(block=f"{name}_items", spec_file=path.name, cpp_class="", call="", via=None,
@@ -217,7 +234,12 @@ def _load_lists(path: Path, type_of) -> list[Function]:
             if getter in ("self", "items", "what"):
                 continue
             o = {"type": o} if isinstance(o, str) else o
-            out = Out(o.get("name", "out"), type_of(o["type"], f"{path.name}: {name}"))
+            if not isinstance(o, dict) or "type" not in o or set(o) - {"type", "name"}:
+                raise SpecError(f"{where}: {getter}: unknown keys, or not an output type "
+                                "(a type name, or {type, name})")
+            out = Out(o.get("name", "out"), type_of(o["type"], f"{where}: {getter}"))
+            if out.type.c_param_template and not out.type.assign:
+                raise SpecError(f"{where}: {getter}: {out.type.name} is input-only")
             functions.append(Function(
                 name=f"tsc_{name}_{getter}", args=(Arg("index", type_of("index", path.name)),),
                 out=out, expr=f'list_at({checked}, index, "{entry["what"]}")', **common))
@@ -295,6 +317,10 @@ def load(bindings: Path = BINDINGS) -> Spec:
                     optional=optional, missing_in=missing_in,
                     self_codon=self_.get("codon", "cobj")))
     lists = _load_lists(bindings / "lists.yaml", type_of)
+    for f in lists:
+        if f.name in seen:
+            raise SpecError(f"lists.yaml: {f.name} is also defined in {seen[f.name]}")
+        seen[f.name] = f.spec_file
     blocks: dict[str, str] = {}
     for f in functions + lists:
         if blocks.setdefault(f.block, f.spec_file) != f.spec_file:

@@ -89,11 +89,26 @@ def shim(spec: Spec) -> str:
     return "\n".join(lines)
 
 
+def _valid_out(t) -> str:
+    """C arguments for an output that pass its checks: one zeroed element per
+    pointer parameter, 0 for a capacity."""
+    if t.handle:
+        return f"({t.c} *[1]){{NULL}}"
+    if not t.c_param_template:
+        return f"({t.c}[1]){{0}}"
+    values = []
+    for param in t.c_param_template.split(","):
+        ctype = param.strip().rsplit(" ", 1)[0] if "*" not in param else param.split("*")[0]
+        ctype = ctype.replace("const ", "").strip()
+        values.append(f"({ctype}[1]){{0}}" if "*" in param else "0")
+    return ", ".join(values)
+
+
 def null_handle_test(spec: Spec) -> str:
     """A C test: every generated function rejects a NULL handle."""
     lines = [f"/* {NOTICE}", " * Every generated function rejects a NULL handle with TSC_INVALID_ARGUMENT",
              " * before looking at its other arguments, which are all invalid here (NULL",
-             " * pointers, NaN, out-of-range values). */", '#include "typesafe_carla/ffi.h"', "",
+             " * pointers, NaN, out-of-range values); the outputs are valid. */", '#include "typesafe_carla/ffi.h"', "",
              "#include <math.h>", "#include <stdio.h>", "#include <string.h>", "", "static int g_failures = 0;", "",
              "static void expect_null_rejected(tsc_status_t status, const char *function) {",
              "  if (status != TSC_INVALID_ARGUMENT ||",
@@ -108,10 +123,8 @@ def null_handle_test(spec: Spec) -> str:
             continue
         call = ["NULL"] + ["NULL" if a.type.struct or a.type.handle else a.type.invalid
                            for a in f.args]
-        if f.out and f.out.type.handle:  # a valid out, so the NULL handle is what fails
-            call.append(f"({f.out.type.c} *[1]){{NULL}}")
-        elif f.out:
-            call.append(f.out.type.invalid if f.out.type.c_param_template else "NULL")
+        if f.out:  # valid outputs, so the NULL handle is what fails
+            call.append(_valid_out(f.out.type))
         lines.append(f'  expect_null_rejected({f.name}({", ".join(call)}), "{f.name}");')
     lines += ["  if (g_failures != 0) return 1;",
               f'  printf("test_generated: {len(spec.generated())} generated functions reject NULL handles\\n");',

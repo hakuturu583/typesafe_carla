@@ -3,7 +3,8 @@
 # and, for each other key <getter>, an element accessor
 #   tsc_status_t tsc_<list>_<getter>(const tsc_<list>_t *<self>, size_t index, <out>);
 # that fails with TSC_NOT_FOUND unless index < size. `self` is the handle's name (default
-# `list`), `items` the C++ container of the handle `{}`, `what` names it in that error, and
+# `list`), `items` the C++ container of the handle `{}` (an lvalue: the getter's result may
+# refer into it), `what` names it in that error, and
 # a getter's value is the element's output type, as `out` in the other files.
 actor_list: {items: "(*{}->list)", what: actor list, get: {type: actor_handle, name: out_actor}}
 blueprint_library: {self: library, items: "(*{}->library)", what: blueprint library, get: blueprint_handle}
