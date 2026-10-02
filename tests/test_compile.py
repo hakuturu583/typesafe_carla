@@ -83,3 +83,11 @@ def test_every_shortcut_warns_and_fails_in_strict_mode(launcher, tmp_path):
     result = _compile(launcher, source, tmp_path, strict=True)
     assert result.returncode != 0
     assert "strict mode: " in result.stderr, result.stderr
+
+
+def test_compatibility_scenario_builds(launcher, tmp_path):
+    """The compatibility scenario needs a server to run, but it must build:
+    Codon can crash on constructs that type-check (see CLAUDE.md)."""
+    source = Path(__file__).resolve().parent / "compatibility" / "scenario_typesafe.codon"
+    result = launcher("build", "-o", str(tmp_path / "scenario"), str(source), timeout=900)
+    assert result.returncode == 0, f"rc {result.returncode}\n{result.stderr}"

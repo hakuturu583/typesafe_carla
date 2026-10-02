@@ -114,9 +114,14 @@ out("landmark_details", str(int(lm0.waypoint is None)) + "," +
     fmt(lm0.h_offset) + "," + str(int(lm0.is_dynamic)) + "," + fmt(lm0.pitch) + "," + fmt(lm0.roll))
 out("landmarks_by_id", str(len(m.get_all_landmarks_from_id(lm0.id))) + "," +
     str(len(m.get_landmark_group(lm0))))
-ahead = wp.get_landmarks(200.0)
-out("landmarks_ahead", ";".join(sorted([l.id + ":" + str(int(l.waypoint is None)) for l in ahead])) +
-    "," + str(len(wp.get_landmarks_of_type(200.0, "1000001"))) + "," +
+# A loop, not a comprehension: Codon 0.19's compiler crashes on the
+# comprehension here (see CLAUDE.md, Codon gotchas).
+ahead_ids = List[str]()
+for l in wp.get_landmarks(200.0):
+    ahead_ids.append(l.id + ":" + str(int(l.waypoint is None)))
+ahead_ids.sort()
+out("landmarks_ahead", ";".join(ahead_ids) + "," +
+    str(len(wp.get_landmarks_of_type(200.0, "1000001"))) + "," +
     str(len(wp.get_landmarks(200.0, True))))
 light_a = lights[0]
 out("light_geometry", light_a.get_opendrive_id() + "," +
