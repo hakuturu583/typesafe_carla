@@ -54,8 +54,15 @@ a tag or SHA. The tag-triggered release uses `ue5-dev`.
 1. Bump `__version__` in `python/typesafe_carla/__init__.py` **and**
    `codon/typesafe_carla/__init__.codon` (a test checks they agree). Bump
    `TSC_ABI_VERSION_*` in `ffi.h` and `_ffi.codon` if the C ABI changed.
-2. Optional dry run: run **Release** manually (workflow_dispatch) with the
-   CARLA ref you want. It publishes to TestPyPI.
+2. Dry run: run **Release** manually (workflow_dispatch) with the CARLA ref
+   you want. It builds and checks every artifact and uploads them as workflow
+   artifacts; with `publish=true` it also uploads to TestPyPI.
+   `tests/distribution/clean_env.sh <dir with the downloaded wheels> <port>`
+   then checks the design's success criteria (section 44) in a clean
+   container against a running CARLA server: `uv sync`,
+   `typesafe-codon build -release main.py`, `./main`, a compile-time
+   rejection, and no Codon, CARLA Python package or `CODON_PATH` set up by
+   hand.
 3. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`. The workflow:
    - checks that the tag matches `__version__`;
    - builds the sdist;

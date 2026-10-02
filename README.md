@@ -28,7 +28,7 @@ Milestones (design section 43):
 | 0: proof of concept | ✅ verified against a CARLA 0.10.0 server |
 | 1: usable vehicle API | ✅ verified against a CARLA 0.10.0 server |
 | 2: sensors | ✅ verified against a CARLA 0.10.0 server |
-| 3: distribution | packaging and release workflows done; not yet published |
+| 3: distribution | ✅ release pipeline verified end to end (manylinux wheels from CI, clean-container `uv sync` → `build` → `./main` against a CARLA server); publishing to PyPI needs the one-time setup in [docs/releasing.md](docs/releasing.md) |
 | 4: broader compatibility | not started |
 | 5: binding generation | not started |
 
@@ -100,7 +100,10 @@ resolved commit are compiled in: `typesafe-codon info`,
 `typesafe-codon info` and `typesafe_carla.backend()` report which one you
 have.
 
-## Installation (once published)
+## Installation
+
+See [docs/usage.md](docs/usage.md) for using typesafe_carla from your own
+project. Once it is published:
 
 ```sh
 uv add typesafe-carla        # or: pip install typesafe-carla
