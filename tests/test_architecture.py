@@ -83,9 +83,8 @@ def test_generated_bindings_up_to_date():
     (regenerate with `uv run python -m tools.bindgen generate`)."""
     from tools.bindgen import emit, spec
 
-    stale = [str(path.relative_to(ROOT)) for path, text in emit.outputs(spec.load()).items()
-             if not path.exists() or path.read_text() != text]
-    assert not stale, f"out of date: {stale}; run `uv run python -m tools.bindgen generate`"
+    stale = [str(path.relative_to(ROOT)) for path in emit.stale(spec.load())]
+    assert not stale, f"out of date: {stale}; run `{emit.REGENERATE}`"
 
 
 def test_generated_functions_are_not_hand_written():

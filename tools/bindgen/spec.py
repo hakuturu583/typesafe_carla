@@ -34,14 +34,8 @@ class Type:
             return f"{self.c} *{name}"
         return f"{self.c} {name}"
 
-    def c_out_param(self, name: str) -> str:
-        return f"{self.c} *{name}"
-
     def codon_param(self) -> str:
         return f"Ptr[{self.codon}]" if self.struct else self.codon
-
-    def codon_out_param(self) -> str:
-        return f"Ptr[{self.codon}]"
 
 
 @dataclass(frozen=True)
@@ -78,13 +72,13 @@ class Function:
         params = [f"{self.self_type} *{self.self_name}"]
         params += [a.type.c_param(a.name) for a in self.args]
         if self.out:
-            params.append(self.out.type.c_out_param(self.out.name))
+            params.append(f"{self.out.type.c} *{self.out.name}")
         return params
 
     def codon_params(self) -> list[str]:
         params = ["cobj"] + [a.type.codon_param() for a in self.args]
         if self.out:
-            params.append(self.out.type.codon_out_param())
+            params.append(f"Ptr[{self.out.type.codon}]")
         return params
 
     def body(self) -> str:
@@ -103,17 +97,17 @@ class Spec:
     types: dict[str, Type]
     functions: tuple[Function, ...]
 
-    def blocks(self) -> dict[str, list[Function]]:
+    def _group(self, key: str) -> dict[str, list[Function]]:
         out: dict[str, list[Function]] = {}
         for f in self.functions:
-            out.setdefault(f.block, []).append(f)
+            out.setdefault(getattr(f, key), []).append(f)
         return out
 
+    def blocks(self) -> dict[str, list[Function]]:
+        return self._group("block")
+
     def classes(self) -> dict[str, list[Function]]:
-        out: dict[str, list[Function]] = {}
-        for f in self.functions:
-            out.setdefault(f.cpp_class, []).append(f)
-        return out
+        return self._group("cpp_class")
 
 
 def _load_types(path: Path) -> dict[str, Type]:

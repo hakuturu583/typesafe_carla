@@ -369,19 +369,14 @@ void copy_out(const Vec &values, Out *out, size_t capacity, size_t *out_count) {
   for (size_t i = 0; i < values.size() && i < capacity; ++i) out[i] = from_carla(values[i]);
 }
 
-// Fails with `message` unless v is finite and non-negative (NaN fails too).
-inline double check_non_negative(double v, const char *message) {
-  if (!(v >= 0.0) || !std::isfinite(v)) fail(TSC_INVALID_ARGUMENT, message);
-  return v;
-}
-
-// LibCarla's float parameters: `name` must be finite (and non-negative).
+// LibCarla's float parameters: `name` must be finite (and non-negative; NaN
+// fails too).
 inline float check_finite(double v, const char *name) {
   if (!std::isfinite(v)) fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite");
   return static_cast<float>(v);
 }
 
-inline float check_non_negative_float(double v, const char *name) {
+inline float check_non_negative(double v, const char *name) {
   if (!(v >= 0.0) || !std::isfinite(v)) {
     fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite and non-negative");
   }
@@ -398,8 +393,8 @@ inline carla::rpc::TrafficLightState to_light_state(int32_t state) {
 // Direct and batch walker control go through here.
 inline carla::rpc::WalkerControl to_carla_walker_control(const tsc_vector3d_t &direction,
                                                          double speed, bool jump) {
-  check_non_negative(speed, "walker speed must be a finite, non-negative number of m/s");
-  return carla::rpc::WalkerControl(to_carla_vector(direction), static_cast<float>(speed), jump);
+  return carla::rpc::WalkerControl(to_carla_vector(direction),
+                                   check_non_negative(speed, "walker speed"), jump);
 }
 
 // Validates ranges (NaN fails too): direct and batch control go through here.

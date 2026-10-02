@@ -44,16 +44,11 @@ def signature(prefix: str, name: str, params: list[str], end: str) -> str:
     return head + "\n" + "\n".join(pack("    ", "    "))
 
 
-def _comment(doc: str | None, style: str) -> list[str]:
-    if not doc:
-        return []
-    return [f"/* {doc} */" if style == "c" else f"# {doc}"]
-
-
 def header_block(functions: list[Function]) -> list[str]:
     lines: list[str] = []
     for f in functions:
-        lines += _comment(f.doc, "c")
+        if f.doc:
+            lines.append(f"/* {f.doc} */")
         lines.append(signature("TSC_API tsc_status_t ", f.name, f.c_params(), ";"))
     return lines
 
@@ -116,18 +111,17 @@ def null_handle_test(spec: Spec) -> str:
     return "\n".join(lines)
 
 
-def _markers(style: str, block: str, spec_file: str) -> tuple[str, str]:
-    text = f"GENERATED {block} (bindings/{spec_file} via tools/bindgen; do not edit)"
-    if style == "c":
-        return f"/* BEGIN {text} */", f"/* END GENERATED {block} */"
-    return f"# BEGIN {text}", f"# END GENERATED {block}"
+# Comment delimiters of the files with generated blocks.
+COMMENTS = {"c": ("/* ", " */"), "codon": ("# ", "")}
 
 
 def splice(text: str, style: str, blocks: dict[str, list[Function]], render) -> str:
     """Replaces the body of every generated block; all blocks must be present."""
+    open_, close = COMMENTS[style]
     for block, functions in blocks.items():
-        begin, end = _markers(style, block, functions[0].spec_file)
-        open_ = "/* " if style == "c" else "# "
+        begin = (f"{open_}BEGIN GENERATED {block} (bindings/{functions[0].spec_file} "
+                 f"via tools/bindgen; do not edit){close}")
+        end = f"{open_}END GENERATED {block}{close}"
         pattern = re.compile(rf"^{re.escape(open_)}BEGIN GENERATED {re.escape(block)} .*?\n(.*?)"
                              rf"^{re.escape(end)}$", re.MULTILINE | re.DOTALL)
         if not pattern.search(text):
@@ -148,3 +142,13 @@ def outputs(spec: Spec) -> dict[Path, str]:
         SHIM: shim(spec),
         TEST: null_handle_test(spec),
     }
+
+
+def stale(spec: Spec) -> dict[Path, tuple[str, str]]:
+    """The generated files that differ from what is on disk: path -> (old, new)."""
+    out = {}
+    for path, text in outputs(spec).items():
+        old = path.read_text() if path.exists() else ""
+        if old != text:
+            out[path] = (old, text)
+    return out

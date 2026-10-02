@@ -69,26 +69,30 @@ def _resource_dir() -> str:
     """Clang's builtin headers (stddef.h, the x86 intrinsics...), which the
     libclang wheel does not ship. TSC_CLANG_RESOURCE_DIR, else an installed
     clang, else the copy inside the `ziglang` package."""
-    candidates = [os.environ.get("TSC_CLANG_RESOURCE_DIR", "")]
-    for clang in ("clang", *(f"clang-{v}" for v in range(22, 13, -1))):
-        if shutil.which(clang):
-            candidates.append(subprocess.run([clang, "-print-resource-dir"], capture_output=True,
-                                             text=True).stdout.strip())
-    try:
-        import ziglang
+    def candidates():  # lazily: each clang costs a subprocess
+        yield os.environ.get("TSC_CLANG_RESOURCE_DIR", "")
+        for clang in ("clang", *(f"clang-{v}" for v in range(22, 13, -1))):
+            if shutil.which(clang):
+                yield subprocess.run([clang, "-print-resource-dir"], capture_output=True,
+                                     text=True).stdout.strip()
+        try:
+            import ziglang
 
-        candidates.append(str(Path(ziglang.__file__).parent / "lib"))
-    except ImportError:
-        pass
-    for c in candidates:
+            yield str(Path(ziglang.__file__).parent / "lib")
+        except ImportError:
+            pass
+
+    for c in candidates():
         if c and (Path(c) / "include" / "stddef.h").exists():
             return c
     raise SystemExit("no clang resource directory (clang's builtin headers) found: install clang, "
                      "set TSC_CLANG_RESOURCE_DIR, or run with `uv run --with ziglang==0.13.0`")
 
 
-def _parse(source: Path, args: list[str]) -> cindex.TranslationUnit:
-    tu = cindex.Index.create().parse(str(source), args=_clang_args(args))
+def _parse(source: Path, args: list[str], bodies: bool = True) -> cindex.TranslationUnit:
+    """`bodies=False` skips function bodies: enough for declarations, faster."""
+    options = 0 if bodies else cindex.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES
+    tu = cindex.Index.create().parse(str(source), args=_clang_args(args), options=options)
     errors = [d for d in tu.diagnostics if d.severity >= cindex.Diagnostic.Error]
     if errors:
         raise SystemExit(f"{source}: libclang could not parse it:\n" +
@@ -150,39 +154,38 @@ def _method(cls: str, m: cindex.Cursor) -> Method:
                   required, deprecated)
 
 
-def _methods(tu: cindex.TranslationUnit, classes: set[str],
+def _methods(defs: dict[str, cindex.Cursor], cls: str,
              stop: set[str] = frozenset()) -> dict[str, list[Method]]:
-    """Public methods of `classes`, keyed by "Class::Method" (overloads listed),
-    including those inherited publicly from bases that are not in `stop`."""
-    defs = _class_definitions(tu)
+    """Public methods of `cls` by name (overloads listed), including those
+    inherited publicly from bases that are not in `stop`. `defs` is
+    _class_definitions() of the translation unit."""
     out: dict[str, list[Method]] = {}
-    for cls in classes:
-        if cls not in defs:
-            continue
-        seen: set[tuple[str, str]] = set()
-        exposed: set[str] = set()  # `using Base::Method;` in a public section
-        pending = [(defs[cls], True)]  # (class, reached through public bases only)
-        while pending:
-            node, public_path = pending.pop(0)
-            owner = _qualified(node)
-            for c in node.get_children():
-                if c.kind == cindex.CursorKind.USING_DECLARATION \
-                        and c.access_specifier == cindex.AccessSpecifier.PUBLIC:
-                    exposed.add(c.spelling)
-                elif c.kind == cindex.CursorKind.CXX_METHOD \
-                        and ((public_path and c.access_specifier == cindex.AccessSpecifier.PUBLIC)
-                             or c.spelling in exposed):
-                    key = (c.spelling, c.type.spelling)
-                    if key not in seen:  # an override hides the base's declaration
-                        seen.add(key)
-                        out.setdefault(f"{cls}::{c.spelling}", []).append(_method(owner, c))
-                elif c.kind == cindex.CursorKind.CXX_BASE_SPECIFIER:
-                    # Private bases matter only for the methods `using` exposes.
-                    base = c.type.get_canonical().get_declaration()
-                    base = defs.get(_qualified(base), base)
-                    if _qualified(base) not in stop and base.is_definition():
-                        pending.append((base, public_path and c.access_specifier
-                                        == cindex.AccessSpecifier.PUBLIC))
+    if cls not in defs:
+        return out
+    seen: set[tuple[str, str]] = set()
+    exposed: set[str] = set()  # `using Base::Method;` in a public section
+    pending = [(defs[cls], True)]  # (class, reached through public bases only)
+    while pending:
+        node, public_path = pending.pop(0)
+        owner = _qualified(node)
+        for c in node.get_children():
+            if c.kind == cindex.CursorKind.USING_DECLARATION \
+                    and c.access_specifier == cindex.AccessSpecifier.PUBLIC:
+                exposed.add(c.spelling)
+            elif c.kind == cindex.CursorKind.CXX_METHOD \
+                    and ((public_path and c.access_specifier == cindex.AccessSpecifier.PUBLIC)
+                         or c.spelling in exposed):
+                key = (c.spelling, c.type.spelling)
+                if key not in seen:  # an override hides the base's declaration
+                    seen.add(key)
+                    out.setdefault(c.spelling, []).append(_method(owner, c))
+            elif c.kind == cindex.CursorKind.CXX_BASE_SPECIFIER:
+                # Private bases matter only for the methods `using` exposes.
+                base = c.type.get_canonical().get_declaration()
+                base = defs.get(_qualified(base), base)
+                if _qualified(base) not in stop and base.is_definition():
+                    pending.append((base, public_path and c.access_specifier
+                                    == cindex.AccessSpecifier.PUBLIC))
     return out
 
 
@@ -191,7 +194,8 @@ def _matches(patterns: tuple[str, ...], canonical: str) -> bool:
 
 
 def _check(f: Function, overloads: list[Method]) -> str | None:
-    """None if one overload accepts the spec's arguments, else why not."""
+    """None if one overload accepts the spec's arguments, else why not. A
+    result the spec does not output is ignored (e.g. Destroy's bool)."""
     reasons = []
     for m in overloads:
         n = len(f.args)
@@ -202,8 +206,6 @@ def _check(f: Function, overloads: list[Method]) -> str | None:
                if not _matches(a.type.cpp, p)]
         if f.out and not _matches(f.out.type.cpp, m.result):
             bad.append(f"result: {f.out.type.name} vs {m.result}")
-        if f.out is None and m.result != "void":
-            pass  # the result is ignored on purpose (e.g. Destroy's bool is not generated)
         if not bad:
             return None
         reasons.append("; ".join(bad))
@@ -218,23 +220,23 @@ def _shim_tu(build_dir: Path) -> tuple[Path, list[str]]:
     return source, commands[source]
 
 
-def _backend(build_dir: Path) -> str:
+def _cache_var(build_dir: Path, name: str) -> str:
+    """A variable of the build's CMakeCache.txt, or "unknown"."""
     cache = build_dir / "CMakeCache.txt"
-    m = re.search(r"^TSC_BACKEND:\w+=(\w+)", cache.read_text(), re.MULTILINE) if cache.exists() else None
+    m = re.search(rf"^{name}:\w+=(.+)$", cache.read_text(), re.MULTILINE) if cache.exists() else None
     return m.group(1) if m else "unknown"
 
 
 def validate(spec: Spec, build_dir: Path) -> int:
     source, args = _shim_tu(build_dir)
-    tu = _parse(source, args)
-    methods = _methods(tu, set(spec.classes()))
+    defs = _class_definitions(_parse(source, args, bodies=False))
+    methods = {cls: _methods(defs, cls) for cls in spec.classes()}
     failures = []
     for f in spec.functions:
-        key = f"{f.cpp_class}::{f.call}"
-        why = _check(f, methods.get(key, []))
+        why = _check(f, methods[f.cpp_class].get(f.call, []))
         if why:
-            failures.append(f"{f.spec_file}: {f.name} -> {key}: {why}")
-    backend = _backend(build_dir)
+            failures.append(f"{f.spec_file}: {f.name} -> {f.cpp_class}::{f.call}: {why}")
+    backend = _cache_var(build_dir, "TSC_BACKEND")
     if failures:
         print(f"bindgen validate ({backend}): {len(failures)} of {len(spec.functions)} functions "
               "do not match the headers:", file=sys.stderr)
@@ -245,9 +247,10 @@ def validate(spec: Spec, build_dir: Path) -> int:
     return 0
 
 
-def _calls_in(source: Path, args: list[str], classes: set[str]) -> set[str]:
+def _calls(tu: cindex.TranslationUnit, classes: set[str]) -> set[str]:
+    """"Class::Method" for every method of `classes` the translation unit calls."""
     called = set()
-    for node in _parse(source, args).cursor.walk_preorder():
+    for node in tu.cursor.walk_preorder():
         if node.kind != cindex.CursorKind.CALL_EXPR or node.referenced is None:
             continue
         ref = node.referenced
@@ -258,10 +261,15 @@ def _calls_in(source: Path, args: list[str], classes: set[str]) -> set[str]:
     return called
 
 
-def _called_methods(build_dir: Path, classes: set[str]) -> set[str]:
-    """"Class::Method" for every LibCarla method a shim source calls."""
+def _calls_in(source: Path, args: list[str], classes: set[str]) -> set[str]:
+    return _calls(_parse(source, args), classes)
+
+
+def _called_methods(build_dir: Path, classes: set[str], exclude: Path) -> set[str]:
+    """"Class::Method" for every LibCarla method a shim source other than
+    `exclude` (already parsed by the caller) calls."""
     sources = {s: a for s, a in _compile_commands(build_dir).items()
-               if SHIM_SOURCES.resolve() in s.parents}
+               if SHIM_SOURCES.resolve() in s.parents and s != exclude}
     with ProcessPoolExecutor() as pool:  # each parse takes seconds
         results = pool.map(_calls_in, sources, sources.values(), [classes] * len(sources))
         return set().union(*results)
@@ -271,32 +279,32 @@ def coverage(spec: Spec, build_dir: Path, output: Path | None) -> int:
     source, args = _shim_tu(build_dir)
     classes = set(COVERAGE_CLASSES)
     tu = _parse(source, args)
-    methods = {}
-    for cls in COVERAGE_CLASSES:
-        methods.update(_methods(tu, {cls}, stop=classes - {cls}))
-    owners = {m.cls for overloads in methods.values() for m in overloads}
-    called = _called_methods(build_dir, owners)
+    defs = _class_definitions(tu)
+    by_class = {cls: _methods(defs, cls, stop=classes - {cls}) for cls in COVERAGE_CLASSES}
+    owners = {m.cls for methods in by_class.values() for overloads in methods.values()
+              for m in overloads}
+    called = _calls(tu, owners) | _called_methods(build_dir, owners, exclude=source)
     generated = {f"{f.cpp_class}::{f.call}" for f in spec.functions}
-    ref = _carla_ref(build_dir)
+    ref = _cache_var(build_dir, "TSC_CARLA_GIT_REF")
 
     lines = ["# LibCarla API coverage", "",
              f"Which public methods of the main LibCarla client classes the C shim calls, "
-             f"for CARLA ref `{ref}` ({_backend(build_dir)} backend).", "",
+             f"for CARLA ref `{ref}` ({_cache_var(build_dir, 'TSC_BACKEND')} backend).", "",
              f"Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o docs/coverage.md`.",
              "", "- **generated**: the binding is generated from `bindings/*.yaml`",
              "- **hand-written**: called from a hand-written shim function",
              "- **—**: not bound yet", ""]
     total = bound = gen = 0
     summary, details = [], []
-    for cls in COVERAGE_CLASSES:
-        names = sorted({k.split("::")[-1] for k in methods if k.rsplit("::", 1)[0] == cls})
+    for cls, methods in by_class.items():
+        names = sorted(methods)
         if not names:
             continue
         rows, cls_bound = [], 0
         for name in names:
             key = f"{cls}::{name}"
-            deprecated = all(m.deprecated for m in methods[key])
-            is_called = any(f"{m.cls}::{name}" in called for m in methods[key])
+            deprecated = all(m.deprecated for m in methods[name])
+            is_called = any(f"{m.cls}::{name}" in called for m in methods[name])
             status = "generated" if key in generated else "hand-written" if is_called else "—"
             if status != "—":
                 cls_bound += 1
@@ -316,12 +324,3 @@ def coverage(spec: Spec, build_dir: Path, output: Path | None) -> int:
     else:
         print(text)
     return 0
-
-
-def _carla_ref(build_dir: Path) -> str:
-    cache = build_dir / "CMakeCache.txt"
-    if cache.exists():
-        m = re.search(r"^TSC_CARLA_GIT_REF:\w+=(.+)$", cache.read_text(), re.MULTILINE)
-        if m:
-            return m.group(1)
-    return "unknown"

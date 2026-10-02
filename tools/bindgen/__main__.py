@@ -13,12 +13,8 @@ from .spec import ROOT
 
 def generate(check: bool) -> int:
     spec = spec_mod.load()
-    stale = []
-    for path, text in emit.outputs(spec).items():
-        old = path.read_text() if path.exists() else ""
-        if old == text:
-            continue
-        stale.append(path)
+    stale = emit.stale(spec)
+    for path, (old, text) in stale.items():
         if check:
             sys.stdout.writelines(difflib.unified_diff(
                 old.splitlines(True), text.splitlines(True),

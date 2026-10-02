@@ -56,7 +56,7 @@ TSC_API tsc_status_t tsc_traffic_light_set_green_time(tsc_traffic_light_t *light
 ```
 ```cpp
 tsc_status_t tsc_traffic_light_set_green_time(tsc_traffic_light_t *light, double t) {
-  return TSC_GUARD({ light_of(light).SetGreenTime(check_non_negative_float(t, "t")); });
+  return TSC_GUARD({ light_of(light).SetGreenTime(check_non_negative(t, "t")); });
 }
 ```
 ```python

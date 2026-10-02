@@ -103,15 +103,15 @@ tsc_status_t tsc_traffic_light_set_state(tsc_traffic_light_t *light, int32_t sta
 }
 
 tsc_status_t tsc_traffic_light_set_green_time(tsc_traffic_light_t *light, double t) {
-  return TSC_GUARD({ light_of(light).SetGreenTime(check_non_negative_float(t, "t")); });
+  return TSC_GUARD({ light_of(light).SetGreenTime(check_non_negative(t, "t")); });
 }
 
 tsc_status_t tsc_traffic_light_set_yellow_time(tsc_traffic_light_t *light, double t) {
-  return TSC_GUARD({ light_of(light).SetYellowTime(check_non_negative_float(t, "t")); });
+  return TSC_GUARD({ light_of(light).SetYellowTime(check_non_negative(t, "t")); });
 }
 
 tsc_status_t tsc_traffic_light_set_red_time(tsc_traffic_light_t *light, double t) {
-  return TSC_GUARD({ light_of(light).SetRedTime(check_non_negative_float(t, "t")); });
+  return TSC_GUARD({ light_of(light).SetRedTime(check_non_negative(t, "t")); });
 }
 
 tsc_status_t tsc_traffic_light_freeze(tsc_traffic_light_t *light, int32_t freeze) {
@@ -151,7 +151,7 @@ tsc_status_t tsc_traffic_manager_set_global_percentage_speed_difference(tsc_traf
 tsc_status_t tsc_traffic_manager_set_global_distance_to_leading_vehicle(tsc_traffic_manager_t *tm,
                                                                         double distance) {
   return TSC_GUARD({
-    tm_of(tm).SetGlobalDistanceToLeadingVehicle(check_non_negative_float(distance, "distance"));
+    tm_of(tm).SetGlobalDistanceToLeadingVehicle(check_non_negative(distance, "distance"));
   });
 }
 
@@ -227,7 +227,7 @@ tsc_status_t tsc_walker_ai_controller_go_to_location(tsc_walker_ai_controller_t 
 tsc_status_t tsc_walker_ai_controller_set_max_speed(tsc_walker_ai_controller_t *controller,
                                                     double max_speed) {
   return TSC_GUARD({
-    controller_of(controller).SetMaxSpeed(check_non_negative_float(max_speed, "max_speed"));
+    controller_of(controller).SetMaxSpeed(check_non_negative(max_speed, "max_speed"));
   });
 }
 

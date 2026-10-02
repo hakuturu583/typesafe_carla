@@ -42,7 +42,7 @@ finite:
 non_negative:
   c: double
   codon: float
-  to_carla: 'check_non_negative_float({}, "{name}")'
+  to_carla: 'check_non_negative({}, "{name}")'
   cpp: ["float"]
 vector3d:
   c: tsc_vector3d_t
