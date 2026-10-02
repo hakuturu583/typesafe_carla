@@ -4,6 +4,7 @@
 #include "typesafe_carla/ffi.h"
 
 #include <pthread.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,6 +57,17 @@ static void test_layout(void) {
   CHECK(sizeof(tsc_world_settings_t) == 40);
   CHECK(sizeof(tsc_string_t) == 16);
   CHECK(sizeof(tsc_actor_attribute_t) == 40);
+  /* ABI 1.2 */
+  CHECK(sizeof(tsc_bounding_box_t) == 72);
+  CHECK(sizeof(tsc_timestamp_t) == 32);
+  CHECK(sizeof(tsc_actor_snapshot_t) == 128);
+  CHECK(sizeof(tsc_waypoint_info_t) == 96);
+  CHECK(sizeof(tsc_wheel_physics_control_t) == 80);
+  CHECK(offsetof(tsc_vehicle_physics_control_t, wheels) == 80);
+  CHECK(sizeof(tsc_vehicle_physics_control_t) == 720);
+  CHECK(sizeof(tsc_command_t) == 144);
+  CHECK(offsetof(tsc_command_response_t, error) == 8);
+  CHECK(sizeof(tsc_command_response_t) == 24);
 }
 
 static void test_null_arguments(void) {
@@ -235,6 +247,118 @@ static void test_mock_session(void) {
   CHECK(tsc_live_handle_count() == before);
 }
 
+static void test_mock_milestone1(void) {
+  uint64_t before = tsc_live_handle_count();
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  tsc_map_t *map = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2102, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+  CHECK_OK(tsc_world_get_map(world, &map));
+
+  /* Spawn points: two-call pattern. */
+  size_t n = 0;
+  CHECK_OK(tsc_map_get_spawn_points(map, NULL, 0, &n));
+  CHECK(n == 6);
+  tsc_transform_t points[6];
+  size_t got = 0;
+  CHECK_OK(tsc_map_get_spawn_points(map, points, 2, &got));
+  CHECK(got == 6); /* total count, even when capacity is smaller */
+  CHECK_OK(tsc_map_get_spawn_points(map, points, 6, &got));
+
+  /* Waypoints. */
+  tsc_location_t on_road = {12.0, 0.3, 0.0};
+  tsc_waypoint_t *wp = NULL;
+  CHECK_OK(tsc_map_get_waypoint(map, &on_road, 1, 2 /* Driving */, &wp));
+  CHECK(wp != NULL);
+  tsc_waypoint_info_t info;
+  CHECK_OK(tsc_waypoint_get_info(wp, &info));
+  CHECK(info.lane_id == -1 && info.road_id == 1 && info.s == 12.0);
+  tsc_waypoint_list_t *next = NULL;
+  CHECK_OK(tsc_waypoint_next(wp, 5.0, &next));
+  CHECK(tsc_waypoint_list_size(next) == 1);
+  tsc_waypoint_list_t *bad = (tsc_waypoint_list_t *)0x1;
+  CHECK(tsc_waypoint_next(wp, -1.0, &bad) == TSC_INVALID_ARGUMENT);
+  CHECK(bad == NULL);
+  tsc_waypoint_t *left = (tsc_waypoint_t *)0x1;
+  CHECK_OK(tsc_waypoint_get_left_lane(wp, &left));
+  CHECK(left == NULL);
+  tsc_location_t off_road = {500.0, 0.0, 0.0};
+  tsc_waypoint_t *none = (tsc_waypoint_t *)0x1;
+  CHECK_OK(tsc_map_get_waypoint(map, &off_road, 1, 2, &none));
+  CHECK(none == NULL);
+
+  /* Snapshots. */
+  tsc_world_snapshot_t *snap = NULL;
+  CHECK_OK(tsc_world_get_snapshot(world, &snap));
+  CHECK(tsc_world_snapshot_size(snap) == 2);
+  tsc_actor_snapshot_t a;
+  CHECK_OK(tsc_world_snapshot_get(snap, 0, &a));
+  CHECK_OK(tsc_world_snapshot_find(snap, a.id, &a));
+  CHECK(tsc_world_snapshot_find(snap, 999, &a) == TSC_NOT_FOUND);
+
+  /* Batch: spawn + then(autopilot), a failing destroy, a dangling then_of. */
+  tsc_blueprint_library_t *library = NULL;
+  tsc_actor_blueprint_t *bp = NULL;
+  CHECK_OK(tsc_world_get_blueprint_library(world, &library));
+  CHECK_OK(tsc_blueprint_library_find(library, "vehicle.audi.tt", 15, &bp));
+  tsc_command_t cmds[3];
+  memset(cmds, 0, sizeof cmds);
+  cmds[0].type = TSC_COMMAND_SPAWN_ACTOR;
+  cmds[0].then_of = -1;
+  cmds[0].blueprint = bp;
+  cmds[0].transform = points[2];
+  cmds[1].type = TSC_COMMAND_SET_AUTOPILOT;
+  cmds[1].then_of = 0;
+  cmds[1].flag = 1;
+  cmds[1].tm_port = 8000;
+  cmds[2].type = TSC_COMMAND_DESTROY_ACTOR;
+  cmds[2].then_of = -1;
+  cmds[2].actor_id = 999;
+  tsc_command_response_t responses[2];
+  size_t count = 0;
+  CHECK(tsc_client_apply_batch_sync(client, cmds, 3, 0, responses, 1, &count) ==
+        TSC_INVALID_ARGUMENT); /* not enough room: 2 top-level commands */
+  CHECK_OK(tsc_client_apply_batch_sync(client, cmds, 3, 1, responses, 2, &count));
+  CHECK(count == 2);
+  CHECK(!responses[0].has_error && responses[0].actor_id != 0);
+  CHECK(responses[1].has_error && strstr(responses[1].error.data, "not found") != NULL);
+  for (size_t i = 0; i < count; ++i) tsc_string_free(&responses[i].error);
+  cmds[2].then_of = 2; /* must name an earlier SpawnActor */
+  CHECK(tsc_client_apply_batch_sync(client, cmds, 3, 0, responses, 2, &count) ==
+        TSC_INVALID_ARGUMENT);
+
+  /* Physics control and bounding box on the spawned vehicle. */
+  tsc_actor_t *actor = NULL;
+  tsc_vehicle_t *vehicle = NULL;
+  CHECK_OK(tsc_world_get_actor(world, responses[0].actor_id, &actor));
+  CHECK_OK(tsc_actor_as_vehicle(actor, &vehicle));
+  tsc_vehicle_physics_control_t pc;
+  CHECK_OK(tsc_vehicle_get_physics_control(vehicle, &pc));
+  CHECK(pc.wheel_count == 4 && pc.mass == 1500.0);
+  pc.mass = 2000.0;
+  CHECK_OK(tsc_vehicle_apply_physics_control(vehicle, &pc));
+  CHECK_OK(tsc_vehicle_get_physics_control(vehicle, &pc));
+  CHECK(pc.mass == 2000.0);
+  pc.wheel_count = 3;
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  tsc_bounding_box_t box;
+  CHECK_OK(tsc_actor_get_bounding_box(actor, &box));
+  CHECK(box.extent.x > 1.0);
+
+  tsc_handle_release(H(vehicle));
+  tsc_handle_release(H(actor));
+  tsc_handle_release(H(bp));
+  tsc_handle_release(H(library));
+  tsc_handle_release(H(snap));
+  tsc_handle_release(H(next));
+  tsc_handle_release(H(wp));
+  tsc_handle_release(H(map));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK(tsc_live_handle_count() == before);
+}
+
 static void test_mock_timeout(void) {
   const char *host = "carla.invalid";
   tsc_client_t *client = NULL;
@@ -255,6 +379,7 @@ int main(void) {
   test_thread_local_error();
   if (strcmp(tsc_backend_name(), "mock") == 0) {
     test_mock_session();
+    test_mock_milestone1();
     test_mock_timeout();
   } else {
     printf("backend '%s': skipping mock-server checks\n", tsc_backend_name());

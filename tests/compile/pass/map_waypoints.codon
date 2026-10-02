@@ -1,0 +1,24 @@
+import typesafe_carla as carla
+
+def route(world: carla.World, length: int) -> List[carla.Transform]:
+    m: carla.Map = world.get_map()
+    start = m.get_waypoint(m.get_spawn_points()[0].location, project_to_road=True,
+                           lane_type=carla.LaneType.Driving)
+    path = List[carla.Transform]()
+    if start is None:
+        return path
+    wp: carla.Waypoint = start
+    for _ in range(length):
+        path.append(wp.transform)
+        ahead = wp.next(2.0)
+        if not ahead:
+            break
+        wp = ahead[0]
+    left: Optional[carla.Waypoint] = wp.get_left_lane()
+    if left is not None and left.lane_type == carla.LaneType.Driving:
+        path.append(left.transform)
+    return path
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+print(len(route(_world, 10)))

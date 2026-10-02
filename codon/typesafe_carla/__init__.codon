@@ -9,13 +9,17 @@ from ._ffi import (tsc_abi_version, tsc_libcarla_version, tsc_libcarla_git_ref,
                    tsc_libcarla_git_commit, tsc_build_commit, tsc_backend_name,
                    tsc_live_handle_count, c_str, TSC_ABI_VERSION_MAJOR, TSC_ABI_VERSION_MINOR)
 from .errors import CarlaError, TimeoutError, ActorTypeError, VersionError
-from .geometry import Vector2D, Vector3D, Location, Rotation, Transform
-from .control import VehicleControl
+from .geometry import Vector2D, Vector3D, Location, Rotation, Transform, BoundingBox
+from .control import VehicleControl, VehiclePhysicsControl, WheelPhysicsControl
 from .blueprint import (ActorAttribute, ActorAttributeType, ActorBlueprint, BlueprintLibrary,
                         Color)
 from .actor import Actor, Vehicle, ActorList, TM_DEFAULT_PORT
 from .world import World, WorldSettings
+from .map import Map, Waypoint, LaneType
+from .snapshot import WorldSnapshot, ActorSnapshot, Timestamp
+from .command import Command, CommandResponse
 from .client import Client
+import typesafe_carla.command as command
 
 __version__ = "0.1.0"
 

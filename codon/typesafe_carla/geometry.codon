@@ -1,6 +1,6 @@
 # Geometry value types. Plain Codon classes; copied across the C ABI.
 
-from ._ffi import CVector3D, CRotation, CTransform
+from ._ffi import CVector3D, CRotation, CTransform, CBoundingBox
 
 class Vector3D:
     x: float
@@ -171,3 +171,30 @@ class Transform:
     @staticmethod
     def _from_c(t: CTransform) -> Transform:
         return Transform(Location._from_c(t.location), Rotation._from_c(t.rotation))
+
+class BoundingBox:
+    """An oriented box in actor-local space: center `location`, half-size `extent`."""
+    location: Location
+    extent: Vector3D
+    rotation: Rotation
+
+    def __init__(self, location: Optional[Location] = None, extent: Optional[Vector3D] = None,
+                 rotation: Optional[Rotation] = None):
+        self.location = location if location is not None else Location()
+        self.extent = extent if extent is not None else Vector3D()
+        self.rotation = rotation if rotation is not None else Rotation()
+
+    def __eq__(self, other: BoundingBox) -> bool:
+        return (self.location == other.location and self.extent == other.extent and
+                self.rotation == other.rotation)
+
+    def __ne__(self, other: BoundingBox) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return f"BoundingBox({self.location}, Extent(x={self.extent.x}, y={self.extent.y}, z={self.extent.z}), {self.rotation})"
+
+    @staticmethod
+    def _from_c(b: CBoundingBox) -> BoundingBox:
+        return BoundingBox(Location._from_c(b.location), Vector3D._from_c(b.extent),
+                           Rotation._from_c(b.rotation))

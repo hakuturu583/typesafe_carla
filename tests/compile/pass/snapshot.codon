@@ -1,0 +1,16 @@
+import typesafe_carla as carla
+
+def speeds(world: carla.World) -> Dict[int, float]:
+    snap: carla.WorldSnapshot = world.wait_for_tick(5.0)
+    t: carla.Timestamp = snap.timestamp
+    result = Dict[int, float]()
+    for a in snap:
+        result[a.id] = a.get_velocity().length()
+    found: Optional[carla.ActorSnapshot] = snap.find(1)
+    if found is not None:
+        result[-1] = found.get_transform().location.x + t.elapsed_seconds
+    return result
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+print(speeds(_world))

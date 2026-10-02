@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 1
-TSC_ABI_VERSION_MINOR = 1
+TSC_ABI_VERSION_MINOR = 2
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -77,6 +77,94 @@ class CActorAttribute:
     value: CString
     type: i32
     is_modifiable: i32
+
+@tuple
+class CBoundingBox:
+    location: CVector3D
+    extent: CVector3D
+    rotation: CRotation
+
+@tuple
+class CTimestamp:
+    frame: u64
+    elapsed_seconds: float
+    delta_seconds: float
+    platform_timestamp: float
+
+@tuple
+class CActorSnapshot:
+    id: u32
+    reserved0: u32
+    transform: CTransform
+    velocity: CVector3D
+    angular_velocity: CVector3D
+    acceleration: CVector3D
+
+@tuple
+class CWaypointInfo:
+    id: u64
+    road_id: u32
+    section_id: u32
+    lane_id: i32
+    is_junction: i32
+    junction_id: i32
+    lane_type: i32
+    s: float
+    lane_width: float
+    transform: CTransform
+
+@tuple
+class CWheelPhysicsControl:
+    wheel_radius: float
+    wheel_width: float
+    wheel_mass: float
+    max_steer_angle: float
+    max_brake_torque: float
+    max_hand_brake_torque: float
+    friction_force_multiplier: float
+    cornering_stiffness: float
+    affected_by_steering: i32
+    affected_by_brake: i32
+    affected_by_handbrake: i32
+    affected_by_engine: i32
+
+# tsc_vehicle_physics_control_t is this header followed by TSC_MAX_WHEELS
+# CWheelPhysicsControl records at PHYSICS_WHEELS_OFFSET.
+@tuple
+class CVehiclePhysicsHead:
+    max_torque: float
+    max_rpm: float
+    final_ratio: float
+    gear_change_time: float
+    mass: float
+    drag_coefficient: float
+    center_of_mass: CVector3D
+    use_automatic_gears: i32
+    wheel_count: i32
+
+TSC_MAX_WHEELS = 8
+PHYSICS_WHEELS_OFFSET = CVehiclePhysicsHead.__elemsize__
+PHYSICS_SIZE = PHYSICS_WHEELS_OFFSET + TSC_MAX_WHEELS * CWheelPhysicsControl.__elemsize__
+
+@tuple
+class CCommand:
+    type: i32
+    then_of: i32
+    actor_id: u32
+    parent_id: u32
+    blueprint: cobj
+    transform: CTransform
+    control: CVehicleControl
+    vector: CVector3D
+    flag: i32
+    tm_port: u16
+    reserved0: u16
+
+@tuple
+class CCommandResponse:
+    actor_id: u32
+    has_error: i32
+    error: CString
 
 # --- Functions ----------------------------------------------------------------
 
@@ -147,6 +235,35 @@ from C import LIB.tsc_actor_blueprint_has_tag(cobj, cobj, int, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_blueprint_has_attribute(cobj, cobj, int, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_blueprint_get_attribute(cobj, cobj, int, Ptr[CActorAttribute]) -> i32
 from C import LIB.tsc_actor_blueprint_set_attribute(cobj, cobj, int, cobj, int) -> i32
+
+# ABI 1.2 (Milestone 1)
+from C import LIB.tsc_actor_get_bounding_box(cobj, Ptr[CBoundingBox]) -> i32
+from C import LIB.tsc_world_get_snapshot(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_wait_for_tick(cobj, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_snapshot_get_id(cobj, Ptr[u64]) -> i32
+from C import LIB.tsc_world_snapshot_get_timestamp(cobj, Ptr[CTimestamp]) -> i32
+from C import LIB.tsc_world_snapshot_size(cobj) -> int
+from C import LIB.tsc_world_snapshot_get(cobj, int, Ptr[CActorSnapshot]) -> i32
+from C import LIB.tsc_world_snapshot_find(cobj, u32, Ptr[CActorSnapshot]) -> i32
+from C import LIB.tsc_world_get_map(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_name(cobj, Ptr[CString]) -> i32
+from C import LIB.tsc_map_to_opendrive(cobj, Ptr[CString]) -> i32
+from C import LIB.tsc_map_get_spawn_points(cobj, Ptr[CTransform], int, Ptr[int]) -> i32
+from C import LIB.tsc_map_get_waypoint(cobj, Ptr[CVector3D], i32, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_generate_waypoints(cobj, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_get_info(cobj, Ptr[CWaypointInfo]) -> i32
+from C import LIB.tsc_waypoint_next(cobj, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_previous(cobj, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_next_until_lane_end(cobj, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_previous_until_lane_start(cobj, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_get_left_lane(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_get_right_lane(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_list_size(cobj) -> int
+from C import LIB.tsc_waypoint_list_get(cobj, int, Ptr[cobj]) -> i32
+from C import LIB.tsc_vehicle_get_physics_control(cobj, cobj) -> i32
+from C import LIB.tsc_vehicle_apply_physics_control(cobj, cobj) -> i32
+from C import LIB.tsc_client_apply_batch(cobj, Ptr[CCommand], int, i32) -> i32
+from C import LIB.tsc_client_apply_batch_sync(cobj, Ptr[CCommand], int, i32, Ptr[CCommandResponse], int, Ptr[int]) -> i32
 
 # --- Helpers --------------------------------------------------------------------
 

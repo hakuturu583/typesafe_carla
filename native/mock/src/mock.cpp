@@ -9,7 +9,7 @@ namespace client {
 namespace mock {
 
 constexpr double kDefaultDeltaSeconds = 0.05;
-constexpr float kSpawnClearance = 2.0f;
+constexpr double kSpawnClearance = 2.0;  // meters between spawned vehicles
 
 struct ActorData {
   rpc::ActorId id = 0;
@@ -20,8 +20,19 @@ struct ActorData {
   geom::Vector3D acceleration;
   geom::Vector3D angular_velocity;
   rpc::VehicleControl control;
+  rpc::VehiclePhysicsControl physics;
   bool autopilot = false;
+  bool simulate_physics = true;
 };
+
+rpc::VehiclePhysicsControl DefaultPhysics() {
+  rpc::VehiclePhysicsControl pc;
+  pc.mass = 1500.0f;
+  pc.wheels.resize(4);
+  pc.wheels[2].affected_by_steering = pc.wheels[3].affected_by_steering = false;
+  pc.wheels[2].max_steer_angle = pc.wheels[3].max_steer_angle = 0.0f;
+  return pc;
+}
 
 struct Episode {
   std::mutex mutex;
@@ -38,8 +49,60 @@ struct Episode {
     data.type_id = type_id;
     data.is_vehicle = is_vehicle;
     data.transform = transform;
+    if (is_vehicle) data.physics = DefaultPhysics();
     actors.emplace(data.id, data);
     return data.id;
+  }
+
+  // World::SpawnActor and the SpawnActor batch command. Throws on failure.
+  rpc::ActorId SpawnLocked(const std::string &type_id, geom::Transform t,
+                           std::optional<rpc::ActorId> parent) {
+    if (parent) {
+      auto p = actors.find(*parent);
+      if (p == actors.end()) throw std::runtime_error("parent actor is destroyed");
+      t.location.x += p->second.transform.location.x;
+      t.location.y += p->second.transform.location.y;
+      t.location.z += p->second.transform.location.z;
+    }
+    const bool is_vehicle = type_id.rfind("vehicle.", 0) == 0;
+    if (is_vehicle) {
+      for (const auto &entry : actors) {
+        const auto &other = entry.second;
+        if (!other.is_vehicle) continue;
+        const double d = std::hypot(other.transform.location.x - t.location.x,
+                                    other.transform.location.y - t.location.y,
+                                    other.transform.location.z - t.location.z);
+        if (d < kSpawnClearance) {
+          throw std::runtime_error("Spawn failed because of collision at spawn position");
+        }
+      }
+    }
+    return AddActorLocked(type_id, is_vehicle, t);
+  }
+
+  ActorData &LiveLocked(rpc::ActorId id) {
+    auto it = actors.find(id);
+    if (it == actors.end()) throw std::runtime_error("actor " + std::to_string(id) + " not found");
+    return it->second;
+  }
+
+  double DeltaSeconds() const {
+    return settings.fixed_delta_seconds.value_or(kDefaultDeltaSeconds);
+  }
+
+  WorldSnapshot SnapshotLocked() const {
+    Timestamp t;
+    t.frame = frame;
+    t.delta_seconds = DeltaSeconds();
+    t.elapsed_seconds = static_cast<double>(frame) * t.delta_seconds;
+    t.platform_timestamp = t.elapsed_seconds;
+    std::vector<ActorSnapshot> snapshot;
+    for (const auto &entry : actors) {
+      const ActorData &a = entry.second;
+      snapshot.push_back(ActorSnapshot{a.id, a.transform, a.velocity, a.angular_velocity,
+                                       a.acceleration});
+    }
+    return WorldSnapshot(id, t, std::move(snapshot));
   }
 
   void ResetLocked(bool reset_settings, bool with_parked_vehicle) {
@@ -56,10 +119,10 @@ struct Episode {
   }
 
   void StepLocked() {
-    const double dt = settings.fixed_delta_seconds.value_or(kDefaultDeltaSeconds);
+    const double dt = DeltaSeconds();
     for (auto &entry : actors) {
       ActorData &a = entry.second;
-      if (!a.is_vehicle) continue;
+      if (!a.is_vehicle || !a.simulate_physics) continue;
       rpc::VehicleControl c = a.control;
       if (a.autopilot) c = rpc::VehicleControl(0.5f, 0.0f, 0.0f, false, false, false, 0);
       const double yaw = a.transform.rotation.yaw * M_PI / 180.0;
@@ -261,7 +324,11 @@ BlueprintLibrary::const_pointer BlueprintLibrary::Find(const std::string &key) c
 Actor::Actor(std::shared_ptr<mock::Episode> episode, rpc::ActorId id)
     : _episode(std::move(episode)), _id(id) {
   std::lock_guard<std::mutex> lock(_episode->mutex);
-  _type_id = _episode->actors.at(id).type_id;
+  const mock::ActorData &data = _episode->actors.at(id);
+  _type_id = data.type_id;
+  _bounding_box = data.is_vehicle
+                      ? geom::BoundingBox(geom::Location(0.0f, 0.0f, 0.7f), geom::Vector3D(2.4f, 1.0f, 0.75f))
+                      : geom::BoundingBox(geom::Location(), geom::Vector3D(0.5f, 0.5f, 0.5f));
 }
 
 template <typename F>
@@ -330,6 +397,14 @@ void Vehicle::ApplyControl(const Control &control) {
   WithData([&](mock::ActorData &a) { a.control = control; return 0; });
 }
 
+void Vehicle::ApplyPhysicsControl(const PhysicsControl &physics_control) {
+  WithData([&](mock::ActorData &a) { a.physics = physics_control; return 0; });
+}
+
+Vehicle::PhysicsControl Vehicle::GetPhysicsControl() const {
+  return WithData([](mock::ActorData &a) { return a.physics; });
+}
+
 Vehicle::Control Vehicle::GetControl() const {
   return WithData([](mock::ActorData &a) { return a.control; });
 }
@@ -388,29 +463,9 @@ SharedPtr<Actor> World::SpawnActor(const ActorBlueprint &blueprint,
   mock::ActorData data;
   {
     std::lock_guard<std::mutex> lock(_episode->mutex);
-    geom::Transform t = transform;
-    if (parent != nullptr) {
-      auto p = _episode->actors.find(parent->GetId());
-      if (p == _episode->actors.end()) throw std::runtime_error("parent actor is destroyed");
-      t.location.x += p->second.transform.location.x;
-      t.location.y += p->second.transform.location.y;
-      t.location.z += p->second.transform.location.z;
-    }
-    const bool is_vehicle = blueprint.GetId().rfind("vehicle.", 0) == 0;
-    if (is_vehicle) {
-      for (const auto &entry : _episode->actors) {
-        const auto &other = entry.second;
-        if (!other.is_vehicle) continue;
-        const double d = std::hypot(other.transform.location.x - t.location.x,
-                                    other.transform.location.y - t.location.y,
-                                    other.transform.location.z - t.location.z);
-        if (d < mock::kSpawnClearance) {
-          throw std::runtime_error("Spawn failed because of collision at spawn position");
-        }
-      }
-    }
-    const rpc::ActorId id = _episode->AddActorLocked(blueprint.GetId(), is_vehicle, t);
-    data = _episode->actors.at(id);
+    std::optional<rpc::ActorId> parent_id;
+    if (parent != nullptr) parent_id = parent->GetId();
+    data = _episode->actors.at(_episode->SpawnLocked(blueprint.GetId(), transform, parent_id));
   }
   return mock::MakeActor(_episode, data);
 }
@@ -430,6 +485,22 @@ uint64_t World::Tick(time_duration) {
   std::lock_guard<std::mutex> lock(_episode->mutex);
   _episode->StepLocked();
   return _episode->frame;
+}
+
+SharedPtr<Map> World::GetMap() const { return std::make_shared<Map>(); }
+
+WorldSnapshot World::GetSnapshot() const {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  return _episode->SnapshotLocked();
+}
+
+WorldSnapshot World::WaitForTick(time_duration timeout) const {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  if (_episode->settings.synchronous_mode) {
+    throw TimeoutException("mock (synchronous mode: no tick will come)", timeout);
+  }
+  _episode->StepLocked();
+  return _episode->SnapshotLocked();
 }
 
 rpc::EpisodeSettings World::GetSettings() const {
@@ -475,6 +546,178 @@ World Client::LoadWorld(std::string map_name, bool reset_settings, rpc::MapLayer
     episode->ResetLocked(reset_settings, false);
   }
   return World(episode);
+}
+
+// ---------------------------------------------------------------------------
+// Snapshots, map and waypoints
+
+std::optional<ActorSnapshot> WorldSnapshot::Find(rpc::ActorId id) const {
+  for (const auto &a : _actors)
+    if (a.id == id) return a;
+  return std::nullopt;
+}
+
+namespace {
+
+constexpr double kRoadLength = 200.0;
+constexpr double kLaneWidth = 3.5;
+constexpr int32_t kLanes[] = {-1, -2};
+
+double LaneY(int32_t lane_id) { return (-lane_id - 1) * kLaneWidth; }
+
+SharedPtr<Waypoint> MakeWaypoint(int32_t lane, double s) { return std::make_shared<Waypoint>(lane, s); }
+
+}  // namespace
+
+uint64_t Waypoint::GetId() const {
+  return (static_cast<uint64_t>(static_cast<uint32_t>(-_lane_id)) << 32) |
+         static_cast<uint64_t>(std::llround(_s * 100.0));
+}
+
+Waypoint::Waypoint(int32_t lane_id, double s)
+    : _lane_id(lane_id),
+      _s(s),
+      _transform(geom::Location(static_cast<float>(s), static_cast<float>(LaneY(lane_id)), 0.0f)) {}
+
+std::vector<SharedPtr<Waypoint>> Waypoint::GetNext(double distance) const {
+  if (_s + distance > kRoadLength) return {};
+  return {MakeWaypoint(_lane_id, _s + distance)};
+}
+
+std::vector<SharedPtr<Waypoint>> Waypoint::GetPrevious(double distance) const {
+  if (_s - distance < 0.0) return {};
+  return {MakeWaypoint(_lane_id, _s - distance)};
+}
+
+std::vector<SharedPtr<Waypoint>> Waypoint::GetNextUntilLaneEnd(double distance) const {
+  std::vector<SharedPtr<Waypoint>> result;
+  for (double s = _s + distance; s <= kRoadLength; s += distance) result.push_back(MakeWaypoint(_lane_id, s));
+  return result;
+}
+
+std::vector<SharedPtr<Waypoint>> Waypoint::GetPreviousUntilLaneStart(double distance) const {
+  std::vector<SharedPtr<Waypoint>> result;
+  for (double s = _s - distance; s >= 0.0; s -= distance) result.push_back(MakeWaypoint(_lane_id, s));
+  return result;
+}
+
+SharedPtr<Waypoint> Waypoint::GetRight() const {
+  return _lane_id == -1 ? MakeWaypoint(-2, _s) : nullptr;
+}
+
+SharedPtr<Waypoint> Waypoint::GetLeft() const {
+  return _lane_id == -2 ? MakeWaypoint(-1, _s) : nullptr;
+}
+
+Map::Map() : _name("Carla/Maps/MockTown") {
+  _xodr = "<?xml version=\"1.0\"?><OpenDRIVE><header name=\"MockTown\"/>"
+          "<road id=\"1\" length=\"200\"/></OpenDRIVE>";
+  for (double x : {10.0, 40.0, 70.0}) {
+    for (int32_t lane : kLanes) {
+      _spawn_points.emplace_back(
+          geom::Location(static_cast<float>(x), static_cast<float>(LaneY(lane)), 0.6f));
+    }
+  }
+}
+
+SharedPtr<Waypoint> Map::GetWaypoint(const geom::Location &location, bool project_to_road,
+                                     int32_t lane_type) const {
+  if ((lane_type & static_cast<int32_t>(road::Lane::LaneType::Driving)) == 0) return nullptr;
+  if (location.x < 0.0f || location.x > kRoadLength) return nullptr;
+  int32_t best = kLanes[0];
+  for (int32_t lane : kLanes) {
+    if (std::abs(location.y - LaneY(lane)) < std::abs(location.y - LaneY(best))) best = lane;
+  }
+  if (!project_to_road && std::abs(location.y - LaneY(best)) > kLaneWidth / 2.0) return nullptr;
+  return MakeWaypoint(best, location.x);
+}
+
+std::vector<SharedPtr<Waypoint>> Map::GenerateWaypoints(double distance) const {
+  std::vector<SharedPtr<Waypoint>> result;
+  for (int32_t lane : kLanes) {
+    for (double s = 0.0; s <= kRoadLength; s += distance) result.push_back(MakeWaypoint(lane, s));
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Batch commands
+
+namespace {
+
+using Command = rpc::Command;
+
+// Executes one command; `future` replaces actor id 0 in do_after commands.
+rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) {
+  auto target = [&](rpc::ActorId id) -> mock::ActorData & {
+    // Like the server: a then-command always acts on the spawned actor.
+    return e.LiveLocked(future != 0 ? future : id);
+  };
+  return std::visit(
+      [&](const auto &c) -> rpc::ActorId {
+        using T = std::decay_t<decltype(c)>;
+        if constexpr (std::is_same_v<T, Command::SpawnActor>) {
+          const rpc::ActorId id = e.SpawnLocked(c.description.id, c.transform, c.parent);
+          // Like the server: a failing then-command does not fail the spawn.
+          for (const auto &after : c.do_after) {
+            try {
+              Execute(e, after, id);
+            } catch (const std::exception &) {
+            }
+          }
+          return id;
+        } else if constexpr (std::is_same_v<T, Command::DestroyActor>) {
+          const rpc::ActorId id = target(c.actor).id;
+          e.actors.erase(id);
+          return id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyVehicleControl>) {
+          auto &a = target(c.actor);
+          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          a.control = c.control;
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyTransform>) {
+          auto &a = target(c.actor);
+          a.transform = c.transform;
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyTargetVelocity>) {
+          auto &a = target(c.actor);
+          a.velocity = c.velocity;
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::SetSimulatePhysics>) {
+          auto &a = target(c.actor);
+          a.simulate_physics = c.enabled;
+          return a.id;
+        } else {
+          static_assert(std::is_same_v<T, Command::SetAutopilot>);
+          auto &a = target(c.actor);
+          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          a.autopilot = c.enabled;
+          return a.id;
+        }
+      },
+      cmd.command);
+}
+
+}  // namespace
+
+std::vector<rpc::CommandResponse> Client::ApplyBatchSync(std::vector<rpc::Command> commands,
+                                                         bool do_tick_cue) const {
+  auto episode = mock::Connect(_endpoint, _timeout);
+  std::lock_guard<std::mutex> lock(episode->mutex);
+  std::vector<rpc::CommandResponse> responses;
+  for (const auto &cmd : commands) {
+    try {
+      responses.emplace_back(Execute(*episode, cmd, 0));
+    } catch (const std::exception &e) {
+      responses.emplace_back(rpc::ResponseError(e.what()));
+    }
+  }
+  if (do_tick_cue) episode->StepLocked();
+  return responses;
+}
+
+void Client::ApplyBatch(std::vector<rpc::Command> commands, bool do_tick_cue) const {
+  ApplyBatchSync(std::move(commands), do_tick_cue);
 }
 
 }  // namespace client

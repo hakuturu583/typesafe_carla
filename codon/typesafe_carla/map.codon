@@ -1,0 +1,177 @@
+# Map and waypoints (OpenDRIVE road network queries).
+
+from ._ffi import (Handle, CString, CTransform, CVector3D, CWaypointInfo, take_string,
+                   tsc_map_get_name, tsc_map_to_opendrive, tsc_map_get_spawn_points,
+                   tsc_map_get_waypoint, tsc_map_generate_waypoints, tsc_waypoint_get_info,
+                   tsc_waypoint_next, tsc_waypoint_previous, tsc_waypoint_next_until_lane_end,
+                   tsc_waypoint_previous_until_lane_start, tsc_waypoint_get_left_lane,
+                   tsc_waypoint_get_right_lane, tsc_waypoint_list_size, tsc_waypoint_list_get)
+from .errors import _check
+from .geometry import Location, Transform
+
+class LaneType:
+    """OpenDRIVE lane types (bit flags, as carla.LaneType)."""
+    NONE: ClassVar[int] = 0x1
+    Driving: ClassVar[int] = 0x1 << 1
+    Stop: ClassVar[int] = 0x1 << 2
+    Shoulder: ClassVar[int] = 0x1 << 3
+    Biking: ClassVar[int] = 0x1 << 4
+    Sidewalk: ClassVar[int] = 0x1 << 5
+    Border: ClassVar[int] = 0x1 << 6
+    Restricted: ClassVar[int] = 0x1 << 7
+    Parking: ClassVar[int] = 0x1 << 8
+    Bidirectional: ClassVar[int] = 0x1 << 9
+    Median: ClassVar[int] = 0x1 << 10
+    Special1: ClassVar[int] = 0x1 << 11
+    Special2: ClassVar[int] = 0x1 << 12
+    Special3: ClassVar[int] = 0x1 << 13
+    RoadWorks: ClassVar[int] = 0x1 << 14
+    Tram: ClassVar[int] = 0x1 << 15
+    Rail: ClassVar[int] = 0x1 << 16
+    Entry: ClassVar[int] = 0x1 << 17
+    Exit: ClassVar[int] = 0x1 << 18
+    OffRamp: ClassVar[int] = 0x1 << 19
+    OnRamp: ClassVar[int] = 0x1 << 20
+    Any: ClassVar[int] = -2
+
+class Waypoint:
+    """A point on a lane. The info fields are read once, when it is created."""
+    _h: Handle
+    _info: CWaypointInfo
+
+    def __init__(self, h: Handle):
+        self._h = h
+        out = Ptr[CWaypointInfo](1)
+        _check(tsc_waypoint_get_info(h.ptr, out))
+        self._info = out[0]
+
+    @property
+    def id(self) -> int:
+        return int(self._info.id)
+
+    @property
+    def transform(self) -> Transform:
+        return Transform._from_c(self._info.transform)
+
+    @property
+    def road_id(self) -> int:
+        return int(self._info.road_id)
+
+    @property
+    def section_id(self) -> int:
+        return int(self._info.section_id)
+
+    @property
+    def lane_id(self) -> int:
+        return int(self._info.lane_id)
+
+    @property
+    def s(self) -> float:
+        return self._info.s
+
+    @property
+    def is_junction(self) -> bool:
+        return int(self._info.is_junction) != 0
+
+    @property
+    def junction_id(self) -> int:
+        return int(self._info.junction_id)
+
+    @property
+    def lane_width(self) -> float:
+        return self._info.lane_width
+
+    @property
+    def lane_type(self) -> int:
+        """A LaneType value."""
+        return int(self._info.lane_type)
+
+    def next(self, distance: float) -> List[Waypoint]:
+        return _waypoints(tsc_waypoint_next, self._h.ptr, distance)
+
+    def previous(self, distance: float) -> List[Waypoint]:
+        return _waypoints(tsc_waypoint_previous, self._h.ptr, distance)
+
+    def next_until_lane_end(self, distance: float) -> List[Waypoint]:
+        return _waypoints(tsc_waypoint_next_until_lane_end, self._h.ptr, distance)
+
+    def previous_until_lane_start(self, distance: float) -> List[Waypoint]:
+        return _waypoints(tsc_waypoint_previous_until_lane_start, self._h.ptr, distance)
+
+    def get_left_lane(self) -> Optional[Waypoint]:
+        out = Ptr[cobj](1)
+        _check(tsc_waypoint_get_left_lane(self._h.ptr, out))
+        return _waypoint_or_none(out[0])
+
+    def get_right_lane(self) -> Optional[Waypoint]:
+        out = Ptr[cobj](1)
+        _check(tsc_waypoint_get_right_lane(self._h.ptr, out))
+        return _waypoint_or_none(out[0])
+
+    def __repr__(self) -> str:
+        return (f"Waypoint(id={self.id}, road_id={self.road_id}, lane_id={self.lane_id}, "
+                f"s={self.s}, {self.transform})")
+
+def _waypoint_or_none(ptr: cobj) -> Optional[Waypoint]:
+    if ptr == cobj():
+        return None
+    return Waypoint(Handle(ptr))
+
+def _waypoints(fn, h: cobj, distance: float) -> List[Waypoint]:
+    """Calls a tsc_*(handle, distance, out) waypoint-list function."""
+    out = Ptr[cobj](1)
+    _check(fn(h, distance, out))
+    return _take_list(out[0])
+
+def _take_list(ptr: cobj) -> List[Waypoint]:
+    """Copies a native waypoint list into a Codon list and releases it."""
+    h = Handle(ptr)
+    n = tsc_waypoint_list_size(h.ptr)
+    result = List[Waypoint](n)
+    out = Ptr[cobj](1)
+    for i in range(n):
+        _check(tsc_waypoint_list_get(h.ptr, i, out))
+        result.append(Waypoint(Handle(out[0])))
+    h.release()
+    return result
+
+class Map:
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    @property
+    def name(self) -> str:
+        out = Ptr[CString](1)
+        _check(tsc_map_get_name(self._h.ptr, out))
+        return take_string(out)
+
+    def to_opendrive(self) -> str:
+        out = Ptr[CString](1)
+        _check(tsc_map_to_opendrive(self._h.ptr, out))
+        return take_string(out)
+
+    def get_spawn_points(self) -> List[Transform]:
+        count = Ptr[int](1)
+        _check(tsc_map_get_spawn_points(self._h.ptr, Ptr[CTransform](), 0, count))
+        n = count[0]
+        buf = Ptr[CTransform](n if n > 0 else 1)
+        _check(tsc_map_get_spawn_points(self._h.ptr, buf, n, count))
+        return [Transform._from_c(buf[i]) for i in range(min(n, count[0]))]
+
+    def get_waypoint(self, location: Location, project_to_road: bool = True,
+                     lane_type: int = LaneType.Driving) -> Optional[Waypoint]:
+        """None when no lane of `lane_type` matches."""
+        loc = Ptr[CVector3D](1)
+        loc[0] = location._to_c()
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_waypoint(self._h.ptr, loc, i32(int(project_to_road)), i32(lane_type),
+                                    out))
+        return _waypoint_or_none(out[0])
+
+    def generate_waypoints(self, distance: float) -> List[Waypoint]:
+        return _waypoints(tsc_map_generate_waypoints, self._h.ptr, distance)
+
+    def __repr__(self) -> str:
+        return f"Map(name={self.name})"

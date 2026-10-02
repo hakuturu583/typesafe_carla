@@ -61,6 +61,10 @@ def _check_port(name: str, port: int):
     if port < 0 or port > 65535:
         raise CarlaError(f"{name} {port} is not a valid TCP port", TSC_INVALID_ARGUMENT)
 
+def _is_actor_id(actor_id: int) -> bool:
+    """Whether actor_id fits CARLA's 32-bit unsigned actor ids."""
+    return 0 <= actor_id <= 0xFFFFFFFF
+
 def _normalize_index(index: int, n: int, what: str) -> int:
     """Python-style indexing: maps a negative index from the end, checks bounds."""
     i = index + n if index < 0 else index

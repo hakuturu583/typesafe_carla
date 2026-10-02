@@ -1,0 +1,10 @@
+# Map.get_waypoint takes a Location.
+# expect-error: 'Transform' does not match expected type 'Location'
+import typesafe_carla as carla
+
+def lookup(world: carla.World):
+    m = world.get_map()
+    m.get_waypoint(m.get_spawn_points()[0])
+
+# Compile-only: Codon type-checks a function only when it is called.
+lookup(carla.Client("localhost", 2000).get_world())

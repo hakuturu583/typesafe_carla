@@ -3,9 +3,11 @@
 from ._ffi import (Handle, CString, take_string, tsc_client_create, tsc_client_set_timeout,
                    tsc_client_get_timeout, tsc_client_get_client_version,
                    tsc_client_get_server_version, tsc_client_get_world, tsc_client_load_world,
-                   tsc_client_reload_world)
+                   tsc_client_reload_world, tsc_client_apply_batch, tsc_client_apply_batch_sync,
+                   CCommandResponse)
 from .errors import _check, _check_port
 from .world import World
+from .command import Command, CommandResponse, _flatten, _responses
 
 class Client:
     _h: Handle
@@ -50,3 +52,23 @@ class Client:
         out = Ptr[cobj](1)
         _check(tsc_client_reload_world(self._h.ptr, i32(int(reset_settings)), out))
         return World(Handle(out[0]))
+
+    def apply_batch(self, commands: List[Command], do_tick: bool = False):
+        """Sends all commands in one RPC without waiting for their results."""
+        records, n = _flatten(commands)
+        _check(tsc_client_apply_batch(self._h.ptr, records, n, i32(int(do_tick))))
+
+    def apply_batch_sync(self, commands: List[Command],
+                         do_tick: bool = False) -> List[CommandResponse]:
+        """Sends all commands in one RPC; one response per command, in order.
+
+        A failing command does not raise: its response has_error(). Autopilot
+        set here is registered with the Traffic Manager, like the Python API.
+        """
+        records, n = _flatten(commands)
+        top = len(commands)
+        buf = Ptr[CCommandResponse](top if top > 0 else 1)
+        count = Ptr[int](1)
+        _check(tsc_client_apply_batch_sync(self._h.ptr, records, n, i32(int(do_tick)), buf, top,
+                                           count))
+        return _responses(buf, count[0])
