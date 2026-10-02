@@ -35,4 +35,9 @@ assert raises_carla_error(lambda: world.get_actors([1 << 32]))
 
 for a in spawned:
     a.destroy()
+
+# As in LibCarla (its actor cache is only cleared when an episode starts), a
+# destroyed actor may still be returned, no longer alive.
+gone = world.get_actors([ids[0]])
+assert len(gone) == 1 and gone[0].id == ids[0] and not gone[0].is_alive
 print("OK")

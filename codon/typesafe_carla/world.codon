@@ -119,7 +119,9 @@ class World:
     def get_actors(self, actor_ids: List[int]) -> ActorList:
         """The actors with these ids, in the order given. Ids that name no actor
         are left out, as in LibCarla; an id outside CARLA's 32-bit unsigned
-        range raises CarlaError (TSC_INVALID_ARGUMENT)."""
+        range raises CarlaError (TSC_INVALID_ARGUMENT). A destroyed actor may
+        still be returned (with is_alive False): LibCarla's actor cache is only
+        cleared when an episode starts."""
         ids = array([_actor_id(i) for i in actor_ids])
         out = Ptr[cobj](1)
         _check(tsc_world_get_actors_by_id(self._h.ptr, ids, len(actor_ids), out))

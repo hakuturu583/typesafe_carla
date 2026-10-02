@@ -10,7 +10,7 @@ blocks:
       call: GetActors
       args: {actor_ids: uint32_array}
       out: {type: actor_list_handle, name: out_list}
-      doc: "In request order; ids that name no actor are left out (as in LibCarla)."
+      doc: "In request order; ids that name no actor are left out (as in LibCarla). Destroyed actors may still be listed (LibCarla's actor cache is only cleared when an episode starts)."
     get_blueprint_library:
       call: GetBlueprintLibrary
       out: {type: blueprint_library_handle, name: out_library}

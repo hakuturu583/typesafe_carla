@@ -80,7 +80,8 @@ out("landmark0", f"{lms[0].id},{lms[0].name},{lms[0].type},{lms[0].road_id}")
 lights = [a for a in world.get_actors() if a.type_id == "traffic.traffic_light"]
 out("traffic_lights", len(lights))
 # Issue #38: get_actors(actor_ids) keeps request order and leaves unknown ids out.
-by_id = world.get_actors([lights[1].id, 999999, lights[0].id])
+unknown_id = max(a.id for a in world.get_actors()) + 100000
+by_id = world.get_actors([lights[1].id, unknown_id, lights[0].id])
 out("actors_by_id", f"{len(by_id)},{int(by_id[0].id == lights[1].id)},"
     f"{int(by_id[1].id == lights[0].id)},{by_id[0].type_id}")
 out("light0_times", f"{lights[0].get_green_time():.3f},{lights[0].get_yellow_time():.3f},{lights[0].get_red_time():.3f}")

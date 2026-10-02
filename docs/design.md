@@ -979,7 +979,7 @@ Phase 1 should intentionally cover the APIs required for normal closed-loop simu
 
 **Client:** Client, set_timeout, get_world, load_world, reload_world, get_server_version, get_client_version, apply_batch, apply_batch_sync, get_trafficmanager
 
-**World:** get_map, get_settings, apply_settings, tick, wait_for_tick, get_snapshot, get_actors, get_actor, get_blueprint_library, spawn_actor, try_spawn_actor, destroy_actor
+**World:** get_map, get_settings, apply_settings, tick, wait_for_tick, get_snapshot, get_actors, get_actors(actor_ids), get_actor, get_blueprint_library, spawn_actor, try_spawn_actor, destroy_actor
 
 **Geometry:** Location, Rotation, Transform, Vector2D, Vector3D, BoundingBox
 
