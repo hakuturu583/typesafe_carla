@@ -1,0 +1,121 @@
+# Issue #19 on the mock backend: actor state, attributes, parent, semantic
+# tags, physics at a location, skeleton queries, textures and traffic signs.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+assert ffi.CStringList.__elemsize__ == 16 and ffi.CTransformList.__elemsize__ == 16
+assert ffi.CFloatColor.__elemsize__ == 16 and ffi.CTextureColor.__elemsize__ == 16
+assert ffi.CTextureFloatColor.__elemsize__ == 16
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+actors = world.get_actors()
+vehicle = actors[0].as_vehicle()
+light = actors[2].as_traffic_light()
+sign_actor = actors[3]
+handles = carla._live_handle_count()
+
+def carla_error(f) -> Tuple[int, str]:
+    """(status, message) of the CarlaError f() raises; (0, "") if none."""
+    try:
+        f()
+    except carla.CarlaError as e:
+        return (e.status, e.message)
+    return (0, "")
+
+def raises_type_error(f) -> bool:
+    try:
+        f()
+    except carla.ActorTypeError:
+        return True
+    return False
+
+# State and identity
+assert vehicle.actor_state == carla.ActorState.Active
+assert vehicle.is_active and not vehicle.is_dormant and vehicle.is_alive
+assert vehicle.get_actor_name() == f"Mock_vehicle_tesla_model3_{vehicle.id}"
+assert vehicle.get_actor_class_name() == "MockVehicle_C"
+assert vehicle.semantic_tags == [carla.CityObjectLabel.Car]
+assert light.semantic_tags == [carla.CityObjectLabel.TrafficLight]
+assert actors[1].semantic_tags == []  # spectator
+assert vehicle.parent is None
+assert len(vehicle.attributes) == 0  # the pre-existing vehicle was not spawned from a blueprint
+
+bp = world.get_blueprint_library().find("vehicle.audi.tt")
+bp.set_attribute("role_name", "hero")
+car = world.spawn_actor(bp, carla.Transform(carla.Location(0.0, 30.0, 0.5))).as_vehicle()
+attrs = car.attributes
+assert attrs["role_name"] == "hero" and "color" in attrs, attrs
+camera_bp = world.get_blueprint_library().find("sensor.camera.rgb")
+camera = world.spawn_actor(camera_bp, carla.Transform(carla.Location(0.0, 0.0, 2.0)), attach_to=car)
+parent = camera.parent
+assert parent is not None and parent.id == car.id and parent.is_vehicle()
+assert camera.parent.as_vehicle().id == car.id
+assert camera.semantic_tags == []
+
+# Physics
+car.set_collisions(False)
+car.set_collisions()
+car.enable_constant_velocity(carla.Vector3D(2.0, 0.0, 0.0))
+world.tick()
+assert car.get_velocity() == carla.Vector3D(2.0, 0.0, 0.0)
+x0 = car.get_location().x
+world.tick()
+assert car.get_location().x > x0
+car.disable_constant_velocity()
+car.set_target_velocity(carla.Vector3D())
+car.add_impulse_at_location(carla.Vector3D(1500.0, 0.0, 0.0), car.get_location())
+assert car.get_velocity().x > 0.0
+car.add_force_at_location(carla.Vector3D(0.0, 1000.0, 0.0), carla.Location(1.0, 2.0, 3.0))
+assert car.get_velocity().y > 0.0
+
+# Skeleton queries (ue5-dev signatures; the mock implements them)
+bones = car.get_bone_names()
+assert len(bones) == 6 and bones[0] == "Root"
+assert len(car.get_bone_world_transforms()) == 6
+rel = car.get_bone_relative_transforms()
+assert len(rel) == 6 and rel[0] == carla.Transform()
+assert car.get_component_names() == ["RootComponent", "Mesh"]
+assert car.get_component_world_transform("Mesh") == car.get_transform()
+assert car.get_component_relative_transform("RootComponent") == carla.Transform()
+assert car.get_socket_names() == ["Socket_Driver"]
+assert len(car.get_socket_world_transforms()) == 1
+assert len(car.get_socket_relative_transforms()) == 1
+assert light.get_socket_names() == [] and light.get_socket_world_transforms() == []
+assert "NoSuchComponent" in carla_error(lambda: car.get_component_world_transform("NoSuchComponent"))[1]
+assert "SkinnedMeshComponent" in carla_error(lambda: light.get_bone_names())[1]  # no skinned mesh
+
+# Textures
+texture = carla.TextureColor(4, 2)
+texture.set(3, 1, carla.Color(255, 0, 0, 255))
+car.apply_texture(carla.MaterialParameter.Diffuse, texture)
+float_texture = carla.TextureFloatColor(2, 2)
+float_texture.set(0, 0, carla.FloatColor(0.5, 0.5, 0.5, 1.0))
+car.apply_texture(carla.MaterialParameter.Normal, float_texture)
+car.apply_texture(carla.MaterialParameter.Emissive, carla.TextureColor(0, 0))
+assert carla_error(lambda: car.apply_texture(7, texture))[0] == ffi.TSC_INVALID_ARGUMENT
+
+# Traffic signs: a TrafficLight is a TrafficSign
+assert sign_actor.type_id == "traffic.stop"
+assert sign_actor.is_traffic_sign() and not sign_actor.is_traffic_light()
+sign = sign_actor.as_traffic_sign()
+assert sign.trigger_volume == sign_actor.bounding_box
+assert sign.semantic_tags == [carla.CityObjectLabel.TrafficSigns]
+assert light.is_traffic_sign()
+light_as_sign = actors[2].as_traffic_sign()
+assert light_as_sign.id == light.id and light.trigger_volume == light_as_sign.trigger_volume
+assert raises_type_error(lambda: sign_actor.as_traffic_light())
+assert raises_type_error(lambda: vehicle.as_traffic_sign())
+# The compatibility shortcut on a plain Actor (warns once).
+assert world.get_actor(sign.id).trigger_volume == sign.trigger_volume
+signs = [a for a in world.get_actors() if a.is_traffic_sign()]
+assert len(signs) == 2
+
+# Destroyed actors
+car_id = car.id
+camera.destroy()
+car.destroy()
+assert not car.is_active and not car.is_dormant and not car.is_alive
+assert carla_error(lambda: car.actor_state)[0] != 0  # as in LibCarla: no episode after destroy
+assert carla_error(lambda: car.get_actor_name())[0] != 0
+print("OK")

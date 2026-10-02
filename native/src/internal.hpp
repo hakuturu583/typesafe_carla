@@ -10,6 +10,7 @@
 #include <initializer_list>
 #include <limits>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <stdexcept>
@@ -165,9 +166,17 @@ struct tsc_walker_ai_controller : tsc_actor {
       : tsc_actor(std::move(c), TSC_KIND_WALKER_AI_CONTROLLER) {}
 };
 
-struct tsc_traffic_light : tsc_actor {
+// A traffic sign handle: `actor` is a carla::client::TrafficSign. Traffic
+// lights are traffic signs in LibCarla, so their handle derives from this one.
+struct tsc_traffic_sign : tsc_actor {
+  explicit tsc_traffic_sign(carla::SharedPtr<carla::client::TrafficSign> s,
+                            tsc_handle_kind_t k = TSC_KIND_TRAFFIC_SIGN)
+      : tsc_actor(std::move(s), k) {}
+};
+
+struct tsc_traffic_light : tsc_traffic_sign {
   explicit tsc_traffic_light(carla::SharedPtr<carla::client::TrafficLight> t)
-      : tsc_actor(std::move(t), TSC_KIND_TRAFFIC_LIGHT) {}
+      : tsc_traffic_sign(std::move(t), TSC_KIND_TRAFFIC_LIGHT) {}
 };
 
 struct tsc_traffic_manager : tsc_handle {
@@ -293,7 +302,8 @@ T *check_handle(T *h, const char *name, tsc_handle_kind_t kind) {
 inline tsc_actor *check_actor(tsc_actor *a, const char *name = "actor") {
   return check_handle(a, name,
                       {TSC_KIND_ACTOR, TSC_KIND_VEHICLE, TSC_KIND_SENSOR, TSC_KIND_WALKER,
-                       TSC_KIND_WALKER_AI_CONTROLLER, TSC_KIND_TRAFFIC_LIGHT});
+                       TSC_KIND_WALKER_AI_CONTROLLER, TSC_KIND_TRAFFIC_LIGHT,
+                       TSC_KIND_TRAFFIC_SIGN});
 }
 
 // Shared body of tsc_actor_as_<kind>: a new reference to `actor` as the
@@ -361,6 +371,12 @@ inline carla::client::Walker &walker_of(tsc_walker_t *w) {
 
 inline carla::client::TrafficLight &light_of(tsc_traffic_light_t *t) {
   return actor_as<carla::client::TrafficLight>(t, "traffic_light", TSC_KIND_TRAFFIC_LIGHT);
+}
+
+// Traffic sign and traffic light handles (both hold a TrafficSign).
+inline carla::client::TrafficSign &sign_of(tsc_traffic_sign_t *s) {
+  return static_cast<carla::client::TrafficSign &>(
+      *check_handle(s, "sign", {TSC_KIND_TRAFFIC_SIGN, TSC_KIND_TRAFFIC_LIGHT})->actor);
 }
 
 inline carla::client::WalkerAIController &controller_of(tsc_walker_ai_controller_t *c) {
@@ -448,6 +464,7 @@ inline tsc_rotation_t from_carla(const carla::geom::Rotation &r) {
 inline tsc_transform_t from_carla(const carla::geom::Transform &t) {
   return tsc_transform_t{from_carla(t.location), from_carla(t.rotation)};
 }
+inline uint8_t from_carla(uint8_t v) { return v; }  // semantic tags
 inline tsc_bounding_box_t from_carla(const carla::geom::BoundingBox &b) {
   return tsc_bounding_box_t{from_carla(b.location), from_carla(b.extent), from_carla(b.rotation)};
 }
@@ -581,6 +598,41 @@ inline carla::time_duration seconds_to_duration(double seconds) {
     fail(TSC_INVALID_ARGUMENT, "timeout must be a finite number of seconds in [0, 1e9]");
   }
   return carla::time_duration::milliseconds(static_cast<size_t>(seconds * 1000.0 + 0.5));
+}
+
+// Shared value types (#19, #21): shared_types.cpp.
+void transform_list_assign(tsc_transform_list_t *out,
+                           const std::vector<carla::geom::Transform> &values);
+carla::rpc::TextureColor to_carla_texture(const tsc_texture_color_t *texture, const char *name);
+carla::rpc::TextureFloatColor to_carla_texture(const tsc_texture_float_color_t *texture,
+                                               const char *name);
+carla::rpc::MaterialParameter to_material_parameter(int32_t parameter);
+
+// Caller-owned lists of POD items (issue #21): malloc'd, freed with free().
+template <typename T>
+T *alloc_list_items(size_t n) {
+  if (n == 0) return nullptr;
+  auto *items = static_cast<T *>(std::calloc(n, sizeof(T)));
+  if (items == nullptr) throw std::bad_alloc();
+  return items;
+}
+
+template <typename List>
+void free_list_items(List *list) {
+  if (list == nullptr) return;
+  std::free(list->items);
+  list->items = nullptr;
+  list->size = 0;
+}
+
+// *out = the items convert(values[i]).
+template <typename List, typename Vec, typename Convert>
+void list_assign(List *out, const Vec &values, Convert &&convert) {
+  require_ptr(out, "out");
+  using Item = std::remove_pointer_t<decltype(out->items)>;
+  List list{alloc_list_items<Item>(values.size()), values.size()};
+  for (size_t i = 0; i < values.size(); ++i) list.items[i] = convert(values[i]);
+  *out = list;
 }
 
 }  // namespace tsc

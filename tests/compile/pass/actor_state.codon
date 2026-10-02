@@ -1,0 +1,68 @@
+# Issue #19: actor state and identity, attributes, parent, semantic tags,
+# physics at a location, skeleton queries, textures and traffic signs, in the
+# statically checked style.
+# strict
+import typesafe_carla as carla
+
+def inspect(actor: carla.Actor):
+    state: int = actor.actor_state
+    active: bool = actor.is_active
+    dormant: bool = actor.is_dormant
+    attributes: Dict[str, str] = actor.attributes
+    parent: Optional[carla.Actor] = actor.parent
+    tags: List[int] = actor.semantic_tags
+    is_car = carla.CityObjectLabel.Car in tags
+    name: str = actor.get_actor_name()
+    class_name: str = actor.get_actor_class_name()
+    print(state == carla.ActorState.Active, active, dormant, attributes, parent, is_car, name,
+          class_name)
+
+def push(actor: carla.Actor, vehicle: carla.Vehicle):
+    actor.set_collisions(False)
+    actor.set_collisions()
+    actor.enable_constant_velocity(carla.Vector3D(1.0, 0.0, 0.0))
+    actor.disable_constant_velocity()
+    actor.add_force_at_location(carla.Vector3D(0.0, 0.0, 100.0), actor.get_location())
+    actor.add_impulse_at_location(carla.Vector3D(10.0, 0.0, 0.0), carla.Location(1.0, 2.0, 3.0))
+    # Every subclass inherits them.
+    vehicle.add_force_at_location(force=carla.Vector3D(1.0, 0.0, 0.0),
+                                  location=vehicle.get_location())
+
+def skeleton(actor: carla.Actor):
+    bones: List[str] = actor.get_bone_names()
+    world_bones: List[carla.Transform] = actor.get_bone_world_transforms()
+    local_bones: List[carla.Transform] = actor.get_bone_relative_transforms()
+    components: List[str] = actor.get_component_names()
+    mesh: carla.Transform = actor.get_component_world_transform("Mesh")
+    root: carla.Transform = actor.get_component_relative_transform(component_name="Root")
+    sockets: List[str] = actor.get_socket_names()
+    world_sockets: List[carla.Transform] = actor.get_socket_world_transforms()
+    local_sockets: List[carla.Transform] = actor.get_socket_relative_transforms()
+    print(bones, world_bones, local_bones, components, mesh, root, sockets, world_sockets,
+          local_sockets)
+
+def paint(actor: carla.Actor):
+    texture = carla.TextureColor(2, 2)
+    texture.set(0, 0, carla.Color(255, 0, 0, 255))
+    actor.apply_texture(carla.MaterialParameter.Diffuse, texture)
+    normal = carla.TextureFloatColor(1, 1)
+    normal.set(0, 0, carla.FloatColor(0.5, 0.5, 1.0))
+    actor.apply_texture(carla.MaterialParameter.Normal, normal)
+
+def signs(world: carla.World):
+    for actor in world.get_actors():
+        if actor.is_traffic_sign():
+            sign: carla.TrafficSign = actor.as_traffic_sign()
+            volume: carla.BoundingBox = sign.trigger_volume
+            print(sign, volume)
+        if actor.is_traffic_light():
+            light = actor.as_traffic_light()
+            print(light.trigger_volume, light.as_traffic_sign().trigger_volume)
+
+world = carla.Client("localhost", 2000).get_world()
+first = world.get_actors()[0]
+inspect(first)
+push(first, first.as_vehicle())
+skeleton(first)
+paint(first)
+signs(world)

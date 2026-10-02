@@ -2,7 +2,7 @@
 import typesafe_carla as carla
 
 assert carla.backend() == "mock"
-assert carla.abi_version() == (3, 3)
+assert carla.abi_version() == (3, 4)
 assert carla.libcarla_git_ref() == "mock" and carla.libcarla_git_commit() == "mock"
 
 client = carla.Client("localhost", 2000)
@@ -12,7 +12,7 @@ assert client.get_server_version() == client.get_client_version()
 
 world = client.get_world()
 actors = world.get_actors()
-assert len(actors) == 3  # vehicle, spectator, traffic light
+assert len(actors) == 4  # vehicle, spectator, traffic light, stop sign
 vehicle = world.get_actors()[0].as_vehicle()
 vehicle.apply_control(carla.VehicleControl(throttle=0.2, steer=0.0))
 

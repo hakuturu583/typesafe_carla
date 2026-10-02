@@ -1,0 +1,12 @@
+# Strict mode: a traffic sign's trigger volume needs a checked
+# as_traffic_sign() conversion. (Outside strict mode this compiles: a
+# Python-API compatibility path.)
+# expect-error: strict mode: call as_traffic_sign() first (Actor.trigger_volume is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def volumes(world: carla.World):
+    for actor in world.get_actors():
+        print(actor.trigger_volume)
+
+# Compile-only: Codon type-checks a function only when it is called.
+volumes(carla.Client("localhost", 2000).get_world())

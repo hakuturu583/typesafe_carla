@@ -1,0 +1,10 @@
+# In strict mode a Vector3D is not a position: the point of application of a
+# force is a Location.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def push(actor: carla.Actor):
+    actor.add_force_at_location(carla.Vector3D(0.0, 0.0, 10.0), carla.Vector3D(1.0, 0.0, 0.0))
+
+# Compile-only: Codon type-checks a function only when it is called.
+push(carla.Client("localhost", 2000).get_world().get_actors()[0])

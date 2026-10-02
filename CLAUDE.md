@@ -87,6 +87,10 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   generic parameter plus `_upcast_vector` / `_upcast_location`. Same-name
   methods with different signatures across a class hierarchy are dispatched
   as virtual overrides: avoid them.
+- Class hierarchies two levels deep are miscompiled: with `C(B(A))`, methods
+  `C` inherits from `B` read `A`'s fields at the wrong offset, and
+  `super().__init__()` chains through both levels crash. Keep classes one
+  level below `Actor` (`TrafficLight` and `TrafficSign` are siblings).
 - `-D` definitions are visible only in the main file, and `CODON_PATH` holds
   a single directory. The strict setting reaches the library through the
   launcher-generated `_tsc_build_config` module.

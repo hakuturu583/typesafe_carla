@@ -21,13 +21,40 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_actor_set_simulate_physics, tsc_actor_set_enable_gravity,
                    tsc_vehicle_set_light_state, tsc_vehicle_get_light_state,
                    tsc_vehicle_get_speed_limit, tsc_vehicle_get_traffic_light_state,
-                   tsc_vehicle_is_at_traffic_light)
-from .errors import _check, _check_light_state, _check_port, _normalize_index
+                   tsc_vehicle_is_at_traffic_light, CStringList, CTransformList,
+                   take_string_list, tsc_transform_list_free,
+                   tsc_actor_get_actor_name, tsc_actor_get_actor_class_name,
+                   tsc_actor_get_actor_state, tsc_actor_is_active, tsc_actor_is_dormant,
+                   tsc_actor_get_parent, tsc_actor_get_semantic_tags, tsc_actor_get_attributes,
+                   tsc_actor_set_collisions, tsc_actor_enable_constant_velocity,
+                   tsc_actor_disable_constant_velocity, tsc_actor_add_force_at_location,
+                   tsc_actor_add_impulse_at_location, tsc_actor_get_bone_names,
+                   tsc_actor_get_bone_world_transforms, tsc_actor_get_bone_relative_transforms,
+                   tsc_actor_get_component_names, tsc_actor_get_component_world_transform,
+                   tsc_actor_get_component_relative_transform, tsc_actor_get_socket_names,
+                   tsc_actor_get_socket_world_transforms, tsc_actor_get_socket_relative_transforms,
+                   tsc_actor_apply_texture_color, tsc_actor_apply_texture_float_color)
+from .errors import _check, _check_light_state, _check_port, _normalize_index, _i32
 from ._callbacks import _unregister_callback
 from .geometry import BoundingBox, Location, Transform, Vector3D, _vector_arg, _location_arg
 from .control import VehicleControl, VehiclePhysicsControl
+from .texture import TextureColor, TextureFloatColor
 
 TM_DEFAULT_PORT = 8000
+
+class ActorState:
+    """Actor.actor_state values (rpc::ActorState). LibCarla also has 3
+    (PendingKill), which the Python API has no name for. A destroyed actor's
+    state cannot be read (CarlaError); is_active is then False."""
+    Invalid: ClassVar[int] = 0
+    Active: ClassVar[int] = 1
+    Dormant: ClassVar[int] = 2
+
+def _take_transforms(out: Ptr[CTransformList]) -> List[Transform]:
+    """Copies an owned tsc_transform_list_t and frees it."""
+    result = [Transform._from_c(out[0].items[i]) for i in range(out[0].size)]
+    tsc_transform_list_free(out)
+    return result
 
 class Actor:
     _h: Handle
@@ -135,6 +162,174 @@ class Actor:
         out = Ptr[CVector3D](1)
         _check(tsc_actor_get_angular_velocity(self._h.ptr, out))
         return Vector3D._from_c(out[0])
+
+    # --- State and identity (issue #19) ---------------------------------------
+
+    @property
+    def actor_state(self) -> int:
+        """An ActorState value."""
+        out = Ptr[i32](1)
+        _check(tsc_actor_get_actor_state(self._h.ptr, out))
+        return int(out[0])
+
+    def _flag(self, fn) -> bool:
+        out = Ptr[i32](1)
+        _check(fn(self._h.ptr, out))
+        return int(out[0]) != 0
+
+    def _string(self, fn) -> str:
+        out = Ptr[CString](1)
+        _check(fn(self._h.ptr, out))
+        return take_string(out)
+
+    @property
+    def is_active(self) -> bool:
+        return self._flag(tsc_actor_is_active)
+
+    @property
+    def is_dormant(self) -> bool:
+        return self._flag(tsc_actor_is_dormant)
+
+    @property
+    def parent(self) -> Optional[Actor]:
+        """The actor this one is attached to, or None."""
+        out = Ptr[cobj](1)
+        _check(tsc_actor_get_parent(self._h.ptr, out))
+        if out[0] == cobj():
+            return None
+        return _make_actor(out[0])
+
+    @property
+    def semantic_tags(self) -> List[int]:
+        """CityObjectLabel values of the actor's components."""
+        count = Ptr[int](1)
+        _check(tsc_actor_get_semantic_tags(self._h.ptr, Ptr[u8](), 0, count))
+        n = count[0]
+        tags = Ptr[u8](n if n > 0 else 1)
+        _check(tsc_actor_get_semantic_tags(self._h.ptr, tags, n, count))
+        return [int(tags[i]) for i in range(min(n, count[0]))]
+
+    @property
+    def attributes(self) -> Dict[str, str]:
+        """The blueprint attributes the actor was spawned with: id -> value."""
+        ids = Ptr[CStringList](1)
+        values = Ptr[CStringList](1)
+        _check(tsc_actor_get_attributes(self._h.ptr, ids, values))
+        keys = take_string_list(ids)
+        vals = take_string_list(values)
+        return {keys[i]: vals[i] for i in range(len(keys))}
+
+    def get_actor_name(self) -> str:
+        """The name of the Unreal actor (one RPC)."""
+        return self._string(tsc_actor_get_actor_name)
+
+    def get_actor_class_name(self) -> str:
+        """The name of the Unreal actor's class (one RPC)."""
+        return self._string(tsc_actor_get_actor_class_name)
+
+    # --- Physics (issue #19) -------------------------------------------------
+
+    def set_collisions(self, enabled: bool = True):
+        _check(tsc_actor_set_collisions(self._h.ptr, i32(int(enabled))))
+
+    def enable_constant_velocity(self, velocity):
+        """velocity: Vector3D, m/s, in the actor's local space (a Location is
+        accepted as in the Python API)."""
+        self._vector_call(tsc_actor_enable_constant_velocity, _vector_arg(
+            velocity, "[tsc-compat] a Location passed as a Vector3D to Actor.enable_constant_velocity"))
+
+    def disable_constant_velocity(self):
+        _check(tsc_actor_disable_constant_velocity(self._h.ptr))
+
+    def _vector_at_call(self, fn, v: Vector3D, location: Location):
+        p = Ptr[CVector3D](2)
+        p[0] = v._to_c()
+        p[1] = location._to_c()
+        _check(fn(self._h.ptr, p, p + 1))
+
+    def add_force_at_location(self, force, location):
+        """force: Vector3D (N); location: Location, world space, where it acts.
+        (A Location as the force, or a Vector3D as the location, is accepted as
+        in the Python API.)"""
+        self._vector_at_call(tsc_actor_add_force_at_location, _vector_arg(
+            force, "[tsc-compat] a Location passed as a Vector3D to Actor.add_force_at_location"),
+            _location_arg(location,
+                          "[tsc-compat] a Vector3D passed as a Location to Actor.add_force_at_location"))
+
+    def add_impulse_at_location(self, impulse, location):
+        """impulse: Vector3D (N*s); location: Location, world space, where it
+        acts. (A Location as the impulse, or a Vector3D as the location, is
+        accepted as in the Python API.)"""
+        self._vector_at_call(tsc_actor_add_impulse_at_location, _vector_arg(
+            impulse, "[tsc-compat] a Location passed as a Vector3D to Actor.add_impulse_at_location"),
+            _location_arg(location,
+                          "[tsc-compat] a Vector3D passed as a Location to Actor.add_impulse_at_location"))
+
+    # --- Skeleton: bones, components, sockets (issue #19) --------------------
+    # One RPC each. They need LibCarla and a server newer than CARLA 0.10.0
+    # (ue5-dev); otherwise they raise CarlaError.
+
+    def _names(self, fn) -> List[str]:
+        out = Ptr[CStringList](1)
+        _check(fn(self._h.ptr, out))
+        return take_string_list(out)
+
+    def _transforms(self, fn) -> List[Transform]:
+        out = Ptr[CTransformList](1)
+        _check(fn(self._h.ptr, out))
+        return _take_transforms(out)
+
+    def _component_transform(self, fn, component_name: str) -> Transform:
+        out = Ptr[CTransform](1)
+        _check(fn(self._h.ptr, component_name.ptr, component_name.len, out))
+        return Transform._from_c(out[0])
+
+    def get_bone_names(self) -> List[str]:
+        """Bones of the actor's first skinned mesh (CarlaError when it has none)."""
+        return self._names(tsc_actor_get_bone_names)
+
+    def get_bone_world_transforms(self) -> List[Transform]:
+        return self._transforms(tsc_actor_get_bone_world_transforms)
+
+    def get_bone_relative_transforms(self) -> List[Transform]:
+        """In the space of the owning skinned mesh component."""
+        return self._transforms(tsc_actor_get_bone_relative_transforms)
+
+    def get_component_names(self) -> List[str]:
+        return self._names(tsc_actor_get_component_names)
+
+    def get_component_world_transform(self, component_name: str) -> Transform:
+        """CarlaError for an unknown component."""
+        return self._component_transform(tsc_actor_get_component_world_transform, component_name)
+
+    def get_component_relative_transform(self, component_name: str) -> Transform:
+        """Relative to the component's parent. CarlaError for an unknown component."""
+        return self._component_transform(tsc_actor_get_component_relative_transform,
+                                         component_name)
+
+    def get_socket_names(self) -> List[str]:
+        return self._names(tsc_actor_get_socket_names)
+
+    def get_socket_world_transforms(self) -> List[Transform]:
+        return self._transforms(tsc_actor_get_socket_world_transforms)
+
+    def get_socket_relative_transforms(self) -> List[Transform]:
+        return self._transforms(tsc_actor_get_socket_relative_transforms)
+
+    # --- Textures (issue #19) --------------------------------------------------
+
+    def _texture_call(self, fn, material_parameter: int, c: T, T: type):
+        t = Ptr[T](1)
+        t[0] = c
+        _check(fn(self._h.ptr, _i32(material_parameter, "material_parameter"), t))
+
+    def apply_texture(self, material_parameter: int, texture: TextureColor):
+        """material_parameter: a MaterialParameter value."""
+        self._texture_call(tsc_actor_apply_texture_color, material_parameter, texture._to_c())
+
+    def apply_texture(self, material_parameter: int, texture: TextureFloatColor):
+        """material_parameter: a MaterialParameter value."""
+        self._texture_call(tsc_actor_apply_texture_float_color, material_parameter, texture._to_c())
 
     def destroy(self) -> bool:
         """Destroys the actor in the simulation. Returns False if it was already gone.

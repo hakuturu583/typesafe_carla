@@ -1,5 +1,5 @@
 # Python API compatibility: the subclass methods of Vehicle, Walker,
-# WalkerAIController, TrafficLight and Sensor can be called on the plain Actor
+# WalkerAIController, TrafficLight, TrafficSign and Sensor can be called on the plain Actor
 # that world.get_actor() returns. Each converts at run time (ActorTypeError on
 # the wrong kind); argument and return types are checked at compile time.
 import typesafe_carla as carla
@@ -77,6 +77,10 @@ def traffic_light_methods(actor: carla.Actor):
     trigger: carla.BoundingBox = actor.trigger_volume
     print(odr, len(affected), len(stops), len(group), len(boxes), trigger)
 
+def traffic_sign_methods(actor: carla.Actor):
+    volume: carla.BoundingBox = actor.trigger_volume
+    print(volume)
+
 def sensor_methods(actor: carla.Actor):
     actor.listen()
     actor.listen(queue_size=8)
@@ -92,4 +96,5 @@ vehicle_methods(world.get_actor(1))
 walker_methods(world.get_actor(2))
 walker_ai_methods(world.get_actor(3))
 traffic_light_methods(world.get_actor(4))
+traffic_sign_methods(world.get_actor(6))
 sensor_methods(world.get_actor(5))

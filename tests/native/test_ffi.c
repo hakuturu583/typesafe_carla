@@ -298,7 +298,7 @@ static void test_mock_session(void) {
 
   CHECK_OK(tsc_client_get_world(client, &world));
   CHECK_OK(tsc_world_get_actors(world, &actors));
-  CHECK(tsc_actor_list_size(actors) == 3); /* vehicle, spectator, traffic light */
+  CHECK(tsc_actor_list_size(actors) == 4); /* vehicle, spectator, traffic light, stop sign */
   CHECK(tsc_actor_list_get(actors, 99, &actor) == TSC_NOT_FOUND);
   CHECK(actor == NULL);
 
@@ -565,7 +565,7 @@ static void test_mock_milestone1(void) {
   /* Snapshots. */
   tsc_world_snapshot_t *snap = NULL;
   CHECK_OK(tsc_world_get_snapshot(world, &snap));
-  CHECK(tsc_world_snapshot_size(snap) == 3);
+  CHECK(tsc_world_snapshot_size(snap) == 4);
   tsc_actor_snapshot_t a;
   CHECK_OK(tsc_world_snapshot_get(snap, 0, &a));
   CHECK_OK(tsc_world_snapshot_find(snap, a.id, &a));
@@ -1206,6 +1206,110 @@ static void test_mock_timeout(void) {
   tsc_handle_release(H(client));
 }
 
+/* Issue #19: parent, tags, attributes, skeleton, textures, traffic signs. */
+static void test_mock_issue19(void) {
+  uint64_t before = tsc_live_handle_count();
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  tsc_actor_list_t *actors = NULL;
+  tsc_actor_t *vehicle = NULL, *light = NULL, *sign_actor = NULL, *parent = NULL;
+  tsc_traffic_sign_t *sign = NULL, *light_sign = NULL;
+  CHECK(sizeof(tsc_string_list_t) == 16 && sizeof(tsc_transform_list_t) == 16);
+  CHECK(sizeof(tsc_float_color_t) == 16 && sizeof(tsc_texture_color_t) == 16);
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2119, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+  CHECK_OK(tsc_world_get_actors(world, &actors));
+  CHECK_OK(tsc_actor_list_get(actors, 0, &vehicle));
+  CHECK_OK(tsc_actor_list_get(actors, 2, &light));
+  CHECK_OK(tsc_actor_list_get(actors, 3, &sign_actor));
+  CHECK(tsc_handle_kind(H(sign_actor)) == TSC_KIND_TRAFFIC_SIGN);
+
+  /* State, parent (generated) */
+  int32_t state = -1;
+  CHECK_OK(tsc_actor_get_actor_state(vehicle, &state));
+  CHECK(state == TSC_ACTOR_STATE_ACTIVE);
+  parent = (tsc_actor_t *)0x1;
+  CHECK_OK(tsc_actor_get_parent(vehicle, &parent));
+  CHECK(parent == NULL);
+
+  /* Semantic tags: two-call pattern */
+  size_t n = 0;
+  uint8_t tags[4] = {0, 0, 0, 0};
+  CHECK_OK(tsc_actor_get_semantic_tags(vehicle, NULL, 0, &n));
+  CHECK(n == 1);
+  CHECK_OK(tsc_actor_get_semantic_tags(vehicle, tags, 4, &n));
+  CHECK(n == 1 && tags[0] == 14);
+  CHECK(tsc_actor_get_semantic_tags(vehicle, tags, 4, NULL) == TSC_INVALID_ARGUMENT);
+
+  /* Attributes: the pre-existing vehicle has none */
+  tsc_string_list_t ids = {(tsc_string_t *)0x1, 7}, values = {(tsc_string_t *)0x1, 7};
+  CHECK_OK(tsc_actor_get_attributes(vehicle, &ids, &values));
+  CHECK(ids.size == 0 && values.size == 0);
+  tsc_string_list_free(&ids);
+  tsc_string_list_free(&values);
+  CHECK(tsc_actor_get_attributes(vehicle, &ids, NULL) == TSC_INVALID_ARGUMENT);
+
+  /* Skeleton */
+  tsc_string_list_t names = {NULL, 0};
+  CHECK_OK(tsc_actor_get_bone_names(vehicle, &names));
+  CHECK(names.size == 6 && strcmp(names.items[0].data, "Root") == 0);
+  tsc_string_list_free(&names);
+  CHECK(names.items == NULL && names.size == 0);
+  tsc_string_list_free(&names); /* idempotent */
+  tsc_string_list_free(NULL);
+  tsc_transform_list_t transforms = {NULL, 0};
+  CHECK_OK(tsc_actor_get_bone_world_transforms(vehicle, &transforms));
+  CHECK(transforms.size == 6);
+  tsc_transform_list_free(&transforms);
+  CHECK(transforms.items == NULL && transforms.size == 0);
+  /* No skinned mesh: an error, and nothing is allocated. */
+  CHECK(tsc_actor_get_bone_names(light, &names) == TSC_ERROR);
+  CHECK(names.items == NULL && names.size == 0);
+  CHECK(tsc_actor_get_bone_world_transforms(light, &transforms) == TSC_ERROR);
+  CHECK(transforms.items == NULL && transforms.size == 0);
+  tsc_transform_t t;
+  CHECK_OK(tsc_actor_get_component_relative_transform(vehicle, "Mesh", 4, &t));
+  CHECK(tsc_actor_get_component_world_transform(vehicle, "Nope", 4, &t) == TSC_ERROR);
+  CHECK(tsc_actor_get_component_world_transform(vehicle, NULL, 4, &t) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_actor_get_socket_names(light, &names));
+  CHECK(names.size == 0);
+  tsc_string_list_free(&names);
+
+  /* Textures (generated; conversions in shared_types.cpp) */
+  tsc_color_t pixels[2] = {{255, 0, 0, 255}, {0, 255, 0, 255}};
+  tsc_texture_color_t tex = {2, 1, pixels};
+  CHECK_OK(tsc_actor_apply_texture_color(vehicle, TSC_MATERIAL_DIFFUSE, &tex));
+  CHECK(tsc_actor_apply_texture_color(vehicle, 4, &tex) == TSC_INVALID_ARGUMENT);
+  tsc_texture_color_t bad = {2, 1, NULL};
+  CHECK(tsc_actor_apply_texture_color(vehicle, TSC_MATERIAL_DIFFUSE, &bad) == TSC_INVALID_ARGUMENT);
+  tsc_float_color_t fpixels[1] = {{0.5f, 0.5f, 0.5f, 1.0f}};
+  tsc_texture_float_color_t ftex = {1, 1, fpixels};
+  CHECK_OK(tsc_actor_apply_texture_float_color(vehicle, TSC_MATERIAL_NORMAL, &ftex));
+
+  /* Traffic signs: lights are signs too */
+  tsc_bounding_box_t box;
+  CHECK_OK(tsc_actor_as_traffic_sign(sign_actor, &sign));
+  CHECK_OK(tsc_traffic_sign_get_trigger_volume(sign, &box));
+  CHECK(box.extent.x == 0.5);
+  CHECK_OK(tsc_actor_as_traffic_sign(light, &light_sign));
+  CHECK(tsc_handle_kind(H(light_sign)) == TSC_KIND_TRAFFIC_LIGHT);
+  CHECK_OK(tsc_traffic_sign_get_trigger_volume(light_sign, &box));
+  tsc_traffic_sign_t *none = (tsc_traffic_sign_t *)0x1;
+  CHECK(tsc_actor_as_traffic_sign(vehicle, &none) == TSC_TYPE_ERROR && none == NULL);
+  CHECK(tsc_traffic_sign_get_trigger_volume((tsc_traffic_sign_t *)vehicle, &box) ==
+        TSC_INVALID_ARGUMENT);
+
+  tsc_handle_release(H(light_sign));
+  tsc_handle_release(H(sign));
+  tsc_handle_release(H(sign_actor));
+  tsc_handle_release(H(light));
+  tsc_handle_release(H(vehicle));
+  tsc_handle_release(H(actors));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK(tsc_live_handle_count() == before);
+}
+
 int main(void) {
   test_versions();
   test_layout();
@@ -1222,6 +1326,7 @@ int main(void) {
     test_mock_milestone4();
     test_mock_issue22();
     test_mock_issue20();
+    test_mock_issue19();
     test_mock_timeout();
   } else {
     printf("backend '%s': skipping mock-server checks\n", tsc_backend_name());

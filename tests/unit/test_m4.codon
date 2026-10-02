@@ -208,5 +208,5 @@ except carla.CarlaError:
 assert raised
 world2 = client.generate_opendrive_world("<?xml version='1.0'?><OpenDRIVE></OpenDRIVE>",
                                          carla.OpendriveGenerationParameters(vertex_distance=1.0))
-assert len(world2.get_actors()) == 2  # a fresh episode: spectator and traffic light
+assert len(world2.get_actors()) == 3  # a fresh episode: spectator, traffic light, stop sign
 print("OK")

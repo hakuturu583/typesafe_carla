@@ -54,10 +54,14 @@ struct ActorData {
   bool chrono = false;
   float pose_blend = 0.0f;                         // walkers
   std::map<std::string, geom::Transform> custom_pose;  // walkers: SetBonesTransform
+  // Issue #19.
+  std::optional<geom::Vector3D> constant_velocity;  // world frame in the mock
 
   bool is_walker() const { return type_id.rfind("walker.", 0) == 0; }
   bool is_walker_ai_controller() const { return type_id == "controller.ai.walker"; }
   bool is_traffic_light() const { return type_id == "traffic.traffic_light"; }
+  // LibCarla's ActorFactory: every other "traffic." actor is a TrafficSign.
+  bool is_traffic_sign() const { return !is_traffic_light() && type_id.rfind("traffic.", 0) == 0; }
   void set_light(rpc::TrafficLightState state) {  // restarts the phase timer
     light = state;
     elapsed = 0.0f;
@@ -219,6 +223,8 @@ struct Episode : std::enable_shared_from_this<Episode> {
     // One traffic light beside the road at x = 100, controlling lane traffic.
     AddActorLocked("traffic.traffic_light", false,
                    geom::Transform(geom::Location(100.0f, -3.0f, 0.0f)));
+    // A stop sign further along (a TrafficSign: map signs are actors in CARLA).
+    AddActorLocked("traffic.stop", false, geom::Transform(geom::Location(150.0f, -3.0f, 0.0f)));
   }
 
   // Ackermann control (issue #20): reach the target speed at `acceleration`
@@ -248,6 +254,15 @@ struct Episode : std::enable_shared_from_this<Episode> {
     const double dt = DeltaSeconds();
     for (auto &entry : actors) {
       ActorData &a = entry.second;
+      if (a.constant_velocity) {  // overrides physics; attached actors follow their parent
+        if (a.parent) continue;
+        a.velocity = *a.constant_velocity;
+        a.acceleration = geom::Vector3D();
+        a.transform.location.x += static_cast<float>(a.velocity.x * dt);
+        a.transform.location.y += static_cast<float>(a.velocity.y * dt);
+        a.transform.location.z += static_cast<float>(a.velocity.z * dt);
+        continue;
+      }
       if (!a.is_vehicle || !a.simulate_physics) continue;
       rpc::VehicleControl c = a.control;
       if (a.autopilot) {
@@ -435,7 +450,18 @@ SharedPtr<Actor> MakeActor(const std::shared_ptr<Episode> &episode, const ActorD
     return std::make_shared<WalkerAIController>(episode, data.id);
   }
   if (data.is_traffic_light()) return std::make_shared<TrafficLight>(episode, data.id);
+  if (data.is_traffic_sign()) return std::make_shared<TrafficSign>(episode, data.id);
   return std::make_shared<Actor>(episode, data.id);
+}
+
+// CityObjectLabel values LibCarla reports for the mock's actor kinds.
+std::vector<uint8_t> SemanticTags(const ActorData &data) {
+  if (data.is_vehicle) return {14u};                       // Car
+  if (data.is_walker()) return {12u};                      // Pedestrians
+  if (data.is_traffic_light()) return {7u};                // TrafficLight
+  if (data.is_traffic_sign()) return {8u};                 // TrafficSigns
+  if (data.type_id.rfind("static.", 0) == 0) return {20u};  // Static
+  return {};
 }
 
 void CheckValue(rpc::ActorAttributeType type, const std::string &value) {
@@ -547,6 +573,11 @@ Actor::Actor(std::shared_ptr<mock::Episode> episode, rpc::ActorId id)
   _bounding_box = data.is_vehicle
                       ? geom::BoundingBox(geom::Location(0.0f, 0.0f, 0.7f), geom::Vector3D(2.4f, 1.0f, 0.75f))
                       : geom::BoundingBox(geom::Location(), geom::Vector3D(0.5f, 0.5f, 0.5f));
+  _parent_id = data.parent.value_or(0u);
+  _semantic_tags = mock::SemanticTags(data);
+  for (const auto &[attribute, value] : data.attributes) {
+    _attributes.emplace_back(attribute, rpc::ActorAttributeType::String, value);
+  }
 }
 
 template <typename F>
@@ -1722,6 +1753,161 @@ World Client::GenerateOpenDriveWorld(std::string opendrive, const rpc::Opendrive
     episode->ResetLocked(reset_settings, false);
   }
   return World(episode);
+}
+
+// ---------------------------------------------------------------------------
+// Issue #19: actor state, physics at a location, textures, skeleton queries.
+
+namespace {
+
+// The mock's "skeletons": vehicles and walkers have a skinned mesh (bones),
+// every actor a root component, and vehicles one socket. Bones and sockets
+// sit at the actor's origin.
+bool HasSkinnedMesh(const mock::ActorData &a) { return a.is_vehicle || a.is_walker(); }
+
+std::vector<std::string> MockBoneNames(const mock::ActorData &a, const char *rpc) {
+  if (!HasSkinnedMesh(a)) {
+    throw std::runtime_error(std::string(rpc) +
+                             ": component not found. Component Name: SkinnedMeshComponent");
+  }
+  if (a.is_vehicle) return {"Root", "Body", "Wheel_Front_Left", "Wheel_Front_Right",
+                            "Wheel_Rear_Left", "Wheel_Rear_Right"};
+  return {"crl_root", "crl_hips__C", "crl_spine__C", "crl_Head__C"};
+}
+
+std::vector<std::string> MockComponentNames(const mock::ActorData &a) {
+  if (HasSkinnedMesh(a)) return {"RootComponent", "Mesh"};
+  return {"RootComponent"};
+}
+
+std::vector<std::string> MockSocketNames(const mock::ActorData &a) {
+  if (a.is_vehicle) return {"Socket_Driver"};
+  return {};
+}
+
+void CheckComponent(const mock::ActorData &a, const std::string &component, const char *rpc) {
+  const auto names = MockComponentNames(a);
+  if (std::find(names.begin(), names.end(), component) == names.end()) {
+    throw std::runtime_error(std::string(rpc) + ": component not found. Component Name: " + component);
+  }
+}
+
+std::string Sanitized(const std::string &type_id) {
+  std::string out;
+  for (char c : type_id) out += (c == '.') ? '_' : c;
+  return out;
+}
+
+}  // namespace
+
+SharedPtr<Actor> Actor::GetParent() const {
+  return _parent_id != 0u ? World(_episode).GetActor(_parent_id) : nullptr;
+}
+
+std::string Actor::GetActorName() const {
+  return WithData([](mock::ActorData &a) {
+    return "Mock_" + Sanitized(a.type_id) + "_" + std::to_string(a.id);
+  });
+}
+
+std::string Actor::GetActorClassName() const {
+  return WithData([](mock::ActorData &a) -> std::string {
+    if (a.is_vehicle) return "MockVehicle_C";
+    if (a.is_walker()) return "MockWalker_C";
+    if (a.is_traffic_light()) return "MockTrafficLight_C";
+    if (a.is_traffic_sign()) return "MockTrafficSign_C";
+    if (a.type_id.rfind("sensor.", 0) == 0) return "MockSensor_C";
+    return "MockActor_C";
+  });
+}
+
+// Like LibCarla, whose Destroy() leaves the actor without an episode: a
+// destroyed actor's state cannot be queried (IsActive / IsDormant are false).
+rpc::ActorState Actor::GetActorState() const {
+  return WithData([](mock::ActorData &) { return rpc::ActorState::Active; });
+}
+
+bool Actor::IsDormant() const { return false; }  // the mock has no dormant actors
+
+bool Actor::IsActive() const {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  return _episode->actors.count(_id) > 0;
+}
+
+void Actor::EnableConstantVelocity(const geom::Vector3D &vector) {
+  WithData([&](mock::ActorData &a) { a.constant_velocity = vector; return 0; });
+}
+
+void Actor::DisableConstantVelocity() {
+  WithData([](mock::ActorData &a) { a.constant_velocity.reset(); return 0; });
+}
+
+// The mock has no rotational dynamics: the point of application is ignored.
+void Actor::AddImpulse(const geom::Vector3D &impulse, const geom::Vector3D &) { AddImpulse(impulse); }
+
+void Actor::AddForce(const geom::Vector3D &force, const geom::Vector3D &) { AddForce(force); }
+
+// No collision or rendering model: these only check that the actor exists.
+void Actor::SetCollisions(bool) { WithData([](mock::ActorData &) { return 0; }); }
+
+void Actor::ApplyTexture(const rpc::MaterialParameter &, const rpc::TextureColor &) {
+  WithData([](mock::ActorData &) { return 0; });
+}
+
+void Actor::ApplyTexture(const rpc::MaterialParameter &, const rpc::TextureFloatColor &) {
+  WithData([](mock::ActorData &) { return 0; });
+}
+
+geom::Transform Actor::GetComponentWorldTransform(const std::string &component_name) const {
+  return WithData([&](mock::ActorData &a) {
+    CheckComponent(a, component_name, "get_actor_component_world_transform");
+    return a.transform;
+  });
+}
+
+geom::Transform Actor::GetComponentRelativeTransform(const std::string &component_name) const {
+  return WithData([&](mock::ActorData &a) {
+    CheckComponent(a, component_name, "get_actor_component_relative_transform");
+    return geom::Transform();
+  });
+}
+
+std::vector<geom::Transform> Actor::GetBoneWorldTransforms() const {
+  return WithData([](mock::ActorData &a) {
+    return std::vector<geom::Transform>(MockBoneNames(a, "get_actor_bone_world_transforms").size(),
+                                        a.transform);
+  });
+}
+
+std::vector<geom::Transform> Actor::GetBoneRelativeTransforms() const {
+  return WithData([](mock::ActorData &a) {
+    return std::vector<geom::Transform>(
+        MockBoneNames(a, "get_actor_bone_relative_transforms").size(), geom::Transform());
+  });
+}
+
+std::vector<std::string> Actor::GetComponentNames() const {
+  return WithData([](mock::ActorData &a) { return MockComponentNames(a); });
+}
+
+std::vector<std::string> Actor::GetBoneNames() const {
+  return WithData([](mock::ActorData &a) { return MockBoneNames(a, "get_actor_bone_names"); });
+}
+
+std::vector<geom::Transform> Actor::GetSocketWorldTransforms() const {
+  return WithData([](mock::ActorData &a) {
+    return std::vector<geom::Transform>(MockSocketNames(a).size(), a.transform);
+  });
+}
+
+std::vector<geom::Transform> Actor::GetSocketRelativeTransforms() const {
+  return WithData([](mock::ActorData &a) {
+    return std::vector<geom::Transform>(MockSocketNames(a).size(), geom::Transform());
+  });
+}
+
+std::vector<std::string> Actor::GetSocketNames() const {
+  return WithData([](mock::ActorData &a) { return MockSocketNames(a); });
 }
 
 }  // namespace client

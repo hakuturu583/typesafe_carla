@@ -1,4 +1,11 @@
-# Traffic lights.
+# Traffic signs and traffic lights.
+#
+# In LibCarla and the Python API, TrafficLight derives from TrafficSign. Here
+# both derive from Actor directly: Codon 0.19 miscompiles a class hierarchy
+# two levels deep (a TrafficLight would read its fields at the wrong offsets
+# in methods inherited from TrafficSign). Both have trigger_volume, and
+# Actor.as_traffic_sign() accepts traffic lights too, so a light converts to a
+# TrafficSign explicitly.
 
 from ._ffi import (CString, CBoundingBox, take_string, tsc_traffic_light_get_opendrive_id,
                    tsc_traffic_light_get_trigger_volume, tsc_traffic_light_get_light_boxes,
@@ -11,11 +18,29 @@ from ._ffi import (Handle, CTrafficLightInfo, TSC_KIND_TRAFFIC_LIGHT, tsc_handle
                    tsc_traffic_light_set_state, tsc_traffic_light_set_green_time,
                    tsc_traffic_light_set_yellow_time, tsc_traffic_light_set_red_time,
                    tsc_traffic_light_freeze, tsc_traffic_light_reset_group,
-                   tsc_vehicle_get_traffic_light)
+                   tsc_vehicle_get_traffic_light, TSC_KIND_TRAFFIC_SIGN,
+                   tsc_actor_as_traffic_sign, tsc_traffic_sign_get_trigger_volume)
 from .errors import _check, _check_traffic_light_state
-from .actor import Actor, Vehicle
 from .geometry import BoundingBox
+from .actor import Actor, Vehicle
 from .map import Waypoint, _waypoints, _read_buffer
+
+class TrafficSign(Actor):
+    """A traffic sign (stop, yield, speed limit, ...), or a traffic light
+    converted with as_traffic_sign()."""
+
+    def __init__(self, h: Handle):
+        super().__init__(h)
+
+    @property
+    def trigger_volume(self) -> BoundingBox:
+        """The volume where the sign affects vehicles, in the sign's local space."""
+        out = Ptr[CBoundingBox](1)
+        _check(tsc_traffic_sign_get_trigger_volume(self._h.ptr, out))
+        return BoundingBox._from_c(out[0])
+
+    def __repr__(self) -> str:
+        return f"TrafficSign(id={self.id}, type={self.type_id})"
 
 class TrafficLight(Actor):
     def __init__(self, h: Handle):
@@ -115,6 +140,18 @@ class TrafficLight(Actor):
 
 @extend
 class Actor:
+    def is_traffic_sign(self) -> bool:
+        """True for traffic signs and traffic lights."""
+        kind = int(tsc_handle_kind(self._h.ptr))
+        return kind == TSC_KIND_TRAFFIC_SIGN or kind == TSC_KIND_TRAFFIC_LIGHT
+
+    def as_traffic_sign(self) -> TrafficSign:
+        """Checked conversion (traffic signs and traffic lights). Raises
+        ActorTypeError for any other actor."""
+        out = Ptr[cobj](1)
+        _check(tsc_actor_as_traffic_sign(self._h.ptr, out))
+        return TrafficSign(Handle(out[0]))
+
     def is_traffic_light(self) -> bool:
         return int(tsc_handle_kind(self._h.ptr)) == TSC_KIND_TRAFFIC_LIGHT
 

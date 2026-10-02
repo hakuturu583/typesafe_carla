@@ -1,0 +1,9 @@
+# A force is a Vector3D: a Rotation does not compile.
+# expect-error: 'Rotation' does not match expected type 'Vector3D'
+import typesafe_carla as carla
+
+def push(actor: carla.Actor):
+    actor.add_force_at_location(carla.Rotation(0.0, 90.0, 0.0), actor.get_location())
+
+# Compile-only: Codon type-checks a function only when it is called.
+push(carla.Client("localhost", 2000).get_world().get_actors()[0])

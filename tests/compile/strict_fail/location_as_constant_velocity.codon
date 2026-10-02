@@ -1,0 +1,9 @@
+# In strict mode a position is not a velocity.
+# expect-error: strict mode: convert with location.as_vector() (Location as Vector3D is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def drift(actor: carla.Actor):
+    actor.enable_constant_velocity(actor.get_location())
+
+# Compile-only: Codon type-checks a function only when it is called.
+drift(carla.Client("localhost", 2000).get_world().get_actors()[0])

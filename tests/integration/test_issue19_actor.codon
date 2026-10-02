@@ -1,0 +1,152 @@
+# Issue #19 against a real CARLA server: actor state, attributes, parent,
+# semantic tags, physics at a location, constant velocity, skeleton queries,
+# textures and traffic signs.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(20.0)
+world = client.get_world()
+lib = world.get_blueprint_library()
+spawn = world.get_map().get_spawn_points()[0]
+bp = lib.find("vehicle.lincoln.mkz")
+bp.set_attribute("role_name", "issue19")
+vehicle = world.spawn_actor(bp, spawn).as_vehicle()
+original = world.get_settings()
+camera: Optional[carla.Actor] = None
+try:
+    settings = world.get_settings()
+    settings.synchronous_mode = True
+    settings.fixed_delta_seconds = 0.05
+    world.apply_settings(settings)
+    for _ in range(20):
+        world.tick()
+
+    # State and identity
+    print("actor_state", vehicle.actor_state, "active", vehicle.is_active, "dormant",
+          vehicle.is_dormant)
+    assert vehicle.actor_state == carla.ActorState.Active
+    assert vehicle.is_active and not vehicle.is_dormant
+    name = vehicle.get_actor_name()
+    class_name = vehicle.get_actor_class_name()
+    print("name", name, "class", class_name)
+    assert name != "" and class_name != ""
+    attrs = vehicle.attributes
+    print("attributes", attrs)
+    assert attrs["role_name"] == "issue19" and attrs["number_of_wheels"] == "4"
+    tags = vehicle.semantic_tags
+    print("semantic_tags", tags)
+    assert len(tags) > 0 and carla.CityObjectLabel.Car in tags, tags
+
+    # Parent
+    assert vehicle.parent is None
+    cam_bp = lib.find("sensor.camera.rgb")
+    cam = world.spawn_actor(cam_bp, carla.Transform(carla.Location(0.0, 0.0, 2.0)),
+                            attach_to=vehicle)
+    camera = cam
+    world.tick()
+    parent = cam.parent
+    assert parent is not None and parent.id == vehicle.id and parent.is_vehicle()
+    print("camera semantic_tags", cam.semantic_tags)
+
+    # Physics
+    vehicle.set_collisions(False)
+    vehicle.set_collisions(True)
+    vehicle.enable_constant_velocity(carla.Vector3D(5.0, 0.0, 0.0))
+    for _ in range(20):
+        world.tick()
+    speed = vehicle.get_velocity().length()
+    print("constant velocity speed", speed)
+    assert abs(speed - 5.0) < 0.5, speed
+    vehicle.disable_constant_velocity()
+    vehicle.apply_control(carla.VehicleControl(brake=1.0))
+    for _ in range(40):
+        world.tick()
+    before = vehicle.get_velocity()
+    side = vehicle.get_location() + carla.Location(0.0, 0.0, 0.5)
+    vehicle.add_impulse_at_location(carla.Vector3D(0.0, 0.0, 8000.0), carla.Location(side))
+    world.tick()
+    after = vehicle.get_velocity()
+    print("impulse at location: velocity", before, "->", after)
+    assert after.z > before.z + 0.5, (before, after)
+    vehicle.add_force_at_location(carla.Vector3D(0.0, 0.0, 1000.0), vehicle.get_location())
+    world.tick()
+
+    # Skeleton: in LibCarla and servers newer than CARLA 0.10.0 only.
+    try:
+        bones = vehicle.get_bone_names()
+        world_bones = vehicle.get_bone_world_transforms()
+        local_bones = vehicle.get_bone_relative_transforms()
+        components = vehicle.get_component_names()
+        sockets = vehicle.get_socket_names()
+        print("bones", len(bones), "components", components, "sockets", len(sockets))
+        assert len(bones) > 0 and len(world_bones) == len(bones) == len(local_bones)
+        assert len(vehicle.get_socket_world_transforms()) == len(sockets)
+        assert len(vehicle.get_socket_relative_transforms()) == len(sockets)
+        assert len(components) > 0
+        print("component", components[0], vehicle.get_component_world_transform(components[0]),
+              vehicle.get_component_relative_transform(components[0]))
+        missing = False
+        try:
+            vehicle.get_component_world_transform("NoSuchComponent_issue19")
+        except carla.CarlaError:
+            missing = True
+        assert missing
+    except carla.CarlaError as e:
+        print("skeleton queries unsupported:", e.message)
+        # Unsupported by this LibCarla (built from 0.10.0), or by the server: a
+        # 0.10.0 server rejects the RPC (rpclib: "rpc::rpc_error during call").
+        server = client.get_server_version()
+        assert (carla.libcarla_git_ref() == "0.10.0" or server.startswith("0.10.0")
+                or "rpc_error" in e.message or "get_actor_" in e.message), (server, e.message)
+
+    # Textures
+    texture = carla.TextureColor(8, 8)
+    for y in range(8):
+        for x in range(8):
+            texture.set(x, y, carla.Color(255, 0, 0, 255))
+    vehicle.apply_texture(carla.MaterialParameter.Diffuse, texture)
+    normal = carla.TextureFloatColor(4, 4)
+    for y in range(4):
+        for x in range(4):
+            normal.set(x, y, carla.FloatColor(0.5, 0.5, 1.0, 1.0))
+    vehicle.apply_texture(carla.MaterialParameter.Normal, normal)
+    world.tick()
+
+    # Traffic signs: every traffic light is also a sign.
+    signs = [a for a in world.get_actors() if a.is_traffic_sign()]
+    lights = [a for a in world.get_actors() if a.is_traffic_light()]
+    plain = [a.type_id for a in signs if not a.is_traffic_light()]
+    print("signs", len(signs), "lights", len(lights), "other signs", sorted(set(plain)))
+    assert len(signs) >= len(lights) > 0
+    for a in signs:
+        assert a.type_id.startswith("traffic.")
+    light = lights[0].as_traffic_light()
+    volume = light.trigger_volume
+    assert volume == lights[0].as_traffic_sign().trigger_volume
+    print("light trigger volume", volume)
+    assert volume.extent.x > 0.0 or volume.extent.y > 0.0
+    raised = False
+    try:
+        vehicle.as_traffic_sign()
+    except carla.ActorTypeError:
+        raised = True
+    assert raised
+finally:
+    world.apply_settings(original)
+    if camera is not None:
+        camera.destroy()
+    vehicle.destroy()
+# LibCarla's Destroy() leaves the actor without an episode: actor_state raises.
+print("after destroy: active", vehicle.is_active)
+state_raised = False
+try:
+    print(vehicle.actor_state)
+except carla.CarlaError:
+    state_raised = True
+assert state_raised
+print("OK")

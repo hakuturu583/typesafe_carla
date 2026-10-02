@@ -128,8 +128,14 @@ class Function:
         args = [a.to_carla() for a in self.args]
         if self.optional:
             return f'TSC_CALL_OPTIONAL({", ".join([self_, self.call, chr(34) + self.optional + chr(34)] + args)});'
-        call = (f"{self.via}({', '.join([self_] + args)})" if self.via
-                else f"{self_}.{self.call}({', '.join(args)})")
+        if self.via and args:
+            # The handle is checked before the arguments are converted, as in a
+            # member call (function arguments are evaluated in no fixed order).
+            call = f"[&](auto &self_) {{ return {self.via}({', '.join(['self_'] + args)}); }}({self_})"
+        elif self.via:
+            call = f"{self.via}({self_})"
+        else:
+            call = f"{self_}.{self.call}({', '.join(args)})"
         if self.out is None:
             return f"{call};"
         t = self.out.type

@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 3
-TSC_ABI_VERSION_MINOR = 3
+TSC_ABI_VERSION_MINOR = 4
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -30,6 +30,7 @@ TSC_KIND_WALKER = 14
 TSC_KIND_WALKER_AI_CONTROLLER = 15
 TSC_KIND_TRAFFIC_LIGHT = 16
 TSC_KIND_BONE_LIST = 23  # issue #20
+TSC_KIND_TRAFFIC_SIGN = 24  # issue #19
 
 # --- POD mirrors (layouts checked by tests/native/test_ffi.c) ---------------
 
@@ -453,6 +454,31 @@ class CBoneTransformOut:
     component: CTransform
     relative: CTransform
 
+# Shared value types: string and transform lists, textures (#19, #21).
+@tuple
+class CTransformList:
+    items: Ptr[CTransform]
+    size: int
+
+@tuple
+class CFloatColor:
+    r: float32
+    g: float32
+    b: float32
+    a: float32
+
+@tuple
+class CTextureColor:
+    width: u32
+    height: u32
+    pixels: Ptr[CColor]
+
+@tuple
+class CTextureFloatColor:
+    width: u32
+    height: u32
+    pixels: Ptr[CFloatColor]
+
 # --- Functions ----------------------------------------------------------------
 
 from C import LIB.tsc_last_error_message() -> cobj
@@ -773,6 +799,46 @@ from C import LIB.tsc_world_get_settings_ext(cobj, Ptr[CWorldSettings], Ptr[CWor
 from C import LIB.tsc_world_apply_settings_ext(cobj, Ptr[CWorldSettings], Ptr[CWorldSettingsExt], float, Ptr[u64]) -> i32
 from C import LIB.tsc_transform_get_matrix(Ptr[CTransform], Ptr[float]) -> i32
 from C import LIB.tsc_transform_get_inverse_matrix(Ptr[CTransform], Ptr[float]) -> i32
+
+# Issue #19: actor state, parent, tags, attributes, physics at a location,
+# skeleton queries, textures, traffic signs.
+# BEGIN GENERATED actor_state from bindings/actor.yaml, do not edit
+from C import LIB.tsc_actor_get_actor_name(cobj, Ptr[CString]) -> i32
+from C import LIB.tsc_actor_get_actor_class_name(cobj, Ptr[CString]) -> i32
+from C import LIB.tsc_actor_get_actor_state(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_actor_is_active(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_actor_is_dormant(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_actor_get_parent(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_actor_get_semantic_tags(cobj, Ptr[u8], int, Ptr[int]) -> i32
+# END GENERATED actor_state
+from C import LIB.tsc_actor_get_attributes(cobj, Ptr[CStringList], Ptr[CStringList]) -> i32
+# BEGIN GENERATED actor_physics_at_location from bindings/actor.yaml, do not edit
+from C import LIB.tsc_actor_set_collisions(cobj, i32) -> i32
+from C import LIB.tsc_actor_enable_constant_velocity(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_disable_constant_velocity(cobj) -> i32
+from C import LIB.tsc_actor_add_force_at_location(cobj, Ptr[CVector3D], Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_add_impulse_at_location(cobj, Ptr[CVector3D], Ptr[CVector3D]) -> i32
+# END GENERATED actor_physics_at_location
+# BEGIN GENERATED actor_skeleton from bindings/actor.yaml, do not edit
+from C import LIB.tsc_actor_get_bone_names(cobj, Ptr[CStringList]) -> i32
+from C import LIB.tsc_actor_get_bone_world_transforms(cobj, Ptr[CTransformList]) -> i32
+from C import LIB.tsc_actor_get_bone_relative_transforms(cobj, Ptr[CTransformList]) -> i32
+from C import LIB.tsc_actor_get_component_names(cobj, Ptr[CStringList]) -> i32
+from C import LIB.tsc_actor_get_component_world_transform(cobj, cobj, int, Ptr[CTransform]) -> i32
+from C import LIB.tsc_actor_get_component_relative_transform(cobj, cobj, int, Ptr[CTransform]) -> i32
+from C import LIB.tsc_actor_get_socket_names(cobj, Ptr[CStringList]) -> i32
+from C import LIB.tsc_actor_get_socket_world_transforms(cobj, Ptr[CTransformList]) -> i32
+from C import LIB.tsc_actor_get_socket_relative_transforms(cobj, Ptr[CTransformList]) -> i32
+# END GENERATED actor_skeleton
+# BEGIN GENERATED actor_texture from bindings/actor.yaml, do not edit
+from C import LIB.tsc_actor_apply_texture_color(cobj, i32, Ptr[CTextureColor]) -> i32
+from C import LIB.tsc_actor_apply_texture_float_color(cobj, i32, Ptr[CTextureFloatColor]) -> i32
+# END GENERATED actor_texture
+from C import LIB.tsc_actor_as_traffic_sign(cobj, Ptr[cobj]) -> i32
+# BEGIN GENERATED traffic_sign from bindings/traffic_sign.yaml, do not edit
+from C import LIB.tsc_traffic_sign_get_trigger_volume(cobj, Ptr[CBoundingBox]) -> i32
+# END GENERATED traffic_sign
+from C import LIB.tsc_transform_list_free(Ptr[CTransformList]) -> None
 
 # --- Helpers --------------------------------------------------------------------
 

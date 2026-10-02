@@ -1,0 +1,8 @@
+# Traffic sign operations: tsc_traffic_sign_<name>, accepting traffic sign and
+# traffic light handles (a TrafficLight is a TrafficSign in LibCarla).
+class: carla::client::TrafficSign
+prefix: traffic_sign
+self: {type: tsc_traffic_sign_t, name: sign, get: sign_of}
+blocks:
+  traffic_sign:
+    get_trigger_volume: {call: GetTriggerVolume, out: bounding_box}
