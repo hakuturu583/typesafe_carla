@@ -7,14 +7,6 @@ namespace {
 
 using WaypointPtr = carla::SharedPtr<carla::client::Waypoint>;
 
-const carla::client::Map &map_of(const tsc_map_t *m) {
-  return *check_handle(m, "map", TSC_KIND_MAP)->map;
-}
-
-const carla::client::Waypoint &waypoint_of(const tsc_waypoint_t *w) {
-  return *check_handle(w, "waypoint", TSC_KIND_WAYPOINT)->waypoint;
-}
-
 tsc_waypoint_t *make_waypoint(WaypointPtr w) {
   return w == nullptr ? nullptr : new tsc_waypoint(std::move(w));
 }
@@ -55,11 +47,7 @@ tsc_status_t tsc_map_to_opendrive(const tsc_map_t *map, tsc_string_t *out) {
 tsc_status_t tsc_map_get_spawn_points(const tsc_map_t *map, tsc_transform_t *out, size_t capacity,
                                       size_t *out_count) {
   return TSC_GUARD({
-    require_ptr(out_count, "out_count");
-    const auto &points = map_of(map).GetRecommendedSpawnPoints();
-    *out_count = points.size();
-    if (out == nullptr) return;
-    for (size_t i = 0; i < points.size() && i < capacity; ++i) out[i] = from_carla(points[i]);
+    copy_out(map_of(map).GetRecommendedSpawnPoints(), out, capacity, out_count);
   });
 }
 

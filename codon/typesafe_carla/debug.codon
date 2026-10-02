@@ -45,7 +45,7 @@ class DebugHelper:
     def draw_box(self, box: BoundingBox, rotation: Rotation, thickness: float = 0.1,
                  color: Color = Color(255, 0, 0), life_time: float = -1.0):
         b = Ptr[CBoundingBox](1)
-        b[0] = CBoundingBox(box.location._to_c(), box.extent._to_c(), box.rotation._to_c())
+        b[0] = box._to_c()
         r = Ptr[CRotation](1)
         r[0] = rotation._to_c()
         _check(tsc_debug_draw_box(self._world._h.ptr, b, r, thickness, _color(color), life_time))

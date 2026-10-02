@@ -7,7 +7,6 @@ from ._ffi import (Handle, CTrafficLightInfo, TSC_KIND_TRAFFIC_LIGHT, tsc_handle
                    tsc_traffic_light_freeze, tsc_traffic_light_reset_group,
                    tsc_vehicle_get_traffic_light)
 from .errors import _check
-from .control import TrafficLightState
 from .actor import Actor, Vehicle
 
 class TrafficLight(Actor):

@@ -25,7 +25,7 @@ extern "C" {
 tsc_status_t tsc_client_get_traffic_manager(tsc_client_t *client, uint16_t port,
                                             tsc_traffic_manager_t **out) {
   return new_handle(__func__, out, [&] {
-    return new tsc_traffic_manager(check_handle(client, "client", TSC_KIND_CLIENT)->client.GetInstanceTM(port));
+    return new tsc_traffic_manager(client_of(client).GetInstanceTM(port));
   });
 }
 

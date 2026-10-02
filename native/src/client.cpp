@@ -2,14 +2,6 @@
 
 using namespace tsc;
 
-namespace {
-
-carla::client::Client &client_of(tsc_client_t *c) {
-  return check_handle(c, "client", TSC_KIND_CLIENT)->client;
-}
-
-}  // namespace
-
 extern "C" {
 
 tsc_status_t tsc_client_create(const char *host, size_t host_len, uint16_t port,

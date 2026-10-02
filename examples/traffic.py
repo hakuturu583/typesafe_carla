@@ -52,8 +52,11 @@ try:
         frame = world.tick()
         if step % 50 == 0:
             snapshot = world.get_snapshot()
-            moving = sum(1 for i in spawned
-                         if snapshot.find(i) is not None and snapshot.find(i).get_velocity().length() > 0.5)
+            moving = 0
+            for i in spawned:
+                s = snapshot.find(i)
+                if s is not None and s.get_velocity().length() > 0.5:
+                    moving += 1
             print("frame", frame, "moving actors", moving, "of", len(spawned))
     for ai in controllers:
         ai.stop()

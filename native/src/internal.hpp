@@ -266,8 +266,34 @@ H *retain_as(tsc_actor_t *actor, tsc_handle_kind_t kind, const char *what) {
   return static_cast<H *>(a);
 }
 
+// Unwrapping accessors shared by the entry-point files.
+inline carla::client::Client &client_of(tsc_client_t *c) {
+  return check_handle(c, "client", TSC_KIND_CLIENT)->client;
+}
+
 inline carla::client::World &world_of(tsc_world_t *w) {
   return check_handle(w, "world", TSC_KIND_WORLD)->world;
+}
+
+inline const carla::client::Map &map_of(const tsc_map_t *m) {
+  return *check_handle(m, "map", TSC_KIND_MAP)->map;
+}
+
+inline const carla::client::Waypoint &waypoint_of(const tsc_waypoint_t *w) {
+  return *check_handle(w, "waypoint", TSC_KIND_WAYPOINT)->waypoint;
+}
+
+inline carla::client::Actor &actor_of(tsc_actor_t *a) { return *check_actor(a)->actor; }
+
+// The LibCarla object behind a derived actor handle: the kind tag guarantees
+// that `actor` points at a C.
+template <typename C, typename H>
+C &actor_as(H *h, const char *name, tsc_handle_kind_t kind) {
+  return static_cast<C &>(*check_handle(h, name, kind)->actor);
+}
+
+inline carla::client::Vehicle &vehicle_of(tsc_vehicle_t *v) {
+  return actor_as<carla::client::Vehicle>(v, "vehicle", TSC_KIND_VEHICLE);
 }
 
 // Fails with TSC_NOT_FOUND unless index < size; `what` names the container.
@@ -306,6 +332,44 @@ inline tsc_rotation_t from_carla(const carla::geom::Rotation &r) {
 inline tsc_transform_t from_carla(const carla::geom::Transform &t) {
   return tsc_transform_t{from_carla(t.location), from_carla(t.rotation)};
 }
+inline tsc_bounding_box_t from_carla(const carla::geom::BoundingBox &b) {
+  return tsc_bounding_box_t{from_carla(b.location), from_carla(b.extent), from_carla(b.rotation)};
+}
+inline carla::geom::BoundingBox to_carla(const tsc_bounding_box_t &b) {
+  return carla::geom::BoundingBox(to_carla(b.location), to_carla_vector(b.extent),
+                                  to_carla(b.rotation));
+}
+
+// Shared body of the "fill a caller buffer" entry points: reports the full
+// count and converts up to `capacity` elements (out may be NULL to query size).
+template <typename Out, typename Vec>
+void copy_out(const Vec &values, Out *out, size_t capacity, size_t *out_count) {
+  require_ptr(out_count, "out_count");
+  *out_count = values.size();
+  if (out == nullptr) return;
+  for (size_t i = 0; i < values.size() && i < capacity; ++i) out[i] = from_carla(values[i]);
+}
+
+// Fails with `message` unless v is finite and non-negative (NaN fails too).
+inline double check_non_negative(double v, const char *message) {
+  if (!(v >= 0.0) || !std::isfinite(v)) fail(TSC_INVALID_ARGUMENT, message);
+  return v;
+}
+
+inline carla::rpc::TrafficLightState to_light_state(int32_t state) {
+  if (state < TSC_TRAFFIC_LIGHT_RED || state > TSC_TRAFFIC_LIGHT_UNKNOWN) {
+    fail(TSC_INVALID_ARGUMENT, "invalid traffic light state " + std::to_string(state));
+  }
+  return static_cast<carla::rpc::TrafficLightState>(state);
+}
+
+// Direct and batch walker control go through here.
+inline carla::rpc::WalkerControl to_carla_walker_control(const tsc_vector3d_t &direction,
+                                                         double speed, bool jump) {
+  check_non_negative(speed, "walker speed must be a finite, non-negative number of m/s");
+  return carla::rpc::WalkerControl(to_carla_vector(direction), static_cast<float>(speed), jump);
+}
+
 // Validates ranges (NaN fails too): direct and batch control go through here.
 inline carla::rpc::VehicleControl to_carla(const tsc_vehicle_control_t &c) {
   if (!(c.throttle >= 0.0 && c.throttle <= 1.0)) fail(TSC_INVALID_ARGUMENT, "throttle must be in [0, 1]");

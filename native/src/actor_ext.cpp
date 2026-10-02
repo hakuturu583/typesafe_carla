@@ -5,29 +5,13 @@ using namespace tsc;
 
 namespace {
 
-carla::client::Actor &actor_of(tsc_actor_t *a) { return *check_actor(a)->actor; }
-
-carla::client::Vehicle &vehicle_of(tsc_vehicle_t *v) {
-  return static_cast<carla::client::Vehicle &>(*check_handle(v, "vehicle", TSC_KIND_VEHICLE)->actor);
-}
-
 carla::client::TrafficLight &light_of(tsc_traffic_light_t *t) {
-  return static_cast<carla::client::TrafficLight &>(
-      *check_handle(t, "traffic_light", TSC_KIND_TRAFFIC_LIGHT)->actor);
+  return actor_as<carla::client::TrafficLight>(t, "traffic_light", TSC_KIND_TRAFFIC_LIGHT);
 }
 
-carla::rpc::TrafficLightState to_light_state(int32_t state) {
-  if (state < TSC_TRAFFIC_LIGHT_RED || state > TSC_TRAFFIC_LIGHT_UNKNOWN) {
-    fail(TSC_INVALID_ARGUMENT, "invalid traffic light state " + std::to_string(state));
-  }
-  return static_cast<carla::rpc::TrafficLightState>(state);
-}
-
-double check_duration(double seconds) {
-  if (!std::isfinite(seconds) || seconds < 0.0) {
-    fail(TSC_INVALID_ARGUMENT, "time must be a finite, non-negative number of seconds");
-  }
-  return seconds;
+float check_duration(double seconds) {
+  return static_cast<float>(
+      check_non_negative(seconds, "time must be a finite, non-negative number of seconds"));
 }
 
 template <typename F>
@@ -139,15 +123,15 @@ tsc_status_t tsc_traffic_light_set_state(tsc_traffic_light_t *light, int32_t sta
 }
 
 tsc_status_t tsc_traffic_light_set_green_time(tsc_traffic_light_t *light, double t) {
-  return TSC_GUARD({ light_of(light).SetGreenTime(static_cast<float>(check_duration(t))); });
+  return TSC_GUARD({ light_of(light).SetGreenTime(check_duration(t)); });
 }
 
 tsc_status_t tsc_traffic_light_set_yellow_time(tsc_traffic_light_t *light, double t) {
-  return TSC_GUARD({ light_of(light).SetYellowTime(static_cast<float>(check_duration(t))); });
+  return TSC_GUARD({ light_of(light).SetYellowTime(check_duration(t)); });
 }
 
 tsc_status_t tsc_traffic_light_set_red_time(tsc_traffic_light_t *light, double t) {
-  return TSC_GUARD({ light_of(light).SetRedTime(static_cast<float>(check_duration(t))); });
+  return TSC_GUARD({ light_of(light).SetRedTime(check_duration(t)); });
 }
 
 tsc_status_t tsc_traffic_light_freeze(tsc_traffic_light_t *light, int32_t freeze) {

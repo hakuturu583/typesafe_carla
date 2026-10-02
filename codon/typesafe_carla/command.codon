@@ -11,10 +11,9 @@
 # Actors are given by id (`actor.id`).
 
 from ._ffi import CCommand, CCommandResponse, CString, take_string, TSC_INVALID_ARGUMENT
-from .errors import CarlaError, _check_port, _is_actor_id
-from .geometry import Transform, Vector3D
-from .control import VehicleControl, WalkerControl, TrafficLightState
-from .geometry import Location
+from .errors import CarlaError, _check_light_state, _check_port, _is_actor_id
+from .geometry import Location, Transform, Vector3D
+from .control import VehicleControl, WalkerControl
 from .blueprint import ActorBlueprint
 
 # In a command passed to SpawnActor(...).then(...), the actor being spawned.
@@ -152,10 +151,13 @@ def SetAutopilot(actor_id: int, enabled: bool, tm_port: int = 8000) -> Command:
     c._tm_port = tm_port
     return c
 
-def SetSimulatePhysics(actor_id: int, enabled: bool) -> Command:
-    c = Command(_SET_SIMULATE_PHYSICS, actor_id)
-    c._flag = int(enabled)
+def _flag_command(kind: int, actor_id: int, flag: int) -> Command:
+    c = Command(kind, actor_id)
+    c._flag = flag
     return c
+
+def SetSimulatePhysics(actor_id: int, enabled: bool) -> Command:
+    return _flag_command(_SET_SIMULATE_PHYSICS, actor_id, int(enabled))
 
 def ApplyWalkerControl(actor_id: int, control: WalkerControl) -> Command:
     c = Command(_APPLY_WALKER_CONTROL, actor_id)
@@ -185,17 +187,13 @@ def ApplyTorque(actor_id: int, torque: Vector3D) -> Command:
     return _vector_command(_APPLY_TORQUE, actor_id, torque)
 
 def SetEnableGravity(actor_id: int, enabled: bool) -> Command:
-    c = Command(_SET_ENABLE_GRAVITY, actor_id)
-    c._flag = int(enabled)
-    return c
+    return _flag_command(_SET_ENABLE_GRAVITY, actor_id, int(enabled))
 
 def SetVehicleLightState(actor_id: int, light_state: int) -> Command:
     """light_state: VehicleLightState flags."""
-    if light_state < 0 or light_state > 0xFFFFFFFF:
-        raise CarlaError(f"light state {light_state} is out of range", TSC_INVALID_ARGUMENT)
-    c = Command(_SET_VEHICLE_LIGHT_STATE, actor_id)
-    c._flag = int(i32(light_state))  # the bit pattern travels as int32
-    return c
+    _check_light_state(light_state)
+    # The bit pattern travels as int32.
+    return _flag_command(_SET_VEHICLE_LIGHT_STATE, actor_id, int(i32(light_state)))
 
 def ApplyLocation(actor_id: int, location: Location) -> Command:
     c = Command(_APPLY_LOCATION, actor_id)
@@ -204,9 +202,7 @@ def ApplyLocation(actor_id: int, location: Location) -> Command:
 
 def SetTrafficLightState(actor_id: int, state: int) -> Command:
     """state: TrafficLightState."""
-    c = Command(_SET_TRAFFIC_LIGHT_STATE, actor_id)
-    c._flag = state
-    return c
+    return _flag_command(_SET_TRAFFIC_LIGHT_STATE, actor_id, state)
 
 def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int]:
     """C records for `commands` (then-commands follow their SpawnActor).

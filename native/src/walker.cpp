@@ -6,12 +6,12 @@ using namespace tsc;
 namespace {
 
 carla::client::Walker &walker_of(tsc_walker_t *w) {
-  return static_cast<carla::client::Walker &>(*check_handle(w, "walker", TSC_KIND_WALKER)->actor);
+  return actor_as<carla::client::Walker>(w, "walker", TSC_KIND_WALKER);
 }
 
 carla::client::WalkerAIController &controller_of(tsc_walker_ai_controller_t *c) {
-  return static_cast<carla::client::WalkerAIController &>(
-      *check_handle(c, "controller", TSC_KIND_WALKER_AI_CONTROLLER)->actor);
+  return actor_as<carla::client::WalkerAIController>(c, "controller",
+                                                     TSC_KIND_WALKER_AI_CONTROLLER);
 }
 
 }  // namespace
@@ -21,11 +21,7 @@ extern "C" {
 tsc_status_t tsc_walker_apply_control(tsc_walker_t *walker, const tsc_walker_control_t *control) {
   return TSC_GUARD({
     const auto &c = *require_ptr(control, "control");
-    if (!(c.speed >= 0.0) || !std::isfinite(c.speed)) {
-      fail(TSC_INVALID_ARGUMENT, "speed must be a finite, non-negative number of m/s");
-    }
-    walker_of(walker).ApplyControl(carla::rpc::WalkerControl(
-        to_carla_vector(c.direction), static_cast<float>(c.speed), c.jump != 0));
+    walker_of(walker).ApplyControl(to_carla_walker_control(c.direction, c.speed, c.jump != 0));
   });
 }
 
@@ -55,9 +51,7 @@ tsc_status_t tsc_walker_ai_controller_go_to_location(tsc_walker_ai_controller_t 
 tsc_status_t tsc_walker_ai_controller_set_max_speed(tsc_walker_ai_controller_t *controller,
                                                     double max_speed) {
   return TSC_GUARD({
-    if (!(max_speed >= 0.0) || !std::isfinite(max_speed)) {
-      fail(TSC_INVALID_ARGUMENT, "max_speed must be a finite, non-negative number of m/s");
-    }
+    check_non_negative(max_speed, "max_speed must be a finite, non-negative number of m/s");
     controller_of(controller).SetMaxSpeed(static_cast<float>(max_speed));
   });
 }

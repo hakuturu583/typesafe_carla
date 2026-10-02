@@ -2,12 +2,6 @@
 
 using namespace tsc;
 
-namespace {
-
-carla::client::Actor &actor_of(tsc_actor_t *a) { return *check_actor(a)->actor; }
-
-}  // namespace
-
 extern "C" {
 
 tsc_status_t tsc_actor_get_id(tsc_actor_t *actor, uint32_t *out_id) {
@@ -65,9 +59,7 @@ tsc_status_t tsc_actor_destroy(tsc_actor_t *actor, int32_t *out_destroyed) {
 
 tsc_status_t tsc_actor_get_bounding_box(tsc_actor_t *actor, tsc_bounding_box_t *out) {
   return TSC_GUARD({
-    const carla::geom::BoundingBox &b = actor_of(actor).GetBoundingBox();
-    *require_ptr(out, "out") =
-        tsc_bounding_box_t{from_carla(b.location), from_carla(b.extent), from_carla(b.rotation)};
+    *require_ptr(out, "out") = from_carla(actor_of(actor).GetBoundingBox());
   });
 }
 

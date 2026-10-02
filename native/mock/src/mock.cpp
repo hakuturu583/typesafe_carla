@@ -38,6 +38,14 @@ struct ActorData {
   std::optional<rpc::ActorId> parent;
   geom::Transform offset;
   std::map<std::string, std::string> attributes;  // blueprint attributes at spawn
+
+  bool is_walker() const { return type_id.rfind("walker.", 0) == 0; }
+  bool is_walker_ai_controller() const { return type_id == "controller.ai.walker"; }
+  bool is_traffic_light() const { return type_id == "traffic.traffic_light"; }
+  void set_light(rpc::TrafficLightState state) {  // restarts the phase timer
+    light = state;
+    elapsed = 0.0f;
+  }
 };
 
 using Delivery = std::function<void()>;  // run after the episode lock is released
@@ -205,7 +213,7 @@ struct Episode : std::enable_shared_from_this<Episode> {
     }
     for (auto &entry : actors) {
       ActorData &a = entry.second;
-      if (a.type_id.rfind("walker.", 0) == 0) {
+      if (a.is_walker()) {
         const auto &d = a.walker_control.direction;
         const double n = std::hypot(d.x, d.y, d.z);
         const double v = n > 0.0 ? a.walker_control.speed / n : 0.0;
@@ -213,7 +221,7 @@ struct Episode : std::enable_shared_from_this<Episode> {
                                     static_cast<float>(d.z * v));
         a.transform.location.x += static_cast<float>(a.velocity.x * dt);
         a.transform.location.y += static_cast<float>(a.velocity.y * dt);
-      } else if (a.type_id == "controller.ai.walker" && a.ai_running && a.ai_target && a.parent) {
+      } else if (a.is_walker_ai_controller() && a.ai_running && a.ai_target && a.parent) {
         auto walker = actors.find(*a.parent);
         if (walker == actors.end()) continue;
         auto &w = walker->second;
@@ -228,7 +236,7 @@ struct Episode : std::enable_shared_from_this<Episode> {
         } else {
           w.walker_control.speed = 0.0f;
         }
-      } else if (a.type_id == "traffic.traffic_light" && !a.frozen) {
+      } else if (a.is_traffic_light() && !a.frozen) {
         a.elapsed += static_cast<float>(dt);
         const float limit = a.light == rpc::TrafficLightState::Green    ? a.green_time
                             : a.light == rpc::TrafficLightState::Yellow ? a.yellow_time
@@ -354,11 +362,11 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
 SharedPtr<Actor> MakeActor(const std::shared_ptr<Episode> &episode, const ActorData &data) {
   if (data.is_vehicle) return std::make_shared<Vehicle>(episode, data.id);
   if (data.type_id.rfind("sensor.", 0) == 0) return std::make_shared<Sensor>(episode, data.id);
-  if (data.type_id.rfind("walker.", 0) == 0) return std::make_shared<Walker>(episode, data.id);
-  if (data.type_id == "controller.ai.walker") {
+  if (data.is_walker()) return std::make_shared<Walker>(episode, data.id);
+  if (data.is_walker_ai_controller()) {
     return std::make_shared<WalkerAIController>(episode, data.id);
   }
-  if (data.type_id == "traffic.traffic_light") return std::make_shared<TrafficLight>(episode, data.id);
+  if (data.is_traffic_light()) return std::make_shared<TrafficLight>(episode, data.id);
   return std::make_shared<Actor>(episode, data.id);
 }
 
@@ -846,7 +854,7 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyWalkerControl>) {
           auto &a = target(c.actor);
-          if (a.type_id.rfind("walker.", 0) != 0) {
+          if (!a.is_walker()) {
             throw std::runtime_error("actor " + std::to_string(a.id) + " is not a walker");
           }
           a.walker_control = c.control;
@@ -882,11 +890,10 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
         } else {
           static_assert(std::is_same_v<T, Command::SetTrafficLightState>);
           auto &a = target(c.actor);
-          if (a.type_id != "traffic.traffic_light") {
+          if (!a.is_traffic_light()) {
             throw std::runtime_error("actor " + std::to_string(a.id) + " is not a traffic light");
           }
-          a.light = c.traffic_light_state;
-          a.elapsed = 0.0f;
+          a.set_light(c.traffic_light_state);
           return a.id;
         }
       },
@@ -1113,7 +1120,7 @@ constexpr double kTrafficLightReach = 15.0;
 const mock::ActorData *LightNear(const mock::Episode &e, const mock::ActorData &vehicle) {
   for (const auto &entry : e.actors) {
     const auto &l = entry.second;
-    if (l.type_id != "traffic.traffic_light") continue;
+    if (!l.is_traffic_light()) continue;
     const auto &p = vehicle.transform.location;
     if (std::hypot(p.x - l.transform.location.x, p.y - l.transform.location.y) < kTrafficLightReach) {
       return &l;
@@ -1179,7 +1186,7 @@ void WalkerAIController::SetMaxSpeed(float max_speed) {
 }
 
 void TrafficLight::SetState(rpc::TrafficLightState state) {
-  WithData([&](mock::ActorData &a) { a.light = state; a.elapsed = 0.0f; return 0; });
+  WithData([&](mock::ActorData &a) { a.set_light(state); return 0; });
 }
 
 rpc::TrafficLightState TrafficLight::GetState() const {
@@ -1196,7 +1203,7 @@ float TrafficLight::GetElapsedTime() const { return WithData([](mock::ActorData 
 void TrafficLight::Freeze(bool freeze) { WithData([&](mock::ActorData &a) { a.frozen = freeze; return 0; }); }
 bool TrafficLight::IsFrozen() const { return WithData([](mock::ActorData &a) { return a.frozen; }); }
 void TrafficLight::ResetGroup() {
-  WithData([](mock::ActorData &a) { a.light = rpc::TrafficLightState::Green; a.elapsed = 0.0f; return 0; });
+  WithData([](mock::ActorData &a) { a.set_light(rpc::TrafficLightState::Green); return 0; });
 }
 
 std::optional<geom::Location> World::GetRandomLocationFromNavigation() const {

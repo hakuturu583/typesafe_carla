@@ -8,16 +8,12 @@ namespace {
 using WaypointPair = std::pair<carla::SharedPtr<carla::client::Waypoint>,
                                carla::SharedPtr<carla::client::Waypoint>>;
 
-const carla::client::Map &map_of(const tsc_map_t *m) {
-  return *check_handle(m, "map", TSC_KIND_MAP)->map;
-}
-
-std::vector<carla::SharedPtr<carla::client::Waypoint>> flatten(const std::vector<WaypointPair> &pairs) {
+std::vector<carla::SharedPtr<carla::client::Waypoint>> flatten(std::vector<WaypointPair> pairs) {
   std::vector<carla::SharedPtr<carla::client::Waypoint>> flat;
   flat.reserve(2 * pairs.size());
-  for (const auto &p : pairs) {
-    flat.push_back(p.first);
-    flat.push_back(p.second);
+  for (auto &p : pairs) {
+    flat.push_back(std::move(p.first));
+    flat.push_back(std::move(p.second));
   }
   return flat;
 }
@@ -37,11 +33,7 @@ tsc_status_t tsc_map_get_topology(const tsc_map_t *map, tsc_waypoint_list_t **ou
 tsc_status_t tsc_map_get_crosswalks(const tsc_map_t *map, tsc_location_t *out, size_t capacity,
                                     size_t *out_count) {
   return TSC_GUARD({
-    require_ptr(out_count, "out_count");
-    const auto points = map_of(map).GetAllCrosswalkZones();
-    *out_count = points.size();
-    if (out == nullptr) return;
-    for (size_t i = 0; i < points.size() && i < capacity; ++i) out[i] = from_carla(points[i]);
+    copy_out(map_of(map).GetAllCrosswalkZones(), out, capacity, out_count);
   });
 }
 
@@ -104,9 +96,7 @@ tsc_status_t tsc_landmark_list_get(const tsc_landmark_list_t *list, size_t index
 
 tsc_status_t tsc_waypoint_get_junction(const tsc_waypoint_t *wp, tsc_junction_t **out) {
   return new_handle(__func__, out, [&]() -> tsc_junction * {
-    const auto &w = *check_handle(wp, "waypoint", TSC_KIND_WAYPOINT)->waypoint;
-    if (!w.IsJunction()) return nullptr;
-    auto j = w.GetJunction();
+    auto j = waypoint_of(wp).GetJunction();
     return j == nullptr ? nullptr : new tsc_junction(std::move(j));
   });
 }
@@ -117,9 +107,7 @@ tsc_status_t tsc_junction_get_id(const tsc_junction_t *j, int32_t *out) {
 
 tsc_status_t tsc_junction_get_bounding_box(const tsc_junction_t *j, tsc_bounding_box_t *out) {
   return TSC_GUARD({
-    const carla::geom::BoundingBox b = junction_of(j).GetBoundingBox();
-    *require_ptr(out, "out") =
-        tsc_bounding_box_t{from_carla(b.location), from_carla(b.extent), from_carla(b.rotation)};
+    *require_ptr(out, "out") = from_carla(junction_of(j).GetBoundingBox());
   });
 }
 

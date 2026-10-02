@@ -125,10 +125,8 @@ tsc_status_t tsc_debug_draw_box(tsc_world_t *world, const tsc_bounding_box_t *bo
                                 const tsc_rotation_t *rotation, double thickness,
                                 tsc_color_t color, double life_time) {
   return TSC_GUARD({
-    const auto &b = *require_ptr(box, "box");
     world_of(world).MakeDebugHelper().DrawBox(
-        carla::geom::BoundingBox(to_carla(b.location), to_carla_vector(b.extent),
-                                 to_carla(b.rotation)),
+        to_carla(*require_ptr(box, "box")),
         to_carla(*require_ptr(rotation, "rotation")), static_cast<float>(thickness),
         to_color(color), life(life_time));
   });

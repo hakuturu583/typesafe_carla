@@ -20,8 +20,8 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_actor_set_simulate_physics, tsc_actor_set_enable_gravity,
                    tsc_vehicle_set_light_state, tsc_vehicle_get_light_state,
                    tsc_vehicle_get_speed_limit, tsc_vehicle_get_traffic_light_state,
-                   tsc_vehicle_is_at_traffic_light, TSC_INVALID_ARGUMENT)
-from .errors import _check, _check_port, _normalize_index, CarlaError
+                   tsc_vehicle_is_at_traffic_light)
+from .errors import _check, _check_light_state, _check_port, _normalize_index
 from .geometry import BoundingBox, Location, Transform, Vector3D
 from .control import VehicleControl, VehiclePhysicsControl
 
@@ -170,8 +170,7 @@ class Vehicle(Actor):
 
     def set_light_state(self, light_state: int):
         """light_state: VehicleLightState flags, e.g. LowBeam | Brake."""
-        if light_state < 0 or light_state > 0xFFFFFFFF:
-            raise CarlaError(f"light state {light_state} is out of range", TSC_INVALID_ARGUMENT)
+        _check_light_state(light_state)
         _check(tsc_vehicle_set_light_state(self._h.ptr, u32(light_state)))
 
     def get_light_state(self) -> int:

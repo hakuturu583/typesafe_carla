@@ -2,14 +2,6 @@
 
 using namespace tsc;
 
-namespace {
-
-carla::client::Vehicle &vehicle_of(tsc_vehicle_t *v) {
-  return static_cast<carla::client::Vehicle &>(*check_handle(v, "vehicle", TSC_KIND_VEHICLE)->actor);
-}
-
-}  // namespace
-
 extern "C" {
 
 tsc_status_t tsc_vehicle_apply_control(tsc_vehicle_t *vehicle,

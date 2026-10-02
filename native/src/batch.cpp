@@ -28,12 +28,8 @@ Command to_command(const tsc_command_t &c) {
     case TSC_COMMAND_SET_SIMULATE_PHYSICS:
       return Command::SetSimulatePhysics(c.actor_id, c.flag != 0);
     case TSC_COMMAND_APPLY_WALKER_CONTROL:
-      if (!(c.scalar >= 0.0) || !std::isfinite(c.scalar)) {
-        fail(TSC_INVALID_ARGUMENT, "walker speed must be a finite, non-negative number of m/s");
-      }
       return Command::ApplyWalkerControl(
-          c.actor_id, carla::rpc::WalkerControl(to_carla_vector(c.vector),
-                                                static_cast<float>(c.scalar), c.flag != 0));
+          c.actor_id, to_carla_walker_control(c.vector, c.scalar, c.flag != 0));
     case TSC_COMMAND_APPLY_TARGET_ANGULAR_VELOCITY:
       return Command::ApplyTargetAngularVelocity(c.actor_id, to_carla_vector(c.vector));
     case TSC_COMMAND_APPLY_IMPULSE:
@@ -51,11 +47,7 @@ Command to_command(const tsc_command_t &c) {
     case TSC_COMMAND_APPLY_LOCATION:
       return Command::ApplyLocation(c.actor_id, to_carla(c.transform.location));
     case TSC_COMMAND_SET_TRAFFIC_LIGHT_STATE:
-      if (c.flag < TSC_TRAFFIC_LIGHT_RED || c.flag > TSC_TRAFFIC_LIGHT_UNKNOWN) {
-        fail(TSC_INVALID_ARGUMENT, "invalid traffic light state " + std::to_string(c.flag));
-      }
-      return Command::SetTrafficLightState(c.actor_id,
-                                           static_cast<carla::rpc::TrafficLightState>(c.flag));
+      return Command::SetTrafficLightState(c.actor_id, to_light_state(c.flag));
     default:
       fail(TSC_INVALID_ARGUMENT, "unknown command type " + std::to_string(c.type));
   }
@@ -115,7 +107,7 @@ extern "C" {
 tsc_status_t tsc_client_apply_batch(tsc_client_t *client, const tsc_command_t *commands,
                                     size_t count, int32_t do_tick) {
   return TSC_GUARD({
-    auto &c = check_handle(client, "client", TSC_KIND_CLIENT)->client;
+    auto &c = client_of(client);
     c.ApplyBatch(build(commands, count), do_tick != 0);
   });
 }
@@ -127,7 +119,7 @@ tsc_status_t tsc_client_apply_batch_sync(tsc_client_t *client, const tsc_command
   return TSC_GUARD({
     require_ptr(out_count, "out_count");
     *out_count = 0;
-    auto &c = check_handle(client, "client", TSC_KIND_CLIENT)->client;
+    auto &c = client_of(client);
     std::vector<Command> top = build(commands, count);
     if (out_capacity < top.size()) {
       fail(TSC_INVALID_ARGUMENT, "out has room for " + std::to_string(out_capacity) +

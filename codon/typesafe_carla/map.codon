@@ -286,11 +286,16 @@ class Map:
 
     def get_crosswalks(self) -> List[Location]:
         """Crosswalk polygon corners (each polygon repeats its first point)."""
+        # Computing the zones walks the whole road network, so guess a buffer
+        # size and only call again when it was too small.
+        n = 256
         count = Ptr[int](1)
-        _check(tsc_map_get_crosswalks(self._h.ptr, Ptr[CVector3D](), 0, count))
-        n = count[0]
-        buf = Ptr[CVector3D](n if n > 0 else 1)
+        buf = Ptr[CVector3D](n)
         _check(tsc_map_get_crosswalks(self._h.ptr, buf, n, count))
+        if count[0] > n:
+            n = count[0]
+            buf = Ptr[CVector3D](n)
+            _check(tsc_map_get_crosswalks(self._h.ptr, buf, n, count))
         return [Location._from_c(buf[i]) for i in range(min(n, count[0]))]
 
     def get_all_landmarks(self) -> List[Landmark]:
