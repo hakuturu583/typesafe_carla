@@ -295,20 +295,21 @@ class Sensor(Actor):
             if queue_size is not None:
                 raise CarlaError("listen(): queue size given twice", TSC_INVALID_ARGUMENT)
             self._start(callback)
-            _unregister_callback(self)
         elif callback is None:
             self._start(queue_size if queue_size is not None else 64)
-            _unregister_callback(self)
         else:
             cb: Callable[[SensorData], None] = _CallbackThunk(callback).run
             self._start(queue_size if queue_size is not None else 0)
-            _register_callback(self, cb)
+            _listeners.append(_Listener(self, cb))
 
     def _start(self, queue_size: int):
+        """Replaces the stream and drops any previous callback (the caller
+        registers the new one)."""
         if queue_size < 0:
             raise CarlaError("queue_size must be 0 (unbounded) or positive",
                              TSC_INVALID_ARGUMENT)
         _check(tsc_sensor_listen(self._h.ptr, queue_size))
+        _unregister_callback(self)
 
     def stop(self):
         """Stops the stream. In callback mode, unregisters the callback and
@@ -325,12 +326,19 @@ class Sensor(Actor):
         return super().destroy()
 
     def _discard_pending(self):
-        out = Ptr[cobj](1)
         while True:
-            _check(tsc_sensor_poll(self._h.ptr, out))
-            if out[0] == cobj():
+            data = self._pop()
+            if data is None:
                 break
-            Handle(out[0]).release()
+            data._h.release()  # now, not at GC: it may own a large buffer
+
+    def _pop(self) -> Optional[SensorData]:
+        """The oldest queued measurement, or None, in either mode."""
+        out = Ptr[cobj](1)
+        _check(tsc_sensor_poll(self._h.ptr, out))
+        if out[0] == cobj():
+            return None
+        return SensorData(Handle(out[0]))
 
     @property
     def is_listening(self) -> bool:
@@ -365,11 +373,7 @@ class Sensor(Actor):
     def poll(self) -> Optional[SensorData]:
         """The oldest queued measurement, or None. Never blocks. Polling mode only."""
         self._check_polling("poll()")
-        out = Ptr[cobj](1)
-        _check(tsc_sensor_poll(self._h.ptr, out))
-        if out[0] == cobj():
-            return None
-        return SensorData(Handle(out[0]))
+        return self._pop()
 
     def wait_for_data(self, seconds: float = 10.0) -> SensorData:
         """Blocks until a measurement arrives. Raises TimeoutError. Polling mode only."""
@@ -412,10 +416,6 @@ def _unregister_callback(sensor: Sensor) -> bool:
     _listeners.pop(i)
     return True
 
-def _register_callback(sensor: Sensor, callback: Callable[[SensorData], None]):
-    _unregister_callback(sensor)
-    _listeners.append(_Listener(sensor, callback))
-
 def dispatch_sensor_callbacks() -> int:
     """Runs the callbacks of every sensor in callback mode on the queued
     measurements, and returns how many callbacks ran.
@@ -443,16 +443,13 @@ def dispatch_sensor_callbacks() -> int:
         for listener in list(_listeners):  # callbacks may stop or listen
             if not listener.active:
                 continue
-            ptr = listener.sensor._h.ptr
-            pending = listener.sensor.pending_count
-            out = Ptr[cobj](1)
-            for _ in range(pending):
+            for _ in range(listener.sensor.pending_count):
                 if not listener.active:
                     break
-                _check(tsc_sensor_poll(ptr, out))
-                if out[0] == cobj():
+                data = listener.sensor._pop()
+                if data is None:
                     break
-                listener.callback(SensorData(Handle(out[0])))
+                listener.callback(data.__val__())
                 count += 1
     finally:
         _dispatching = False
