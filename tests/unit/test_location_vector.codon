@@ -33,6 +33,18 @@ assert carla.Vector3D(1.0, 0.0, 0.0).cross(carla.Location(0.0, 1.0, 0.0)) == car
 u = d.make_unit_vector()
 assert type(u).__name__ == "Vector3D" and close(u.x, 0.6) and close(u.y, 0.8) and u.z == 0.0
 assert carla.Vector3D().make_unit_vector() == carla.Vector3D()  # as CARLA 0.10.0
+# Issue #40: epsilon (default 2 * FLT_EPSILON); a vector of length <= epsilon
+# comes back unchanged, as in LibCarla's MakeUnitVector.
+tiny = carla.Vector3D(1e-7, 0.0, 0.0)
+assert tiny.make_unit_vector() == tiny
+assert tiny.make_unit_vector(epsilon=0.0) == carla.Vector3D(1.0, 0.0, 0.0)
+assert tiny.make_unit_vector(1e-8) == carla.Vector3D(1.0, 0.0, 0.0)
+assert carla.Vector3D(0.1, 0.0, 0.0).make_unit_vector(epsilon=1.0) == carla.Vector3D(0.1, 0.0, 0.0)
+assert d.make_unit_vector(epsilon=5.0) == d  # length == epsilon: unchanged
+assert d.make_unit_vector(epsilon=-1.0) == u  # a negative epsilon acts as 0
+lu = carla.Location(3.0, 4.0, 12.0).make_unit_vector(epsilon=0.5)
+assert type(lu).__name__ == "Vector3D" and close(lu.x, 3.0 / 13.0) and close(lu.z, 12.0 / 13.0)
+assert carla.Location(0.3, 0.4, 0.0).make_unit_vector(1.0) == carla.Vector3D(0.3, 0.4, 0.0)
 assert a.distance(b) == 5.0 and b.distance(a) == 5.0 and a.distance_squared(b) == 25.0
 assert carla.Location(0.0, 0.0, 7.0).distance_2d(carla.Location(3.0, 4.0, 0.0)) == 5.0
 assert carla.Location(0.0, 0.0, 7.0).distance_squared_2d(carla.Location(3.0, 4.0, 0.0)) == 25.0

@@ -57,11 +57,12 @@ class Vector3D:
                         self.z * other.x - self.x * other.z,
                         self.x * other.y - self.y * other.x)
 
-    def make_unit_vector(self) -> Vector3D:
-        """This vector scaled to length 1; a zero vector stays zero (as in CARLA 0.10.0)."""
+    def make_unit_vector(self, epsilon: float = _UNIT_EPSILON) -> Vector3D:
+        """This vector scaled to length 1; one of length <= epsilon is returned
+        unchanged (as in LibCarla ue5-dev and its Python API)."""
         n = self.length()
-        if n == 0.0:
-            return Vector3D()
+        if n <= max(epsilon, 0.0):
+            return Vector3D(self.x, self.y, self.z)
         return Vector3D(self.x / n, self.y / n, self.z / n)
 
     def distance(self, other) -> float:

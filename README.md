@@ -473,9 +473,12 @@ Deliberate differences, all in favour of static checking:
   precision here and in float32 in the Python API. Results can differ in the
   last digits. Near the edges they can differ outright:
   `get_vector_angle` clamps the cosine to [-1, 1], so nearly parallel vectors
-  give 0 rather than NaN; and a vector tiny enough to underflow in float32
-  becomes a zero vector in `make_unit_vector()` in Python, but a unit vector
-  here.
+  give 0 rather than NaN; and with `make_unit_vector(epsilon=0.0)`, a vector
+  whose float32 length underflows to 0 comes back unchanged in Python, but
+  as a unit vector here. `make_unit_vector(epsilon)` otherwise behaves as
+  LibCarla's `MakeUnitVector` on `Vector2D`, `Vector3D` and `Location`: a
+  vector of length <= `epsilon` (default `2.384185791015625e-07`, i.e.
+  2 * FLT_EPSILON) is returned unchanged.
 
 * **Sensor data (issue #24).**
   - `raw_data()` is a method returning a zero-copy `Ptr[u8]` (with
