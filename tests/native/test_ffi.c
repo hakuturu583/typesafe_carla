@@ -930,6 +930,9 @@ static void test_mock_milestone4(void) {
   CHECK_OK(tsc_debug_draw_point(world, &nav, 0.2, &red, 1.0, 0)); /* persistent_lines = false */
   CHECK_OK(tsc_debug_draw_line(world, &nav, &nav, 0.1, &red, 1.0, 0));
   CHECK_OK(tsc_debug_draw_arrow(world, &nav, &nav, 0.1, 0.1, &red, 1.0, 0));
+  tsc_bounding_box_t dbg_box = {nav, {1.0, 1.0, 1.0}, {0.0, 0.0, 0.0}};
+  tsc_rotation_t dbg_rot = {0.0, 0.0, 0.0};
+  CHECK_OK(tsc_debug_draw_box(world, &dbg_box, &dbg_rot, 0.1, &red, 1.0, 0));
   CHECK_OK(tsc_debug_draw_string(world, &nav, "hi", 2, 0, &red, 1.0, 1));
   CHECK_OK(tsc_debug_draw_string(world, &nav, "hi", 2, 0, &red, 1.0, 0));
   CHECK(tsc_debug_draw_point(world, &nav, 0.2, &red, 1.0 / 0.0, 1) == TSC_INVALID_ARGUMENT);
