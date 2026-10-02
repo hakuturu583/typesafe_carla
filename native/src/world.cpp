@@ -4,10 +4,6 @@ using namespace tsc;
 
 namespace {
 
-carla::client::World &world_of(tsc_world_t *w) {
-  return check_handle(w, "world", TSC_KIND_WORLD)->world;
-}
-
 carla::client::Actor *parent_of(tsc_actor_t *parent) {
   return parent == nullptr ? nullptr : check_actor(parent, "parent")->actor.get();
 }
@@ -144,10 +140,7 @@ tsc_status_t tsc_actor_list_get(const tsc_actor_list_t *list, size_t index,
     require_ptr(out_actor, "out_actor");
     *out_actor = nullptr;
     const auto &l = check_handle(list, "list", TSC_KIND_ACTOR_LIST)->list;
-    if (index >= l->size()) {
-      fail(TSC_NOT_FOUND, "index " + std::to_string(index) + " out of range for actor list of size " +
-                              std::to_string(l->size()));
-    }
+    check_index(index, l->size(), "actor list");
     *out_actor = make_actor_handle(l->at(index));
   });
 }

@@ -1,7 +1,7 @@
 # Control value types.
 
-from ._ffi import (CVehicleControl, CVehiclePhysicsHead, CWheelPhysicsControl, CVector3D,
-                   TSC_MAX_WHEELS, PHYSICS_WHEELS_OFFSET, PHYSICS_SIZE)
+from ._ffi import (CVehicleControl, CVehiclePhysicsHead, CWheelPhysicsControl,
+                   TSC_MAX_WHEELS, PHYSICS_WHEELS_OFFSET)
 from .geometry import Location
 
 class VehicleControl:
@@ -143,10 +143,9 @@ class VehiclePhysicsControl:
         """Serializes into a PHYSICS_SIZE-byte tsc_vehicle_physics_control_t."""
         if len(self.wheels) > TSC_MAX_WHEELS:
             raise ValueError(f"at most {TSC_MAX_WHEELS} wheels are supported")
-        c = self.center_of_mass
         Ptr[CVehiclePhysicsHead](buf)[0] = CVehiclePhysicsHead(
             self.max_torque, self.max_rpm, self.final_ratio, self.gear_change_time, self.mass,
-            self.drag_coefficient, CVector3D(c.x, c.y, c.z), i32(int(self.use_automatic_gears)),
+            self.drag_coefficient, self.center_of_mass._to_c(), i32(int(self.use_automatic_gears)),
             i32(len(self.wheels)))
         wheels = Ptr[CWheelPhysicsControl](buf + PHYSICS_WHEELS_OFFSET)
         for i in range(len(self.wheels)):

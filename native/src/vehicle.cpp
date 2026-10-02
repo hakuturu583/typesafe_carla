@@ -19,15 +19,7 @@ tsc_status_t tsc_vehicle_apply_control(tsc_vehicle_t *vehicle,
     if (!(c.throttle >= 0.0 && c.throttle <= 1.0)) fail(TSC_INVALID_ARGUMENT, "throttle must be in [0, 1]");
     if (!(c.steer >= -1.0 && c.steer <= 1.0)) fail(TSC_INVALID_ARGUMENT, "steer must be in [-1, 1]");
     if (!(c.brake >= 0.0 && c.brake <= 1.0)) fail(TSC_INVALID_ARGUMENT, "brake must be in [0, 1]");
-    carla::rpc::VehicleControl rc;
-    rc.throttle = static_cast<float>(c.throttle);
-    rc.steer = static_cast<float>(c.steer);
-    rc.brake = static_cast<float>(c.brake);
-    rc.hand_brake = c.hand_brake != 0;
-    rc.reverse = c.reverse != 0;
-    rc.manual_gear_shift = c.manual_gear_shift != 0;
-    rc.gear = c.gear;
-    vehicle_of(vehicle).ApplyControl(rc);
+    vehicle_of(vehicle).ApplyControl(to_carla(c));
   });
 }
 

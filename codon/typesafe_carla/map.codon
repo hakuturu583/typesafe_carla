@@ -87,24 +87,16 @@ class Waypoint:
         return int(self._info.lane_type)
 
     def next(self, distance: float) -> List[Waypoint]:
-        out = Ptr[cobj](1)
-        _check(tsc_waypoint_next(self._h.ptr, distance, out))
-        return _take_list(out[0])
+        return _waypoints(tsc_waypoint_next, self._h.ptr, distance)
 
     def previous(self, distance: float) -> List[Waypoint]:
-        out = Ptr[cobj](1)
-        _check(tsc_waypoint_previous(self._h.ptr, distance, out))
-        return _take_list(out[0])
+        return _waypoints(tsc_waypoint_previous, self._h.ptr, distance)
 
     def next_until_lane_end(self, distance: float) -> List[Waypoint]:
-        out = Ptr[cobj](1)
-        _check(tsc_waypoint_next_until_lane_end(self._h.ptr, distance, out))
-        return _take_list(out[0])
+        return _waypoints(tsc_waypoint_next_until_lane_end, self._h.ptr, distance)
 
     def previous_until_lane_start(self, distance: float) -> List[Waypoint]:
-        out = Ptr[cobj](1)
-        _check(tsc_waypoint_previous_until_lane_start(self._h.ptr, distance, out))
-        return _take_list(out[0])
+        return _waypoints(tsc_waypoint_previous_until_lane_start, self._h.ptr, distance)
 
     def get_left_lane(self) -> Optional[Waypoint]:
         out = Ptr[cobj](1)
@@ -124,6 +116,12 @@ def _waypoint_or_none(ptr: cobj) -> Optional[Waypoint]:
     if ptr == cobj():
         return None
     return Waypoint(Handle(ptr))
+
+def _waypoints(fn, h: cobj, distance: float) -> List[Waypoint]:
+    """Calls a tsc_*(handle, distance, out) waypoint-list function."""
+    out = Ptr[cobj](1)
+    _check(fn(h, distance, out))
+    return _take_list(out[0])
 
 def _take_list(ptr: cobj) -> List[Waypoint]:
     """Copies a native waypoint list into a Codon list and releases it."""
@@ -173,9 +171,7 @@ class Map:
         return _waypoint_or_none(out[0])
 
     def generate_waypoints(self, distance: float) -> List[Waypoint]:
-        out = Ptr[cobj](1)
-        _check(tsc_map_generate_waypoints(self._h.ptr, distance, out))
-        return _take_list(out[0])
+        return _waypoints(tsc_map_generate_waypoints, self._h.ptr, distance)
 
     def __repr__(self) -> str:
         return f"Map(name={self.name})"

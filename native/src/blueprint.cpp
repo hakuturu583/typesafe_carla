@@ -39,11 +39,7 @@ tsc_status_t tsc_blueprint_library_get(const tsc_blueprint_library_t *library, s
     require_ptr(out, "out");
     *out = nullptr;
     const auto &l = library_of(library);
-    if (index >= l->size()) {
-      fail(TSC_NOT_FOUND, "index " + std::to_string(index) +
-                              " out of range for blueprint library of size " +
-                              std::to_string(l->size()));
-    }
+    check_index(index, l->size(), "blueprint library");
     *out = new tsc_actor_blueprint(l->at(index));
   });
 }

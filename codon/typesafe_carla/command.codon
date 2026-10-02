@@ -10,9 +10,8 @@
 # Every constructor returns a Command, so one list can mix command kinds.
 # Actors are given by id (`actor.id`).
 
-from ._ffi import (CCommand, CCommandResponse, CTransform, CVehicleControl, CVector3D, CString,
-                   copy_string, tsc_string_free, TSC_INVALID_ARGUMENT)
-from .errors import CarlaError, _check_port
+from ._ffi import CCommand, CCommandResponse, CString, take_string, TSC_INVALID_ARGUMENT
+from .errors import CarlaError, _check_port, _is_actor_id
 from .geometry import Transform, Vector3D
 from .control import VehicleControl
 from .blueprint import ActorBlueprint
@@ -29,7 +28,7 @@ _SET_AUTOPILOT = 6
 _SET_SIMULATE_PHYSICS = 7
 
 def _actor_id(actor_id: int) -> u32:
-    if actor_id < 0 or actor_id > 0xFFFFFFFF:
+    if not _is_actor_id(actor_id):
         raise CarlaError(f"actor id {actor_id} is out of range", TSC_INVALID_ARGUMENT)
     return u32(actor_id)
 
@@ -69,12 +68,11 @@ class Command:
         return self
 
     def _to_c(self, then_of: int) -> CCommand:
-        c = self._control._to_c()
-        v = self._vector
         bp = self._blueprint
         return CCommand(i32(self._type), i32(then_of), u32(self._actor_id), u32(self._parent_id),
-                        bp._h.ptr if bp is not None else cobj(), self._transform._to_c(), c,
-                        CVector3D(v.x, v.y, v.z), i32(int(self._flag)), u16(self._tm_port), u16(0))
+                        bp._h.ptr if bp is not None else cobj(), self._transform._to_c(),
+                        self._control._to_c(), self._vector._to_c(), i32(int(self._flag)),
+                        u16(self._tm_port), u16(0))
 
     def __repr__(self) -> str:
         names = ["", "SpawnActor", "DestroyActor", "ApplyVehicleControl", "ApplyTransform",
@@ -133,10 +131,10 @@ def SetSimulatePhysics(actor_id: int, enabled: bool) -> Command:
     c._flag = enabled
     return c
 
-def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int, int]:
+def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int]:
     """C records for `commands` (then-commands follow their SpawnActor).
 
-    Returns (records, record count, top-level count). The Command objects
+    Returns (records, record count). The Command objects
     (which hold the blueprints) must stay alive for the duration of the call.
     """
     n = 0
@@ -151,14 +149,14 @@ def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int, int]:
         for after in c._then:
             records[i] = after._to_c(top)
             i += 1
-    return (records, n, len(commands))
+    return (records, n)
 
 def _responses(buf: Ptr[CCommandResponse], n: int) -> List[CommandResponse]:
+    """Converts the responses and frees their error strings."""
     result = List[CommandResponse](n)
+    error = Ptr[CString](1)
     for i in range(n):
         r = buf[i]
-        error = copy_string(r.error) if int(r.has_error) != 0 else ""
-        # Free the string in place: `error` sits after two 4-byte fields.
-        tsc_string_free(Ptr[CString]((buf + i).as_byte() + 8))
-        result.append(CommandResponse(int(r.actor_id), error))
+        error[0] = r.error  # tsc_string_free only needs the data pointer
+        result.append(CommandResponse(int(r.actor_id), take_string(error)))
     return result

@@ -17,17 +17,8 @@ Command to_command(const tsc_command_t &c) {
     }
     case TSC_COMMAND_DESTROY_ACTOR:
       return Command::DestroyActor(c.actor_id);
-    case TSC_COMMAND_APPLY_VEHICLE_CONTROL: {
-      carla::rpc::VehicleControl rc;
-      rc.throttle = static_cast<float>(c.control.throttle);
-      rc.steer = static_cast<float>(c.control.steer);
-      rc.brake = static_cast<float>(c.control.brake);
-      rc.hand_brake = c.control.hand_brake != 0;
-      rc.reverse = c.control.reverse != 0;
-      rc.manual_gear_shift = c.control.manual_gear_shift != 0;
-      rc.gear = c.control.gear;
-      return Command::ApplyVehicleControl(c.actor_id, rc);
-    }
+    case TSC_COMMAND_APPLY_VEHICLE_CONTROL:
+      return Command::ApplyVehicleControl(c.actor_id, to_carla(c.control));
     case TSC_COMMAND_APPLY_TRANSFORM:
       return Command::ApplyTransform(c.actor_id, to_carla(c.transform));
     case TSC_COMMAND_APPLY_TARGET_VELOCITY:

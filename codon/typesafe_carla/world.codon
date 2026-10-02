@@ -5,7 +5,7 @@ from ._ffi import (Handle, CTransform, CWorldSettings, tsc_world_get_id, tsc_wor
                    tsc_world_try_spawn_actor, tsc_world_tick, tsc_world_get_settings,
                    tsc_world_apply_settings, TSC_NOT_FOUND, tsc_world_get_map,
                    tsc_world_get_snapshot, tsc_world_wait_for_tick)
-from .errors import _check
+from .errors import _check, _is_actor_id
 from .geometry import Transform
 from .actor import Actor, ActorList, _make_actor
 from .blueprint import ActorBlueprint, BlueprintLibrary
@@ -73,7 +73,7 @@ class World:
 
     def get_actor(self, actor_id: int) -> Optional[Actor]:
         """Returns None if there is no actor with this id."""
-        if actor_id < 0 or actor_id > 0xFFFFFFFF:
+        if not _is_actor_id(actor_id):
             return None
         out = Ptr[cobj](1)
         status = tsc_world_get_actor(self._h.ptr, u32(actor_id), out)

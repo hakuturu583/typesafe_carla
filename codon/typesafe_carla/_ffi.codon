@@ -143,8 +143,8 @@ class CVehiclePhysicsHead:
     wheel_count: i32
 
 TSC_MAX_WHEELS = 8
-PHYSICS_WHEELS_OFFSET = 80
-PHYSICS_SIZE = 720
+PHYSICS_WHEELS_OFFSET = CVehiclePhysicsHead.__elemsize__
+PHYSICS_SIZE = PHYSICS_WHEELS_OFFSET + TSC_MAX_WHEELS * CWheelPhysicsControl.__elemsize__
 
 @tuple
 class CCommand:

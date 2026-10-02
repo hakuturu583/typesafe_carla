@@ -8,7 +8,6 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
-#include <iterator>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -73,6 +72,17 @@ inline std::string to_string(const char *data, size_t len, const char *name) {
 }
 
 void string_assign(tsc_string_t *out, const std::string &value);
+
+// Shared body of the entry points that return one new handle: *out is NULL
+// unless make() succeeds; make() may itself return NULL ("no such object").
+template <typename H, typename F>
+tsc_status_t new_handle(const char *function, H **out, F &&make) noexcept {
+  return guard(function, [&]() {
+    require_ptr(out, "out");
+    *out = nullptr;
+    *out = make();
+  });
+}
 
 }  // namespace tsc
 
@@ -139,8 +149,10 @@ struct tsc_actor_blueprint : tsc_handle {
 
 struct tsc_world_snapshot : tsc_handle {
   carla::client::WorldSnapshot snapshot;
-  explicit tsc_world_snapshot(carla::client::WorldSnapshot s)
-      : tsc_handle(TSC_KIND_WORLD_SNAPSHOT), snapshot(std::move(s)) {}
+  // The actors, converted once: LibCarla's snapshot iterator is forward-only,
+  // so indexing it directly would make a full iteration O(n^2).
+  std::vector<tsc_actor_snapshot_t> actors;
+  explicit tsc_world_snapshot(carla::client::WorldSnapshot s);  // snapshot.cpp
 };
 
 struct tsc_map : tsc_handle {
@@ -184,6 +196,18 @@ inline tsc_actor *check_actor(tsc_actor *a, const char *name = "actor") {
   return check_handle(a, name, TSC_KIND_ACTOR, TSC_KIND_VEHICLE);
 }
 
+inline carla::client::World &world_of(tsc_world_t *w) {
+  return check_handle(w, "world", TSC_KIND_WORLD)->world;
+}
+
+// Fails with TSC_NOT_FOUND unless index < size; `what` names the container.
+inline void check_index(size_t index, size_t size, const char *what) {
+  if (index >= size) {
+    fail(TSC_NOT_FOUND, "index " + std::to_string(index) + " out of range for " + what +
+                            " of size " + std::to_string(size));
+  }
+}
+
 // Wraps a LibCarla actor in the most derived handle kind we support.
 tsc_actor *make_actor_handle(const carla::SharedPtr<carla::client::Actor> &actor);
 
@@ -211,6 +235,18 @@ inline tsc_rotation_t from_carla(const carla::geom::Rotation &r) {
 }
 inline tsc_transform_t from_carla(const carla::geom::Transform &t) {
   return tsc_transform_t{from_carla(t.location), from_carla(t.rotation)};
+}
+// No range checks: callers validate where the API requires it.
+inline carla::rpc::VehicleControl to_carla(const tsc_vehicle_control_t &c) {
+  carla::rpc::VehicleControl rc;
+  rc.throttle = static_cast<float>(c.throttle);
+  rc.steer = static_cast<float>(c.steer);
+  rc.brake = static_cast<float>(c.brake);
+  rc.hand_brake = c.hand_brake != 0;
+  rc.reverse = c.reverse != 0;
+  rc.manual_gear_shift = c.manual_gear_shift != 0;
+  rc.gear = c.gear;
+  return rc;
 }
 
 // Longest accepted timeout (~31 years): keeps the millisecond count far inside

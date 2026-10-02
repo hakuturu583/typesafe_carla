@@ -9,6 +9,7 @@ namespace client {
 namespace mock {
 
 constexpr double kDefaultDeltaSeconds = 0.05;
+constexpr double kSpawnClearance = 2.0;  // meters between spawned vehicles
 
 struct ActorData {
   rpc::ActorId id = 0;
@@ -71,7 +72,9 @@ struct Episode {
         const double d = std::hypot(other.transform.location.x - t.location.x,
                                     other.transform.location.y - t.location.y,
                                     other.transform.location.z - t.location.z);
-        if (d < 2.0) throw std::runtime_error("Spawn failed because of collision at spawn position");
+        if (d < kSpawnClearance) {
+          throw std::runtime_error("Spawn failed because of collision at spawn position");
+        }
       }
     }
     return AddActorLocked(type_id, is_vehicle, t);
@@ -571,13 +574,10 @@ uint64_t Waypoint::GetId() const {
          static_cast<uint64_t>(std::llround(_s * 100.0));
 }
 
-const geom::Transform &Waypoint::GetTransform() const {
-  if (!_transform) {
-    _transform = geom::Transform(geom::Location(static_cast<float>(_s),
-                                                static_cast<float>(LaneY(_lane_id)), 0.0f));
-  }
-  return *_transform;
-}
+Waypoint::Waypoint(int32_t lane_id, double s)
+    : _lane_id(lane_id),
+      _s(s),
+      _transform(geom::Location(static_cast<float>(s), static_cast<float>(LaneY(lane_id)), 0.0f)) {}
 
 std::vector<SharedPtr<Waypoint>> Waypoint::GetNext(double distance) const {
   if (_s + distance > kRoadLength) return {};

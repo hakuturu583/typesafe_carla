@@ -316,13 +316,13 @@ class WorldSnapshot {
 // driving lanes, lane -1 at y=0 and lane -2 at y=3.5.
 class Waypoint : public std::enable_shared_from_this<Waypoint> {
  public:
-  Waypoint(int32_t lane_id, double s) : _lane_id(lane_id), _s(s) {}
+  Waypoint(int32_t lane_id, double s);
   uint64_t GetId() const;
   uint32_t GetRoadId() const { return 1u; }
   uint32_t GetSectionId() const { return 0u; }
   int32_t GetLaneId() const { return _lane_id; }
   double GetDistance() const { return _s; }
-  const geom::Transform &GetTransform() const;
+  const geom::Transform &GetTransform() const { return _transform; }
   int32_t GetJunctionId() const { return -1; }
   bool IsJunction() const { return false; }
   double GetLaneWidth() const { return 3.5; }
@@ -337,7 +337,7 @@ class Waypoint : public std::enable_shared_from_this<Waypoint> {
  private:
   int32_t _lane_id;
   double _s;
-  mutable std::optional<geom::Transform> _transform;
+  geom::Transform _transform;
 };
 
 class Map : public std::enable_shared_from_this<Map> {

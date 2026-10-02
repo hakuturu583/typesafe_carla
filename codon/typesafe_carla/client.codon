@@ -55,7 +55,7 @@ class Client:
 
     def apply_batch(self, commands: List[Command], do_tick: bool = False):
         """Sends all commands in one RPC without waiting for their results."""
-        records, n, _ = _flatten(commands)
+        records, n = _flatten(commands)
         _check(tsc_client_apply_batch(self._h.ptr, records, n, i32(int(do_tick))))
 
     def apply_batch_sync(self, commands: List[Command],
@@ -65,7 +65,8 @@ class Client:
         A failing command does not raise: its response has_error(). Autopilot
         set here is registered with the Traffic Manager, like the Python API.
         """
-        records, n, top = _flatten(commands)
+        records, n = _flatten(commands)
+        top = len(commands)
         buf = Ptr[CCommandResponse](top if top > 0 else 1)
         count = Ptr[int](1)
         _check(tsc_client_apply_batch_sync(self._h.ptr, records, n, i32(int(do_tick)), buf, top,
