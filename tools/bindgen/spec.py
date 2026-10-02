@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -97,6 +99,12 @@ class Function:
     args: tuple[Arg, ...]
     out: Out | None
     doc: str | None
+    # Set when a supported LibCarla lacks the method: the feature's name for
+    # the TSC_ERROR that the call raises there (TSC_CALL_OPTIONAL), and the
+    # CARLA refs (the build's TSC_CARLA_GIT_REF) whose LibCarla lacks it;
+    # `validate` accepts the method missing only on those.
+    optional: str | None = None
+    missing_in: tuple[str, ...] = ()
 
     def c_params(self) -> list[str]:
         params = [f"{self.self_type} *{self.self_name}"]
@@ -118,6 +126,8 @@ class Function:
     def body(self) -> str:
         self_ = f"{self.self_get}({self.self_name})"
         args = [a.to_carla() for a in self.args]
+        if self.optional:
+            return f'TSC_CALL_OPTIONAL({", ".join([self_, self.call, chr(34) + self.optional + chr(34)] + args)});'
         call = (f"{self.via}({', '.join([self_] + args)})" if self.via
                 else f"{self_}.{self.call}({', '.join(args)})")
         if self.out is None:
@@ -185,7 +195,7 @@ def load(bindings: Path = BINDINGS) -> Spec:
         for block, entries in raw["blocks"].items():
             for short, entry in entries.items():
                 where = f"{path.name}: {short}"
-                unknown = set(entry) - {"call", "via", "args", "out", "doc"}
+                unknown = set(entry) - {"call", "via", "args", "out", "doc", "optional"}
                 if unknown:
                     raise SpecError(f"{where}: unknown keys {sorted(unknown)}")
                 args = tuple(Arg(n, type_of(t, where)) for n, t in (entry.get("args") or {}).items())
@@ -200,6 +210,27 @@ def load(bindings: Path = BINDINGS) -> Spec:
                     if out.type.handle and out.type.from_carla == "{}":
                         raise SpecError(f"{where}: {out.type.name} has no from_carla to create "
                                         "the output handle")
+                    if out.type.c_param_template and not out.type.assign:
+                        raise SpecError(f"{where}: {out.type.name} is input-only")
+                optional, missing_in = None, ()
+                if "optional" in entry:
+                    if out:
+                        raise SpecError(f"{where}: an optional method has no output")
+                    if "via" in entry:
+                        raise SpecError(f"{where}: `optional` and `via` exclude each other")
+                    o = entry["optional"]
+                    if not isinstance(o, dict) or set(o) != {"name", "missing_in"} or \
+                            not isinstance(o["missing_in"], list) or not o["missing_in"]:
+                        raise SpecError(f"{where}: optional must be {{name: ..., missing_in: [refs]}}")
+                    optional, missing_in = str(o["name"]), tuple(str(r) for r in o["missing_in"])
+                c_params = [self_["name"]] + [a.type.c_param(a.name) for a in args]
+                if out:
+                    c_params.append(out.type.c_param(out.name) if out.type.c_param_template
+                                    else out.name)
+                params = [n for c in c_params for n in re.findall(r"(\w+)\s*(?:,|$)", c)]
+                duplicate = sorted({n for n in params if params.count(n) > 1})
+                if duplicate:
+                    raise SpecError(f"{where}: duplicate C parameter(s) {duplicate}")
                 name = f"tsc_{raw['prefix']}_{short}"
                 if name in seen:
                     raise SpecError(f"{where}: {name} is also defined in {seen[name]}")
@@ -207,7 +238,8 @@ def load(bindings: Path = BINDINGS) -> Spec:
                 functions.append(Function(
                     name=name, block=block, spec_file=path.name, cpp_class=raw["class"],
                     call=entry["call"], via=entry.get("via"), self_type=self_["type"], self_name=self_["name"],
-                    self_get=self_["get"], args=args, out=out, doc=entry.get("doc")))
+                    self_get=self_["get"], args=args, out=out, doc=entry.get("doc"),
+                    optional=optional, missing_in=missing_in))
     blocks: dict[str, str] = {}
     for f in functions:
         if blocks.setdefault(f.block, f.spec_file) != f.spec_file:

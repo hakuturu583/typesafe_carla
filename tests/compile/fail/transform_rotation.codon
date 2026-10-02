@@ -1,0 +1,9 @@
+# Transform.transform takes a point (a Location or Vector3D).
+# expect-error: 'Rotation' does not match expected type 'Vector3D'
+import typesafe_carla as carla
+
+def apply(t: carla.Transform):
+    t.transform(carla.Rotation(yaw=90.0))
+
+# Compile-only: Codon type-checks a function only when it is called.
+apply(carla.Transform())

@@ -45,15 +45,21 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
 - A C function that only checks a handle, converts arguments and calls one
   LibCarla method belongs in `bindings/*.yaml` (generated), not hand-written.
   Never edit generated code (`native/src/generated/`, marked blocks in
-  `ffi.h` and `_ffi.codon`).
+  `ffi.h` and `_ffi.codon`). A method that a supported LibCarla lacks gets
+  `optional: {name: Class.python_name, missing_in: [<CARLA refs>]}`: the
+  generated code calls it through `TSC_CALL_OPTIONAL` (TSC_ERROR where it is
+  missing), and `validate` accepts it missing only on a libcarla build of a
+  listed ref (never on the mock).
 - A new API parameter typed `Vector3D` or `Location` is generic (no
   annotation) and goes through `geometry._vector_arg` / `_location_arg`
   (`_vector_or` / `_location_or` if optional), with a distinct literal
   `"[tsc-compat] a Location passed as a Vector3D to X"` (or the reverse);
   the helpers call `compat_shortcut`. It needs a `tests/compile/strict_fail`
   case for the compat path.
-- The mock (`native/mock`) mirrors LibCarla UE5 signatures; keep it in sync
-  with any LibCarla API the shim starts using.
+- The mock (`native/mock`) mirrors LibCarla UE5 (ue5-dev) signatures *and
+  behaviour* (return values, empty results, exceptions); keep it in sync with
+  any LibCarla API the shim starts using. Where 0.10.0 behaves differently,
+  the shim maps both to one documented status.
 - Versions: `python/typesafe_carla/__init__.py` and
   `codon/typesafe_carla/__init__.codon` must agree.
 

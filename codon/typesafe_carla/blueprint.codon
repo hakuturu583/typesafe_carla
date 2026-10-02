@@ -6,6 +6,8 @@ from ._ffi import (Handle, CString, CActorAttribute, take_string, copy_string, t
                    tsc_actor_blueprint_get_id, tsc_actor_blueprint_has_tag,
                    tsc_actor_blueprint_has_attribute, tsc_actor_blueprint_get_attribute,
                    tsc_actor_blueprint_set_attribute, TSC_TYPE_ERROR)
+from ._ffi import (CStringList, take_string_list, tsc_actor_blueprint_get_tags,
+                   tsc_actor_blueprint_match_tags, tsc_blueprint_library_filter_by_attribute)
 from .errors import _check, _normalize_index, CarlaError
 
 class ActorAttributeType:
@@ -113,6 +115,20 @@ class ActorBlueprint:
         _check(tsc_actor_blueprint_has_tag(self._h.ptr, tag.ptr, tag.len, out))
         return int(out[0]) != 0
 
+    @property
+    def tags(self) -> List[str]:
+        """The blueprint's tags (in LibCarla's order, which is unspecified)."""
+        out = Ptr[CStringList](1)
+        _check(tsc_actor_blueprint_get_tags(self._h.ptr, out))
+        return take_string_list(out)
+
+    def match_tags(self, wildcard_pattern: str) -> bool:
+        """Whether the id or any tag matches the shell-style wildcard pattern."""
+        out = Ptr[i32](1)
+        _check(tsc_actor_blueprint_match_tags(self._h.ptr, wildcard_pattern.ptr,
+                                              wildcard_pattern.len, out))
+        return int(out[0]) != 0
+
     def has_attribute(self, id: str) -> bool:
         out = Ptr[i32](1)
         _check(tsc_actor_blueprint_has_attribute(self._h.ptr, id.ptr, id.len, out))
@@ -167,6 +183,14 @@ class BlueprintLibrary:
         out = Ptr[cobj](1)
         _check(tsc_blueprint_library_filter(self._h.ptr, wildcard_pattern.ptr,
                                             wildcard_pattern.len, out))
+        return BlueprintLibrary(Handle(out[0]))
+
+    def filter_by_attribute(self, name: str, value: str) -> BlueprintLibrary:
+        """The blueprints whose attribute `name` has `value` (or lists it among
+        its recommended values)."""
+        out = Ptr[cobj](1)
+        _check(tsc_blueprint_library_filter_by_attribute(self._h.ptr, name.ptr, name.len,
+                                                         value.ptr, value.len, out))
         return BlueprintLibrary(Handle(out[0]))
 
     def __repr__(self) -> str:

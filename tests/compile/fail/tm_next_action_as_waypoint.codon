@@ -1,0 +1,10 @@
+# TrafficManager.get_next_action gives a (road option, waypoint) pair, not a waypoint.
+# expect-error: 'Waypoint' does not match expected type 'Tuple[str,Waypoint]'
+import typesafe_carla as carla
+
+def next_waypoint(client: carla.Client, vehicle: carla.Vehicle) -> carla.Waypoint:
+    return client.get_trafficmanager().get_next_action(vehicle)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+next_waypoint(carla.Client("localhost", 2000), _world.get_actors()[0].as_vehicle())

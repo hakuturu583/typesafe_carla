@@ -39,6 +39,16 @@ int main(void) {
   expect_null_rejected(tsc_actor_add_torque(NULL, NULL), "tsc_actor_add_torque");
   expect_null_rejected(tsc_actor_set_simulate_physics(NULL, 0), "tsc_actor_set_simulate_physics");
   expect_null_rejected(tsc_actor_set_enable_gravity(NULL, 0), "tsc_actor_set_enable_gravity");
+  expect_null_rejected(tsc_actor_blueprint_get_tags(NULL, NULL), "tsc_actor_blueprint_get_tags");
+  expect_null_rejected(tsc_actor_blueprint_match_tags(NULL, NULL, 1, NULL), "tsc_actor_blueprint_match_tags");
+  expect_null_rejected(tsc_client_set_replayer_ignore_hero(NULL, 0), "tsc_client_set_replayer_ignore_hero");
+  expect_null_rejected(tsc_client_set_replayer_ignore_spectator(NULL, 0), "tsc_client_set_replayer_ignore_spectator");
+  expect_null_rejected(tsc_client_get_available_maps(NULL, NULL), "tsc_client_get_available_maps");
+  expect_null_rejected(tsc_client_get_required_files(NULL, NULL, 1, 0, NULL), "tsc_client_get_required_files");
+  expect_null_rejected(tsc_client_request_file(NULL, NULL, 1), "tsc_client_request_file");
+  expect_null_rejected(tsc_client_set_files_base_folder(NULL, NULL, 1, NULL), "tsc_client_set_files_base_folder");
+  expect_null_rejected(tsc_debug_clear_shapes(NULL), "tsc_debug_clear_shapes");
+  expect_null_rejected(tsc_debug_clear_strings(NULL), "tsc_debug_clear_strings");
   expect_null_rejected(tsc_landmark_get_h_offset(NULL, NULL), "tsc_landmark_get_h_offset");
   expect_null_rejected(tsc_landmark_get_pitch(NULL, NULL), "tsc_landmark_get_pitch");
   expect_null_rejected(tsc_landmark_get_roll(NULL, NULL), "tsc_landmark_get_roll");
@@ -71,6 +81,17 @@ int main(void) {
   expect_null_rejected(tsc_traffic_manager_set_auto_lane_change(NULL, NULL, 0), "tsc_traffic_manager_set_auto_lane_change");
   expect_null_rejected(tsc_traffic_manager_force_lane_change(NULL, NULL, 0), "tsc_traffic_manager_force_lane_change");
   expect_null_rejected(tsc_traffic_manager_set_update_vehicle_lights(NULL, NULL, 0), "tsc_traffic_manager_set_update_vehicle_lights");
+  expect_null_rejected(tsc_traffic_manager_set_osm_mode(NULL, 0), "tsc_traffic_manager_set_osm_mode");
+  expect_null_rejected(tsc_traffic_manager_set_respawn_dormant_vehicles(NULL, 0), "tsc_traffic_manager_set_respawn_dormant_vehicles");
+  expect_null_rejected(tsc_traffic_manager_set_boundaries_respawn_dormant_vehicles(NULL, NAN, NAN), "tsc_traffic_manager_set_boundaries_respawn_dormant_vehicles");
+  expect_null_rejected(tsc_traffic_manager_set_hybrid_physics_radius(NULL, NAN), "tsc_traffic_manager_set_hybrid_physics_radius");
+  expect_null_rejected(tsc_traffic_manager_set_global_lane_offset(NULL, NAN), "tsc_traffic_manager_set_global_lane_offset");
+  expect_null_rejected(tsc_traffic_manager_set_collision_detection(NULL, NULL, NULL, 0), "tsc_traffic_manager_set_collision_detection");
+  expect_null_rejected(tsc_traffic_manager_shut_down(NULL), "tsc_traffic_manager_shut_down");
+  expect_null_rejected(tsc_traffic_manager_set_global_large_vehicle_wide_turn(NULL, 0), "tsc_traffic_manager_set_global_large_vehicle_wide_turn");
+  expect_null_rejected(tsc_traffic_manager_set_large_vehicle_wide_turn(NULL, NULL, 0), "tsc_traffic_manager_set_large_vehicle_wide_turn");
+  expect_null_rejected(tsc_traffic_manager_set_path(NULL, NULL, NULL, 1, 0), "tsc_traffic_manager_set_path");
+  expect_null_rejected(tsc_traffic_manager_set_route(NULL, NULL, NULL, 1, 0), "tsc_traffic_manager_set_route");
   expect_null_rejected(tsc_vehicle_set_autopilot(NULL, 0, 0), "tsc_vehicle_set_autopilot");
   expect_null_rejected(tsc_vehicle_set_light_state(NULL, 0), "tsc_vehicle_set_light_state");
   expect_null_rejected(tsc_vehicle_get_light_state(NULL, NULL), "tsc_vehicle_get_light_state");
@@ -107,6 +128,6 @@ int main(void) {
   expect_null_rejected(tsc_waypoint_get_landmarks(NULL, NAN, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks");
   expect_null_rejected(tsc_waypoint_get_landmarks_of_type(NULL, NAN, NULL, 1, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks_of_type");
   if (g_failures != 0) return 1;
-  printf("test_generated: 86 generated functions reject NULL handles\n");
+  printf("test_generated: 107 generated functions reject NULL handles\n");
   return 0;
 }

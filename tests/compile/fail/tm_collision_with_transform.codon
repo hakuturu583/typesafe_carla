@@ -1,0 +1,10 @@
+# TrafficManager.collision_detection takes actors.
+# expect-error: expected an Actor (a Vehicle, Walker, ...)
+import typesafe_carla as carla
+
+def ignore(client: carla.Client, vehicle: carla.Vehicle):
+    client.get_trafficmanager().collision_detection(vehicle, vehicle.get_transform(), False)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+ignore(carla.Client("localhost", 2000), _world.get_actors()[0].as_vehicle())

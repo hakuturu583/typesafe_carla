@@ -104,6 +104,115 @@ static void test_layout(void) {
   CHECK(offsetof(tsc_bone_transform_t, transform) == 16);
   CHECK(offsetof(tsc_vehicle_telemetry_data_t, gear) == 40);
   CHECK(sizeof(tsc_bone_transform_out_t) == 160);
+  CHECK(sizeof(tsc_string_list_t) == 16);         /* issue #23 */
+  CHECK(sizeof(tsc_world_settings_ext_t) == 32);  /* issue #23 */
+}
+
+/* Issue #23, on any backend: no server needed. */
+static void test_issue23_offline(void) {
+  tsc_string_list_t list;
+  memset(&list, 0, sizeof list);
+  tsc_string_list_free(&list); /* zeroed: a no-op */
+  tsc_string_list_free(&list); /* twice */
+  tsc_string_list_free(NULL);
+  tsc_road_options_free(NULL);
+  /* Transform matrices: yaw 90 degrees is the same in CARLA 0.10.0 and ue5-dev. */
+  tsc_transform_t t = {{1.0, 2.0, 3.0}, {0.0, 90.0, 0.0}};
+  double m[16], inv[16];
+  CHECK_OK(tsc_transform_get_matrix(&t, m));
+  CHECK_OK(tsc_transform_get_inverse_matrix(&t, inv));
+  CHECK(m[3] == 1.0 && m[7] == 2.0 && m[11] == 3.0 && m[15] == 1.0);
+  CHECK(m[1] < -0.999 && m[4] > 0.999); /* x' = -y, y' = x */
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      double acc = 0.0;
+      for (int k = 0; k < 4; ++k) acc += m[4 * i + k] * inv[4 * k + j];
+      CHECK(acc > (i == j ? 0.9999 : -0.0001) && acc < (i == j ? 1.0001 : 0.0001));
+    }
+  }
+  CHECK(tsc_transform_get_matrix(NULL, m) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_transform_get_matrix(&t, NULL) == TSC_INVALID_ARGUMENT);
+  /* Hand-written entry points reject NULL handles. */
+  tsc_world_t *world = NULL;
+  int32_t option = 0;
+  tsc_waypoint_t *waypoint = NULL;
+  CHECK(tsc_client_load_world_if_different(NULL, "Town01", 6, 1, &world) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_traffic_manager_get_next_action(NULL, NULL, &option, &waypoint) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_debug_clear_shapes(NULL) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_world_get_settings_ext(NULL, NULL, NULL) == TSC_INVALID_ARGUMENT);
+}
+
+/* Issue #23 against the mock server. */
+static void test_mock_issue23(void) {
+  tsc_client_t *client = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2023, &client));
+  tsc_string_list_t maps;
+  memset(&maps, 0, sizeof maps);
+  CHECK_OK(tsc_client_get_available_maps(client, &maps));
+  CHECK(maps.size == 3 && strcmp(maps.items[1].data, "/Game/Carla/Maps/Town01") == 0);
+  tsc_string_list_free(&maps);
+  CHECK(maps.items == NULL && maps.size == 0);
+  tsc_world_t *world = NULL;
+  CHECK_OK(tsc_client_load_world_if_different(client, "MockTown", 8, 1, &world));
+  CHECK(world == NULL);
+  CHECK_OK(tsc_client_load_world_if_different(client, "Town01", 6, 1, &world));
+  CHECK(world != NULL);
+  tsc_world_settings_t s;
+  tsc_world_settings_ext_t ext;
+  CHECK_OK(tsc_world_get_settings_ext(world, &s, &ext));
+  CHECK(ext.tile_stream_distance == 3000.0 && ext.deterministic_ragdolls == 1);
+  ext.actor_active_distance = 750.0;
+  uint64_t frame = 0;
+  CHECK_OK(tsc_world_apply_settings_ext(world, &s, &ext, 1.0, &frame));
+  /* The ABI 3.0 entry points leave the extended fields alone. */
+  CHECK_OK(tsc_world_apply_settings(world, &s, 1.0, &frame));
+  CHECK_OK(tsc_world_get_settings_ext(world, &s, &ext));
+  CHECK(ext.actor_active_distance == 750.0);
+  ext.max_culling_distance = 0.0 / 0.0;
+  CHECK(tsc_world_apply_settings_ext(world, &s, &ext, 1.0, &frame) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_debug_clear_shapes(world));
+  CHECK_OK(tsc_debug_clear_strings(world));
+  tsc_traffic_manager_t *tm = NULL;
+  CHECK_OK(tsc_client_get_traffic_manager(client, 8000, &tm));
+  tsc_blueprint_library_t *library = NULL;
+  tsc_actor_blueprint_t *bp = NULL;
+  tsc_actor_t *actor = NULL;
+  tsc_vehicle_t *vehicle = NULL;
+  CHECK_OK(tsc_world_get_blueprint_library(world, &library));
+  CHECK_OK(tsc_blueprint_library_find(library, "vehicle.audi.tt", 15, &bp));
+  tsc_transform_t at = {{10.0, 0.0, 0.6}, {0.0, 0.0, 0.0}};
+  CHECK_OK(tsc_world_spawn_actor(world, bp, &at, NULL, &actor));
+  CHECK_OK(tsc_actor_as_vehicle(actor, &vehicle));
+  const uint8_t bad_route[] = {TSC_ROAD_OPTION_LEFT, 8};
+  CHECK(tsc_traffic_manager_set_route(tm, vehicle, bad_route, 2, 1) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "invalid road option 8") != NULL);
+  CHECK(tsc_traffic_manager_set_route(tm, vehicle, NULL, 1, 1) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_traffic_manager_set_route(tm, vehicle, NULL, 0, 1));
+  uint8_t *options = NULL;
+  size_t count = 0;
+  tsc_waypoint_list_t *waypoints = NULL;
+  CHECK(tsc_traffic_manager_get_all_actions(tm, vehicle, &options, &count, &waypoints) ==
+        TSC_NOT_FOUND); /* not driven by the Traffic Manager: an empty plan */
+  CHECK(options == NULL && waypoints == NULL);
+  int32_t next_option = -1;
+  tsc_waypoint_t *next_waypoint = NULL;
+  CHECK(tsc_traffic_manager_get_next_action(tm, vehicle, &next_option, &next_waypoint) ==
+        TSC_NOT_FOUND); /* (Void, NULL), as ue5-dev */
+  CHECK(strstr(tsc_last_error_message(), "not driven by this Traffic Manager") != NULL);
+  CHECK(next_waypoint == NULL);
+  CHECK_OK(tsc_vehicle_set_autopilot(vehicle, 1, 8000));
+  CHECK_OK(tsc_traffic_manager_get_all_actions(tm, vehicle, &options, &count, &waypoints));
+  CHECK(count == 1 && options[0] == TSC_ROAD_OPTION_LANE_FOLLOW &&
+        tsc_waypoint_list_size(waypoints) == 1);
+  tsc_road_options_free(options);
+  tsc_handle_release(H(waypoints));
+  tsc_handle_release(H(vehicle));
+  tsc_handle_release(H(actor));
+  tsc_handle_release(H(bp));
+  tsc_handle_release(H(library));
+  tsc_handle_release(H(tm));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
 }
 
 static void test_null_arguments(void) {
@@ -1104,7 +1213,9 @@ int main(void) {
   test_wrong_handle_kind();
   test_refcount();
   test_thread_local_error();
+  test_issue23_offline();
   if (strcmp(tsc_backend_name(), "mock") == 0) {
+    test_mock_issue23();
     test_mock_session();
     test_mock_milestone1();
     test_mock_sensors();

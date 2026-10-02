@@ -117,6 +117,17 @@ std::vector<carla::geom::Transform> vehicle_bone_world_transforms(const V &vehic
   }
 }
 
+// Thrown (as TSC_ERROR) for a feature the linked LibCarla does not have.
+[[noreturn]] inline void unsupported(const char *what) { throw missing_in_libcarla(what); }
+
+// obj.method(args...), or unsupported(what) when the linked LibCarla has no
+// such method (a generic lambda, so that the `requires` may fail). Generated
+// for `optional:` entries of bindings/*.yaml.
+#define TSC_CALL_OPTIONAL(obj, method, what, ...)                                \
+  [](auto &&s, auto &&...a) {                                                    \
+    if constexpr (requires { s.method(a...); }) s.method(a...); else unsupported(what); \
+  }(obj __VA_OPT__(, ) __VA_ARGS__)
+
 #ifdef TSC_MOCK_LIBCARLA
 inline constexpr const char *kBackendName = "mock";
 #else

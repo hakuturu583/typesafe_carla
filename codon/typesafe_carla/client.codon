@@ -10,6 +10,10 @@ from ._ffi import (COpendriveParameters, tsc_client_start_recorder, tsc_client_s
                    tsc_client_show_recorder_actors_blocked, tsc_client_replay_file,
                    tsc_client_stop_replayer, tsc_client_set_replayer_time_factor,
                    tsc_client_generate_opendrive_world, TSC_INVALID_ARGUMENT)
+from ._ffi import (CStringList, take_string_list, tsc_client_get_available_maps,
+                   tsc_client_load_world_if_different, tsc_client_get_required_files,
+                   tsc_client_request_file, tsc_client_set_files_base_folder,
+                   tsc_client_set_replayer_ignore_hero, tsc_client_set_replayer_ignore_spectator)
 from .errors import _check, _check_port, CarlaError, _is_actor_id
 from .world import World
 from ._callbacks import dispatch_sensor_callbacks, _unregister_callback
@@ -94,6 +98,43 @@ class Client:
         out = Ptr[cobj](1)
         _check(tsc_client_reload_world(self._h.ptr, i32(int(reset_settings)), out))
         return World(Handle(out[0]))
+
+    def load_world_if_different(self, map_name: str,
+                                reset_settings: bool = True) -> Optional[World]:
+        """Loads `map_name` unless it is the current map (with or without the
+        "Carla/Maps/" prefix). Returns the new World, or None when nothing was
+        loaded (the Python API always returns None)."""
+        out = Ptr[cobj](1)
+        _check(tsc_client_load_world_if_different(self._h.ptr, map_name.ptr, map_name.len,
+                                                  i32(int(reset_settings)), out))
+        if out[0] == cobj():
+            return None
+        return World(Handle(out[0]))
+
+    def get_available_maps(self) -> List[str]:
+        out = Ptr[CStringList](1)
+        _check(tsc_client_get_available_maps(self._h.ptr, out))
+        return take_string_list(out)
+
+    # --- File transfer (files the map needs, cached on this machine) -------------
+
+    def get_required_files(self, folder: str = "", download: bool = True) -> List[str]:
+        """The files the current map needs under `folder`; with `download`, the
+        missing ones are fetched into the files base folder."""
+        out = Ptr[CStringList](1)
+        _check(tsc_client_get_required_files(self._h.ptr, folder.ptr, folder.len,
+                                             i32(int(download)), out))
+        return take_string_list(out)
+
+    def request_file(self, name: str):
+        """Downloads one file from the server into the files base folder."""
+        _check(tsc_client_request_file(self._h.ptr, name.ptr, name.len))
+
+    def set_files_base_folder(self, path: str) -> bool:
+        """Where downloaded files go (process-wide). False for an empty path."""
+        out = Ptr[i32](1)
+        _check(tsc_client_set_files_base_folder(self._h.ptr, path.ptr, path.len, out))
+        return int(out[0]) != 0
 
     def apply_batch(self, commands: List[Command], do_tick: bool = False):
         """Sends all commands in one RPC without waiting for their results."""
@@ -183,3 +224,10 @@ class Client:
 
     def set_replayer_time_factor(self, time_factor: float = 1.0):
         _check(tsc_client_set_replayer_time_factor(self._h.ptr, time_factor))
+
+    def set_replayer_ignore_hero(self, ignore_hero: bool):
+        _check(tsc_client_set_replayer_ignore_hero(self._h.ptr, i32(int(ignore_hero))))
+
+    def set_replayer_ignore_spectator(self, ignore_spectator: bool):
+        _check(tsc_client_set_replayer_ignore_spectator(self._h.ptr,
+                                                        i32(int(ignore_spectator))))

@@ -4,19 +4,6 @@ using namespace tsc;
 
 namespace {
 
-const carla::SharedPtr<carla::client::BlueprintLibrary> &library_of(
-    const tsc_blueprint_library_t *l) {
-  return check_handle(l, "library", TSC_KIND_BLUEPRINT_LIBRARY)->library;
-}
-
-carla::client::ActorBlueprint &blueprint_of(tsc_actor_blueprint_t *b) {
-  return check_handle(b, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
-}
-
-const carla::client::ActorBlueprint &blueprint_of(const tsc_actor_blueprint_t *b) {
-  return check_handle(b, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
-}
-
 // Fails with TSC_NOT_FOUND unless the blueprint has attribute `key`.
 void require_attribute(const carla::client::ActorBlueprint &bp, const std::string &key) {
   if (!bp.ContainsAttribute(key)) {
@@ -122,6 +109,18 @@ tsc_status_t tsc_actor_blueprint_set_attribute(tsc_actor_blueprint_t *blueprint,
       fail(TSC_INVALID_ARGUMENT, "attribute '" + key + "' of '" + bp.GetId() + "' is not modifiable");
     }
     bp.SetAttribute(key, to_string(value, value_len, "value"));
+  });
+}
+
+// --- Issue #23 -------------------------------------------------------------------
+
+tsc_status_t tsc_blueprint_library_filter_by_attribute(const tsc_blueprint_library_t *library,
+                                                       const char *name, size_t name_len,
+                                                       const char *value, size_t value_len,
+                                                       tsc_blueprint_library_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_blueprint_library(library_of(library)->FilterByAttribute(
+        to_string(name, name_len, "name"), to_string(value, value_len, "value")));
   });
 }
 

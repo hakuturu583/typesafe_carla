@@ -1,0 +1,28 @@
+# Integer enumerations of the Python API that no typesafe_carla call takes yet.
+# The values are the official module's (CARLA 0.10.0 / ue5-dev).
+
+class AttachmentType:
+    """How a spawned actor attaches to its parent (carla.AttachmentType).
+
+    World.spawn_actor does not take an attachment type yet: attachments are Rigid.
+    """
+    Rigid: ClassVar[int] = 0
+    SpringArm: ClassVar[int] = 1
+    SpringArmGhost: ClassVar[int] = 2
+
+class GBufferTextureID:
+    """Unreal G-buffer textures of a camera (carla.GBufferTextureID), for
+    Sensor.listen_to_gbuffer in the Python API (not available here yet)."""
+    SceneColor: ClassVar[int] = 0
+    SceneDepth: ClassVar[int] = 1
+    SceneStencil: ClassVar[int] = 2
+    GBufferA: ClassVar[int] = 3
+    GBufferB: ClassVar[int] = 4
+    GBufferC: ClassVar[int] = 5
+    GBufferD: ClassVar[int] = 6
+    GBufferE: ClassVar[int] = 7
+    GBufferF: ClassVar[int] = 8
+    Velocity: ClassVar[int] = 9
+    SSAO: ClassVar[int] = 10
+    CustomDepth: ClassVar[int] = 11
+    CustomStencil: ClassVar[int] = 12

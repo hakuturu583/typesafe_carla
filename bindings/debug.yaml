@@ -1,0 +1,15 @@
+# DebugHelper operations: tsc_debug_<name> (on a world). The drawing functions
+# are hand-written (native/src/world_ext.cpp).
+class: carla::client::DebugHelper
+prefix: debug
+self: {type: tsc_world_t, name: world, get: debug_of}
+blocks:
+  debug_clear:
+    clear_shapes:
+      call: ClearDebugShape
+      optional: {name: DebugHelper.clear_debug_shape, missing_in: ["0.10.0"]}
+      doc: "Removes the persistent debug shapes (LibCarla ue5-dev); TSC_ERROR without (0.10.0)."
+    clear_strings:
+      call: ClearDebugString
+      optional: {name: DebugHelper.clear_debug_string, missing_in: ["0.10.0"]}
+      doc: "Removes the persistent debug strings; TSC_ERROR as tsc_debug_clear_shapes."

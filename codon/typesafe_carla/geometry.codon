@@ -1,7 +1,12 @@
 # Geometry value types. Plain Codon classes; copied across the C ABI.
 
-from ._ffi import CVector2D, CVector3D, CRotation, CTransform, CBoundingBox
+from ._ffi import (CVector2D, CVector3D, CRotation, CTransform, CBoundingBox,
+                   tsc_transform_get_matrix, tsc_transform_get_inverse_matrix)
 from ._strict import compat_shortcut
+from .errors import _check
+
+# 2 * FLT_EPSILON: LibCarla's default threshold for a zero-length vector.
+_UNIT_EPSILON = 2.0 * 1.1920928955078125e-07
 
 class Vector3D:
     """A 3D vector (velocity, force, direction, ...), as carla.Vector3D.
@@ -133,8 +138,19 @@ class Vector2D:
         self.x = x
         self.y = y
 
+    def squared_length(self) -> float:
+        return self.x * self.x + self.y * self.y
+
     def length(self) -> float:
-        return (self.x * self.x + self.y * self.y) ** 0.5
+        return self.squared_length() ** 0.5
+
+    def make_unit_vector(self, epsilon: float = _UNIT_EPSILON) -> Vector2D:
+        """This vector scaled to length 1; one of length <= epsilon is returned
+        unchanged (as in LibCarla ue5-dev and its Python API)."""
+        n = self.length()
+        if n <= max(epsilon, 0.0):
+            return Vector2D(self.x, self.y)
+        return Vector2D(self.x / n, self.y / n)
 
     def __eq__(self, other: Vector2D) -> bool:
         return self.x == other.x and self.y == other.y
@@ -185,6 +201,43 @@ class Location(Vector3D):
     @staticmethod
     def _from_c(v: CVector3D) -> Location:
         return Location(v.x, v.y, v.z)
+
+class Velocity(Vector3D):
+    """A linear velocity in m/s, as carla.Velocity: a Vector3D (its arithmetic
+    gives a Vector3D, as in the Python API)."""
+
+    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
+        super().__init__(x, y, z)
+
+    def __init__(self, rhs: Vector3D):
+        super().__init__(rhs.x, rhs.y, rhs.z)
+
+    def __repr__(self) -> str:
+        return f"Velocity(x={self.x}, y={self.y}, z={self.z})"
+
+class AngularVelocity(Vector3D):
+    """An angular velocity, as carla.AngularVelocity: a Vector3D."""
+
+    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
+        super().__init__(x, y, z)
+
+    def __init__(self, rhs: Vector3D):
+        super().__init__(rhs.x, rhs.y, rhs.z)
+
+    def __repr__(self) -> str:
+        return f"AngularVelocity(x={self.x}, y={self.y}, z={self.z})"
+
+class Acceleration(Vector3D):
+    """A linear acceleration in m/s^2, as carla.Acceleration: a Vector3D."""
+
+    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
+        super().__init__(x, y, z)
+
+    def __init__(self, rhs: Vector3D):
+        super().__init__(rhs.x, rhs.y, rhs.z)
+
+    def __repr__(self) -> str:
+        return f"Acceleration(x={self.x}, y={self.y}, z={self.z})"
 
 def _vector_arg(v, what: Literal[str]) -> Vector3D:
     """An API argument documented as Vector3D: a Vector3D, or a Location.
@@ -258,11 +311,28 @@ class Rotation:
         self.yaw = yaw
         self.roll = roll
 
+    # The basis vectors are the columns of LibCarla's rotation matrix: CARLA
+    # 0.10.0 and ue5-dev differ in the sign of the pitch and roll terms, and
+    # these follow the LibCarla this library is built from (as the Python API
+    # built from the same sources does).
+
     def get_forward_vector(self) -> Vector3D:
-        from math import cos, sin, radians
-        cp = cos(radians(self.pitch))
-        return Vector3D(cp * cos(radians(self.yaw)), cp * sin(radians(self.yaw)),
-                        sin(radians(self.pitch)))
+        return self._basis(0)
+
+    def get_right_vector(self) -> Vector3D:
+        return self._basis(1)
+
+    def get_up_vector(self) -> Vector3D:
+        return self._basis(2)
+
+    def _basis(self, c: int) -> Vector3D:
+        m = _matrix(CTransform(CVector3D(0.0, 0.0, 0.0), self._to_c()), False)
+        return Vector3D(m[c], m[4 + c], m[8 + c])
+
+    def get_normalized(self) -> Rotation:
+        """Each angle mapped into [-180, 180), as LibCarla's Rotation::Normalize."""
+        return Rotation(_normalize_angle(self.pitch), _normalize_angle(self.yaw),
+                        _normalize_angle(self.roll))
 
     def __eq__(self, other: Rotation) -> bool:
         return self.pitch == other.pitch and self.yaw == other.yaw and self.roll == other.roll
@@ -280,6 +350,45 @@ class Rotation:
     def _from_c(r: CRotation) -> Rotation:
         return Rotation(r.pitch, r.yaw, r.roll)
 
+def _normalize_angle(a: float) -> float:
+    from math import trunc
+    a = a - 360.0 * float(trunc(a / 360.0))
+    if a < 0.0:
+        a += 360.0
+    if a >= 180.0:
+        a -= 360.0
+    return a
+
+def _matrix(t: CTransform, inverse: bool) -> List[float]:
+    """LibCarla's Transform::GetMatrix (or GetInverseMatrix), row major."""
+    # Stack buffers: the basis vectors call this once per use.
+    out = __array__[float](16)
+    if inverse:
+        _check(tsc_transform_get_inverse_matrix(__ptr__(t), out.ptr))
+    else:
+        _check(tsc_transform_get_matrix(__ptr__(t), out.ptr))
+    return [out[i] for i in range(16)]
+
+def _apply(m: List[float], x: float, y: float, z: float, w: float) -> Tuple[float, float, float]:
+    """m (row major 4x4) times (x, y, z, w), the first three components."""
+    return (m[0] * x + m[1] * y + m[2] * z + m[3] * w,
+            m[4] * x + m[5] * y + m[6] * z + m[7] * w,
+            m[8] * x + m[9] * y + m[10] * z + m[11] * w)
+
+def _rows(m: List[float]) -> List[List[float]]:
+    return [[m[4 * r + c] for c in range(4)] for r in range(4)]
+
+def _set_vector(v, x: float, y: float, z: float):
+    """Stores (x, y, z) into `v` in place (a Vector3D or a Location) and
+    returns a copy of the same type."""
+    v.x = x
+    v.y = y
+    v.z = z
+    if isinstance(v, Location):
+        return Location(x, y, z)
+    else:
+        return Vector3D(x, y, z)
+
 class Transform:
     location: Location
     rotation: Rotation
@@ -292,6 +401,52 @@ class Transform:
 
     def get_forward_vector(self) -> Vector3D:
         return self.rotation.get_forward_vector()
+
+    def get_right_vector(self) -> Vector3D:
+        return self.rotation.get_right_vector()
+
+    def get_up_vector(self) -> Vector3D:
+        return self.rotation.get_up_vector()
+
+    def get_matrix(self) -> List[List[float]]:
+        """The 4x4 matrix of this transform (rows), as LibCarla computes it."""
+        return _rows(_matrix(self._to_c(), False))
+
+    def get_inverse_matrix(self) -> List[List[float]]:
+        return _rows(_matrix(self._to_c(), True))
+
+    def transform(self, in_point):
+        """Applies this transform to a point, in place, as in the Python API.
+
+        in_point: a Location or a Vector3D (an Optional of one), or a list of
+        them (each transformed in place; returns None). For one point, also
+        returns the result, of the same type as `in_point` (the Python API
+        returns a Vector3D).
+        """
+        if isinstance(in_point, Optional):
+            return self.transform(unwrap(in_point))
+        elif isinstance(in_point, List):
+            m = _matrix(self._to_c(), False)
+            for p in in_point:
+                q = _upcast_vector(p)
+                x, y, z = _apply(m, q.x, q.y, q.z, 1.0)
+                _set_vector(p, x, y, z)
+        else:
+            q = _upcast_vector(in_point)
+            x, y, z = _apply(_matrix(self._to_c(), False), q.x, q.y, q.z, 1.0)
+            return _set_vector(in_point, x, y, z)
+
+    def transform_vector(self, in_vector):
+        """Rotates a vector (no translation), in place, as in the Python API;
+        also returns the result. in_vector: a Vector3D (a Location is accepted
+        with a compatibility warning, as for other vector parameters)."""
+        if isinstance(in_vector, Optional):
+            return self.transform_vector(unwrap(in_vector))
+        else:
+            q = _vector_arg(in_vector, "[tsc-compat] a Location passed as a Vector3D to Transform.transform_vector")
+            x, y, z = _apply(_matrix(self._to_c(), False), q.x, q.y, q.z, 0.0)
+            _set_vector(in_vector, x, y, z)
+            return Vector3D(x, y, z)
 
     def __eq__(self, other: Transform) -> bool:
         return self.location == other.location and self.rotation == other.rotation
@@ -334,6 +489,40 @@ class BoundingBox:
     def __repr__(self) -> str:
         return f"BoundingBox({self.location}, Extent(x={self.extent.x}, y={self.extent.y}, z={self.extent.z}), {self.rotation})"
 
+    def contains(self, world_point, bbox_transform: Transform) -> bool:
+        """Whether `world_point` (a Location) is inside this box placed by
+        `bbox_transform` (box space to world). As in LibCarla, the box's own
+        rotation is not applied."""
+        p = _location_arg(world_point, "[tsc-compat] a Vector3D passed as a Location to BoundingBox.contains")
+        x, y, z = _apply(_matrix(bbox_transform._to_c(), True), p.x, p.y, p.z, 1.0)
+        x -= self.location.x
+        y -= self.location.y
+        z -= self.location.z
+        e = self.extent
+        return (-e.x <= x <= e.x) and (-e.y <= y <= e.y) and (-e.z <= z <= e.z)
+
+    def get_local_vertices(self) -> List[Location]:
+        """The 8 corners in local space (the box rotated by its `rotation`),
+        in LibCarla's order."""
+        m = _matrix(CTransform(self.location._to_c(), self.rotation._to_c()), False)
+        e = self.extent
+        result = List[Location](8)
+        for sx in (-1.0, 1.0):
+            for sy in (-1.0, 1.0):
+                for sz in (-1.0, 1.0):
+                    x, y, z = _apply(m, sx * e.x, sy * e.y, sz * e.z, 1.0)
+                    result.append(Location(x, y, z))
+        return result
+
+    def get_world_vertices(self, bbox_transform: Transform) -> List[Location]:
+        """The 8 corners in world space, `bbox_transform` mapping box space to world."""
+        m = _matrix(bbox_transform._to_c(), False)
+        result = List[Location](8)
+        for v in self.get_local_vertices():
+            x, y, z = _apply(m, v.x, v.y, v.z, 1.0)
+            result.append(Location(x, y, z))
+        return result
+
     @staticmethod
     def _from_c(b: CBoundingBox) -> BoundingBox:
         return BoundingBox(Location._from_c(b.location), Vector3D._from_c(b.extent),
@@ -341,3 +530,103 @@ class BoundingBox:
 
     def _to_c(self) -> CBoundingBox:
         return CBoundingBox(self.location._to_c(), self.extent._to_c(), self.rotation._to_c())
+
+class Quaternion:
+    """A rotation as a unit quaternion (x, y, z, w), as carla.Quaternion.
+
+    Pure Codon, following LibCarla ue5-dev's geom::Quaternion (CARLA 0.10.0
+    has none): internally right-handed; Quaternion(rotation) and rotator()
+    negate yaw and roll. Its basis vectors use ue5-dev's rotation convention,
+    so with a LibCarla 0.10.0 build they can differ from Rotation's for a
+    non-zero pitch or roll (see Rotation.get_forward_vector).
+    """
+    x: float
+    y: float
+    z: float
+    w: float
+
+    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0, w: float = 1.0):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.w = w
+
+    def __init__(self, rotation: Rotation):
+        from math import cos, sin, radians
+        hy = radians(-rotation.yaw) * 0.5
+        hp = radians(rotation.pitch) * 0.5
+        hr = radians(-rotation.roll) * 0.5
+        cy, sy = cos(hy), sin(hy)
+        cp, sp = cos(hp), sin(hp)
+        cr, sr = cos(hr), sin(hr)
+        self.w = cy * cp * cr + sy * sp * sr
+        self.x = cy * cp * sr - sy * sp * cr
+        self.y = cy * sp * cr + sy * cp * sr
+        self.z = sy * cp * cr - cy * sp * sr
+
+    def rotator(self) -> Rotation:
+        """Back to a Rotation (inverse of Quaternion(rotation))."""
+        from math import asin, atan2, degrees
+        x, y, z, w = self.x, self.y, self.z, self.w
+        sin_pitch = max(-1.0, min(1.0, 2.0 * (w * y - z * x)))
+        pitch = asin(sin_pitch)
+        roll = atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y))
+        yaw = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+        return Rotation(degrees(pitch), degrees(-yaw), degrees(-roll))
+
+    def _rotated(self, vx: float, vy: float, vz: float) -> Vector3D:
+        # CARLA's left-handed vector -> right-handed (negate y), rotate by
+        # q v q* (Rodrigues form), and back.
+        q = Vector3D(self.x, self.y, self.z)
+        v = Vector3D(vx, -vy, vz)
+        t = 2.0 * q.cross(v)
+        r = v + self.w * t + q.cross(t)
+        return Vector3D(r.x, -r.y, r.z)
+
+    def get_forward_vector(self) -> Vector3D:
+        return self._rotated(1.0, 0.0, 0.0)
+
+    def get_right_vector(self) -> Vector3D:
+        return self._rotated(0.0, 1.0, 0.0)
+
+    def get_up_vector(self) -> Vector3D:
+        return self._rotated(0.0, 0.0, 1.0)
+
+    def conjugate(self) -> Quaternion:
+        return Quaternion(-self.x, -self.y, -self.z, self.w)
+
+    def inverse(self) -> Quaternion:
+        """The inverse; the identity for a zero quaternion (as LibCarla)."""
+        n2 = self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w
+        if n2 <= 0.0:
+            return Quaternion()
+        k = 1.0 / n2
+        return Quaternion(-self.x * k, -self.y * k, -self.z * k, self.w * k)
+
+    def length(self) -> float:
+        return (self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w) ** 0.5
+
+    def unit_quaternion(self) -> Quaternion:
+        """This quaternion scaled to length 1; the identity for a zero quaternion."""
+        n = self.length()
+        if n <= 0.0:
+            return Quaternion()
+        k = 1.0 / n
+        return Quaternion(self.x * k, self.y * k, self.z * k, self.w * k)
+
+    def __mul__(self, rhs: Quaternion) -> Quaternion:
+        """The Hamilton product self * rhs."""
+        return Quaternion(
+            self.w * rhs.x + self.x * rhs.w + self.y * rhs.z - self.z * rhs.y,
+            self.w * rhs.y - self.x * rhs.z + self.y * rhs.w + self.z * rhs.x,
+            self.w * rhs.z + self.x * rhs.y - self.y * rhs.x + self.z * rhs.w,
+            self.w * rhs.w - self.x * rhs.x - self.y * rhs.y - self.z * rhs.z)
+
+    def __eq__(self, other: Quaternion) -> bool:
+        return self.x == other.x and self.y == other.y and self.z == other.z and self.w == other.w
+
+    def __ne__(self, other: Quaternion) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return f"Quaternion(x={self.x}, y={self.y}, z={self.z}, w={self.w})"

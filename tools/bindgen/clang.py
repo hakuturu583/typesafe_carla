@@ -202,14 +202,27 @@ def _matches(patterns: tuple[str, ...], canonical: str) -> bool:
     return any(re.fullmatch(p, canonical) for p in patterns)
 
 
-def _check(f: Function, overloads: list[Method], allow_missing_via: bool = False) -> str | None:
+def _missing_allowed(f: Function, backend: str, ref: str) -> str | None:
+    """None if this build may lack `f.call`, else why not. Only a real LibCarla
+    may: through a `via` helper (any ref), or an `optional` method on a ref the
+    spec lists as lacking it. The mock mirrors the newest LibCarla and must have
+    every method, so a misspelt `call` still fails there."""
+    if f.via:
+        return None if backend == "libcarla" else "no such method (a `via` call must exist in the mock)"
+    if f.optional:
+        if backend == "libcarla" and ref in f.missing_in:
+            return None
+        return (f"no such method (optional: missing only in {list(f.missing_in)}, this build is "
+                f"{backend} {ref})")
+    return "no such method"
+
+
+def _check(f: Function, overloads: list[Method], backend: str = "mock", ref: str = "") -> str | None:
     """None if one overload accepts the spec's arguments, else why not. A
-    result the spec does not output is ignored (e.g. Destroy's bool). With
-    allow_missing_via (a real LibCarla build), a `via` helper stands in for a
-    method that LibCarla does not have; the mock, which mirrors the newest
-    LibCarla, must have it, so a misspelt `call` still fails there."""
-    if f.via and not overloads:
-        return None if allow_missing_via else "no such method (a `via` call must exist in the mock)"
+    result the spec does not output is ignored (e.g. Destroy's bool). A missing
+    method is checked by _missing_allowed."""
+    if not overloads:
+        return _missing_allowed(f, backend, ref)
     reasons = []
     for m in overloads:
         n = len(f.args)
@@ -247,9 +260,9 @@ def validate(spec: Spec, build_dir: Path) -> int:
     methods = {cls: _methods(defs, cls) for cls in spec.classes()}
     failures = []
     backend = _cache_var(build_dir, "TSC_BACKEND")
+    ref = _cache_var(build_dir, "TSC_CARLA_GIT_REF")
     for f in spec.functions:
-        why = _check(f, methods[f.cpp_class].get(f.call, []),
-                     allow_missing_via=backend == "libcarla")
+        why = _check(f, methods[f.cpp_class].get(f.call, []), backend, ref)
         if why:
             failures.append(f"{f.spec_file}: {f.name} -> {f.cpp_class}::{f.call}: {why}")
     if failures:

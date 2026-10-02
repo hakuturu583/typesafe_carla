@@ -13,9 +13,21 @@ from ._ffi import (Handle, tsc_client_get_traffic_manager, tsc_traffic_manager_g
                    tsc_traffic_manager_set_auto_lane_change,
                    tsc_traffic_manager_force_lane_change,
                    tsc_traffic_manager_set_update_vehicle_lights, TSC_INVALID_ARGUMENT)
+from ._ffi import (CVector3D, tsc_traffic_manager_set_osm_mode,
+                   tsc_traffic_manager_set_respawn_dormant_vehicles,
+                   tsc_traffic_manager_set_boundaries_respawn_dormant_vehicles,
+                   tsc_traffic_manager_set_hybrid_physics_radius,
+                   tsc_traffic_manager_set_global_lane_offset,
+                   tsc_traffic_manager_set_collision_detection, tsc_traffic_manager_shut_down,
+                   tsc_traffic_manager_set_global_large_vehicle_wide_turn,
+                   tsc_traffic_manager_set_large_vehicle_wide_turn, tsc_traffic_manager_set_path,
+                   tsc_traffic_manager_set_route, tsc_traffic_manager_get_next_action,
+                   tsc_traffic_manager_get_all_actions, tsc_road_options_free)
 from .errors import _check, _check_port, CarlaError
 from .actor import Vehicle, TM_DEFAULT_PORT
 from .client import Client
+from .geometry import _location_arg
+from .map import Waypoint, _take_list
 
 _PERCENTAGE_SPEED_DIFFERENCE = 1
 _DISTANCE_TO_LEADING_VEHICLE = 2
@@ -28,6 +40,29 @@ _IGNORE_WALKERS = 8
 _KEEP_RIGHT = 9
 _DESIRED_SPEED = 10
 _LANE_OFFSET = 11
+
+# Road options, as the Python API names them (TrafficManager.set_route,
+# get_next_action, get_all_actions); the index is LibCarla's RoadOption code.
+_ROAD_OPTIONS = ["Void", "Left", "Right", "Straight", "LaneFollow", "ChangeLaneLeft",
+                 "ChangeLaneRight", "RoadEnd"]
+
+def _road_option_name(code: int) -> str:
+    return _ROAD_OPTIONS[code] if 0 <= code < len(_ROAD_OPTIONS) else "[Unknown RoadOption]"
+
+def _road_option_code(name: str) -> u8:
+    for i in range(len(_ROAD_OPTIONS)):
+        if _ROAD_OPTIONS[i] == name:
+            return u8(i)
+    raise CarlaError(f"unknown road option '{name}' (expected one of {_ROAD_OPTIONS})",
+                     TSC_INVALID_ARGUMENT)
+
+def _any_actor(actor) -> cobj:
+    """The handle of an Actor or any subclass (a typed `Actor` parameter would not
+    bind arguments whose type Codon infers late)."""
+    if hasattr(actor, "as_vehicle"):
+        return actor._h.ptr
+    else:
+        compile_error("expected an Actor (a Vehicle, Walker, ...)")
 
 class TrafficManager:
     _h: Handle
@@ -87,7 +122,12 @@ class TrafficManager:
         self._set(vehicle, _IGNORE_WALKERS, percentage)
 
     def keep_right_rule_percentage(self, vehicle: Vehicle, percentage: float):
+        """CARLA 0.10.0's name for keep_slow_lane_rule_percentage."""
         self._set(vehicle, _KEEP_RIGHT, percentage)
+
+    def keep_slow_lane_rule_percentage(self, vehicle: Vehicle, perc: float):
+        """Percent of the time the vehicle keeps to the slow lane (ue5-dev's name)."""
+        self._set(vehicle, _KEEP_RIGHT, perc)
 
     def set_desired_speed(self, vehicle: Vehicle, speed: float):
         """km/h"""
@@ -108,6 +148,88 @@ class TrafficManager:
     def update_vehicle_lights(self, vehicle: Vehicle, do_update: bool):
         _check(tsc_traffic_manager_set_update_vehicle_lights(self._h.ptr, vehicle._h.ptr,
                                                              i32(int(do_update))))
+
+    def global_lane_offset(self, offset: float):
+        """Offset from the lane center for every vehicle, in meters (positive: right)."""
+        _check(tsc_traffic_manager_set_global_lane_offset(self._h.ptr, offset))
+
+    def collision_detection(self, reference_actor: Vehicle, other_actor,
+                            detect_collision: bool):
+        """Whether `reference_actor` avoids `other_actor` (any actor)."""
+        _check(tsc_traffic_manager_set_collision_detection(
+            self._h.ptr, reference_actor._h.ptr, _any_actor(other_actor),
+            i32(int(detect_collision))))
+
+    def set_osm_mode(self, mode_switch: bool):
+        _check(tsc_traffic_manager_set_osm_mode(self._h.ptr, i32(int(mode_switch))))
+
+    def set_respawn_dormant_vehicles(self, mode_switch: bool):
+        _check(tsc_traffic_manager_set_respawn_dormant_vehicles(self._h.ptr,
+                                                                i32(int(mode_switch))))
+
+    def set_boundaries_respawn_dormant_vehicles(self, lower_bound: float, upper_bound: float):
+        """Distances (m) from the hero within which dormant vehicles respawn."""
+        _check(tsc_traffic_manager_set_boundaries_respawn_dormant_vehicles(
+            self._h.ptr, lower_bound, upper_bound))
+
+    def set_hybrid_physics_radius(self, r: float):
+        _check(tsc_traffic_manager_set_hybrid_physics_radius(self._h.ptr, r))
+
+    def global_large_vehicle_wide_turn(self, enable: bool):
+        """LibCarla ue5-dev only: CarlaError with a CARLA 0.10.0 build."""
+        _check(tsc_traffic_manager_set_global_large_vehicle_wide_turn(self._h.ptr,
+                                                                      i32(int(enable))))
+
+    def vehicle_large_vehicle_wide_turn(self, actor: Vehicle, enable: bool):
+        """LibCarla ue5-dev only: CarlaError with a CARLA 0.10.0 build."""
+        _check(tsc_traffic_manager_set_large_vehicle_wide_turn(self._h.ptr, actor._h.ptr,
+                                                               i32(int(enable))))
+
+    def set_path(self, actor: Vehicle, path, empty_buffer: bool = True):
+        """The vehicle follows these locations. path: a list of Location (a
+        Vector3D element is accepted with a compatibility warning)."""
+        n = len(path)
+        buf = Ptr[CVector3D](n if n > 0 else 1)
+        for i, p in enumerate(path):
+            buf[i] = _location_arg(p, "[tsc-compat] a Vector3D passed as a Location to TrafficManager.set_path")._to_c()
+        _check(tsc_traffic_manager_set_path(self._h.ptr, actor._h.ptr, buf, n,
+                                            i32(int(empty_buffer))))
+
+    def set_route(self, actor: Vehicle, path: List[str], empty_buffer: bool = True):
+        """The vehicle follows these road options ("Left", "Right", "Straight", ...).
+        An unknown name raises CarlaError (the Python API sends an invalid code)."""
+        n = len(path)
+        buf = Ptr[u8](n if n > 0 else 1)
+        for i in range(n):
+            buf[i] = _road_option_code(path[i])
+        _check(tsc_traffic_manager_set_route(self._h.ptr, actor._h.ptr, buf, n,
+                                             i32(int(empty_buffer))))
+
+    def get_next_action(self, actor: Vehicle) -> Tuple[str, Waypoint]:
+        """(road option, waypoint) of the vehicle's next action. IndexError when
+        there is no plan: this Traffic Manager does not drive the vehicle (yet:
+        it plans at its next step) or is shut down. Only for a Traffic Manager
+        in this process (LibCarla's remote server does not answer this RPC)."""
+        option = Ptr[i32](1)
+        out = Ptr[cobj](1)
+        _check(tsc_traffic_manager_get_next_action(self._h.ptr, actor._h.ptr, option, out))
+        return (_road_option_name(int(option[0])), Waypoint(Handle(out[0])))
+
+    def get_all_actions(self, actor: Vehicle) -> List[Tuple[str, Waypoint]]:
+        """Every planned (road option, waypoint), in order. IndexError when there
+        is no plan, as get_next_action."""
+        options = Ptr[Ptr[u8]](1)
+        count = Ptr[int](1)
+        out = Ptr[cobj](1)
+        _check(tsc_traffic_manager_get_all_actions(self._h.ptr, actor._h.ptr, options, count, out))
+        codes = [int(options[0][i]) for i in range(count[0])]
+        tsc_road_options_free(options[0])
+        waypoints = _take_list(out[0])
+        return [(_road_option_name(codes[i]), waypoints[i]) for i in range(len(codes))]
+
+    def shut_down(self):
+        """Stops this Traffic Manager (LibCarla deletes it: later settings are ignored)."""
+        _check(tsc_traffic_manager_shut_down(self._h.ptr))
 
     def __repr__(self) -> str:
         return f"TrafficManager(port={self.get_port()})"

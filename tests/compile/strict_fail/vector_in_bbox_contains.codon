@@ -1,0 +1,8 @@
+# In strict mode BoundingBox.contains takes a Location, not Location arithmetic.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def inside(bb: carla.BoundingBox, t: carla.Transform, here: carla.Location) -> bool:
+    return bb.contains(here + carla.Location(0.0, 0.0, 1.0), t)
+
+inside(carla.BoundingBox(), carla.Transform(), carla.Location())

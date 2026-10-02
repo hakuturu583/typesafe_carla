@@ -8,11 +8,11 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**213 of 326 methods bound (65%), 84 of them generated.**
+**234 of 326 methods bound (71%), 101 of them generated.**
 
 | class | bound |
 |---|---|
-| `carla::client::Client` | 19 / 27 |
+| `carla::client::Client` | 26 / 27 |
 | `carla::client::World` | 17 / 48 |
 | `carla::client::Map` | 14 / 18 |
 | `carla::client::Waypoint` | 18 / 22 |
@@ -24,12 +24,12 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `carla::client::WalkerAIController` | 4 / 5 |
 | `carla::client::TrafficLight` | 19 / 20 |
 | `carla::client::Sensor` | 3 / 3 |
-| `carla::client::BlueprintLibrary` | 4 / 10 |
-| `carla::client::ActorBlueprint` | 6 / 11 |
+| `carla::client::BlueprintLibrary` | 5 / 10 |
+| `carla::client::ActorBlueprint` | 8 / 11 |
 | `carla::client::ActorList` | 3 / 8 |
 | `carla::client::WorldSnapshot` | 4 / 10 |
 | `carla::client::DebugHelper` | 5 / 5 |
-| `carla::traffic_manager::TrafficManager` | 20 / 45 |
+| `carla::traffic_manager::TrafficManager` | 31 / 45 |
 
 ## Methods
 
@@ -40,22 +40,22 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `ApplyBatch` | hand-written |
 | `ApplyBatchSync` | hand-written |
 | `GenerateOpenDriveWorld` | hand-written |
-| `GetAvailableMaps` | — |
+| `GetAvailableMaps` | generated |
 | `GetClientVersion` | hand-written |
 | `GetCurrentEpisode` | — |
 | `GetInstanceTM` | hand-written |
-| `GetRequiredFiles` | — |
+| `GetRequiredFiles` | generated |
 | `GetServerVersion` | hand-written |
 | `GetTimeout` | hand-written |
 | `GetWorld` | hand-written |
 | `LoadWorld` | hand-written |
-| `LoadWorldIfDifferent` | — |
+| `LoadWorldIfDifferent` | hand-written |
 | `ReloadWorld` | hand-written |
 | `ReplayFile` | hand-written |
-| `RequestFile` | — |
-| `SetFilesBaseFolder` | — |
-| `SetReplayerIgnoreHero` | — |
-| `SetReplayerIgnoreSpectator` | — |
+| `RequestFile` | generated |
+| `SetFilesBaseFolder` | generated |
+| `SetReplayerIgnoreHero` | generated |
+| `SetReplayerIgnoreSpectator` | generated |
 | `SetReplayerTimeFactor` | hand-written |
 | `SetTimeout` | hand-written |
 | `ShowRecorderActorsBlocked` | hand-written |
@@ -335,7 +335,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | method | binding |
 |---|---|
 | `Filter` | hand-written |
-| `FilterByAttribute` | — |
+| `FilterByAttribute` | hand-written |
 | `Find` | hand-written |
 | `at` | hand-written |
 | `begin` | — |
@@ -353,9 +353,9 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `ContainsTag` | hand-written |
 | `GetAttribute` | hand-written |
 | `GetId` | hand-written |
-| `GetTags` | — |
+| `GetTags` | generated |
 | `MakeActorDescription` | hand-written |
-| `MatchTags` | — |
+| `MatchTags` | generated |
 | `SetAttribute` | hand-written |
 | `begin` | — |
 | `end` | — |
@@ -403,8 +403,8 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 
 | method | binding |
 |---|---|
-| `GetActionBuffer` | — |
-| `GetNextAction` | — |
+| `GetActionBuffer` | hand-written |
+| `GetNextAction` | hand-written |
 | `IsValidPort` | — |
 | `Port` | generated |
 | `RegisterVehicles` | — |
@@ -413,22 +413,22 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `RemoveUploadPath` | — |
 | `Reset` | — |
 | `SetAutoLaneChange` | generated |
-| `SetBoundariesRespawnDormantVehicles` | — |
-| `SetCollisionDetection` | — |
-| `SetCustomPath` | — |
+| `SetBoundariesRespawnDormantVehicles` | generated |
+| `SetCollisionDetection` | generated |
+| `SetCustomPath` | generated |
 | `SetDesiredSpeed` | hand-written |
 | `SetDistanceToLeadingVehicle` | hand-written |
 | `SetForceLaneChange` | generated |
 | `SetGlobalDistanceToLeadingVehicle` | generated |
-| `SetGlobalLaneOffset` | — |
+| `SetGlobalLaneOffset` | generated |
 | `SetGlobalPercentageSpeedDifference` | generated |
 | `SetHybridPhysicsMode` | generated |
-| `SetHybridPhysicsRadius` | — |
-| `SetImportedRoute` | — |
+| `SetHybridPhysicsRadius` | generated |
+| `SetImportedRoute` | generated |
 | `SetKeepRightPercentage` | hand-written |
 | `SetLaneOffset` | hand-written |
 | `SetMaxBoundaries` | — |
-| `SetOSMMode` | — |
+| `SetOSMMode` | generated |
 | `SetPercentageIgnoreVehicles` | hand-written |
 | `SetPercentageIgnoreWalkers` | hand-written |
 | `SetPercentageRunningLight` | hand-written |
@@ -437,11 +437,11 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `SetRandomDeviceSeed` | generated |
 | `SetRandomLeftLaneChangePercentage` | hand-written |
 | `SetRandomRightLaneChangePercentage` | hand-written |
-| `SetRespawnDormantVehicles` | — |
+| `SetRespawnDormantVehicles` | generated |
 | `SetSynchronousMode` | generated |
 | `SetSynchronousModeTimeOutInMiliSecond` | — |
 | `SetUpdateVehicleLights` | generated |
-| `ShutDown` | — |
+| `ShutDown` | generated |
 | `SynchronousTick` | — |
 | `Tick` | — |
 | `UnregisterVehicles` | — |

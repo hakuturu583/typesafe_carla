@@ -96,6 +96,68 @@ tsc_status_t tsc_actor_set_enable_gravity(tsc_actor_t *actor, int32_t enabled) {
   return TSC_GUARD({ actor_of(actor).SetEnableGravity(enabled != 0); });
 }
 
+// bindings/blueprint.yaml: carla::client::ActorBlueprint
+
+tsc_status_t tsc_actor_blueprint_get_tags(tsc_actor_blueprint_t *blueprint,
+                                          tsc_string_list_t *out) {
+  return TSC_GUARD({ string_list_assign(out, blueprint_of(blueprint).GetTags()); });
+}
+
+tsc_status_t tsc_actor_blueprint_match_tags(tsc_actor_blueprint_t *blueprint,
+                                            const char *pattern, size_t pattern_len, int32_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = blueprint_of(blueprint).MatchTags(to_string(pattern, pattern_len, "pattern")) ? 1 : 0;
+  });
+}
+
+// bindings/client.yaml: carla::client::Client
+
+tsc_status_t tsc_client_set_replayer_ignore_hero(tsc_client_t *client, int32_t ignore_hero) {
+  return TSC_GUARD({ client_of(client).SetReplayerIgnoreHero(ignore_hero != 0); });
+}
+
+tsc_status_t tsc_client_set_replayer_ignore_spectator(tsc_client_t *client,
+                                                      int32_t ignore_spectator) {
+  return TSC_GUARD({ client_of(client).SetReplayerIgnoreSpectator(ignore_spectator != 0); });
+}
+
+tsc_status_t tsc_client_get_available_maps(tsc_client_t *client, tsc_string_list_t *out) {
+  return TSC_GUARD({ string_list_assign(out, client_of(client).GetAvailableMaps()); });
+}
+
+tsc_status_t tsc_client_get_required_files(tsc_client_t *client,
+                                           const char *folder, size_t folder_len, int32_t download,
+                                           tsc_string_list_t *out) {
+  return TSC_GUARD({
+    string_list_assign(out, client_of(client).GetRequiredFiles(to_string(folder, folder_len, "folder"), download != 0));
+  });
+}
+
+tsc_status_t tsc_client_request_file(tsc_client_t *client, const char *name, size_t name_len) {
+  return TSC_GUARD({ client_of(client).RequestFile(to_string(name, name_len, "name")); });
+}
+
+tsc_status_t tsc_client_set_files_base_folder(tsc_client_t *client,
+                                              const char *path, size_t path_len, int32_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = client_of(client).SetFilesBaseFolder(to_string(path, path_len, "path")) ? 1 : 0;
+  });
+}
+
+// bindings/debug.yaml: carla::client::DebugHelper
+
+tsc_status_t tsc_debug_clear_shapes(tsc_world_t *world) {
+  return TSC_GUARD({
+    TSC_CALL_OPTIONAL(debug_of(world), ClearDebugShape, "DebugHelper.clear_debug_shape");
+  });
+}
+
+tsc_status_t tsc_debug_clear_strings(tsc_world_t *world) {
+  return TSC_GUARD({
+    TSC_CALL_OPTIONAL(debug_of(world), ClearDebugString, "DebugHelper.clear_debug_string");
+  });
+}
+
 // bindings/landmark.yaml: carla::client::Landmark
 
 tsc_status_t tsc_landmark_get_h_offset(const tsc_landmark_handle_t *landmark, double *out) {
@@ -270,6 +332,76 @@ tsc_status_t tsc_traffic_manager_set_update_vehicle_lights(tsc_traffic_manager_t
                                                            int32_t enabled) {
   return TSC_GUARD({
     tm_of(tm).SetUpdateVehicleLights(vehicle_ptr(vehicle, "vehicle"), enabled != 0);
+  });
+}
+
+tsc_status_t tsc_traffic_manager_set_osm_mode(tsc_traffic_manager_t *tm, int32_t enabled) {
+  return TSC_GUARD({ tm_of(tm).SetOSMMode(enabled != 0); });
+}
+
+tsc_status_t tsc_traffic_manager_set_respawn_dormant_vehicles(tsc_traffic_manager_t *tm,
+                                                              int32_t enabled) {
+  return TSC_GUARD({ tm_of(tm).SetRespawnDormantVehicles(enabled != 0); });
+}
+
+tsc_status_t tsc_traffic_manager_set_boundaries_respawn_dormant_vehicles(tsc_traffic_manager_t *tm,
+                                                                         double lower_bound,
+                                                                         double upper_bound) {
+  return TSC_GUARD({
+    tm_of(tm).SetBoundariesRespawnDormantVehicles(check_non_negative(lower_bound, "lower_bound"), check_non_negative(upper_bound, "upper_bound"));
+  });
+}
+
+tsc_status_t tsc_traffic_manager_set_hybrid_physics_radius(tsc_traffic_manager_t *tm,
+                                                           double radius) {
+  return TSC_GUARD({ tm_of(tm).SetHybridPhysicsRadius(check_non_negative(radius, "radius")); });
+}
+
+tsc_status_t tsc_traffic_manager_set_global_lane_offset(tsc_traffic_manager_t *tm, double offset) {
+  return TSC_GUARD({ tm_of(tm).SetGlobalLaneOffset(check_finite(offset, "offset")); });
+}
+
+tsc_status_t tsc_traffic_manager_set_collision_detection(tsc_traffic_manager_t *tm,
+                                                         tsc_vehicle_t *reference_vehicle,
+                                                         tsc_actor_t *other_actor,
+                                                         int32_t detect_collision) {
+  return TSC_GUARD({
+    tm_of(tm).SetCollisionDetection(vehicle_ptr(reference_vehicle, "reference_vehicle"), check_actor(other_actor, "other_actor")->actor, detect_collision != 0);
+  });
+}
+
+tsc_status_t tsc_traffic_manager_shut_down(tsc_traffic_manager_t *tm) {
+  return TSC_GUARD({ tm_of(tm).ShutDown(); });
+}
+
+tsc_status_t tsc_traffic_manager_set_global_large_vehicle_wide_turn(tsc_traffic_manager_t *tm,
+                                                                    int32_t enabled) {
+  return TSC_GUARD({
+    TSC_CALL_OPTIONAL(tm_of(tm), SetGlobalLargeVehicleWideTurn, "TrafficManager.global_large_vehicle_wide_turn", enabled != 0);
+  });
+}
+
+tsc_status_t tsc_traffic_manager_set_large_vehicle_wide_turn(tsc_traffic_manager_t *tm,
+                                                             tsc_vehicle_t *vehicle,
+                                                             int32_t enabled) {
+  return TSC_GUARD({
+    TSC_CALL_OPTIONAL(tm_of(tm), SetLargeVehicleWideTurn, "TrafficManager.vehicle_large_vehicle_wide_turn", vehicle_ptr(vehicle, "vehicle"), enabled != 0);
+  });
+}
+
+tsc_status_t tsc_traffic_manager_set_path(tsc_traffic_manager_t *tm, tsc_vehicle_t *vehicle,
+                                          const tsc_location_t *path, size_t count,
+                                          int32_t empty_buffer) {
+  return TSC_GUARD({
+    tm_of(tm).SetCustomPath(vehicle_ptr(vehicle, "vehicle"), to_path(path, count, "path"), empty_buffer != 0);
+  });
+}
+
+tsc_status_t tsc_traffic_manager_set_route(tsc_traffic_manager_t *tm, tsc_vehicle_t *vehicle,
+                                           const uint8_t *route, size_t count,
+                                           int32_t empty_buffer) {
+  return TSC_GUARD({
+    tm_of(tm).SetImportedRoute(vehicle_ptr(vehicle, "vehicle"), to_route(route, count, "route"), empty_buffer != 0);
   });
 }
 
