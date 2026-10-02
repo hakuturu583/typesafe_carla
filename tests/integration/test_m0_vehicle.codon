@@ -1,0 +1,77 @@
+# Milestone 0 against a real CARLA server: connect, find/spawn a vehicle,
+# read and write its transform, drive it, and check the typed errors.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(20.0)
+print("client", client.get_client_version(), "server", client.get_server_version())
+world = client.get_world()
+print("world id", world.id, "actors", len(world.get_actors()))
+
+# Spawn a vehicle so the test does not depend on what the server already has.
+bp = world.get_blueprint_library().find("vehicle.lincoln.mkz")
+# Town10HD_Opt spawn point 0 (the Map API arrives in Milestone 1).
+spawn = carla.Transform(carla.Location(-64.644844, 24.471010, 0.6), carla.Rotation(0.0, 0.159198, 0.0))
+actor = world.spawn_actor(bp, spawn)
+try:
+    assert actor.is_vehicle()
+    vehicle = actor.as_vehicle()
+    print("spawned", vehicle)
+
+    # Synchronous stepping so the motion check is deterministic.
+    original = world.get_settings()
+    settings = world.get_settings()
+    settings.synchronous_mode = True
+    settings.fixed_delta_seconds = 0.05
+    world.apply_settings(settings)
+    try:
+        for _ in range(20):  # let the car settle on the road
+            world.tick()
+        start = vehicle.get_location()
+        print("start", start)
+
+        moved = vehicle.get_transform()
+        moved.location.z += 0.5
+        vehicle.set_transform(moved)
+        world.tick()
+        assert abs(vehicle.get_location().x - moved.location.x) < 0.5
+
+        vehicle.apply_control(carla.VehicleControl(throttle=0.8))
+        for _ in range(60):
+            world.tick()
+        control = vehicle.get_control()
+        assert abs(control.throttle - 0.8) < 1e-3, control
+        end = vehicle.get_location()
+        speed = vehicle.get_velocity().length()
+        print("end", end, "distance", end.distance(start), "speed", speed)
+        assert end.distance(start) > 2.0, (start, end)
+        assert speed > 1.0
+    finally:
+        world.apply_settings(original)
+
+    # Typed errors from the real server.
+    again = world.get_actor(vehicle.id)
+    assert again is not None and again.is_vehicle()
+    assert world.get_actor(999999) is None
+    non_vehicle: Optional[carla.Actor] = None
+    for a in world.get_actors():
+        if not a.is_vehicle():
+            non_vehicle = a
+            break
+    raised = False
+    try:
+        non_vehicle.as_vehicle()
+    except carla.ActorTypeError as e:
+        raised = True
+        print("ActorTypeError:", e.message)
+    assert raised
+finally:
+    # Do not assert here: an assertion in `finally` would hide the original failure.
+    destroyed = actor.destroy()
+assert destroyed
+print("OK")

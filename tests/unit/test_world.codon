@@ -1,0 +1,83 @@
+# Blueprints, spawning, settings and ticking.
+import typesafe_carla as carla
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+first_id = world.id
+
+library = world.get_blueprint_library()
+assert len(library) == 5
+vehicles = library.filter("vehicle.*")
+assert len(vehicles) == 3
+ids = [bp.id for bp in vehicles]
+assert "vehicle.audi.tt" in ids
+assert len(library.filter("audi")) == 1  # tags match too
+
+bp = library.find("vehicle.lincoln.mkz_2020")
+assert bp.has_tag("lincoln") and not bp.has_tag("audi")
+assert bp.has_attribute("color") and not bp.has_attribute("colour")
+color = bp.get_attribute("color")
+assert color.type == carla.ActorAttributeType.RGBColor and color.is_modifiable
+bp.set_attribute("color", "10,20,30")
+assert bp.get_attribute("color").as_color() == carla.Color(10, 20, 30)
+assert library.find("vehicle.lincoln.mkz_2020").get_attribute("color").as_color() == carla.Color(0, 0, 0)
+assert bp.get_attribute("number_of_wheels").as_int() == 4
+assert bp.get_attribute("sticky_control").as_bool()
+assert bp.get_attribute("base_mass").as_float() == 1500.0
+assert bp.get_attribute("role_name").as_str() == "autopilot"
+assert str(bp.get_attribute("number_of_wheels")) == "4"
+
+spawn = carla.Transform(carla.Location(10.0, 20.0, 0.5), carla.Rotation(0.0, 90.0, 0.0))
+actor = world.spawn_actor(bp, spawn)
+assert actor.is_vehicle() and actor.type_id == "vehicle.lincoln.mkz_2020"
+assert world.try_spawn_actor(bp, spawn) is None
+assert len(world.get_actors()) == 3
+assert len(world.get_actors().filter("vehicle.*")) == 2
+found = world.get_actors().find(actor.id)
+assert found is not None and found.id == actor.id
+assert world.get_actor(123456) is None
+assert world.get_actor(-1) is None
+
+# Attach a cone to the vehicle: spawned relative to the parent.
+cone_bp = library.find("static.prop.trafficcone01")
+cone = world.spawn_actor(cone_bp, carla.Transform(carla.Location(0.0, 0.0, 2.0)), attach_to=actor)
+assert cone.get_location() == carla.Location(10.0, 20.0, 2.5)
+
+# Synchronous stepping moves a vehicle under throttle along its heading (+y).
+settings = world.get_settings()
+assert not settings.synchronous_mode and settings.fixed_delta_seconds is None
+settings.synchronous_mode = True
+settings.fixed_delta_seconds = 0.05
+world.apply_settings(settings)
+again = world.get_settings()
+assert again.synchronous_mode and again.fixed_delta_seconds == 0.05
+
+vehicle = actor.as_vehicle()
+vehicle.apply_control(carla.VehicleControl(throttle=1.0))
+frame = 0
+for _ in range(20):
+    frame = world.tick()
+assert frame >= 20
+location = vehicle.get_location()
+assert location.y > 21.0, location
+assert abs(location.x - 10.0) < 1e-3, location
+assert vehicle.get_velocity().length() > 1.0
+
+vehicle.apply_control(carla.VehicleControl(brake=1.0))
+for _ in range(40):
+    world.tick()
+assert vehicle.get_velocity().length() < 1e-6
+
+settings.fixed_delta_seconds = None
+settings.synchronous_mode = False
+world.apply_settings(settings)
+assert world.get_settings().fixed_delta_seconds is None
+
+assert cone.destroy() and vehicle.destroy()
+assert len(world.get_actors()) == 2
+
+# Loading a map starts a new episode with only the spectator.
+new_world = client.load_world("Town01")
+assert new_world.id != first_id
+assert len(new_world.get_actors()) == 1
+print("OK")

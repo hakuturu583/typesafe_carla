@@ -1,0 +1,30 @@
+# The public API example from the design (section 9).
+import typesafe_carla as carla
+
+def run():
+    client = carla.Client("localhost", 2000)
+    client.set_timeout(10.0)
+    world = client.get_world()
+    blueprints = world.get_blueprint_library()
+    bp = blueprints.find("vehicle.tesla.model3")
+    if bp.has_attribute("color"):
+        bp.set_attribute("color", "255,0,0")
+    spawn = carla.Transform(
+        carla.Location(10.0, 20.0, 0.5),
+        carla.Rotation(0.0, 90.0, 0.0),
+    )
+    actor = world.spawn_actor(bp, spawn)
+    vehicle = actor.as_vehicle()
+    control = carla.VehicleControl(
+        throttle=0.5,
+        steer=0.1,
+        brake=0.0,
+    )
+    vehicle.apply_control(control)
+    maybe: Optional[carla.Actor] = world.try_spawn_actor(bp, spawn)
+    if maybe is not None:
+        maybe.destroy()
+    actor.destroy()
+
+# Compile-only: Codon type-checks a function only when it is called.
+run()

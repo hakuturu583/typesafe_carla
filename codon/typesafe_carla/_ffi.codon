@@ -1,0 +1,197 @@
+# Raw C ABI declarations (native/include/typesafe_carla/ffi.h).
+#
+# Internal module: everything here is unchecked. Public modules wrap these
+# calls, convert statuses with _check() and own handles through _Handle.
+#
+# The shared library is located through TYPESAFE_CARLA_LIB, which the
+# `typesafe-codon` launcher sets. Without it, the dynamic loader search path
+# (LD_LIBRARY_PATH, RPATH) is used.
+
+import os
+from internal.gc import register_finalizer
+
+LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
+
+# ABI version this Codon source was written against (ffi.h).
+TSC_ABI_VERSION_MAJOR = 1
+TSC_ABI_VERSION_MINOR = 1
+
+TSC_OK = 0
+TSC_ERROR = 1
+TSC_INVALID_ARGUMENT = 2
+TSC_TIMEOUT = 3
+TSC_NOT_FOUND = 4
+TSC_TYPE_ERROR = 5
+TSC_VERSION_ERROR = 6
+
+TSC_KIND_VEHICLE = 4
+
+# --- POD mirrors (layouts checked by tests/native/test_ffi.c) ---------------
+
+@tuple
+class CString:
+    data: cobj
+    size: int
+
+@tuple
+class CVector3D:
+    x: float
+    y: float
+    z: float
+
+@tuple
+class CRotation:
+    pitch: float
+    yaw: float
+    roll: float
+
+@tuple
+class CTransform:
+    location: CVector3D
+    rotation: CRotation
+
+@tuple
+class CVehicleControl:
+    throttle: float
+    steer: float
+    brake: float
+    hand_brake: i32
+    reverse: i32
+    manual_gear_shift: i32
+    gear: i32
+
+@tuple
+class CWorldSettings:
+    synchronous_mode: i32
+    no_rendering_mode: i32
+    has_fixed_delta_seconds: i32
+    substepping: i32
+    fixed_delta_seconds: float
+    max_substep_delta_time: float
+    max_substeps: i32
+    reserved0: i32
+
+@tuple
+class CActorAttribute:
+    id: CString
+    value: CString
+    type: i32
+    is_modifiable: i32
+
+# --- Functions ----------------------------------------------------------------
+
+from C import LIB.tsc_last_error_message() -> cobj
+from C import LIB.tsc_clear_last_error() -> None
+from C import LIB.tsc_abi_version() -> u32
+from C import LIB.tsc_libcarla_version() -> cobj
+from C import LIB.tsc_libcarla_git_ref() -> cobj
+from C import LIB.tsc_libcarla_git_commit() -> cobj
+from C import LIB.tsc_build_commit() -> cobj
+from C import LIB.tsc_backend_name() -> cobj
+from C import LIB.tsc_string_free(Ptr[CString]) -> None
+from C import LIB.tsc_actor_attribute_free(Ptr[CActorAttribute]) -> None
+
+from C import LIB.tsc_handle_retain(cobj) -> None
+from C import LIB.tsc_handle_release(cobj) -> None
+from C import LIB.tsc_handle_kind(cobj) -> i32
+from C import LIB.tsc_handle_refcount(cobj) -> u32
+from C import LIB.tsc_live_handle_count() -> u64
+
+from C import LIB.tsc_client_create(cobj, int, u16, Ptr[cobj]) -> i32
+from C import LIB.tsc_client_set_timeout(cobj, float) -> i32
+from C import LIB.tsc_client_get_timeout(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_client_get_client_version(cobj, Ptr[CString]) -> i32
+from C import LIB.tsc_client_get_server_version(cobj, Ptr[CString]) -> i32
+from C import LIB.tsc_client_get_world(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_client_load_world(cobj, cobj, int, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_client_reload_world(cobj, i32, Ptr[cobj]) -> i32
+
+from C import LIB.tsc_world_get_id(cobj, Ptr[u64]) -> i32
+from C import LIB.tsc_world_get_actors(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_actor(cobj, u32, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_blueprint_library(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_try_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_tick(cobj, float, Ptr[u64]) -> i32
+from C import LIB.tsc_world_get_settings(cobj, Ptr[CWorldSettings]) -> i32
+from C import LIB.tsc_world_apply_settings(cobj, Ptr[CWorldSettings], float, Ptr[u64]) -> i32
+
+from C import LIB.tsc_actor_list_size(cobj) -> int
+from C import LIB.tsc_actor_list_get(cobj, int, Ptr[cobj]) -> i32
+from C import LIB.tsc_actor_list_filter(cobj, cobj, int, Ptr[cobj]) -> i32
+
+from C import LIB.tsc_actor_get_id(cobj, Ptr[u32]) -> i32
+from C import LIB.tsc_actor_get_type_id(cobj, Ptr[CString]) -> i32
+from C import LIB.tsc_actor_is_alive(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_actor_get_transform(cobj, Ptr[CTransform]) -> i32
+from C import LIB.tsc_actor_set_transform(cobj, Ptr[CTransform]) -> i32
+from C import LIB.tsc_actor_get_location(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_set_location(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_get_velocity(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_set_target_velocity(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_get_acceleration(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_get_angular_velocity(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_destroy(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_actor_as_vehicle(cobj, Ptr[cobj]) -> i32
+
+from C import LIB.tsc_vehicle_apply_control(cobj, Ptr[CVehicleControl]) -> i32
+from C import LIB.tsc_vehicle_get_control(cobj, Ptr[CVehicleControl]) -> i32
+from C import LIB.tsc_vehicle_set_autopilot(cobj, i32, u16) -> i32
+
+from C import LIB.tsc_blueprint_library_size(cobj) -> int
+from C import LIB.tsc_blueprint_library_get(cobj, int, Ptr[cobj]) -> i32
+from C import LIB.tsc_blueprint_library_find(cobj, cobj, int, Ptr[cobj]) -> i32
+from C import LIB.tsc_blueprint_library_filter(cobj, cobj, int, Ptr[cobj]) -> i32
+from C import LIB.tsc_actor_blueprint_get_id(cobj, Ptr[CString]) -> i32
+from C import LIB.tsc_actor_blueprint_has_tag(cobj, cobj, int, Ptr[i32]) -> i32
+from C import LIB.tsc_actor_blueprint_has_attribute(cobj, cobj, int, Ptr[i32]) -> i32
+from C import LIB.tsc_actor_blueprint_get_attribute(cobj, cobj, int, Ptr[CActorAttribute]) -> i32
+from C import LIB.tsc_actor_blueprint_set_attribute(cobj, cobj, int, cobj, int) -> i32
+
+# --- Helpers --------------------------------------------------------------------
+
+def c_str(p: cobj) -> str:
+    """Copies a NUL-terminated C string owned by the library."""
+    return str.from_ptr(p)
+
+def last_error() -> str:
+    return c_str(tsc_last_error_message())
+
+def copy_string(v: CString) -> str:
+    """Copies a tsc_string_t into a Codon str without taking ownership."""
+    if v.data == cobj() or v.size == 0:
+        return ""
+    buf = Ptr[byte](v.size)
+    str.memcpy(buf, v.data, v.size)
+    return str(buf, v.size)
+
+def take_string(s: Ptr[CString]) -> str:
+    """Copies an owned tsc_string_t into a Codon str and frees it."""
+    result = copy_string(s[0])
+    tsc_string_free(s)
+    return result
+
+class Handle:
+    """Owns one reference to a native handle.
+
+    Codon class instances have reference semantics, so every public wrapper
+    that holds the same Handle shares one native reference. The reference is
+    released when the Handle is garbage collected, or earlier by release().
+    """
+    ptr: cobj
+
+    def __init__(self, ptr: cobj):
+        self.ptr = ptr
+        # Codon 0.19 does not register __del__ for classes on its own.
+        register_finalizer(self)
+
+    def release(self):
+        if self.ptr != cobj():
+            tsc_handle_release(self.ptr)
+            self.ptr = cobj()
+
+    def __del__(self):
+        self.release()
+
+    def __bool__(self) -> bool:
+        return self.ptr != cobj()

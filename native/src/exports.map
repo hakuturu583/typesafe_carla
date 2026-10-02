@@ -1,0 +1,7 @@
+/* Only the C ABI is exported from libtypesafe_carla_ffi.so. */
+{
+  global:
+    tsc_*;
+  local:
+    *;
+};

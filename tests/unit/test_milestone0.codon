@@ -1,0 +1,44 @@
+# Milestone 0 success criterion plus the round trips it implies.
+import typesafe_carla as carla
+
+assert carla.backend() == "mock"
+assert carla.abi_version() == (1, 1)
+assert carla.libcarla_git_ref() == "mock" and carla.libcarla_git_commit() == "mock"
+
+client = carla.Client("localhost", 2000)
+client.set_timeout(2.0)
+assert client.get_timeout() == 2.0
+assert client.get_server_version() == client.get_client_version()
+
+world = client.get_world()
+actors = world.get_actors()
+assert len(actors) == 2
+vehicle = world.get_actors()[0].as_vehicle()
+vehicle.apply_control(carla.VehicleControl(throttle=0.2, steer=0.0))
+
+assert vehicle.type_id == "vehicle.tesla.model3"
+assert vehicle.is_alive
+assert abs(vehicle.get_control().throttle - 0.2) < 1e-6
+# Floats cross the ABI as LibCarla's float32.
+c = carla.VehicleControl(0.3, -0.5, 0.0, False, True, True, 2)
+vehicle.apply_control(c)
+got = vehicle.get_control()
+assert abs(got.throttle - 0.3) < 1e-6 and got.steer == -0.5 and got.reverse
+assert got.manual_gear_shift and got.gear == 2 and not got.hand_brake
+
+t = carla.Transform(carla.Location(1.5, -2.0, 0.25), carla.Rotation(0.0, 45.0, 0.0))
+vehicle.set_transform(t)
+assert vehicle.get_transform() == t
+assert vehicle.get_location() == t.location
+vehicle.set_location(carla.Location(3.0, 4.0, 0.0))
+assert vehicle.get_location().distance(carla.Location()) == 5.0
+
+# The same actor seen through a different handle.
+again = world.get_actor(vehicle.id)
+assert again is not None
+assert again.id == vehicle.id and again.is_vehicle()
+assert again.get_location() == carla.Location(3.0, 4.0, 0.0)
+
+vehicle.set_target_velocity(carla.Vector3D(1.0, 2.0, 0.0))
+assert vehicle.get_velocity() == carla.Vector3D(1.0, 2.0, 0.0)
+print("OK")

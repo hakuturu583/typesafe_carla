@@ -1,0 +1,13 @@
+import typesafe_carla as carla
+
+def drive(vehicle: carla.Vehicle):
+    vehicle.apply_control(carla.VehicleControl(throttle=0.5))
+    vehicle.apply_control(carla.VehicleControl(0.3, -0.1, 0.0, False, False, False, 0))
+    control: carla.VehicleControl = vehicle.get_control()
+    control.steer = 0.2
+    vehicle.apply_control(control)
+    vehicle.set_autopilot(True)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+drive(_world.get_actors()[0].as_vehicle())

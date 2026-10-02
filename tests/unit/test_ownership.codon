@@ -1,0 +1,37 @@
+# Native handles are released when their Codon wrappers are collected.
+import typesafe_carla as carla
+
+from C import GC_gcollect() -> None
+from C import GC_invoke_finalizers() -> int
+
+def collect():
+    for _ in range(3):
+        GC_gcollect()
+        GC_invoke_finalizers()
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+
+def churn(n: int) -> int:
+    total = 0
+    for _ in range(n):
+        for actor in world.get_actors():
+            total += actor.id
+        total += len(world.get_blueprint_library())
+    return total
+
+collect()
+baseline = carla._live_handle_count()
+churn(5000)
+collect()
+after = carla._live_handle_count()
+# Boehm GC is conservative, so a few handles may still look reachable; what
+# matters is that ~20000 short-lived handles did not accumulate.
+assert after - baseline < 200, (baseline, after)
+
+# Copies of a wrapper share one native reference.
+v1 = world.get_actors()[0].as_vehicle()
+v2 = v1
+v2.apply_control(carla.VehicleControl(throttle=0.1))
+assert abs(v1.get_control().throttle - 0.1) < 1e-6
+print("OK")

@@ -1,0 +1,173 @@
+# Blueprints: BlueprintLibrary, ActorBlueprint, ActorAttribute.
+
+from ._ffi import (Handle, CString, CActorAttribute, take_string, copy_string, tsc_actor_attribute_free,
+                   tsc_blueprint_library_size, tsc_blueprint_library_get,
+                   tsc_blueprint_library_find, tsc_blueprint_library_filter,
+                   tsc_actor_blueprint_get_id, tsc_actor_blueprint_has_tag,
+                   tsc_actor_blueprint_has_attribute, tsc_actor_blueprint_get_attribute,
+                   tsc_actor_blueprint_set_attribute, TSC_TYPE_ERROR)
+from .errors import _check, _normalize_index, CarlaError
+
+class ActorAttributeType:
+    Bool: ClassVar[int] = 0
+    Int: ClassVar[int] = 1
+    Float: ClassVar[int] = 2
+    String: ClassVar[int] = 3
+    RGBColor: ClassVar[int] = 4
+
+def _type_name(t: int) -> str:
+    if t == ActorAttributeType.Bool:
+        return "bool"
+    if t == ActorAttributeType.Int:
+        return "int"
+    if t == ActorAttributeType.Float:
+        return "float"
+    if t == ActorAttributeType.String:
+        return "str"
+    if t == ActorAttributeType.RGBColor:
+        return "RGBColor"
+    return "unknown"
+
+class Color:
+    r: int
+    g: int
+    b: int
+    a: int
+
+    def __init__(self, r: int = 0, g: int = 0, b: int = 0, a: int = 255):
+        self.r = r
+        self.g = g
+        self.b = b
+        self.a = a
+
+    def __eq__(self, other: Color) -> bool:
+        return self.r == other.r and self.g == other.g and self.b == other.b and self.a == other.a
+
+    def __repr__(self) -> str:
+        return f"Color(r={self.r}, g={self.g}, b={self.b}, a={self.a})"
+
+class ActorAttribute:
+    """A snapshot of one blueprint attribute. Typed accessors check the type."""
+    id: str
+    type: int  # ActorAttributeType
+    is_modifiable: bool
+    _value: str
+
+    def __init__(self, id: str, type: int, is_modifiable: bool, value: str):
+        self.id = id
+        self.type = type
+        self.is_modifiable = is_modifiable
+        self._value = value
+
+    def _expect(self, t: int):
+        if self.type != t:
+            raise CarlaError(f"attribute '{self.id}' is {_type_name(self.type)}, "
+                             f"not {_type_name(t)}", TSC_TYPE_ERROR)
+
+    def as_bool(self) -> bool:
+        self._expect(ActorAttributeType.Bool)
+        return self._value == "true" or self._value == "True"
+
+    def as_int(self) -> int:
+        self._expect(ActorAttributeType.Int)
+        return int(self._value)
+
+    def as_float(self) -> float:
+        self._expect(ActorAttributeType.Float)
+        return float(self._value)
+
+    def as_str(self) -> str:
+        self._expect(ActorAttributeType.String)
+        return self._value
+
+    def as_color(self) -> Color:
+        self._expect(ActorAttributeType.RGBColor)
+        parts = self._value.split(",")
+        if len(parts) < 3:
+            raise CarlaError(f"attribute '{self.id}' has malformed color '{self._value}'")
+        return Color(int(parts[0].strip()), int(parts[1].strip()), int(parts[2].strip()),
+                     int(parts[3].strip()) if len(parts) > 3 else 255)
+
+    def __str__(self) -> str:
+        """The raw value, whatever the type (like str(attribute) in Python)."""
+        return self._value
+
+    def __repr__(self) -> str:
+        return f"ActorAttribute(id={self.id}, type={_type_name(self.type)}, value={self._value})"
+
+class ActorBlueprint:
+    """A copy of a library blueprint; set_attribute does not affect the library."""
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    @property
+    def id(self) -> str:
+        out = Ptr[CString](1)
+        _check(tsc_actor_blueprint_get_id(self._h.ptr, out))
+        return take_string(out)
+
+    def has_tag(self, tag: str) -> bool:
+        out = Ptr[i32](1)
+        _check(tsc_actor_blueprint_has_tag(self._h.ptr, tag.ptr, tag.len, out))
+        return int(out[0]) != 0
+
+    def has_attribute(self, id: str) -> bool:
+        out = Ptr[i32](1)
+        _check(tsc_actor_blueprint_has_attribute(self._h.ptr, id.ptr, id.len, out))
+        return int(out[0]) != 0
+
+    def get_attribute(self, id: str) -> ActorAttribute:
+        """Raises IndexError if the blueprint has no such attribute."""
+        out = Ptr[CActorAttribute](1)
+        _check(tsc_actor_blueprint_get_attribute(self._h.ptr, id.ptr, id.len, out))
+        a = out[0]
+        result = ActorAttribute(copy_string(a.id), int(a.type), int(a.is_modifiable) != 0,
+                                copy_string(a.value))
+        tsc_actor_attribute_free(out)
+        return result
+
+    def set_attribute(self, id: str, value: str):
+        """Raises IndexError for unknown attributes, CarlaError for invalid values."""
+        _check(tsc_actor_blueprint_set_attribute(self._h.ptr, id.ptr, id.len, value.ptr,
+                                                 value.len))
+
+    def __repr__(self) -> str:
+        return f"ActorBlueprint(id={self.id})"
+
+class BlueprintLibrary:
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    def __len__(self) -> int:
+        return tsc_blueprint_library_size(self._h.ptr)
+
+    def _get(self, i: int) -> ActorBlueprint:
+        out = Ptr[cobj](1)
+        _check(tsc_blueprint_library_get(self._h.ptr, i, out))
+        return ActorBlueprint(Handle(out[0]))
+
+    def __getitem__(self, index: int) -> ActorBlueprint:
+        return self._get(_normalize_index(index, len(self), "blueprint library"))
+
+    def __iter__(self) -> Generator[ActorBlueprint]:
+        for i in range(len(self)):
+            yield self._get(i)
+
+    def find(self, id: str) -> ActorBlueprint:
+        """Raises IndexError if no blueprint has this id."""
+        out = Ptr[cobj](1)
+        _check(tsc_blueprint_library_find(self._h.ptr, id.ptr, id.len, out))
+        return ActorBlueprint(Handle(out[0]))
+
+    def filter(self, wildcard_pattern: str) -> BlueprintLibrary:
+        out = Ptr[cobj](1)
+        _check(tsc_blueprint_library_filter(self._h.ptr, wildcard_pattern.ptr,
+                                            wildcard_pattern.len, out))
+        return BlueprintLibrary(Handle(out[0]))
+
+    def __repr__(self) -> str:
+        return f"BlueprintLibrary(size={len(self)})"

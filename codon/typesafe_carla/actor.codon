@@ -1,0 +1,172 @@
+# Actor hierarchy: Actor, Vehicle, and ActorList.
+#
+#   Actor
+#   └── Vehicle
+#
+# Conversions are explicit and checked: Actor.as_vehicle() raises
+# ActorTypeError when the actor is not a vehicle.
+
+from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_KIND_VEHICLE,
+                   tsc_handle_kind, tsc_actor_get_id, tsc_actor_get_type_id, tsc_actor_is_alive,
+                   tsc_actor_get_transform, tsc_actor_set_transform, tsc_actor_get_location,
+                   tsc_actor_set_location, tsc_actor_get_velocity, tsc_actor_set_target_velocity,
+                   tsc_actor_get_acceleration, tsc_actor_get_angular_velocity, tsc_actor_destroy,
+                   tsc_actor_as_vehicle, tsc_vehicle_apply_control, tsc_vehicle_get_control,
+                   tsc_vehicle_set_autopilot, tsc_actor_list_size, tsc_actor_list_get,
+                   tsc_actor_list_filter, take_string)
+from .errors import _check, _check_port, _normalize_index
+from .geometry import Location, Transform, Vector3D
+from .control import VehicleControl
+
+TM_DEFAULT_PORT = 8000
+
+class Actor:
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    @property
+    def id(self) -> int:
+        out = Ptr[u32](1)
+        _check(tsc_actor_get_id(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def type_id(self) -> str:
+        out = Ptr[CString](1)
+        _check(tsc_actor_get_type_id(self._h.ptr, out))
+        return take_string(out)
+
+    @property
+    def is_alive(self) -> bool:
+        out = Ptr[i32](1)
+        _check(tsc_actor_is_alive(self._h.ptr, out))
+        return int(out[0]) != 0
+
+    def get_transform(self) -> Transform:
+        out = Ptr[CTransform](1)
+        _check(tsc_actor_get_transform(self._h.ptr, out))
+        return Transform._from_c(out[0])
+
+    def set_transform(self, transform: Transform):
+        t = Ptr[CTransform](1)
+        t[0] = transform._to_c()
+        _check(tsc_actor_set_transform(self._h.ptr, t))
+
+    def get_location(self) -> Location:
+        out = Ptr[CVector3D](1)
+        _check(tsc_actor_get_location(self._h.ptr, out))
+        return Location._from_c(out[0])
+
+    def set_location(self, location: Location):
+        v = Ptr[CVector3D](1)
+        v[0] = location._to_c()
+        _check(tsc_actor_set_location(self._h.ptr, v))
+
+    def get_velocity(self) -> Vector3D:
+        out = Ptr[CVector3D](1)
+        _check(tsc_actor_get_velocity(self._h.ptr, out))
+        return Vector3D._from_c(out[0])
+
+    def set_target_velocity(self, velocity: Vector3D):
+        v = Ptr[CVector3D](1)
+        v[0] = velocity._to_c()
+        _check(tsc_actor_set_target_velocity(self._h.ptr, v))
+
+    def get_acceleration(self) -> Vector3D:
+        out = Ptr[CVector3D](1)
+        _check(tsc_actor_get_acceleration(self._h.ptr, out))
+        return Vector3D._from_c(out[0])
+
+    def get_angular_velocity(self) -> Vector3D:
+        out = Ptr[CVector3D](1)
+        _check(tsc_actor_get_angular_velocity(self._h.ptr, out))
+        return Vector3D._from_c(out[0])
+
+    def destroy(self) -> bool:
+        """Destroys the actor in the simulation. Returns False if it was already gone."""
+        out = Ptr[i32](1)
+        _check(tsc_actor_destroy(self._h.ptr, out))
+        return int(out[0]) != 0
+
+    def is_vehicle(self) -> bool:
+        return int(tsc_handle_kind(self._h.ptr)) == TSC_KIND_VEHICLE
+
+    def __eq__(self, other: Actor) -> bool:
+        return self.id == other.id
+
+    def __ne__(self, other: Actor) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return f"Actor(id={self.id}, type={self.type_id})"
+
+class Vehicle(Actor):
+    def __init__(self, h: Handle):
+        super().__init__(h)
+
+    def apply_control(self, control: VehicleControl):
+        c = Ptr[CVehicleControl](1)
+        c[0] = control._to_c()
+        _check(tsc_vehicle_apply_control(self._h.ptr, c))
+
+    def get_control(self) -> VehicleControl:
+        out = Ptr[CVehicleControl](1)
+        _check(tsc_vehicle_get_control(self._h.ptr, out))
+        return VehicleControl._from_c(out[0])
+
+    def set_autopilot(self, enabled: bool = True, tm_port: int = TM_DEFAULT_PORT):
+        _check_port("tm_port", tm_port)
+        _check(tsc_vehicle_set_autopilot(self._h.ptr, i32(int(enabled)), u16(tm_port)))
+
+    def __repr__(self) -> str:
+        return f"Vehicle(id={self.id}, type={self.type_id})"
+
+# Defined after Vehicle because the return type refers to it.
+@extend
+class Actor:
+    def as_vehicle(self) -> Vehicle:
+        """Checked conversion. Raises ActorTypeError if this actor is not a vehicle."""
+        out = Ptr[cobj](1)
+        _check(tsc_actor_as_vehicle(self._h.ptr, out))
+        return Vehicle(Handle(out[0]))
+
+def _make_actor(ptr: cobj) -> Actor:
+    return Actor(Handle(ptr))
+
+class ActorList:
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    def __len__(self) -> int:
+        return tsc_actor_list_size(self._h.ptr)
+
+    def _get(self, i: int) -> Actor:
+        out = Ptr[cobj](1)
+        _check(tsc_actor_list_get(self._h.ptr, i, out))
+        return _make_actor(out[0])
+
+    def __getitem__(self, index: int) -> Actor:
+        return self._get(_normalize_index(index, len(self), "actor list"))
+
+    def __iter__(self) -> Generator[Actor]:
+        for i in range(len(self)):
+            yield self._get(i)
+
+    def find(self, actor_id: int) -> Optional[Actor]:
+        for actor in self:
+            if actor.id == actor_id:
+                return actor
+        return None
+
+    def filter(self, wildcard_pattern: str) -> ActorList:
+        out = Ptr[cobj](1)
+        _check(tsc_actor_list_filter(self._h.ptr, wildcard_pattern.ptr, wildcard_pattern.len,
+                                     out))
+        return ActorList(Handle(out[0]))
+
+    def __repr__(self) -> str:
+        return f"ActorList(size={len(self)})"

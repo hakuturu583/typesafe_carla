@@ -1,0 +1,9 @@
+# An Actor must be converted with as_vehicle() before it can be driven.
+# expect-error: 'Actor' object has no attribute 'apply_control'
+import typesafe_carla as carla
+
+def drive(world: carla.World):
+    world.get_actors()[0].apply_control(carla.VehicleControl(throttle=0.5))
+
+# Compile-only: Codon type-checks a function only when it is called.
+drive(carla.Client("localhost", 2000).get_world())

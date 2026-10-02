@@ -1,0 +1,8 @@
+# expect-error: 'str' does not match expected type 'int'
+import typesafe_carla as carla
+
+def frame_label(world: carla.World) -> str:
+    return world.tick()
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(frame_label(carla.Client("localhost", 2000).get_world()))
