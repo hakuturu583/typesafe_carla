@@ -135,8 +135,10 @@ class SensorQueue;  // sensor.cpp
 }  // namespace tsc
 
 // A sensor handle is an actor handle whose `actor` is a carla::client::Sensor.
-// The queue is shared with the LibCarla callback, so it outlives the handle
-// if the sensor keeps streaming (call stop()).
+// Listening state belongs to that client-side object (as in LibCarla): another
+// handle for the same actor (e.g. from World.get_actor) is not listening, and
+// releasing the last reference stops the stream (LibCarla's destructor calls
+// Stop()). The queue is shared with the callback, so late measurements are safe.
 struct tsc_sensor : tsc_actor {
   std::shared_ptr<tsc::SensorQueue> queue;
   explicit tsc_sensor(carla::SharedPtr<carla::client::Sensor> s)

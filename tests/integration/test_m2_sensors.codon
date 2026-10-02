@@ -128,6 +128,20 @@ try:
         print("type check:", e.message)
     assert raised
 
+    # Listening again replaces the stream; stop() then stops it for real
+    # (LibCarla would otherwise keep an orphaned subscription streaming).
+    camera.listen(4)
+    world.tick()
+    camera.wait_for_data(10.0)
+    camera.stop()
+    assert not camera.is_listening
+    while camera.poll() is not None:
+        pass
+    for _ in range(5):
+        world.tick()
+    assert camera.poll() is None, "data kept arriving after stop()"
+    assert not world.get_actor(lidar.id).as_sensor().is_listening  # state is per handle
+
     for s in sensors:
         s.stop()
         assert not s.is_listening

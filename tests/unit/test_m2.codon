@@ -97,6 +97,20 @@ except carla.ActorTypeError:
     raised = True
 assert raised
 
+# Listening state belongs to the handle object, as in LibCarla.
+other_handle = world.get_actor(camera.id).as_sensor()
+assert camera.is_listening and not other_handle.is_listening
+
+# Listening again replaces the stream; stop() then really stops it.
+camera.listen(8)
+camera.listen(4)
+world.tick()
+assert camera.wait_for_data(1.0).frame == world.get_snapshot().frame
+camera.stop()
+assert not camera.is_listening
+world.tick()
+assert camera.poll() is None
+
 for s in (camera, lidar, gnss, imu, collision):
     s.stop()
     assert not s.is_listening

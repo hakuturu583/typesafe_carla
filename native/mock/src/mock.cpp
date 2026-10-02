@@ -47,7 +47,12 @@ struct Episode : std::enable_shared_from_this<Episode> {
   rpc::ActorId next_actor_id = 1;
   rpc::EpisodeSettings settings;
   std::map<rpc::ActorId, ActorData> actors;  // ordered: GetActors() is deterministic
-  std::map<rpc::ActorId, std::function<void(SharedPtr<sensor::SensorData>)>> listeners;
+  // Listening is per client-side Sensor object, like LibCarla's ServerSideSensor.
+  struct Listener {
+    const Sensor *owner;
+    std::function<void(SharedPtr<sensor::SensorData>)> callback;
+  };
+  std::map<rpc::ActorId, Listener> listeners;
 
   rpc::ActorId AddActorLocked(const std::string &type_id, bool is_vehicle,
                               const geom::Transform &transform) {
@@ -805,20 +810,24 @@ rpc::ActorDescription ActorBlueprint::MakeActorDescription() const {
 
 void Sensor::Listen(CallbackFunctionType callback) {
   WithData([&](mock::ActorData &) {
-    _episode->listeners[_id] = std::move(callback);
+    _episode->listeners[_id] = mock::Episode::Listener{this, std::move(callback)};
     return 0;
   });
 }
 
 void Sensor::Stop() {
   std::lock_guard<std::mutex> lock(_episode->mutex);
-  _episode->listeners.erase(_id);
+  auto it = _episode->listeners.find(_id);
+  if (it != _episode->listeners.end() && it->second.owner == this) _episode->listeners.erase(it);
 }
 
 bool Sensor::IsListening() const {
   std::lock_guard<std::mutex> lock(_episode->mutex);
-  return _episode->listeners.count(_id) > 0;
+  auto it = _episode->listeners.find(_id);
+  return it != _episode->listeners.end() && it->second.owner == this;
 }
+
+Sensor::~Sensor() { Stop(); }
 
 namespace mock {
 
@@ -844,7 +853,7 @@ std::vector<Delivery> Episode::SenseLocked() {
     auto it = actors.find(entry.first);
     if (it == actors.end()) continue;
     const ActorData &a = it->second;
-    auto callback = entry.second;
+    auto callback = entry.second.callback;
     SharedPtr<sensor::SensorData> data;
     namespace sd = sensor::data;
     if (a.type_id == "sensor.camera.rgb") {

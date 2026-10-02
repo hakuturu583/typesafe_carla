@@ -509,9 +509,11 @@ typedef enum {
 TSC_API tsc_status_t tsc_actor_as_sensor(tsc_actor_t *actor, tsc_sensor_t **out_sensor);
 
 /* Starts delivering measurements into this handle's queue, which keeps at
- * most queue_capacity items (oldest dropped first). Restarting replaces the
- * previous queue. */
+ * most queue_capacity items (oldest dropped first). Listening again stops the
+ * previous stream and replaces the queue. Listening state belongs to this
+ * handle's client-side sensor object; releasing it stops the stream. */
 TSC_API tsc_status_t tsc_sensor_listen(tsc_sensor_t *sensor, size_t queue_capacity);
+/* Idempotent. */
 TSC_API tsc_status_t tsc_sensor_stop(tsc_sensor_t *sensor);
 TSC_API tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out);
 /* Number of measurements dropped because the queue was full. */

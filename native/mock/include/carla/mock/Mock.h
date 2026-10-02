@@ -465,6 +465,7 @@ class Sensor : public Actor {
  public:
   using CallbackFunctionType = std::function<void(SharedPtr<sensor::SensorData>)>;
   using Actor::Actor;
+  ~Sensor() override;  // stops listening, like LibCarla's ServerSideSensor
   void Listen(CallbackFunctionType callback);
   void Stop();
   bool IsListening() const;

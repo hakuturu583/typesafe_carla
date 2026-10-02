@@ -128,9 +128,13 @@ tsc_status_t tsc_sensor_listen(tsc_sensor_t *sensor, size_t queue_capacity) {
   return TSC_GUARD({
     if (queue_capacity == 0) fail(TSC_INVALID_ARGUMENT, "queue_capacity must be at least 1");
     auto &h = sensor_handle(sensor);
+    auto &s = sensor_of(sensor);
+    // LibCarla does not replace an existing subscription: a second Listen()
+    // would leave an orphaned stream that Stop() cannot reach. Stop first.
+    if (s.IsListening()) s.Stop();
     auto queue = std::make_shared<SensorQueue>(queue_capacity);
     // The callback runs on LibCarla threads: it only touches the queue.
-    sensor_of(sensor).Listen([queue](carla::SharedPtr<carla::sensor::SensorData> d) {
+    s.Listen([queue](carla::SharedPtr<carla::sensor::SensorData> d) {
       queue->push(std::move(d));
     });
     h.queue = std::move(queue);
@@ -138,7 +142,11 @@ tsc_status_t tsc_sensor_listen(tsc_sensor_t *sensor, size_t queue_capacity) {
 }
 
 tsc_status_t tsc_sensor_stop(tsc_sensor_t *sensor) {
-  return TSC_GUARD({ sensor_of(sensor).Stop(); });
+  return TSC_GUARD({
+    // Idempotent (LibCarla logs a warning when stopping a stopped sensor).
+    auto &s = sensor_of(sensor);
+    if (s.IsListening()) s.Stop();
+  });
 }
 
 tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out) {
