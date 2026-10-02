@@ -39,7 +39,8 @@ if len(files) > 0:
     path = folder + "/" + carla.libcarla_version() + "/" + files[0]
     with open(path, "rb") as f:
         assert len(f.read()) > 0, path
-    assert client.get_required_files(download=True) == files  # now cached
+    cached = client.get_required_files(download=True)
+    assert sorted(cached) == sorted(files), (cached, files)  # now cached
 client.set_replayer_ignore_hero(False)
 client.set_replayer_ignore_spectator(True)
 
