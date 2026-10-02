@@ -8,6 +8,11 @@ from .errors import _check
 # 2 * FLT_EPSILON: LibCarla's default threshold for a zero-length vector.
 _UNIT_EPSILON = 2.0 * 1.1920928955078125e-07
 
+@tuple
+class _NoArg:
+    """Default of an optional keyword: tells "not passed" apart statically."""
+    pass
+
 class Vector3D:
     """A 3D vector (velocity, force, direction, ...), as carla.Vector3D.
 
@@ -18,9 +23,9 @@ class Vector3D:
     y: float
     z: float
 
-    # Methods that take another vector use a generic `other` converted by
+    # Methods that take another vector use a generic parameter converted by
     # _upcast_vector: a Vector3D or a Location (or anything else, which fails
-    # with "'T' does not match expected type 'Vector3D'"). A `other: Vector3D`
+    # with "'T' does not match expected type 'Vector3D'"). A `vector: Vector3D`
     # annotation, or Location overloads, would break arguments whose type
     # Codon infers late, e.g. `wp.transform.location` with `wp` an
     # Optional[Waypoint] ("'Vector3D' does not match expected type 'Location'"),
@@ -43,19 +48,19 @@ class Vector3D:
     def squared_length(self) -> float:
         return self.x * self.x + self.y * self.y + self.z * self.z
 
-    def dot(self, other) -> float:
-        other = _upcast_vector(other)
-        return self.x * other.x + self.y * other.y + self.z * other.z
+    def dot(self, vector) -> float:
+        vector = _upcast_vector(vector)
+        return self.x * vector.x + self.y * vector.y + self.z * vector.z
 
-    def dot_2d(self, other) -> float:
-        other = _upcast_vector(other)
-        return self.x * other.x + self.y * other.y
+    def dot_2d(self, vector) -> float:
+        vector = _upcast_vector(vector)
+        return self.x * vector.x + self.y * vector.y
 
-    def cross(self, other) -> Vector3D:
-        other = _upcast_vector(other)
-        return Vector3D(self.y * other.z - self.z * other.y,
-                        self.z * other.x - self.x * other.z,
-                        self.x * other.y - self.y * other.x)
+    def cross(self, vector) -> Vector3D:
+        vector = _upcast_vector(vector)
+        return Vector3D(self.y * vector.z - self.z * vector.y,
+                        self.z * vector.x - self.x * vector.z,
+                        self.x * vector.y - self.y * vector.x)
 
     def make_unit_vector(self, epsilon: float = _UNIT_EPSILON) -> Vector3D:
         """This vector scaled to length 1; one of length <= epsilon is returned
@@ -65,33 +70,43 @@ class Vector3D:
             return Vector3D(self.x, self.y, self.z)
         return Vector3D(self.x / n, self.y / n, self.z / n)
 
-    def distance(self, other) -> float:
-        return self.distance_squared(other) ** 0.5
+    def distance(self, vector = _NoArg(), location = _NoArg()) -> float:
+        """The Python API names the parameter `vector` here and `location` in
+        Location.distance. Codon dispatches an override in Location virtually,
+        which rejects keywords, so both names are accepted here (on any vector)."""
+        if isinstance(location, _NoArg):
+            if isinstance(vector, _NoArg):
+                compile_error("distance() missing its argument: vector (or location)")
+            return self.distance_squared(vector) ** 0.5
+        else:
+            if not isinstance(vector, _NoArg):
+                compile_error("distance() takes one argument: vector or location, not both")
+            return self.distance_squared(location) ** 0.5
 
-    def distance_squared(self, other) -> float:
-        other = _upcast_vector(other)
-        dx = self.x - other.x
-        dy = self.y - other.y
-        dz = self.z - other.z
+    def distance_squared(self, vector) -> float:
+        vector = _upcast_vector(vector)
+        dx = self.x - vector.x
+        dy = self.y - vector.y
+        dz = self.z - vector.z
         return dx * dx + dy * dy + dz * dz
 
-    def distance_2d(self, other) -> float:
-        return self.distance_squared_2d(other) ** 0.5
+    def distance_2d(self, vector) -> float:
+        return self.distance_squared_2d(vector) ** 0.5
 
-    def distance_squared_2d(self, other) -> float:
-        other = _upcast_vector(other)
-        dx = self.x - other.x
-        dy = self.y - other.y
+    def distance_squared_2d(self, vector) -> float:
+        vector = _upcast_vector(vector)
+        dx = self.x - vector.x
+        dy = self.y - vector.y
         return dx * dx + dy * dy
 
-    def get_vector_angle(self, other) -> float:
-        """The angle to `other`, in radians (NaN if either is zero, as in CARLA 0.10.0)."""
-        other = _upcast_vector(other)
+    def get_vector_angle(self, vector) -> float:
+        """The angle to `vector`, in radians (NaN if either is zero, as in CARLA 0.10.0)."""
+        vector = _upcast_vector(vector)
         from math import acos, nan
-        n = self.length() * other.length()
+        n = self.length() * vector.length()
         if n == 0.0:
             return nan
-        c = self.dot(other) / n
+        c = self.dot(vector) / n
         return acos(max(-1.0, min(1.0, c)))
 
     def __add__(self, other) -> Vector3D:
@@ -443,16 +458,16 @@ class Transform:
             x, y, z = _apply(_matrix(self._to_c(), False), q.x, q.y, q.z, 1.0)
             return _set_vector(in_point, x, y, z)
 
-    def transform_vector(self, in_vector):
+    def transform_vector(self, in_point):
         """Rotates a vector (no translation), in place, as in the Python API;
-        also returns the result. in_vector: a Vector3D (a Location is accepted
+        also returns the result. in_point: a Vector3D (a Location is accepted
         with a compatibility warning, as for other vector parameters)."""
-        if isinstance(in_vector, Optional):
-            return self.transform_vector(unwrap(in_vector))
+        if isinstance(in_point, Optional):
+            return self.transform_vector(unwrap(in_point))
         else:
-            q = _vector_arg(in_vector, "[tsc-compat] a Location passed as a Vector3D to Transform.transform_vector")
+            q = _vector_arg(in_point, "[tsc-compat] a Location passed as a Vector3D to Transform.transform_vector")
             x, y, z = _apply(_matrix(self._to_c(), False), q.x, q.y, q.z, 0.0)
-            _set_vector(in_vector, x, y, z)
+            _set_vector(in_point, x, y, z)
             return Vector3D(x, y, z)
 
     def __eq__(self, other: Transform) -> bool:
@@ -496,12 +511,13 @@ class BoundingBox:
     def __repr__(self) -> str:
         return f"BoundingBox({self.location}, Extent(x={self.extent.x}, y={self.extent.y}, z={self.extent.z}), {self.rotation})"
 
-    def contains(self, world_point, bbox_transform: Transform) -> bool:
-        """Whether `world_point` (a Location) is inside this box placed by
-        `bbox_transform` (box space to world). As in LibCarla, the box's own
-        rotation is not applied."""
+    def contains(self, world_point, point: Transform) -> bool:
+        """Whether `world_point` (a Location) is inside this box placed by the
+        transform `point` (box space to world). As in LibCarla, the box's own
+        rotation is not applied. The Python API names the Transform `point`
+        (and the Location is positional-only), so the names follow it."""
         p = _location_arg(world_point, "[tsc-compat] a Vector3D passed as a Location to BoundingBox.contains")
-        x, y, z = _apply(_matrix(bbox_transform._to_c(), True), p.x, p.y, p.z, 1.0)
+        x, y, z = _apply(_matrix(point._to_c(), True), p.x, p.y, p.z, 1.0)
         x -= self.location.x
         y -= self.location.y
         z -= self.location.z

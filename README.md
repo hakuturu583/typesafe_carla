@@ -416,6 +416,19 @@ Deliberate differences, all in favour of static checking:
 * **`get_landmarks_of_type(distance, type)`**: pass the type by position.
   Codon 0.19 cannot compile these methods with a parameter named `type`, so
   it is `landmark_type` (as in `Map.get_all_landmarks_of_type`).
+* **Keyword arguments use the official names** (issue #41): `TrafficManager`'s
+  per-vehicle methods take `actor` (and `perc` or `percentage`, as each
+  official method does), `set_random_device_seed(value)`,
+  `set_synchronous_mode(mode_switch)`, `TrafficLight.set_green_time(green_time)`
+  & co., `ActorList.find(id)`, `Vector3D`'s methods `vector`,
+  `Transform.transform_vector(in_point)`. Two quirks of the official
+  binding are kept so ported code behaves the same:
+  - `Location.distance` takes `location` and `Vector3D.distance` takes `vector`.
+    Codon dispatches a `Location` override virtually, which rejects keywords,
+    so `distance` accepts either name on any vector (not both at once).
+  - `BoundingBox.contains(world_point, point)`: the official binding names the
+    *Transform* `point` and leaves the Location positional-only, so pass the
+    Location by position and the Transform as `point=` (or by position).
 * **Attribute values are typed.** `ActorAttribute.as_int()` raises when the
   attribute is not an int; `str(attribute)` gives the raw value.
 * **Sensor callbacks run at dispatch points, not on CARLA's threads.**

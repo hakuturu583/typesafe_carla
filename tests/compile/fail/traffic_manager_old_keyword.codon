@@ -1,0 +1,11 @@
+# Keyword names follow the official Python API (issue #41): the vehicle is
+# `actor` and the share `perc`, as in carla.TrafficManager.
+# expect-error: 'vehicle' is an invalid keyword argument
+import typesafe_carla as carla
+
+def calm(tm: carla.TrafficManager, v: carla.Vehicle):
+    tm.ignore_lights_percentage(vehicle=v, perc=0.0)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_client = carla.Client("localhost", 2000)
+calm(_client.get_trafficmanager(8000), _client.get_world().get_actors()[0].as_vehicle())
