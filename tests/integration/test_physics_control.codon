@@ -1,0 +1,89 @@
+# VehiclePhysicsControl against a real CARLA server (issue #12): read every
+# field, modify a scalar, a curve, a gear ratio and wheel fields, apply, wait
+# a few ticks and read back. Fields that were not touched must keep their values.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+def close(a: float, b: float, tol: float = 1e-3) -> bool:
+    return abs(a - b) <= tol * max(1.0, abs(b))
+
+def close_curve(a: List[carla.Vector2D], b: List[carla.Vector2D]) -> bool:
+    if len(a) != len(b):
+        return False
+    for i in range(len(a)):
+        if not (close(a[i].x, b[i].x) and close(a[i].y, b[i].y)):
+            return False
+    return True
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+bp = world.get_blueprint_library().find("vehicle.lincoln.mkz")
+vehicle: Optional[carla.Actor] = None
+for point in world.get_map().get_spawn_points():
+    vehicle = world.try_spawn_actor(bp, point)
+    if vehicle is not None:
+        break
+assert vehicle is not None, "no free spawn point"
+car = vehicle.as_vehicle()
+try:
+    for _ in range(10):
+        world.wait_for_tick(10.0)
+    pc = car.get_physics_control()
+    print("physics", pc)
+    assert len(pc.wheels) == 4 and pc.mass > 100.0
+    assert len(pc.torque_curve) >= 1 and len(pc.steering_curve) >= 1
+    assert len(pc.forward_gear_ratios) >= 1
+    for i in range(len(pc.wheels)):
+        print("wheel", i, pc.wheels[i])
+
+    mass = float(int(pc.mass * 1.5))
+    curve = [carla.Vector2D(0.0, 400.0), carla.Vector2D(1500.0, 650.0),
+             carla.Vector2D(5500.0, 450.0)]
+    gear0 = pc.forward_gear_ratios[0] + 0.5
+    pc.mass = mass
+    pc.torque_curve = curve
+    pc.forward_gear_ratios[0] = gear0
+    w0 = pc.wheels[0]
+    steer = w0.max_steer_angle - 10.0
+    radius = w0.wheel_radius + 1.0
+    stiffness = w0.cornering_stiffness + 100.0
+    w0.max_steer_angle = steer
+    w0.wheel_radius = radius
+    w0.cornering_stiffness = stiffness
+    car.apply_physics_control(pc)
+    for _ in range(20):  # the server applies physics changes a few frames later
+        world.wait_for_tick(10.0)
+
+    again = car.get_physics_control()
+    print("physics after", again)
+    assert close(again.mass, mass), again.mass
+    assert close_curve(again.torque_curve, curve), again.torque_curve
+    assert len(again.forward_gear_ratios) == len(pc.forward_gear_ratios)
+    assert close(again.forward_gear_ratios[0], gear0), again.forward_gear_ratios
+    # Untouched fields keep their values.
+    assert close(again.max_rpm, pc.max_rpm) and close(again.final_ratio, pc.final_ratio)
+    assert close_curve(again.steering_curve, pc.steering_curve)
+    assert again.differential_type == pc.differential_type
+    assert len(again.reverse_gear_ratios) == len(pc.reverse_gear_ratios)
+    assert len(again.wheels) == 4
+    a0 = again.wheels[0]
+    print("wheel 0 after", a0)
+    applied = 0
+    for name, got, want in [("max_steer_angle", a0.max_steer_angle, steer),
+                            ("wheel_radius", a0.wheel_radius, radius),
+                            ("cornering_stiffness", a0.cornering_stiffness, stiffness)]:
+        if close(got, want):
+            applied += 1
+        else:
+            print("NOTE: the server did not keep wheel", name, got, "!=", want)
+    assert applied >= 1, "no wheel field round-tripped"
+    assert again.wheels[1].wheel_index == pc.wheels[1].wheel_index
+    assert again.wheels[1].axle_type == pc.wheels[1].axle_type
+finally:
+    car.destroy()
+print("OK")

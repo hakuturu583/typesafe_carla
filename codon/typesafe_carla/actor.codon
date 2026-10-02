@@ -14,8 +14,7 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_actor_as_vehicle, tsc_vehicle_apply_control, tsc_vehicle_get_control,
                    tsc_vehicle_set_autopilot, tsc_actor_list_size, tsc_actor_list_get,
                    tsc_actor_list_filter, take_string, CBoundingBox, tsc_actor_get_bounding_box,
-                   tsc_vehicle_get_physics_control, tsc_vehicle_apply_physics_control,
-                   PHYSICS_SIZE, tsc_actor_set_target_angular_velocity, tsc_actor_add_impulse,
+                   tsc_actor_set_target_angular_velocity, tsc_actor_add_impulse,
                    tsc_actor_add_force, tsc_actor_add_angular_impulse, tsc_actor_add_torque,
                    tsc_actor_set_simulate_physics, tsc_actor_set_enable_gravity,
                    tsc_vehicle_set_light_state, tsc_vehicle_get_light_state,
@@ -165,15 +164,12 @@ class Vehicle(Actor):
         return VehicleControl._from_c(out[0])
 
     def get_physics_control(self) -> VehiclePhysicsControl:
-        buf = Ptr[byte](PHYSICS_SIZE)
-        _check(tsc_vehicle_get_physics_control(self._h.ptr, buf))
-        return VehiclePhysicsControl._read(buf)
+        """Every physics field of the vehicle, as the Python API returns it."""
+        return VehiclePhysicsControl._get(self._h.ptr)
 
     def apply_physics_control(self, physics_control: VehiclePhysicsControl):
-        """Changes the typed subset; the vehicle's other physics settings are kept."""
-        buf = Ptr[byte](PHYSICS_SIZE)
-        physics_control._write(buf)
-        _check(tsc_vehicle_apply_physics_control(self._h.ptr, buf))
+        """Applies every field; the wheel count must match the vehicle's."""
+        physics_control._apply(self._h.ptr)
 
     def set_light_state(self, light_state: int):
         """light_state: VehicleLightState flags, e.g. LowBeam | Brake."""

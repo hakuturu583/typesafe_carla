@@ -18,6 +18,24 @@ def out(key, value):
     print(f"{key}={value}")
 
 
+# Physics fields compared field by field (physics_all, physics_codes).
+VEHICLE_FLOATS = ("max_torque", "max_rpm", "idle_rpm", "brake_effect", "rev_up_moi",
+                  "rev_down_rate", "front_rear_split", "gear_change_time", "final_ratio",
+                  "change_up_rpm", "change_down_rpm", "transmission_efficiency", "mass",
+                  "drag_coefficient", "chassis_width", "chassis_height", "downforce_coefficient",
+                  "drag_area", "sleep_threshold", "sleep_slope_limit")
+WHEEL_FLOATS = ("wheel_radius", "wheel_width", "wheel_mass", "cornering_stiffness",
+                "friction_force_multiplier", "side_slip_modifier", "slip_threshold",
+                "skid_threshold", "max_steer_angle", "max_wheelspin_rotation",
+                "suspension_max_raise", "suspension_max_drop", "suspension_damping_ratio",
+                "wheel_load_ratio", "spring_rate", "spring_preload", "rollbar_scaling",
+                "max_brake_torque", "max_hand_brake_torque")
+WHEEL_INTS = ("axle_type", "external_torque_combine_method", "sweep_shape", "sweep_type",
+              "suspension_smoothing", "wheel_index")
+WHEEL_BOOLS = ("affected_by_steering", "affected_by_brake", "affected_by_handbrake",
+               "affected_by_engine", "abs_enabled", "traction_control_enabled")
+
+
 client = carla.Client(host, port)
 client.set_timeout(20.0)
 out("server_version", client.get_server_version())
@@ -102,6 +120,24 @@ try:
     pc = vehicle.get_physics_control()
     out("physics", f"{pc.mass:.3f},{pc.max_rpm:.3f},{pc.wheels[0].wheel_radius:.3f}")
     out("physics_wheels", len(pc.wheels))
+    # Every physics field the official API can read (it cannot convert the gear
+    # ratio lists in 0.10.0), except the wheels' per-frame location/velocity.
+    vals = [getattr(pc, n) for n in VEHICLE_FLOATS]
+    vals += [pc.center_of_mass.x, pc.center_of_mass.y, pc.center_of_mass.z]
+    vals += [pc.inertia_tensor_scale.x, pc.inertia_tensor_scale.y, pc.inertia_tensor_scale.z]
+    vals += [c for p in list(pc.torque_curve) + list(pc.steering_curve) for c in (p.x, p.y)]
+    codes = [pc.differential_type, int(pc.use_automatic_gears),
+             int(pc.use_sweep_wheel_collision), len(pc.torque_curve), len(pc.steering_curve)]
+    for w in pc.wheels:
+        vals += [getattr(w, n) for n in WHEEL_FLOATS]
+        for v in (w.offset, w.suspension_axis, w.suspension_force_offset):
+            vals += [v.x, v.y, v.z]
+        vals += [c for p in w.lateral_slip_graph for c in (p.x, p.y)]
+        codes += [getattr(w, n) for n in WHEEL_INTS]
+        codes += [int(getattr(w, n)) for n in WHEEL_BOOLS]
+        codes.append(len(w.lateral_slip_graph))
+    out("physics_all", ",".join(f"{v:.3f}" for v in vals))
+    out("physics_codes", ",".join(str(c) for c in codes))
     for _ in range(20):
         world.tick()
     t = vehicle.get_transform()

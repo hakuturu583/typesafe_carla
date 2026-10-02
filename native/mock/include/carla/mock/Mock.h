@@ -57,6 +57,13 @@ class Vector3D {
   Vector3D(float ix, float iy, float iz) : x(ix), y(iy), z(iz) {}
 };
 
+struct Vector2D {
+  float x = 0.0f;
+  float y = 0.0f;
+  Vector2D() = default;
+  Vector2D(float ix, float iy) : x(ix), y(iy) {}
+};
+
 class Location : public Vector3D {
  public:
   Location() = default;
@@ -149,31 +156,82 @@ class EpisodeSettings {
   bool spectator_as_ego = true;
 };
 
+// rpc::WheelPhysicsControl and rpc::VehiclePhysicsControl: the same fields,
+// types, order and defaults as LibCarla UE5 (identical in 0.10.0 and ue5-dev).
 struct WheelPhysicsControl {
-  float wheel_radius = 37.0f;
+  uint8_t axle_type = 0;
+  geom::Vector3D offset = geom::Vector3D(0, 0, 0);
+  float wheel_radius = 30.0f;
   float wheel_width = 30.0f;
   float wheel_mass = 30.0f;
   float cornering_stiffness = 1000.0f;
   float friction_force_multiplier = 3.0f;
+  float side_slip_modifier = 1.0f;
+  float slip_threshold = 20.0f;
+  float skid_threshold = 20.0f;
   float max_steer_angle = 70.0f;
   bool affected_by_steering = true;
   bool affected_by_brake = true;
   bool affected_by_handbrake = true;
   bool affected_by_engine = true;
+  bool abs_enabled = false;
+  bool traction_control_enabled = false;
+  float max_wheelspin_rotation = 30;
+  uint8_t external_torque_combine_method = 0;
+  std::vector<geom::Vector2D> lateral_slip_graph = {};
+  geom::Vector3D suspension_axis = geom::Vector3D(0, 0, -1);
+  geom::Vector3D suspension_force_offset = geom::Vector3D(0, 0, 0);
+  float suspension_max_raise = 10.0f;
+  float suspension_max_drop = 10.0f;
+  float suspension_damping_ratio = 0.5f;
+  float wheel_load_ratio = 0.5f;
+  float spring_rate = 250.0f;
+  float spring_preload = 50.0f;
+  int suspension_smoothing = 0;
+  float rollbar_scaling = 0.15f;
+  uint8_t sweep_shape = 0;
+  uint8_t sweep_type = 0;
   float max_brake_torque = 1500.0f;
   float max_hand_brake_torque = 3000.0f;
+  int32_t wheel_index = -1;
+  geom::Location location = geom::Location(0, 0, 0);
+  geom::Location old_location = geom::Location(0, 0, 0);
+  geom::Location velocity = geom::Location(0, 0, 0);
 };
 
 struct VehiclePhysicsControl {
+  std::vector<geom::Vector2D> torque_curve = {geom::Vector2D(0.0f, 500.0f),
+                                              geom::Vector2D(5000.0f, 500.0f)};
   float max_torque = 300.0f;
   float max_rpm = 5000.0f;
+  float idle_rpm = 1.0f;
+  float brake_effect = 1.0f;
+  float rev_up_moi = 1.0f;
+  float rev_down_rate = 600.0f;
+  uint8_t differential_type = 0;
+  float front_rear_split = 0.5f;
   bool use_automatic_gears = true;
   float gear_change_time = 0.5f;
   float final_ratio = 4.0f;
+  std::vector<float> forward_gear_ratios = {2.85, 2.02, 1.35, 1.0, 2.85, 2.02, 1.35, 1.0};
+  std::vector<float> reverse_gear_ratios = {2.86, 2.86};
+  float change_up_rpm = 4500.0f;
+  float change_down_rpm = 2000.0f;
+  float transmission_efficiency = 0.9f;
   float mass = 1000.0f;
   float drag_coefficient = 0.3f;
   geom::Location center_of_mass = geom::Location(0, 0, 0);
+  float chassis_width = 180.f;
+  float chassis_height = 140.f;
+  float downforce_coefficient = 0.3f;
+  float drag_area = 0.0f;
+  geom::Vector3D inertia_tensor_scale = geom::Vector3D(1, 1, 1);
+  float sleep_threshold = 10.0f;
+  float sleep_slope_limit = 0.866f;
+  std::vector<geom::Vector2D> steering_curve = {geom::Vector2D(0.0f, 1.0f),
+                                                geom::Vector2D(10.0f, 0.5f)};
   std::vector<WheelPhysicsControl> wheels;
+  bool use_sweep_wheel_collision = false;
 };
 
 enum class TrafficLightState : uint8_t { Red, Yellow, Green, Off, Unknown, SIZE };

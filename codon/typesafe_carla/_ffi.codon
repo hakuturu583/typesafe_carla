@@ -118,37 +118,93 @@ class CWaypointInfo:
     transform: CTransform
 
 @tuple
+class CVector2D:
+    x: float
+    y: float
+
+# tsc_wheel_physics_control_t / tsc_vehicle_physics_control_t (ABI 3.0). The
+# (Ptr, size) pairs borrow from a physics control handle when read, and from
+# Codon-owned buffers (alive for the call) when applied.
+@tuple
 class CWheelPhysicsControl:
+    lateral_slip_graph: Ptr[CVector2D]
+    lateral_slip_graph_size: int
+    offset: CVector3D
+    suspension_axis: CVector3D
+    suspension_force_offset: CVector3D
+    location: CVector3D
+    old_location: CVector3D
+    velocity: CVector3D
     wheel_radius: float
     wheel_width: float
     wheel_mass: float
+    cornering_stiffness: float
+    friction_force_multiplier: float
+    side_slip_modifier: float
+    slip_threshold: float
+    skid_threshold: float
     max_steer_angle: float
+    max_wheelspin_rotation: float
+    suspension_max_raise: float
+    suspension_max_drop: float
+    suspension_damping_ratio: float
+    wheel_load_ratio: float
+    spring_rate: float
+    spring_preload: float
+    rollbar_scaling: float
     max_brake_torque: float
     max_hand_brake_torque: float
-    friction_force_multiplier: float
-    cornering_stiffness: float
+    axle_type: i32
+    external_torque_combine_method: i32
+    sweep_shape: i32
+    sweep_type: i32
+    suspension_smoothing: i32
+    wheel_index: i32
     affected_by_steering: i32
     affected_by_brake: i32
     affected_by_handbrake: i32
     affected_by_engine: i32
+    abs_enabled: i32
+    traction_control_enabled: i32
 
-# tsc_vehicle_physics_control_t is this header followed by TSC_MAX_WHEELS
-# CWheelPhysicsControl records at PHYSICS_WHEELS_OFFSET.
 @tuple
-class CVehiclePhysicsHead:
+class CVehiclePhysicsControl:
+    torque_curve: Ptr[CVector2D]
+    torque_curve_size: int
+    steering_curve: Ptr[CVector2D]
+    steering_curve_size: int
+    forward_gear_ratios: Ptr[float]
+    forward_gear_ratios_size: int
+    reverse_gear_ratios: Ptr[float]
+    reverse_gear_ratios_size: int
+    wheels: Ptr[CWheelPhysicsControl]
+    wheel_count: int
     max_torque: float
     max_rpm: float
-    final_ratio: float
+    idle_rpm: float
+    brake_effect: float
+    rev_up_moi: float
+    rev_down_rate: float
+    front_rear_split: float
     gear_change_time: float
+    final_ratio: float
+    change_up_rpm: float
+    change_down_rpm: float
+    transmission_efficiency: float
     mass: float
     drag_coefficient: float
+    chassis_width: float
+    chassis_height: float
+    downforce_coefficient: float
+    drag_area: float
+    sleep_threshold: float
+    sleep_slope_limit: float
     center_of_mass: CVector3D
+    inertia_tensor_scale: CVector3D
+    differential_type: i32
     use_automatic_gears: i32
-    wheel_count: i32
-
-TSC_MAX_WHEELS = 8
-PHYSICS_WHEELS_OFFSET = CVehiclePhysicsHead.__elemsize__
-PHYSICS_SIZE = PHYSICS_WHEELS_OFFSET + TSC_MAX_WHEELS * CWheelPhysicsControl.__elemsize__
+    use_sweep_wheel_collision: i32
+    reserved0: i32
 
 @tuple
 class CCommand:
@@ -393,8 +449,9 @@ from C import LIB.tsc_waypoint_get_left_lane(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_get_right_lane(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_list_size(cobj) -> int
 from C import LIB.tsc_waypoint_list_get(cobj, int, Ptr[cobj]) -> i32
-from C import LIB.tsc_vehicle_get_physics_control(cobj, cobj) -> i32
-from C import LIB.tsc_vehicle_apply_physics_control(cobj, cobj) -> i32
+from C import LIB.tsc_vehicle_get_physics_control(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_physics_control_view(cobj, Ptr[CVehiclePhysicsControl]) -> i32
+from C import LIB.tsc_vehicle_apply_physics_control(cobj, Ptr[CVehiclePhysicsControl]) -> i32
 from C import LIB.tsc_client_apply_batch(cobj, Ptr[CCommand], int, i32) -> i32
 from C import LIB.tsc_client_apply_batch_sync(cobj, Ptr[CCommand], int, i32, Ptr[CCommandResponse], int, Ptr[int]) -> i32
 

@@ -1,0 +1,11 @@
+# A torque curve (a list of Vector2D) is not a scalar physics field.
+# expect-error: 'List[Vector2D]' does not match expected type 'float'
+import typesafe_carla as carla
+
+def stiffer(vehicle: carla.Vehicle):
+    pc = vehicle.get_physics_control()
+    pc.max_torque = pc.torque_curve
+    vehicle.apply_physics_control(pc)
+
+# Compile-only: Codon type-checks a function only when it is called.
+stiffer(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

@@ -1,8 +1,10 @@
 # Control value types.
 
-from ._ffi import (CVehicleControl, CWalkerControl, CVehiclePhysicsHead, CWheelPhysicsControl,
-                   TSC_MAX_WHEELS, PHYSICS_WHEELS_OFFSET)
-from .geometry import Location, Vector3D
+from ._ffi import (Handle, CVehicleControl, CWalkerControl, CVector2D, CVehiclePhysicsControl,
+                   CWheelPhysicsControl, tsc_vehicle_get_physics_control,
+                   tsc_physics_control_view, tsc_vehicle_apply_physics_control)
+from .errors import _check
+from .geometry import Location, Vector2D, Vector3D
 
 class VehicleControl:
     throttle: float  # [0, 1]
@@ -48,117 +50,524 @@ class VehicleControl:
         return VehicleControl(c.throttle, c.steer, c.brake, int(c.hand_brake) != 0,
                               int(c.reverse) != 0, int(c.manual_gear_shift) != 0, int(c.gear))
 
+def _curve_to_c(curve: List[Vector2D]) -> Ptr[CVector2D]:
+    out = Ptr[CVector2D](len(curve))
+    for i in range(len(curve)):
+        out[i] = CVector2D(curve[i].x, curve[i].y)
+    return out
+
+def _curve_from_c(data: Ptr[CVector2D], size: int) -> List[Vector2D]:
+    return [Vector2D(data[i].x, data[i].y) for i in range(size)]
+
+def _ratios_from_c(data: Ptr[float], size: int) -> List[float]:
+    return [data[i] for i in range(size)]
+
+def _ratios_to_c(ratios: List[float]) -> Ptr[float]:
+    out = Ptr[float](len(ratios))
+    for i in range(len(ratios)):
+        out[i] = ratios[i]
+    return out
+
 class WheelPhysicsControl:
-    """Per-wheel physics (a typed subset of CARLA's WheelPhysicsControl)."""
+    """Per-wheel physics: every field of CARLA's WheelPhysicsControl, with the
+    Python API's names and LibCarla's defaults. The uint8_t codes (axle_type,
+    external_torque_combine_method, sweep_shape, sweep_type) must be in [0, 255].
+    """
+    axle_type: int
+    offset: Vector3D
     wheel_radius: float  # cm
     wheel_width: float  # cm
     wheel_mass: float  # kg
-    max_steer_angle: float  # degrees
-    max_brake_torque: float  # Nm
-    max_hand_brake_torque: float  # Nm
-    friction_force_multiplier: float
     cornering_stiffness: float
+    friction_force_multiplier: float
+    side_slip_modifier: float
+    slip_threshold: float
+    skid_threshold: float
+    max_steer_angle: float  # degrees
     affected_by_steering: bool
     affected_by_brake: bool
     affected_by_handbrake: bool
     affected_by_engine: bool
+    abs_enabled: bool
+    traction_control_enabled: bool
+    max_wheelspin_rotation: float
+    external_torque_combine_method: int
+    lateral_slip_graph: List[Vector2D]
+    suspension_axis: Vector3D
+    suspension_force_offset: Vector3D
+    suspension_max_raise: float
+    suspension_max_drop: float
+    suspension_damping_ratio: float
+    wheel_load_ratio: float
+    spring_rate: float
+    spring_preload: float
+    suspension_smoothing: int
+    rollbar_scaling: float
+    sweep_shape: int
+    sweep_type: int
+    max_brake_torque: float  # Nm
+    max_hand_brake_torque: float  # Nm
+    wheel_index: int
+    location: Location
+    old_location: Location
+    velocity: Vector3D
 
-    def __init__(self, wheel_radius: float = 30.0, wheel_width: float = 30.0,
-                 wheel_mass: float = 30.0, max_steer_angle: float = 70.0,
-                 max_brake_torque: float = 1500.0, max_hand_brake_torque: float = 3000.0,
-                 friction_force_multiplier: float = 3.0, cornering_stiffness: float = 1000.0,
-                 affected_by_steering: bool = True, affected_by_brake: bool = True,
-                 affected_by_handbrake: bool = True, affected_by_engine: bool = True):
+    def __init__(self,
+                 axle_type: int = 0,
+                 offset: Optional[Vector3D] = None,
+                 wheel_radius: float = 30.0,
+                 wheel_width: float = 30.0,
+                 wheel_mass: float = 30.0,
+                 cornering_stiffness: float = 1000.0,
+                 friction_force_multiplier: float = 3.0,
+                 side_slip_modifier: float = 1.0,
+                 slip_threshold: float = 20.0,
+                 skid_threshold: float = 20.0,
+                 max_steer_angle: float = 70.0,
+                 affected_by_steering: bool = True,
+                 affected_by_brake: bool = True,
+                 affected_by_handbrake: bool = True,
+                 affected_by_engine: bool = True,
+                 abs_enabled: bool = False,
+                 traction_control_enabled: bool = False,
+                 max_wheelspin_rotation: float = 30.0,
+                 external_torque_combine_method: int = 0,
+                 lateral_slip_graph: Optional[List[Vector2D]] = None,
+                 suspension_axis: Optional[Vector3D] = None,
+                 suspension_force_offset: Optional[Vector3D] = None,
+                 suspension_max_raise: float = 10.0,
+                 suspension_max_drop: float = 10.0,
+                 suspension_damping_ratio: float = 0.5,
+                 wheel_load_ratio: float = 0.5,
+                 spring_rate: float = 250.0,
+                 spring_preload: float = 50.0,
+                 suspension_smoothing: int = 0,
+                 rollbar_scaling: float = 0.15,
+                 sweep_shape: int = 0,
+                 sweep_type: int = 0,
+                 max_brake_torque: float = 1500.0,
+                 max_hand_brake_torque: float = 3000.0,
+                 wheel_index: int = -1,
+                 location: Optional[Location] = None,
+                 old_location: Optional[Location] = None,
+                 velocity: Optional[Vector3D] = None):
+        self.axle_type = axle_type
+        self.offset = offset if offset is not None else Vector3D()
         self.wheel_radius = wheel_radius
         self.wheel_width = wheel_width
         self.wheel_mass = wheel_mass
-        self.max_steer_angle = max_steer_angle
-        self.max_brake_torque = max_brake_torque
-        self.max_hand_brake_torque = max_hand_brake_torque
-        self.friction_force_multiplier = friction_force_multiplier
         self.cornering_stiffness = cornering_stiffness
+        self.friction_force_multiplier = friction_force_multiplier
+        self.side_slip_modifier = side_slip_modifier
+        self.slip_threshold = slip_threshold
+        self.skid_threshold = skid_threshold
+        self.max_steer_angle = max_steer_angle
         self.affected_by_steering = affected_by_steering
         self.affected_by_brake = affected_by_brake
         self.affected_by_handbrake = affected_by_handbrake
         self.affected_by_engine = affected_by_engine
+        self.abs_enabled = abs_enabled
+        self.traction_control_enabled = traction_control_enabled
+        self.max_wheelspin_rotation = max_wheelspin_rotation
+        self.external_torque_combine_method = external_torque_combine_method
+        self.lateral_slip_graph = (lateral_slip_graph if lateral_slip_graph is not None
+                                   else List[Vector2D]())
+        self.suspension_axis = (suspension_axis if suspension_axis is not None
+                                else Vector3D(0.0, 0.0, -1.0))
+        self.suspension_force_offset = (
+            suspension_force_offset if suspension_force_offset is not None else Vector3D())
+        self.suspension_max_raise = suspension_max_raise
+        self.suspension_max_drop = suspension_max_drop
+        self.suspension_damping_ratio = suspension_damping_ratio
+        self.wheel_load_ratio = wheel_load_ratio
+        self.spring_rate = spring_rate
+        self.spring_preload = spring_preload
+        self.suspension_smoothing = suspension_smoothing
+        self.rollbar_scaling = rollbar_scaling
+        self.sweep_shape = sweep_shape
+        self.sweep_type = sweep_type
+        self.max_brake_torque = max_brake_torque
+        self.max_hand_brake_torque = max_hand_brake_torque
+        self.wheel_index = wheel_index
+        self.location = location if location is not None else Location()
+        self.old_location = old_location if old_location is not None else Location()
+        self.velocity = velocity if velocity is not None else Vector3D()
+
+    def __eq__(self, other: WheelPhysicsControl) -> bool:
+        return (self.axle_type == other.axle_type and
+                self.offset == other.offset and
+                self.wheel_radius == other.wheel_radius and
+                self.wheel_width == other.wheel_width and
+                self.wheel_mass == other.wheel_mass and
+                self.cornering_stiffness == other.cornering_stiffness and
+                self.friction_force_multiplier == other.friction_force_multiplier and
+                self.side_slip_modifier == other.side_slip_modifier and
+                self.slip_threshold == other.slip_threshold and
+                self.skid_threshold == other.skid_threshold and
+                self.max_steer_angle == other.max_steer_angle and
+                self.affected_by_steering == other.affected_by_steering and
+                self.affected_by_brake == other.affected_by_brake and
+                self.affected_by_handbrake == other.affected_by_handbrake and
+                self.affected_by_engine == other.affected_by_engine and
+                self.abs_enabled == other.abs_enabled and
+                self.traction_control_enabled == other.traction_control_enabled and
+                self.max_wheelspin_rotation == other.max_wheelspin_rotation and
+                self.external_torque_combine_method == other.external_torque_combine_method and
+                self.lateral_slip_graph == other.lateral_slip_graph and
+                self.suspension_axis == other.suspension_axis and
+                self.suspension_force_offset == other.suspension_force_offset and
+                self.suspension_max_raise == other.suspension_max_raise and
+                self.suspension_max_drop == other.suspension_max_drop and
+                self.suspension_damping_ratio == other.suspension_damping_ratio and
+                self.wheel_load_ratio == other.wheel_load_ratio and
+                self.spring_rate == other.spring_rate and
+                self.spring_preload == other.spring_preload and
+                self.suspension_smoothing == other.suspension_smoothing and
+                self.rollbar_scaling == other.rollbar_scaling and
+                self.sweep_shape == other.sweep_shape and
+                self.sweep_type == other.sweep_type and
+                self.max_brake_torque == other.max_brake_torque and
+                self.max_hand_brake_torque == other.max_hand_brake_torque and
+                self.wheel_index == other.wheel_index and
+                self.location == other.location and
+                self.old_location == other.old_location and
+                self.velocity == other.velocity)
+
+    def __ne__(self, other: WheelPhysicsControl) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
-        return (f"WheelPhysicsControl(wheel_radius={self.wheel_radius}, "
-                f"max_steer_angle={self.max_steer_angle}, max_brake_torque={self.max_brake_torque})")
+        return (f"WheelPhysicsControl(axle_type={self.axle_type}, offset={self.offset}, "
+                f"wheel_radius={self.wheel_radius}, wheel_width={self.wheel_width}, "
+                f"wheel_mass={self.wheel_mass}, "
+                f"cornering_stiffness={self.cornering_stiffness}, "
+                f"friction_force_multiplier={self.friction_force_multiplier}, "
+                f"side_slip_modifier={self.side_slip_modifier}, "
+                f"slip_threshold={self.slip_threshold}, "
+                f"skid_threshold={self.skid_threshold}, "
+                f"max_steer_angle={self.max_steer_angle}, "
+                f"affected_by_steering={self.affected_by_steering}, "
+                f"affected_by_brake={self.affected_by_brake}, "
+                f"affected_by_handbrake={self.affected_by_handbrake}, "
+                f"affected_by_engine={self.affected_by_engine}, "
+                f"abs_enabled={self.abs_enabled}, "
+                f"traction_control_enabled={self.traction_control_enabled}, "
+                f"max_wheelspin_rotation={self.max_wheelspin_rotation}, "
+                f"external_torque_combine_method={self.external_torque_combine_method}, "
+                f"lateral_slip_graph={self.lateral_slip_graph}, "
+                f"suspension_axis={self.suspension_axis}, "
+                f"suspension_force_offset={self.suspension_force_offset}, "
+                f"suspension_max_raise={self.suspension_max_raise}, "
+                f"suspension_max_drop={self.suspension_max_drop}, "
+                f"suspension_damping_ratio={self.suspension_damping_ratio}, "
+                f"wheel_load_ratio={self.wheel_load_ratio}, "
+                f"spring_rate={self.spring_rate}, spring_preload={self.spring_preload}, "
+                f"suspension_smoothing={self.suspension_smoothing}, "
+                f"rollbar_scaling={self.rollbar_scaling}, "
+                f"sweep_shape={self.sweep_shape}, sweep_type={self.sweep_type}, "
+                f"max_brake_torque={self.max_brake_torque}, "
+                f"max_hand_brake_torque={self.max_hand_brake_torque}, "
+                f"wheel_index={self.wheel_index}, location={self.location}, "
+                f"old_location={self.old_location}, velocity={self.velocity})")
 
-    def _to_c(self) -> CWheelPhysicsControl:
-        return CWheelPhysicsControl(
-            self.wheel_radius, self.wheel_width, self.wheel_mass, self.max_steer_angle,
-            self.max_brake_torque, self.max_hand_brake_torque, self.friction_force_multiplier,
-            self.cornering_stiffness, i32(int(self.affected_by_steering)),
-            i32(int(self.affected_by_brake)), i32(int(self.affected_by_handbrake)),
-            i32(int(self.affected_by_engine)))
+    def _to_c(self, slip: Ptr[CVector2D]) -> CWheelPhysicsControl:
+        """slip: lateral_slip_graph in C layout; it must outlive the C call."""
+        return CWheelPhysicsControl(slip, len(self.lateral_slip_graph), self.offset._to_c(),
+            self.suspension_axis._to_c(), self.suspension_force_offset._to_c(),
+            self.location._to_c(), self.old_location._to_c(), self.velocity._to_c(),
+            self.wheel_radius, self.wheel_width, self.wheel_mass, self.cornering_stiffness,
+            self.friction_force_multiplier, self.side_slip_modifier, self.slip_threshold,
+            self.skid_threshold, self.max_steer_angle, self.max_wheelspin_rotation,
+            self.suspension_max_raise, self.suspension_max_drop, self.suspension_damping_ratio,
+            self.wheel_load_ratio, self.spring_rate, self.spring_preload, self.rollbar_scaling,
+            self.max_brake_torque, self.max_hand_brake_torque, i32(self.axle_type),
+            i32(self.external_torque_combine_method), i32(self.sweep_shape), i32(self.sweep_type),
+            i32(self.suspension_smoothing), i32(self.wheel_index),
+            i32(int(self.affected_by_steering)), i32(int(self.affected_by_brake)),
+            i32(int(self.affected_by_handbrake)), i32(int(self.affected_by_engine)),
+            i32(int(self.abs_enabled)), i32(int(self.traction_control_enabled)))
 
     @staticmethod
     def _from_c(w: CWheelPhysicsControl) -> WheelPhysicsControl:
         return WheelPhysicsControl(
-            w.wheel_radius, w.wheel_width, w.wheel_mass, w.max_steer_angle, w.max_brake_torque,
-            w.max_hand_brake_torque, w.friction_force_multiplier, w.cornering_stiffness,
-            int(w.affected_by_steering) != 0, int(w.affected_by_brake) != 0,
-            int(w.affected_by_handbrake) != 0, int(w.affected_by_engine) != 0)
+            axle_type=int(w.axle_type),
+            offset=Vector3D._from_c(w.offset),
+            wheel_radius=w.wheel_radius,
+            wheel_width=w.wheel_width,
+            wheel_mass=w.wheel_mass,
+            cornering_stiffness=w.cornering_stiffness,
+            friction_force_multiplier=w.friction_force_multiplier,
+            side_slip_modifier=w.side_slip_modifier,
+            slip_threshold=w.slip_threshold,
+            skid_threshold=w.skid_threshold,
+            max_steer_angle=w.max_steer_angle,
+            affected_by_steering=int(w.affected_by_steering) != 0,
+            affected_by_brake=int(w.affected_by_brake) != 0,
+            affected_by_handbrake=int(w.affected_by_handbrake) != 0,
+            affected_by_engine=int(w.affected_by_engine) != 0,
+            abs_enabled=int(w.abs_enabled) != 0,
+            traction_control_enabled=int(w.traction_control_enabled) != 0,
+            max_wheelspin_rotation=w.max_wheelspin_rotation,
+            external_torque_combine_method=int(w.external_torque_combine_method),
+            lateral_slip_graph=_curve_from_c(w.lateral_slip_graph, w.lateral_slip_graph_size),
+            suspension_axis=Vector3D._from_c(w.suspension_axis),
+            suspension_force_offset=Vector3D._from_c(w.suspension_force_offset),
+            suspension_max_raise=w.suspension_max_raise,
+            suspension_max_drop=w.suspension_max_drop,
+            suspension_damping_ratio=w.suspension_damping_ratio,
+            wheel_load_ratio=w.wheel_load_ratio,
+            spring_rate=w.spring_rate,
+            spring_preload=w.spring_preload,
+            suspension_smoothing=int(w.suspension_smoothing),
+            rollbar_scaling=w.rollbar_scaling,
+            sweep_shape=int(w.sweep_shape),
+            sweep_type=int(w.sweep_type),
+            max_brake_torque=w.max_brake_torque,
+            max_hand_brake_torque=w.max_hand_brake_torque,
+            wheel_index=int(w.wheel_index),
+            location=Location._from_c(w.location),
+            old_location=Location._from_c(w.old_location),
+            velocity=Vector3D._from_c(w.velocity))
 
 class VehiclePhysicsControl:
-    """A typed subset of CARLA's VehiclePhysicsControl.
+    """Every field of CARLA's VehiclePhysicsControl, with the Python API's names
+    and LibCarla's defaults.
 
-    Vehicle.apply_physics_control() changes only these fields; everything else
-    (torque curve, gear ratios, suspension, ...) keeps the vehicle's values.
-    The number of wheels must match the vehicle's.
+    Unlike the Python API, the lists are plain Codon lists: changes made in place
+    (pc.wheels[0].wheel_radius = 40.0, pc.torque_curve.append(...)) are applied
+    by Vehicle.apply_physics_control(). The number of wheels must match the
+    vehicle's. Values cross into LibCarla as float32.
     """
-    max_torque: float
+    torque_curve: List[Vector2D]  # (rpm, torque)
+    max_torque: float  # Nm
     max_rpm: float
-    final_ratio: float
+    idle_rpm: float
+    brake_effect: float
+    rev_up_moi: float
+    rev_down_rate: float
+    differential_type: int
+    front_rear_split: float
+    use_automatic_gears: bool
     gear_change_time: float
+    final_ratio: float
+    forward_gear_ratios: List[float]
+    reverse_gear_ratios: List[float]
+    change_up_rpm: float
+    change_down_rpm: float
+    transmission_efficiency: float
     mass: float  # kg
     drag_coefficient: float
-    center_of_mass: Location
-    use_automatic_gears: bool
+    center_of_mass: Location  # m, vehicle frame
+    chassis_width: float
+    chassis_height: float
+    downforce_coefficient: float
+    drag_area: float
+    inertia_tensor_scale: Vector3D
+    sleep_threshold: float
+    sleep_slope_limit: float
+    steering_curve: List[Vector2D]  # (speed, steer factor)
     wheels: List[WheelPhysicsControl]
+    use_sweep_wheel_collision: bool
 
-    def __init__(self, max_torque: float = 300.0, max_rpm: float = 5000.0,
-                 final_ratio: float = 4.0, gear_change_time: float = 0.5, mass: float = 1000.0,
-                 drag_coefficient: float = 0.3, center_of_mass: Optional[Location] = None,
+    def __init__(self,
+                 torque_curve: Optional[List[Vector2D]] = None,
+                 max_torque: float = 300.0,
+                 max_rpm: float = 5000.0,
+                 idle_rpm: float = 1.0,
+                 brake_effect: float = 1.0,
+                 rev_up_moi: float = 1.0,
+                 rev_down_rate: float = 600.0,
+                 differential_type: int = 0,
+                 front_rear_split: float = 0.5,
                  use_automatic_gears: bool = True,
-                 wheels: Optional[List[WheelPhysicsControl]] = None):
+                 gear_change_time: float = 0.5,
+                 final_ratio: float = 4.0,
+                 forward_gear_ratios: Optional[List[float]] = None,
+                 reverse_gear_ratios: Optional[List[float]] = None,
+                 change_up_rpm: float = 4500.0,
+                 change_down_rpm: float = 2000.0,
+                 transmission_efficiency: float = 0.9,
+                 mass: float = 1000.0,
+                 drag_coefficient: float = 0.3,
+                 center_of_mass: Optional[Location] = None,
+                 chassis_width: float = 180.0,
+                 chassis_height: float = 140.0,
+                 downforce_coefficient: float = 0.3,
+                 drag_area: float = 0.0,
+                 inertia_tensor_scale: Optional[Vector3D] = None,
+                 sleep_threshold: float = 10.0,
+                 sleep_slope_limit: float = 0.866,
+                 steering_curve: Optional[List[Vector2D]] = None,
+                 wheels: Optional[List[WheelPhysicsControl]] = None,
+                 use_sweep_wheel_collision: bool = False):
+        self.torque_curve = (torque_curve if torque_curve is not None
+                             else [Vector2D(0.0, 500.0), Vector2D(5000.0, 500.0)])
         self.max_torque = max_torque
         self.max_rpm = max_rpm
-        self.final_ratio = final_ratio
+        self.idle_rpm = idle_rpm
+        self.brake_effect = brake_effect
+        self.rev_up_moi = rev_up_moi
+        self.rev_down_rate = rev_down_rate
+        self.differential_type = differential_type
+        self.front_rear_split = front_rear_split
+        self.use_automatic_gears = use_automatic_gears
         self.gear_change_time = gear_change_time
+        self.final_ratio = final_ratio
+        self.forward_gear_ratios = (forward_gear_ratios if forward_gear_ratios is not None
+                                    else [2.85, 2.02, 1.35, 1.0, 2.85, 2.02, 1.35, 1.0])
+        self.reverse_gear_ratios = (reverse_gear_ratios if reverse_gear_ratios is not None
+                                    else [2.86, 2.86])
+        self.change_up_rpm = change_up_rpm
+        self.change_down_rpm = change_down_rpm
+        self.transmission_efficiency = transmission_efficiency
         self.mass = mass
         self.drag_coefficient = drag_coefficient
         self.center_of_mass = center_of_mass if center_of_mass is not None else Location()
-        self.use_automatic_gears = use_automatic_gears
+        self.chassis_width = chassis_width
+        self.chassis_height = chassis_height
+        self.downforce_coefficient = downforce_coefficient
+        self.drag_area = drag_area
+        self.inertia_tensor_scale = (inertia_tensor_scale if inertia_tensor_scale is not None
+                                     else Vector3D(1.0, 1.0, 1.0))
+        self.sleep_threshold = sleep_threshold
+        self.sleep_slope_limit = sleep_slope_limit
+        self.steering_curve = (steering_curve if steering_curve is not None
+                               else [Vector2D(0.0, 1.0), Vector2D(10.0, 0.5)])
         self.wheels = wheels if wheels is not None else List[WheelPhysicsControl]()
+        self.use_sweep_wheel_collision = use_sweep_wheel_collision
+
+    def __eq__(self, other: VehiclePhysicsControl) -> bool:
+        return (self.torque_curve == other.torque_curve and
+                self.max_torque == other.max_torque and
+                self.max_rpm == other.max_rpm and
+                self.idle_rpm == other.idle_rpm and
+                self.brake_effect == other.brake_effect and
+                self.rev_up_moi == other.rev_up_moi and
+                self.rev_down_rate == other.rev_down_rate and
+                self.differential_type == other.differential_type and
+                self.front_rear_split == other.front_rear_split and
+                self.use_automatic_gears == other.use_automatic_gears and
+                self.gear_change_time == other.gear_change_time and
+                self.final_ratio == other.final_ratio and
+                self.forward_gear_ratios == other.forward_gear_ratios and
+                self.reverse_gear_ratios == other.reverse_gear_ratios and
+                self.change_up_rpm == other.change_up_rpm and
+                self.change_down_rpm == other.change_down_rpm and
+                self.transmission_efficiency == other.transmission_efficiency and
+                self.mass == other.mass and
+                self.drag_coefficient == other.drag_coefficient and
+                self.center_of_mass == other.center_of_mass and
+                self.chassis_width == other.chassis_width and
+                self.chassis_height == other.chassis_height and
+                self.downforce_coefficient == other.downforce_coefficient and
+                self.drag_area == other.drag_area and
+                self.inertia_tensor_scale == other.inertia_tensor_scale and
+                self.sleep_threshold == other.sleep_threshold and
+                self.sleep_slope_limit == other.sleep_slope_limit and
+                self.steering_curve == other.steering_curve and
+                self.wheels == other.wheels and
+                self.use_sweep_wheel_collision == other.use_sweep_wheel_collision)
+
+    def __ne__(self, other: VehiclePhysicsControl) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
-        return (f"VehiclePhysicsControl(mass={self.mass}, max_torque={self.max_torque}, "
-                f"max_rpm={self.max_rpm}, drag_coefficient={self.drag_coefficient}, "
-                f"wheels={len(self.wheels)})")
-
-    def _write(self, buf: cobj):
-        """Serializes into a PHYSICS_SIZE-byte tsc_vehicle_physics_control_t."""
-        if len(self.wheels) > TSC_MAX_WHEELS:
-            raise ValueError(f"at most {TSC_MAX_WHEELS} wheels are supported")
-        Ptr[CVehiclePhysicsHead](buf)[0] = CVehiclePhysicsHead(
-            self.max_torque, self.max_rpm, self.final_ratio, self.gear_change_time, self.mass,
-            self.drag_coefficient, self.center_of_mass._to_c(), i32(int(self.use_automatic_gears)),
-            i32(len(self.wheels)))
-        wheels = Ptr[CWheelPhysicsControl](buf + PHYSICS_WHEELS_OFFSET)
-        for i in range(len(self.wheels)):
-            wheels[i] = self.wheels[i]._to_c()
+        return (f"VehiclePhysicsControl(torque_curve={self.torque_curve}, "
+                f"max_torque={self.max_torque}, "
+                f"max_rpm={self.max_rpm}, idle_rpm={self.idle_rpm}, "
+                f"brake_effect={self.brake_effect}, rev_up_moi={self.rev_up_moi}, "
+                f"rev_down_rate={self.rev_down_rate}, "
+                f"differential_type={self.differential_type}, "
+                f"front_rear_split={self.front_rear_split}, "
+                f"use_automatic_gears={self.use_automatic_gears}, "
+                f"gear_change_time={self.gear_change_time}, "
+                f"final_ratio={self.final_ratio}, "
+                f"forward_gear_ratios={self.forward_gear_ratios}, "
+                f"reverse_gear_ratios={self.reverse_gear_ratios}, "
+                f"change_up_rpm={self.change_up_rpm}, "
+                f"change_down_rpm={self.change_down_rpm}, "
+                f"transmission_efficiency={self.transmission_efficiency}, "
+                f"mass={self.mass}, drag_coefficient={self.drag_coefficient}, "
+                f"center_of_mass={self.center_of_mass}, "
+                f"chassis_width={self.chassis_width}, "
+                f"chassis_height={self.chassis_height}, "
+                f"downforce_coefficient={self.downforce_coefficient}, "
+                f"drag_area={self.drag_area}, "
+                f"inertia_tensor_scale={self.inertia_tensor_scale}, "
+                f"sleep_threshold={self.sleep_threshold}, "
+                f"sleep_slope_limit={self.sleep_slope_limit}, "
+                f"steering_curve={self.steering_curve}, wheels={self.wheels}, "
+                f"use_sweep_wheel_collision={self.use_sweep_wheel_collision})")
 
     @staticmethod
-    def _read(buf: cobj) -> VehiclePhysicsControl:
-        h = Ptr[CVehiclePhysicsHead](buf)[0]
-        wheels = Ptr[CWheelPhysicsControl](buf + PHYSICS_WHEELS_OFFSET)
+    def _get(vehicle: cobj) -> VehiclePhysicsControl:
+        out = Ptr[cobj](1)
+        _check(tsc_vehicle_get_physics_control(vehicle, out))
+        snapshot = Handle(out[0])  # owns the arrays the view points into
+        view = Ptr[CVehiclePhysicsControl](1)
+        _check(tsc_physics_control_view(snapshot.ptr, view))
+        result = VehiclePhysicsControl._from_c(view[0])
+        snapshot.release()
+        return result
+
+    def _apply(self, vehicle: cobj):
+        # Every buffer stays referenced by a local until the call returns.
+        slips = [_curve_to_c(w.lateral_slip_graph) for w in self.wheels]
+        wheels = Ptr[CWheelPhysicsControl](len(self.wheels))
+        for i in range(len(self.wheels)):
+            wheels[i] = self.wheels[i]._to_c(slips[i])
+        c = Ptr[CVehiclePhysicsControl](1)
+        c[0] = self._to_c(_curve_to_c(self.torque_curve), _curve_to_c(self.steering_curve),
+                          _ratios_to_c(self.forward_gear_ratios),
+                          _ratios_to_c(self.reverse_gear_ratios), wheels)
+        _check(tsc_vehicle_apply_physics_control(vehicle, c))
+
+    def _to_c(self, torque: Ptr[CVector2D], steering: Ptr[CVector2D], forward: Ptr[float],
+              reverse: Ptr[float], wheels: Ptr[CWheelPhysicsControl]) -> CVehiclePhysicsControl:
+        return CVehiclePhysicsControl(torque, len(self.torque_curve), steering,
+            len(self.steering_curve), forward, len(self.forward_gear_ratios), reverse,
+            len(self.reverse_gear_ratios), wheels, len(self.wheels), self.max_torque, self.max_rpm,
+            self.idle_rpm, self.brake_effect, self.rev_up_moi, self.rev_down_rate,
+            self.front_rear_split, self.gear_change_time, self.final_ratio, self.change_up_rpm,
+            self.change_down_rpm, self.transmission_efficiency, self.mass, self.drag_coefficient,
+            self.chassis_width, self.chassis_height, self.downforce_coefficient, self.drag_area,
+            self.sleep_threshold, self.sleep_slope_limit, self.center_of_mass._to_c(),
+            self.inertia_tensor_scale._to_c(), i32(self.differential_type),
+            i32(int(self.use_automatic_gears)), i32(int(self.use_sweep_wheel_collision)), i32(0))
+
+    @staticmethod
+    def _from_c(c: CVehiclePhysicsControl) -> VehiclePhysicsControl:
         return VehiclePhysicsControl(
-            h.max_torque, h.max_rpm, h.final_ratio, h.gear_change_time, h.mass,
-            h.drag_coefficient, Location._from_c(h.center_of_mass), int(h.use_automatic_gears) != 0,
-            [WheelPhysicsControl._from_c(wheels[i]) for i in range(int(h.wheel_count))])
+            torque_curve=_curve_from_c(c.torque_curve, c.torque_curve_size),
+            max_torque=c.max_torque,
+            max_rpm=c.max_rpm,
+            idle_rpm=c.idle_rpm,
+            brake_effect=c.brake_effect,
+            rev_up_moi=c.rev_up_moi,
+            rev_down_rate=c.rev_down_rate,
+            differential_type=int(c.differential_type),
+            front_rear_split=c.front_rear_split,
+            use_automatic_gears=int(c.use_automatic_gears) != 0,
+            gear_change_time=c.gear_change_time,
+            final_ratio=c.final_ratio,
+            forward_gear_ratios=_ratios_from_c(c.forward_gear_ratios, c.forward_gear_ratios_size),
+            reverse_gear_ratios=_ratios_from_c(c.reverse_gear_ratios, c.reverse_gear_ratios_size),
+            change_up_rpm=c.change_up_rpm,
+            change_down_rpm=c.change_down_rpm,
+            transmission_efficiency=c.transmission_efficiency,
+            mass=c.mass,
+            drag_coefficient=c.drag_coefficient,
+            center_of_mass=Location._from_c(c.center_of_mass),
+            chassis_width=c.chassis_width,
+            chassis_height=c.chassis_height,
+            downforce_coefficient=c.downforce_coefficient,
+            drag_area=c.drag_area,
+            inertia_tensor_scale=Vector3D._from_c(c.inertia_tensor_scale),
+            sleep_threshold=c.sleep_threshold,
+            sleep_slope_limit=c.sleep_slope_limit,
+            steering_curve=_curve_from_c(c.steering_curve, c.steering_curve_size),
+            wheels=[WheelPhysicsControl._from_c(c.wheels[i]) for i in range(c.wheel_count)],
+            use_sweep_wheel_collision=int(c.use_sweep_wheel_collision) != 0)
 
 class WalkerControl:
     direction: Vector3D  # world-space direction (normalized by CARLA)

@@ -54,6 +54,13 @@ rpc::VehiclePhysicsControl DefaultPhysics() {
   rpc::VehiclePhysicsControl pc;
   pc.mass = 1500.0f;
   pc.wheels.resize(4);
+  for (size_t i = 0; i < pc.wheels.size(); ++i) {
+    auto &w = pc.wheels[i];
+    w.wheel_index = static_cast<int32_t>(i);
+    w.axle_type = i < 2 ? 1 : 2;  // front, rear
+    w.offset = geom::Vector3D(i < 2 ? 140.0f : -140.0f, i % 2 == 0 ? -80.0f : 80.0f, 0.0f);
+    w.lateral_slip_graph = {geom::Vector2D(0.0f, 0.0f), geom::Vector2D(5.0f, 1.0f)};
+  }
   pc.wheels[2].affected_by_steering = pc.wheels[3].affected_by_steering = false;
   pc.wheels[2].max_steer_angle = pc.wheels[3].max_steer_angle = 0.0f;
   return pc;

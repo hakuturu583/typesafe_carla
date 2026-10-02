@@ -178,6 +178,17 @@ struct tsc_junction : tsc_handle {
       : tsc_handle(TSC_KIND_JUNCTION), junction(std::move(j)) {}
 };
 
+// A physics control snapshot, already converted to the C layout: `view` points
+// into the vectors below, which never change after construction.
+struct tsc_physics_control : tsc_handle {
+  std::vector<tsc_vector2d_t> torque_curve, steering_curve;
+  std::vector<double> forward_gear_ratios, reverse_gear_ratios;
+  std::vector<std::vector<tsc_vector2d_t>> lateral_slip_graphs;  // one per wheel
+  std::vector<tsc_wheel_physics_control_t> wheels;
+  tsc_vehicle_physics_control_t view{};
+  explicit tsc_physics_control(const carla::rpc::VehiclePhysicsControl &pc);  // vehicle.cpp
+};
+
 struct tsc_sensor_data : tsc_handle {
   carla::SharedPtr<carla::sensor::SensorData> data;
   explicit tsc_sensor_data(carla::SharedPtr<carla::sensor::SensorData> d)

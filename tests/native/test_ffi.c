@@ -62,9 +62,6 @@ static void test_layout(void) {
   CHECK(sizeof(tsc_timestamp_t) == 32);
   CHECK(sizeof(tsc_actor_snapshot_t) == 128);
   CHECK(sizeof(tsc_waypoint_info_t) == 96);
-  CHECK(sizeof(tsc_wheel_physics_control_t) == 80);
-  CHECK(offsetof(tsc_vehicle_physics_control_t, wheels) == 80);
-  CHECK(sizeof(tsc_vehicle_physics_control_t) == 720);
   CHECK(sizeof(tsc_command_t) == 152); /* ABI 2.0: + scalar */
   CHECK(offsetof(tsc_command_response_t, error) == 8);
   CHECK(sizeof(tsc_command_response_t) == 24);
@@ -82,6 +79,15 @@ static void test_layout(void) {
   CHECK(sizeof(tsc_color_t) == 4);
   CHECK(sizeof(tsc_opendrive_parameters_t) == 48);
   CHECK(sizeof(tsc_landmark_t) == 224);
+  /* ABI 3.0 */
+  CHECK(sizeof(tsc_vector2d_t) == 16);
+  CHECK(sizeof(tsc_wheel_physics_control_t) == 360);
+  CHECK(offsetof(tsc_wheel_physics_control_t, wheel_radius) == 160);
+  CHECK(offsetof(tsc_wheel_physics_control_t, axle_type) == 312);
+  CHECK(sizeof(tsc_vehicle_physics_control_t) == 304);
+  CHECK(offsetof(tsc_vehicle_physics_control_t, max_torque) == 80);
+  CHECK(offsetof(tsc_vehicle_physics_control_t, center_of_mass) == 240);
+  CHECK(offsetof(tsc_vehicle_physics_control_t, differential_type) == 288);
 }
 
 static void test_null_arguments(void) {
@@ -261,6 +267,113 @@ static void test_mock_session(void) {
   CHECK(tsc_live_handle_count() == before);
 }
 
+/* Full physics control round trip on a mock vehicle (ABI 3.0): every kind of
+ * field (float, uint8 code, bool, vector, curve, gear ratios, wheels and their
+ * slip graphs) is read, modified, applied and read back. */
+static void check_physics_control(tsc_vehicle_t *vehicle) {
+  uint64_t before = tsc_live_handle_count();
+  tsc_vehicle_physics_control_t pc;
+  tsc_physics_control_t *snap = NULL;
+  CHECK(tsc_vehicle_get_physics_control(vehicle, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_physics_control_view(NULL, &pc) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_physics_control_view((const tsc_physics_control_t *)vehicle, &pc) ==
+        TSC_INVALID_ARGUMENT); /* wrong handle kind */
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_vehicle_get_physics_control(vehicle, &snap));
+  CHECK(tsc_handle_kind(H(snap)) == TSC_KIND_PHYSICS_CONTROL);
+  CHECK(tsc_live_handle_count() == before + 1);
+  CHECK(tsc_physics_control_view(snap, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_physics_control_view(snap, &pc));
+  /* LibCarla's defaults, the mock's mass and wheels. */
+  CHECK(pc.mass == 1500.0 && pc.max_torque == 300.0 && pc.idle_rpm == 1.0);
+  CHECK(pc.use_automatic_gears == 1 && pc.use_sweep_wheel_collision == 0);
+  CHECK(pc.differential_type == 0 && pc.inertia_tensor_scale.z == 1.0);
+  CHECK(pc.torque_curve_size == 2 && pc.torque_curve[1].x == 5000.0 &&
+        pc.torque_curve[1].y == 500.0);
+  CHECK(pc.steering_curve_size == 2 && pc.steering_curve[1].y == 0.5);
+  CHECK(pc.forward_gear_ratios_size == 8 && pc.forward_gear_ratios[3] == 1.0);
+  CHECK(pc.reverse_gear_ratios_size == 2);
+  CHECK(pc.wheel_count == 4);
+  CHECK(pc.wheels[3].wheel_index == 3 && pc.wheels[3].axle_type == 2);
+  CHECK(pc.wheels[0].suspension_axis.z == -1.0 && pc.wheels[0].affected_by_steering == 1);
+  CHECK(pc.wheels[0].lateral_slip_graph_size == 2 &&
+        pc.wheels[0].lateral_slip_graph[1].x == 5.0);
+
+  /* Modify a copy in caller memory; the snapshot's arrays are read-only. */
+  tsc_vector2d_t torque[3] = {{0.0, 400.0}, {3000.0, 600.0}, {6000.0, 350.0}};
+  double forward[3] = {3.5, 2.0, 1.25};
+  tsc_vector2d_t slip[1] = {{2.0, 0.75}};
+  tsc_wheel_physics_control_t wheels[4];
+  memcpy(wheels, pc.wheels, sizeof wheels);
+  wheels[1].cornering_stiffness = 1250.0;
+  wheels[1].abs_enabled = 1;
+  wheels[1].sweep_type = 2;
+  wheels[1].suspension_smoothing = 3;
+  wheels[1].offset.y = 90.5;
+  wheels[1].lateral_slip_graph = slip;
+  wheels[1].lateral_slip_graph_size = 1;
+  pc.wheels = wheels;
+  pc.torque_curve = torque;
+  pc.torque_curve_size = 3;
+  pc.forward_gear_ratios = forward;
+  pc.forward_gear_ratios_size = 3;
+  pc.reverse_gear_ratios = NULL; /* empty */
+  pc.reverse_gear_ratios_size = 0;
+  pc.mass = 2000.0;
+  pc.drag_area = 2.5;
+  pc.differential_type = 3;
+  pc.use_sweep_wheel_collision = 1;
+  pc.center_of_mass.z = -0.25;
+  CHECK_OK(tsc_vehicle_apply_physics_control(vehicle, &pc));
+  tsc_handle_release(H(snap));
+  snap = NULL;
+
+  CHECK_OK(tsc_vehicle_get_physics_control(vehicle, &snap));
+  CHECK_OK(tsc_physics_control_view(snap, &pc));
+  CHECK(pc.mass == 2000.0 && pc.drag_area == 2.5 && pc.differential_type == 3);
+  CHECK(pc.use_sweep_wheel_collision == 1 && pc.center_of_mass.z == -0.25);
+  CHECK(pc.max_torque == 300.0 && pc.steering_curve_size == 2); /* untouched */
+  CHECK(pc.torque_curve_size == 3 && pc.torque_curve[2].x == 6000.0);
+  CHECK(pc.forward_gear_ratios_size == 3 && pc.forward_gear_ratios[0] == 3.5);
+  CHECK(pc.reverse_gear_ratios_size == 0);
+  CHECK(pc.wheel_count == 4 && pc.wheels[1].cornering_stiffness == 1250.0);
+  CHECK(pc.wheels[1].abs_enabled == 1 && pc.wheels[1].sweep_type == 2);
+  CHECK(pc.wheels[1].suspension_smoothing == 3 && pc.wheels[1].offset.y == 90.5);
+  CHECK(pc.wheels[1].lateral_slip_graph_size == 1 &&
+        pc.wheels[1].lateral_slip_graph[0].y == 0.75);
+  CHECK(pc.wheels[0].cornering_stiffness == 1000.0 && pc.wheels[0].abs_enabled == 0);
+
+  /* Invalid input is rejected and changes nothing. */
+  memcpy(wheels, pc.wheels, sizeof wheels);
+  pc.wheels = wheels;
+  pc.wheel_count = 3;
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "wheels") != NULL);
+  pc.wheel_count = 4;
+  pc.differential_type = 256;
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "differential_type") != NULL);
+  pc.differential_type = 0;
+  wheels[2].axle_type = -1;
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  wheels[2].axle_type = 0;
+  pc.torque_curve = NULL; /* size is still 3 */
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  pc.torque_curve = torque;
+  pc.mass = 0.0;
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  pc.mass = 2000.0;
+  wheels[0].wheel_radius = 0.0 / 0.0; /* NaN */
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "wheel_radius") != NULL);
+  tsc_handle_release(H(snap));
+  CHECK_OK(tsc_vehicle_get_physics_control(vehicle, &snap));
+  CHECK_OK(tsc_physics_control_view(snap, &pc));
+  CHECK(pc.differential_type == 3 && pc.wheels[0].wheel_radius == 30.0);
+  tsc_handle_release(H(snap));
+  CHECK(tsc_live_handle_count() == before);
+}
+
 static void test_mock_milestone1(void) {
   uint64_t before = tsc_live_handle_count();
   tsc_client_t *client = NULL;
@@ -347,15 +460,7 @@ static void test_mock_milestone1(void) {
   tsc_vehicle_t *vehicle = NULL;
   CHECK_OK(tsc_world_get_actor(world, responses[0].actor_id, &actor));
   CHECK_OK(tsc_actor_as_vehicle(actor, &vehicle));
-  tsc_vehicle_physics_control_t pc;
-  CHECK_OK(tsc_vehicle_get_physics_control(vehicle, &pc));
-  CHECK(pc.wheel_count == 4 && pc.mass == 1500.0);
-  pc.mass = 2000.0;
-  CHECK_OK(tsc_vehicle_apply_physics_control(vehicle, &pc));
-  CHECK_OK(tsc_vehicle_get_physics_control(vehicle, &pc));
-  CHECK(pc.mass == 2000.0);
-  pc.wheel_count = 3;
-  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  check_physics_control(vehicle);
   tsc_bounding_box_t box;
   CHECK_OK(tsc_actor_get_bounding_box(actor, &box));
   CHECK(box.extent.x > 1.0);
