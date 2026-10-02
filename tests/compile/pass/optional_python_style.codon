@@ -1,0 +1,61 @@
+# Python-style handling of lookups that can miss: `is None`, truthiness, and
+# direct use when the value is known to exist (implicitly unwrapped).
+import typesafe_carla as carla
+
+def lane_id_of(w: carla.Waypoint) -> int:
+    return w.lane_id
+
+def lane_id(w):
+    return w.lane_id
+
+def checks(world: carla.World, actor_id: int) -> int:
+    if world.get_actor(actor_id) is None:
+        return -1
+    actor = world.get_actor(actor_id)
+    if actor is not None and actor.is_alive:
+        return actor.id
+    if (found := world.get_actors().find(actor_id)) is not None:
+        return found.id
+    return 0
+
+def truthiness(m: carla.Map, loc: carla.Location) -> int:
+    wp = m.get_waypoint(loc)
+    if wp:
+        left = wp.get_left_lane()
+        if not left:
+            return wp.lane_id
+        return lane_id(left)
+    return lane_id_of(wp)
+
+def direct(world: carla.World, bp: carla.ActorBlueprint, spot: carla.Transform) -> float:
+    a = world.try_spawn_actor(bp, spot)
+    a.destroy()
+    m = world.get_map()
+    loc = spot.location
+    ahead = m.get_waypoint(loc).next(2.0)
+    s = m.get_waypoint(loc).get_right_lane().s
+    j = m.get_waypoint(loc).get_junction()
+    v = world.get_actor(1).as_vehicle()
+    light = v.get_traffic_light()
+    state = light.get_state() if light is not None else carla.TrafficLightState.Unknown
+    snap = world.get_snapshot().find(v.id)
+    nav = world.get_random_location_from_navigation()
+    child = world.spawn_actor(bp, carla.Transform(nav), attach_to=world.get_actor(1))
+    child.destroy()
+    return s + ahead[0].s + float(state) + (0.0 if j is None else 1.0) + snap.get_velocity().x
+
+def unwrapped(m: carla.Map, loc: carla.Location) -> int:
+    # A method returning Optional, called on an Optional receiver, needs an
+    # explicit unwrap() where a non-Optional type is annotated (a Codon
+    # limitation; see README). Unannotated code, as above, needs none.
+    wp = m.get_waypoint(loc)
+    return lane_id_of(unwrap(wp.get_right_lane())) + lane_id_of(unwrap(wp).get_right_lane())
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+_bp = _world.get_blueprint_library().find("vehicle.audi.tt")
+_loc = carla.Location(12.0, 0.4, 0.0)
+print(checks(_world, 1))
+print(truthiness(_world.get_map(), _loc))
+print(direct(_world, _bp, carla.Transform(_loc)))
+print(unwrapped(_world.get_map(), _loc))

@@ -58,10 +58,33 @@ junction_wp = [w for w in m.generate_waypoints(10.0) if w.is_junction][0]
 jn = junction_wp.get_junction()
 out("junction", f"{jn.id},{len(jn.get_waypoints(carla.LaneType.Driving))}")
 
+# Lookups that can miss return None (issue #9).
+offroad = m.get_waypoint(carla.Location(10000.0, 10000.0, 0.0), project_to_road=False)
+out("none_lookups", f"{int(world.get_actor(999999) is None)},"
+    f"{int(world.get_snapshot().find(999999) is None)},{int(world.get_actors().find(999999) is None)},"
+    f"{int(offroad is None)},{int(wp.get_junction() is None)},{int(jn is None)}")
+
+
+def lane_walk(w, left):
+    ids = []
+    for _ in range(20):
+        w = w.get_left_lane() if left else w.get_right_lane()
+        if w is None:
+            break
+        ids.append(str(w.lane_id))
+    return "/".join(ids)
+
+
+out("lane_walk", lane_walk(wp, True) + ";" + lane_walk(wp, False))
+
 spawn = carla.Transform(carla.Location(-64.644844, 24.471010, 0.6), carla.Rotation(0.0, 0.159198, 0.0))
 original = world.get_settings()
 vehicle = world.spawn_actor(bp, spawn)
 try:
+    blocked = world.try_spawn_actor(bp, spawn)
+    out("try_spawn_occupied", int(blocked is None))
+    if blocked is not None:
+        blocked.destroy()
     settings = world.get_settings()
     settings.synchronous_mode = True
     settings.fixed_delta_seconds = 0.05

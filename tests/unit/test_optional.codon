@@ -1,0 +1,131 @@
+# Lookups that can miss return None in the same cases as the CARLA Python API,
+# and Python-style code that handles them runs unchanged on the mock backend.
+import typesafe_carla as carla
+
+def lane_id_of(w: carla.Waypoint) -> int:
+    # A typed parameter: an Optional[Waypoint] variable is unwrapped implicitly.
+    return w.lane_id
+
+def raises_unwrap(f) -> str:
+    # Using a None result raises ValueError (Python raises AttributeError on
+    # NoneType); returns the message.
+    try:
+        f()
+    except ValueError as e:
+        return e.message
+    return ""
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+m = world.get_map()
+lib = world.get_blueprint_library()
+existing = world.get_actors()[0].id
+
+# World.get_actor: None for unknown ids.
+assert world.get_actor(123456) is None
+assert not world.get_actor(123456)
+assert world.get_actor(existing) is not None
+assert world.get_actor(existing)
+assert world.get_actor(existing).id == existing  # used directly, no check
+if world.get_actor(123456) is None:
+    pass
+else:
+    assert False
+actor = world.get_actor(existing)
+if actor is not None and actor.is_alive:
+    assert actor.id == existing
+if (found := world.get_actor(existing)) is not None:
+    assert found.id == existing
+assert str(world.get_actor(123456)) == "None"
+msg = raises_unwrap(lambda: world.get_actor(123456).destroy())
+assert msg == "optional unpack failed: expected Actor, got None", msg
+
+# ActorList.find and WorldSnapshot.find.
+assert world.get_actors().find(123456) is None
+assert world.get_actors().find(existing).id == existing
+snap = world.get_snapshot()
+assert snap.find(123456) is None and not snap.find(123456)
+assert snap.find(existing).id == existing
+
+# World.try_spawn_actor: None at an occupied spot; spawn_actor raises instead.
+bp = lib.find("vehicle.audi.tt")
+spot = carla.Transform(carla.Location(30.0, 40.0, 0.5))
+first = world.try_spawn_actor(bp, spot)
+assert first
+second = world.try_spawn_actor(bp, spot)
+assert second is None and not second
+msg = raises_unwrap(lambda: world.try_spawn_actor(bp, spot).destroy())
+assert msg == "optional unpack failed: expected Actor, got None", msg
+raised = False
+try:
+    world.spawn_actor(bp, spot)
+except carla.CarlaError:
+    raised = True
+assert raised
+assert first.destroy()  # no check before use, as in Python
+
+# Map.get_waypoint: None off the road without projection, or for a lane type
+# with no match.
+loc = carla.Location(12.0, 0.4, 5.0)
+wp = m.get_waypoint(loc)
+if wp:
+    assert wp.lane_id == -1
+else:
+    assert False
+assert m.get_waypoint(carla.Location(12.0, 30.0, 0.0), project_to_road=False) is None
+assert not m.get_waypoint(carla.Location(12.0, 0.0, 0.0), lane_type=carla.LaneType.Sidewalk)
+# Chained calls without a check.
+assert len(m.get_waypoint(loc).next(2.0)) == 1
+assert m.get_waypoint(loc).next(2.0)[0].s == 14.0
+assert m.get_waypoint(loc).get_right_lane().lane_id == -2
+assert m.get_waypoint(loc).transform.location == carla.Location(12.0, 0.0, 0.0)
+assert lane_id_of(wp) == -1
+assert lane_id_of(unwrap(wp.get_right_lane())) == -2  # see README: Codon limitations
+
+# Waypoint.get_left_lane / get_right_lane: None past the outermost lane.
+assert wp.get_left_lane() is None and not wp.get_left_lane()
+right = wp.get_right_lane()
+assert right is not None and right.lane_id == -2
+lanes = [wp.lane_id]
+cur = wp
+while True:
+    nxt = cur.get_right_lane()
+    if nxt is None:
+        break
+    cur = nxt
+    lanes.append(cur.lane_id)
+assert lanes == [-1, -2], lanes
+msg = raises_unwrap(lambda: wp.get_left_lane().lane_id)
+assert msg == "optional unpack failed: expected Waypoint, got None", msg
+
+# Waypoint.get_junction: None outside junctions.
+assert wp.get_junction() is None and not wp.get_junction()
+
+# Vehicle.get_traffic_light: None away from lights.
+vehicle = world.spawn_actor(bp, carla.Transform(carla.Location(-50.0, -50.0, 0.5))).as_vehicle()
+assert vehicle.get_traffic_light() is None
+msg = raises_unwrap(lambda: vehicle.get_traffic_light().get_state())
+assert msg == "optional unpack failed: expected TrafficLight, got None", msg
+vehicle.destroy()
+
+# A destroyed actor is gone from get_actor, as in Python.
+gone = vehicle.id
+assert world.get_actor(gone) is None
+
+# get_random_location_from_navigation: a Location when the map has a navmesh.
+nav = world.get_random_location_from_navigation()
+assert nav is not None and nav
+
+# Sensor.poll (no Python counterpart; Python uses callbacks): None when empty.
+camera = world.spawn_actor(lib.find("sensor.camera.rgb"), carla.Transform()).as_sensor()
+camera.listen()
+assert camera.poll() is None and not camera.poll()
+camera.stop()
+camera.destroy()
+
+# attach_to accepts an Optional actor.
+parent = world.get_actor(existing)
+child = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform(), attach_to=parent)
+child.destroy()
+
+print("OK")

@@ -82,6 +82,19 @@ error, and no executable is produced:
 error: 'Transform' does not match expected type 'VehicleControl'
 ```
 
+Lookups that can miss return `None` in the same cases as the Python API, and
+the usual Python idioms work:
+
+```python
+actor = world.get_actor(actor_id)
+if actor is None:
+    print("no such actor")
+left = world.get_map().get_waypoint(location).get_left_lane()
+if left:
+    print(left.lane_id)
+world.try_spawn_actor(bp, transform).destroy()   # raises ValueError if it is None
+```
+
 The README covers the API surface and the Codon-specific caveats: exceptions
-do not form a hierarchy, `Optional` is unwrapped implicitly, and only called
-functions are type-checked.
+do not form a hierarchy, `Optional` is unwrapped implicitly (with one gap where
+an explicit `unwrap()` is needed), and only called functions are type-checked.

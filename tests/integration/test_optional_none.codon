@@ -1,0 +1,81 @@
+# Issue #9 against a real CARLA server: lookups that can miss return None in
+# the same cases as the official Python API, and Python-style code handles them.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+def unwrap_error(f) -> str:
+    try:
+        f()
+    except ValueError as e:
+        return e.message
+    return ""
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+m = world.get_map()
+lib = world.get_blueprint_library()
+
+# Unknown ids.
+assert world.get_actor(999999) is None and not world.get_actor(999999)
+assert world.get_actors().find(999999) is None
+assert world.get_snapshot().find(999999) is None
+msg = unwrap_error(lambda: world.get_actor(999999).destroy())
+assert msg == "optional unpack failed: expected Actor, got None", msg
+
+# Waypoints: off the road without projection, and past the outermost lanes.
+assert m.get_waypoint(carla.Location(10000.0, 10000.0, 0.0), project_to_road=False) is None
+points = m.get_spawn_points()
+wp = m.get_waypoint(points[0].location)
+assert wp
+assert len(m.get_waypoint(points[0].location).next(2.0)) >= 1  # chained, no check
+for left in (True, False):
+    w = wp
+    steps = 0
+    while True:
+        w = w.get_left_lane() if left else w.get_right_lane()
+        if w is None:
+            break
+        steps += 1
+        assert steps < 20, "lane walk did not end"
+    print("left" if left else "right", "lanes", steps)
+non_junction = [x for x in m.generate_waypoints(10.0) if not x.is_junction][0]
+assert non_junction.get_junction() is None
+junction = [x for x in m.generate_waypoints(10.0) if x.is_junction][0]
+assert junction.get_junction() is not None
+
+# try_spawn_actor: None at an occupied spot; spawn_actor raises there.
+bp = lib.find("vehicle.lincoln.mkz")
+vehicle = world.try_spawn_actor(bp, points[0])
+i = 1
+while vehicle is None and i < len(points):
+    vehicle = world.try_spawn_actor(bp, points[i])
+    i += 1
+assert vehicle is not None
+try:
+    spot = vehicle.get_transform()
+    blocked = world.try_spawn_actor(bp, spot)
+    if blocked is not None:
+        blocked.destroy()
+        assert False, "try_spawn_actor succeeded at an occupied spot"
+    raised = False
+    try:
+        world.spawn_actor(bp, spot)
+    except carla.CarlaError as e:
+        raised = True
+        print("spawn_actor at occupied spot:", e.message)
+    assert raised
+    msg = unwrap_error(lambda: world.try_spawn_actor(bp, spot).destroy())
+    assert msg == "optional unpack failed: expected Actor, got None", msg
+    light = vehicle.as_vehicle().get_traffic_light()
+    print("traffic light", "None" if light is None else str(light.id))
+    found = world.get_actor(vehicle.id)  # used directly when known to exist
+    assert found.id == vehicle.id
+finally:
+    vehicle.destroy()
+
+print("OK")
