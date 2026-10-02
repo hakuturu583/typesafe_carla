@@ -158,6 +158,13 @@ else()
                     "configuring Boost may fail on BOOST_ENABLE_PYTHON")
   endif()
 
+  # CMake 4 removed compatibility with cmake_minimum_required < 3.5, which some
+  # of CARLA's dependencies (e.g. libpng in 0.10.0) still declare. ue5-dev sets
+  # this itself; older refs need it from us.
+  if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0" AND NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM)
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+  endif()
+
   add_subdirectory("${TSC_CARLA_DIR}" "${CMAKE_BINARY_DIR}/carla" EXCLUDE_FROM_ALL SYSTEM)
   if(NOT TARGET carla-client)
     message(FATAL_ERROR "CARLA at ${TSC_CARLA_DIR} did not define the carla-client target")
