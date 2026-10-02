@@ -107,7 +107,109 @@ assert rejected(bad, "mass")
 bad = vehicle.get_physics_control()
 bad.torque_curve[0] = carla.Vector2D(float("nan"), 1.0)
 assert rejected(bad, "torque_curve")
+# Codon ints are 64-bit: values are range-checked before narrowing to int32,
+# so 2**32 + 1 is not silently applied as 1.
+big = 2**32 + 1
+bad = vehicle.get_physics_control()
+bad.differential_type = big
+assert rejected(bad, "differential_type")
+bad = vehicle.get_physics_control()
+bad.wheels[0].sweep_shape = big
+assert rejected(bad, "sweep_shape")
+bad = vehicle.get_physics_control()
+bad.wheels[0].wheel_index = big
+assert rejected(bad, "wheel_index")
+bad = vehicle.get_physics_control()
+bad.wheels[2].suspension_smoothing = -big
+assert rejected(bad, "suspension_smoothing")
+# Finite doubles beyond float32 range would become inf in LibCarla.
+bad = vehicle.get_physics_control()
+bad.mass = 1e39
+assert rejected(bad, "mass")
+bad = vehicle.get_physics_control()
+bad.wheels[0].wheel_radius = -1e300
+assert rejected(bad, "wheel_radius")
+bad = vehicle.get_physics_control()
+bad.forward_gear_ratios[0] = 1e39
+assert rejected(bad, "forward_gear_ratios")
 assert vehicle.get_physics_control() == pc
+
+# One distinct value per field, so a swapped pair of same-typed fields in the
+# C layout or the shim would not round-trip.
+u = vehicle.get_physics_control()
+u.max_torque = 301.0
+u.max_rpm = 5002.0
+u.idle_rpm = 3.0
+u.brake_effect = 4.0
+u.rev_up_moi = 5.0
+u.rev_down_rate = 606.0
+u.front_rear_split = 0.25
+u.gear_change_time = 0.75
+u.final_ratio = 9.0
+u.change_up_rpm = 4510.0
+u.change_down_rpm = 2011.0
+u.transmission_efficiency = 0.875
+u.mass = 1513.0
+u.drag_coefficient = 0.375
+u.chassis_width = 181.5
+u.chassis_height = 142.5
+u.downforce_coefficient = 0.625
+u.drag_area = 18.0
+u.sleep_threshold = 19.0
+u.sleep_slope_limit = 0.5
+u.differential_type = 21
+u.use_automatic_gears = False
+u.use_sweep_wheel_collision = True
+u.center_of_mass = carla.Location(22.0, 23.0, 24.0)
+u.inertia_tensor_scale = carla.Vector3D(25.0, 26.0, 27.0)
+u.torque_curve = [carla.Vector2D(28.0, 29.0)]
+u.steering_curve = [carla.Vector2D(30.0, 31.0), carla.Vector2D(32.0, 33.0)]
+u.forward_gear_ratios = [34.0, 35.0, 36.0]
+u.reverse_gear_ratios = [37.0]
+for i in range(len(u.wheels)):
+    b = 100.0 * float(i + 1)
+    k = 10 * (i + 1)
+    w = u.wheels[i]
+    w.axle_type = k + 1
+    w.external_torque_combine_method = k + 2
+    w.sweep_shape = k + 3
+    w.sweep_type = k + 4
+    w.suspension_smoothing = k + 5
+    w.wheel_index = k + 6
+    w.affected_by_steering = i % 2 == 0
+    w.affected_by_brake = i % 2 == 1
+    w.affected_by_handbrake = i % 2 == 0
+    w.affected_by_engine = i % 2 == 1
+    w.abs_enabled = i % 2 == 0
+    w.traction_control_enabled = i % 2 == 1
+    w.offset = carla.Vector3D(b + 1.0, b + 2.0, b + 3.0)
+    w.suspension_axis = carla.Vector3D(b + 4.0, b + 5.0, b + 6.0)
+    w.suspension_force_offset = carla.Vector3D(b + 7.0, b + 8.0, b + 9.0)
+    w.location = carla.Location(b + 10.0, b + 11.0, b + 12.0)
+    w.old_location = carla.Location(b + 13.0, b + 14.0, b + 15.0)
+    w.velocity = carla.Vector3D(b + 16.0, b + 17.0, b + 18.0)
+    w.wheel_radius = b + 19.0
+    w.wheel_width = b + 20.0
+    w.wheel_mass = b + 21.0
+    w.cornering_stiffness = b + 22.0
+    w.friction_force_multiplier = b + 23.0
+    w.side_slip_modifier = b + 24.0
+    w.slip_threshold = b + 25.0
+    w.skid_threshold = b + 26.0
+    w.max_steer_angle = b + 27.0
+    w.max_wheelspin_rotation = b + 28.0
+    w.suspension_max_raise = b + 29.0
+    w.suspension_max_drop = b + 30.0
+    w.suspension_damping_ratio = b + 31.0
+    w.wheel_load_ratio = b + 32.0
+    w.spring_rate = b + 33.0
+    w.spring_preload = b + 34.0
+    w.rollbar_scaling = b + 35.0
+    w.max_brake_torque = b + 36.0
+    w.max_hand_brake_torque = b + 37.0
+    w.lateral_slip_graph = [carla.Vector2D(b + 38.0, b + 39.0)]
+vehicle.apply_physics_control(u)
+assert vehicle.get_physics_control() == u
 
 vehicle.destroy()
 print("OK")

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <atomic>
 #include <initializer_list>
+#include <limits>
 #include <cmath>
 #include <cstring>
 #include <optional>
@@ -389,18 +390,23 @@ void copy_out(const Vec &values, Out *out, size_t capacity, size_t *out_count) {
   for (size_t i = 0; i < values.size() && i < capacity; ++i) out[i] = from_carla(values[i]);
 }
 
-// LibCarla's float parameters: `name` must be finite (and non-negative; NaN
-// fails too).
-inline float check_finite(double v, const char *name) {
-  if (!std::isfinite(v)) fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite");
+// LibCarla's float parameters. A finite double above FLT_MAX would become
+// +-inf in the float cast, so the float range is checked too (NaN fails).
+inline float check_float(double v, const char *name) {
+  if (!(std::fabs(v) <= static_cast<double>(std::numeric_limits<float>::max()))) {
+    fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite and within float range");
+  }
   return static_cast<float>(v);
 }
 
+// Kept for existing callers; same check as check_float.
+inline float check_finite(double v, const char *name) { return check_float(v, name); }
+
 inline float check_non_negative(double v, const char *name) {
-  if (!(v >= 0.0) || !std::isfinite(v)) {
+  if (!(v >= 0.0)) {
     fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite and non-negative");
   }
-  return static_cast<float>(v);
+  return check_float(v, name);
 }
 
 inline carla::rpc::TrafficLightState to_light_state(int32_t state) {

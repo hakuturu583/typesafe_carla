@@ -3,7 +3,7 @@
 from ._ffi import (Handle, CVehicleControl, CWalkerControl, CVector2D, CVehiclePhysicsControl,
                    CWheelPhysicsControl, tsc_vehicle_get_physics_control,
                    tsc_physics_control_view, tsc_vehicle_apply_physics_control)
-from .errors import _check
+from .errors import _check, _u8, _i32
 from .geometry import Location, Vector2D, Vector3D
 
 class VehicleControl:
@@ -226,9 +226,9 @@ class WheelPhysicsControl:
             self.skid_threshold, self.max_steer_angle, self.max_wheelspin_rotation,
             self.suspension_max_raise, self.suspension_max_drop, self.suspension_damping_ratio,
             self.wheel_load_ratio, self.spring_rate, self.spring_preload, self.rollbar_scaling,
-            self.max_brake_torque, self.max_hand_brake_torque, i32(self.axle_type),
-            i32(self.external_torque_combine_method), i32(self.sweep_shape), i32(self.sweep_type),
-            i32(self.suspension_smoothing), i32(self.wheel_index),
+            self.max_brake_torque, self.max_hand_brake_torque, _u8(self.axle_type, "axle_type"),
+            _u8(self.external_torque_combine_method, "external_torque_combine_method"), _u8(self.sweep_shape, "sweep_shape"), _u8(self.sweep_type, "sweep_type"),
+            _i32(self.suspension_smoothing, "suspension_smoothing"), _i32(self.wheel_index, "wheel_index"),
             i32(int(self.affected_by_steering)), i32(int(self.affected_by_brake)),
             i32(int(self.affected_by_handbrake)), i32(int(self.affected_by_engine)),
             i32(int(self.abs_enabled)), i32(int(self.traction_control_enabled)))
@@ -424,7 +424,7 @@ class VehiclePhysicsControl:
             self.change_down_rpm, self.transmission_efficiency, self.mass, self.drag_coefficient,
             self.chassis_width, self.chassis_height, self.downforce_coefficient, self.drag_area,
             self.sleep_threshold, self.sleep_slope_limit, self.center_of_mass._to_c(),
-            self.inertia_tensor_scale._to_c(), i32(self.differential_type),
+            self.inertia_tensor_scale._to_c(), _u8(self.differential_type, "differential_type"),
             i32(int(self.use_automatic_gears)), i32(int(self.use_sweep_wheel_collision)), i32(0))
 
     @staticmethod

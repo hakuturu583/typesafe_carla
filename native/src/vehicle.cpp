@@ -37,9 +37,9 @@ namespace {
 // Element conversions for the variable-length arrays, both directions.
 double to_c(float v) { return v; }
 tsc_vector2d_t to_c(const carla::geom::Vector2D &p) { return from_carla(p); }
-float check_element(double v, const char *name) { return check_finite(v, name); }
+float check_element(double v, const char *name) { return check_float(v, name); }
 carla::geom::Vector2D check_element(const tsc_vector2d_t &p, const char *name) {
-  return carla::geom::Vector2D(check_finite(p.x, name), check_finite(p.y, name));
+  return carla::geom::Vector2D(check_float(p.x, name), check_float(p.y, name));
 }
 
 template <typename T>
@@ -70,15 +70,15 @@ uint8_t check_u8(int32_t v, const char *name) {
 
 // geom::Location converts from geom::Vector3D, so this serves both.
 carla::geom::Vector3D check_vector(const tsc_vector3d_t &v, const char *name) {
-  return carla::geom::Vector3D(check_finite(v.x, name), check_finite(v.y, name),
-                               check_finite(v.z, name));
+  return carla::geom::Vector3D(check_float(v.x, name), check_float(v.y, name),
+                               check_float(v.z, name));
 }
 
 // Plain fields (bools become 0/1), LibCarla -> C.
 #define TSC_READ(f) dst.f = src.f;
 #define TSC_READ_VECTOR(f) dst.f = from_carla(src.f);
 // C -> LibCarla, validated.
-#define TSC_WRITE_FLOAT(f) dst.f = check_finite(src.f, #f);
+#define TSC_WRITE_FLOAT(f) dst.f = check_float(src.f, #f);
 #define TSC_WRITE_BOOL(f) dst.f = src.f != 0;
 #define TSC_WRITE_U8(f) dst.f = check_u8(src.f, #f);
 #define TSC_WRITE_INT(f) dst.f = src.f;

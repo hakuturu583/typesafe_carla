@@ -366,6 +366,28 @@ static void check_physics_control(tsc_vehicle_t *vehicle) {
   wheels[0].wheel_radius = 0.0 / 0.0; /* NaN */
   CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
   CHECK(strstr(tsc_last_error_message(), "wheel_radius") != NULL);
+  /* Finite doubles beyond float range would become +-inf in LibCarla's float. */
+  wheels[0].wheel_radius = -1e300;
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "wheel_radius") != NULL);
+  wheels[0].wheel_radius = 30.0;
+  pc.mass = 1e39;
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "mass") != NULL);
+  pc.mass = 2000.0;
+  torque[1].y = 1e39;
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "torque_curve") != NULL);
+  torque[1].y = 600.0;
+  pc.forward_gear_ratios = forward;
+  forward[0] = -1e39;
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "forward_gear_ratios") != NULL);
+  forward[0] = 3.5;
+  pc.center_of_mass.y = 1e39;
+  CHECK(tsc_vehicle_apply_physics_control(vehicle, &pc) == TSC_INVALID_ARGUMENT);
+  CHECK(strstr(tsc_last_error_message(), "center_of_mass") != NULL);
+  pc.center_of_mass.y = 0.0;
   tsc_handle_release(H(snap));
   CHECK_OK(tsc_vehicle_get_physics_control(vehicle, &snap));
   CHECK_OK(tsc_physics_control_view(snap, &pc));

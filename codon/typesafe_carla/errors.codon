@@ -61,6 +61,18 @@ def _check_port(name: str, port: int):
     if port < 0 or port > 65535:
         raise CarlaError(f"{name} {port} is not a valid TCP port", TSC_INVALID_ARGUMENT)
 
+def _u8(value: int, name: str) -> i32:
+    """Narrows a uint8_t code for the C ABI; CarlaError (TSC_INVALID_ARGUMENT) outside [0, 255]."""
+    if value < 0 or value > 255:
+        raise CarlaError(f"{name} must be in [0, 255], got {value}", TSC_INVALID_ARGUMENT)
+    return i32(value)
+
+def _i32(value: int, name: str) -> i32:
+    """Narrows to int32_t for the C ABI; CarlaError (TSC_INVALID_ARGUMENT) when it does not fit."""
+    if value < -2147483648 or value > 2147483647:
+        raise CarlaError(f"{name} {value} does not fit in int32", TSC_INVALID_ARGUMENT)
+    return i32(value)
+
 def _check_light_state(light_state: int):
     """Raises CarlaError (TSC_INVALID_ARGUMENT) unless light_state fits VehicleLightState's u32."""
     if light_state < 0 or light_state > 0xFFFFFFFF:
