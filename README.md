@@ -219,6 +219,66 @@ tests/unit/                Codon runtime tests against the mock backend
 examples/                  example programs
 ```
 
+## Writing new scenarios: use the statically checked style
+
+typesafe_carla has two ways to write the same thing. The **compatibility**
+style exists so that code written for the CARLA Python API ports with few
+changes. The **statically checked** style is what the type checker can verify
+at compile time. **For new scenarios, write the statically checked style, and
+enforce it with strict mode.**
+
+| | Compatibility style (ported code) | Statically checked style (recommended) |
+|---|---|---|
+| Vehicle methods on an actor from `get_actor` | `world.get_actor(i).apply_control(c)`: the actor kind is checked at run time (`ActorTypeError`) | `world.get_actor(i).as_vehicle().apply_control(c)`, or keep the `Vehicle` from `spawn_actor(...).as_vehicle()` |
+| A position where a vector is expected | `actor.set_target_velocity(target_location)`: compiles, and a position silently becomes a velocity | `actor.set_target_velocity(target_location.as_vector())`, or compute a real `Vector3D` |
+| A vector where a position is expected | `carla.Transform(loc + offset, rot)` | `carla.Transform(carla.Location(loc + offset), rot)` |
+
+Use the statically checked style even where the compatibility style happens to work. The
+compatibility style moves mistakes that would be compile errors (the wrong
+actor kind, a position passed as a velocity) to run time, or makes them
+silent.
+
+**Warnings.** Every compatibility path a program uses is reported twice. At
+compile time, `typesafe-codon` lists every one the program contains before it
+runs:
+
+```
+typesafe-codon: compile-time warning: Actor.apply_control(VehicleControl) without as_vehicle(): Python-API compatibility path, not statically checked (use --strict to make this an error)
+```
+
+At run time, each one is reported once, when it is first taken:
+
+```
+typesafe_carla: warning: Actor.apply_control(VehicleControl) without as_vehicle() is a Python-API compatibility path that is not statically checked; call as_vehicle() first (...)
+```
+
+`TYPESAFE_CARLA_COMPAT_WARNINGS=0` silences both, e.g. while porting a large
+script. A program that uses only the statically checked style gets no
+warnings at all.
+
+**Strict mode** turns every compatibility path into a compile error; the last line of the
+trace is the line using it:
+
+```sh
+uv run typesafe-codon --strict run main.py           # or: build
+TYPESAFE_CARLA_STRICT=1 uv run typesafe-codon run main.py
+```
+
+```
+_strict.codon:26 (9-108): error: strict mode: call as_vehicle() first (Actor.apply_control is a Python-API compatibility shortcut)
+├─ _actor_compat.codon:46 (9-24): error: during the realization of compat_shortcut(...)
+╰─ main.py:7 (1-52): error: during the realization of apply_control(self: Actor, control: VehicleControl, S: Actor)
+```
+
+Enable it in CI for new projects (`TYPESAFE_CARLA_STRICT=1`), so code stays in
+the statically checked style. Strict mode only adds errors: a program that
+compiles in strict mode behaves the same without it. Some things are checked
+in every mode, strict or not:
+- a typed actor never gets another kind's methods (`vehicle.listen()` does
+  not compile);
+- argument types are always checked (`apply_control(carla.Transform())` does
+  not compile).
+
 ## Differences from the CARLA Python API
 
 Most code ports by changing `import carla` to `import typesafe_carla as carla`.
