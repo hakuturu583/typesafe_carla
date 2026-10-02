@@ -41,10 +41,12 @@ assert outside.get_junction() is None
 original_weather = world.get_weather()
 print("weather enabled:", world.is_weather_enabled(), original_weather)
 if world.is_weather_enabled():
-    world.set_weather(carla.WeatherParameters.preset("HardRainNoon"))
-    world.wait_for_tick(10.0)
-    assert world.get_weather().precipitation > 90.0
-    world.set_weather(original_weather)
+    try:
+        world.set_weather(carla.WeatherParameters.preset("HardRainNoon"))
+        world.wait_for_tick(10.0)
+        assert world.get_weather().precipitation > 90.0
+    finally:
+        world.set_weather(original_weather)
 raised = False
 try:
     carla.WeatherParameters.preset("NoSuchWeather")
@@ -71,14 +73,16 @@ finally:
     light.freeze(False)
     light.reset_group()
 
-# --- Recorder ---------------------------------------------------------------------------------
-recording = client.start_recorder("tsc_m4_test.log")
-print("recorder:", recording)
-assert "tsc_m4_test.log" in recording
-
 spawned = List[int]()
 original_settings = world.get_settings()
+tm = client.get_trafficmanager(tm_port)
+
+# --- Recorder ---------------------------------------------------------------------------------
+recording = client.start_recorder("tsc_m4_test.log")
 try:
+    print("recorder:", recording)
+    assert "tsc_m4_test.log" in recording
+
     # --- Walkers with AI controllers (asynchronous: the navigation runs on its own) ----------------
     walker_bp = lib.filter("walker.pedestrian.*")[0]
     if walker_bp.has_attribute("is_invincible"):
@@ -111,18 +115,23 @@ try:
     print("walker walked", walked, "m")
     assert walked > 1.0
     ai.stop()
+    # The server drops the walker from crowd navigation asynchronously.
+    for _ in range(5):
+        world.wait_for_tick(10.0)
 
     # Direct walker control and the batch variant.
     walker.apply_control(carla.WalkerControl(carla.Vector3D(1.0, 0.0, 0.0), 1.0))
-    world.wait_for_tick(10.0)
-    assert abs(walker.get_control().speed - 1.0) < 1e-3
+    for _ in range(20):
+        world.wait_for_tick(10.0)
+        if abs(walker.get_control().speed - 1.0) < 1e-3:
+            break
+    assert abs(walker.get_control().speed - 1.0) < 1e-3, f"walker speed {walker.get_control().speed}"
 
     # --- Traffic Manager in synchronous mode ------------------------------------------------------------
     settings = world.get_settings()
     settings.synchronous_mode = True
     settings.fixed_delta_seconds = 0.05
     world.apply_settings(settings)
-    tm = client.get_trafficmanager(tm_port)
     assert tm.get_port() == tm_port
     tm.set_synchronous_mode(True)
     tm.set_random_device_seed(7)
@@ -206,9 +215,8 @@ try:
     world.debug.draw_arrow(here, here + carla.Location(3.0, 0.0, 0.0), life_time=1.0)
     world.debug.draw_box(car.bounding_box, car.get_transform().rotation, life_time=1.0)
     world.debug.draw_string(here, "typesafe_carla", True, carla.Color(255, 255, 0), 1.0)
-
-    tm.set_synchronous_mode(False)
 finally:
+    tm.set_synchronous_mode(False)
     world.apply_settings(original_settings)
     client.stop_recorder()
     client.apply_batch_sync([carla.command.DestroyActor(i) for i in reversed(spawned)])

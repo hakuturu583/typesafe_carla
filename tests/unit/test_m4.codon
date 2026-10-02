@@ -44,6 +44,21 @@ light.freeze(True)
 for _ in range(100):
     world.tick()
 assert light.get_state() == carla.TrafficLightState.Red and light.is_frozen()
+# Out-of-range states are rejected before narrowing to the C ABI's int32.
+for bad in (-1, 5, 1 << 32):
+    raised = False
+    try:
+        light.set_state(bad)
+    except carla.CarlaError:
+        raised = True
+    assert raised
+    raised = False
+    try:
+        carla.command.SetTrafficLightState(light.id, bad)
+    except carla.CarlaError:
+        raised = True
+    assert raised
+assert light.get_state() == carla.TrafficLightState.Red
 
 # A vehicle within 15 m of the light sees it.
 assert not vehicle.is_at_traffic_light() and vehicle.get_traffic_light() is None

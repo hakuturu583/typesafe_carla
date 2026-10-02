@@ -8,11 +8,13 @@ from .geometry import Location, Rotation, BoundingBox
 from .blueprint import Color
 from .world import World
 
-def _color(c: Color) -> CColor:
+def _color(c: Color) -> Ptr[CColor]:
     for v in (c.r, c.g, c.b, c.a):
         if v < 0 or v > 255:
             raise CarlaError(f"color component {v} is out of [0, 255]", TSC_INVALID_ARGUMENT)
-    return CColor(u8(c.r), u8(c.g), u8(c.b), u8(c.a))
+    p = Ptr[CColor](1)
+    p[0] = CColor(u8(c.r), u8(c.g), u8(c.b), u8(c.a))
+    return p
 
 def _loc(l: Location) -> Ptr[CVector3D]:
     p = Ptr[CVector3D](1)

@@ -443,11 +443,11 @@ from C import LIB.tsc_world_get_weather(cobj, Ptr[CWeather]) -> i32
 from C import LIB.tsc_world_set_weather(cobj, Ptr[CWeather]) -> i32
 from C import LIB.tsc_world_is_weather_enabled(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_weather_preset(cobj, int, Ptr[CWeather]) -> i32
-from C import LIB.tsc_debug_draw_point(cobj, Ptr[CVector3D], float, CColor, float) -> i32
-from C import LIB.tsc_debug_draw_line(cobj, Ptr[CVector3D], Ptr[CVector3D], float, CColor, float) -> i32
-from C import LIB.tsc_debug_draw_arrow(cobj, Ptr[CVector3D], Ptr[CVector3D], float, float, CColor, float) -> i32
-from C import LIB.tsc_debug_draw_box(cobj, Ptr[CBoundingBox], Ptr[CRotation], float, CColor, float) -> i32
-from C import LIB.tsc_debug_draw_string(cobj, Ptr[CVector3D], cobj, int, i32, CColor, float) -> i32
+from C import LIB.tsc_debug_draw_point(cobj, Ptr[CVector3D], float, Ptr[CColor], float) -> i32
+from C import LIB.tsc_debug_draw_line(cobj, Ptr[CVector3D], Ptr[CVector3D], float, Ptr[CColor], float) -> i32
+from C import LIB.tsc_debug_draw_arrow(cobj, Ptr[CVector3D], Ptr[CVector3D], float, float, Ptr[CColor], float) -> i32
+from C import LIB.tsc_debug_draw_box(cobj, Ptr[CBoundingBox], Ptr[CRotation], float, Ptr[CColor], float) -> i32
+from C import LIB.tsc_debug_draw_string(cobj, Ptr[CVector3D], cobj, int, i32, Ptr[CColor], float) -> i32
 from C import LIB.tsc_client_start_recorder(cobj, cobj, int, i32, Ptr[CString]) -> i32
 from C import LIB.tsc_client_stop_recorder(cobj) -> i32
 from C import LIB.tsc_client_show_recorder_file_info(cobj, cobj, int, i32, Ptr[CString]) -> i32

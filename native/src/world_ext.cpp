@@ -26,7 +26,8 @@ WeatherParameters to_carla_weather(const tsc_weather_t &w) {
                            f(w.rayleigh_scattering_scale), f(w.dust_storm));
 }
 
-carla::sensor::data::Color to_color(tsc_color_t c) {
+carla::sensor::data::Color to_color(const tsc_color_t *color) {
+  const tsc_color_t &c = *require_ptr(color, "color");
   return carla::sensor::data::Color(c.r, c.g, c.b, c.a);
 }
 
@@ -91,7 +92,7 @@ tsc_status_t tsc_weather_preset(const char *name, size_t name_len, tsc_weather_t
 }
 
 tsc_status_t tsc_debug_draw_point(tsc_world_t *world, const tsc_location_t *location, double size,
-                                  tsc_color_t color, double life_time) {
+                                  const tsc_color_t *color, double life_time) {
   return TSC_GUARD({
     world_of(world).MakeDebugHelper().DrawPoint(to_carla(*require_ptr(location, "location")),
                                                 static_cast<float>(size), to_color(color),
@@ -100,7 +101,7 @@ tsc_status_t tsc_debug_draw_point(tsc_world_t *world, const tsc_location_t *loca
 }
 
 tsc_status_t tsc_debug_draw_line(tsc_world_t *world, const tsc_location_t *begin,
-                                 const tsc_location_t *end, double thickness, tsc_color_t color,
+                                 const tsc_location_t *end, double thickness, const tsc_color_t *color,
                                  double life_time) {
   return TSC_GUARD({
     world_of(world).MakeDebugHelper().DrawLine(to_carla(*require_ptr(begin, "begin")),
@@ -112,7 +113,7 @@ tsc_status_t tsc_debug_draw_line(tsc_world_t *world, const tsc_location_t *begin
 
 tsc_status_t tsc_debug_draw_arrow(tsc_world_t *world, const tsc_location_t *begin,
                                   const tsc_location_t *end, double thickness, double arrow_size,
-                                  tsc_color_t color, double life_time) {
+                                  const tsc_color_t *color, double life_time) {
   return TSC_GUARD({
     world_of(world).MakeDebugHelper().DrawArrow(
         to_carla(*require_ptr(begin, "begin")), to_carla(*require_ptr(end, "end")),
@@ -123,7 +124,7 @@ tsc_status_t tsc_debug_draw_arrow(tsc_world_t *world, const tsc_location_t *begi
 
 tsc_status_t tsc_debug_draw_box(tsc_world_t *world, const tsc_bounding_box_t *box,
                                 const tsc_rotation_t *rotation, double thickness,
-                                tsc_color_t color, double life_time) {
+                                const tsc_color_t *color, double life_time) {
   return TSC_GUARD({
     world_of(world).MakeDebugHelper().DrawBox(
         to_carla(*require_ptr(box, "box")),
@@ -134,7 +135,7 @@ tsc_status_t tsc_debug_draw_box(tsc_world_t *world, const tsc_bounding_box_t *bo
 
 tsc_status_t tsc_debug_draw_string(tsc_world_t *world, const tsc_location_t *location,
                                    const char *text, size_t text_len, int32_t draw_shadow,
-                                   tsc_color_t color, double life_time) {
+                                   const tsc_color_t *color, double life_time) {
   return TSC_GUARD({
     world_of(world).MakeDebugHelper().DrawString(to_carla(*require_ptr(location, "location")),
                                                  to_string(text, text_len, "text"),

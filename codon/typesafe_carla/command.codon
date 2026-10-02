@@ -11,7 +11,8 @@
 # Actors are given by id (`actor.id`).
 
 from ._ffi import CCommand, CCommandResponse, CString, take_string, TSC_INVALID_ARGUMENT
-from .errors import CarlaError, _check_light_state, _check_port, _is_actor_id
+from .errors import (CarlaError, _check_light_state, _check_port, _check_traffic_light_state,
+                     _is_actor_id)
 from .geometry import Location, Transform, Vector3D
 from .control import VehicleControl, WalkerControl
 from .blueprint import ActorBlueprint
@@ -202,6 +203,7 @@ def ApplyLocation(actor_id: int, location: Location) -> Command:
 
 def SetTrafficLightState(actor_id: int, state: int) -> Command:
     """state: TrafficLightState."""
+    _check_traffic_light_state(state)
     return _flag_command(_SET_TRAFFIC_LIGHT_STATE, actor_id, state)
 
 def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int]:

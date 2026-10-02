@@ -721,24 +721,26 @@ TSC_API tsc_status_t tsc_weather_preset(const char *name, size_t name_len, tsc_w
 
 /* --- Debug drawing ---------------------------------------------------------- */
 
+/* Passed by pointer like every struct here: Codon passes small structs by value
+ * as separate scalars, which does not match the C calling convention. */
 typedef struct {
   uint8_t r, g, b, a;
 } tsc_color_t;
 
 TSC_API tsc_status_t tsc_debug_draw_point(tsc_world_t *world, const tsc_location_t *location,
-                                          double size, tsc_color_t color, double life_time);
+                                          double size, const tsc_color_t *color, double life_time);
 TSC_API tsc_status_t tsc_debug_draw_line(tsc_world_t *world, const tsc_location_t *begin,
                                          const tsc_location_t *end, double thickness,
-                                         tsc_color_t color, double life_time);
+                                         const tsc_color_t *color, double life_time);
 TSC_API tsc_status_t tsc_debug_draw_arrow(tsc_world_t *world, const tsc_location_t *begin,
                                           const tsc_location_t *end, double thickness,
-                                          double arrow_size, tsc_color_t color, double life_time);
+                                          double arrow_size, const tsc_color_t *color, double life_time);
 TSC_API tsc_status_t tsc_debug_draw_box(tsc_world_t *world, const tsc_bounding_box_t *box,
                                         const tsc_rotation_t *rotation, double thickness,
-                                        tsc_color_t color, double life_time);
+                                        const tsc_color_t *color, double life_time);
 TSC_API tsc_status_t tsc_debug_draw_string(tsc_world_t *world, const tsc_location_t *location,
                                            const char *text, size_t text_len, int32_t draw_shadow,
-                                           tsc_color_t color, double life_time);
+                                           const tsc_color_t *color, double life_time);
 
 /* --- Recorder ---------------------------------------------------------------- */
 

@@ -66,6 +66,11 @@ def _check_light_state(light_state: int):
     if light_state < 0 or light_state > 0xFFFFFFFF:
         raise CarlaError(f"light state {light_state} is out of range", TSC_INVALID_ARGUMENT)
 
+def _check_traffic_light_state(state: int):
+    """Raises CarlaError (TSC_INVALID_ARGUMENT) unless state is a TrafficLightState (0..4)."""
+    if state < 0 or state > 4:
+        raise CarlaError(f"traffic light state {state} is not a TrafficLightState", TSC_INVALID_ARGUMENT)
+
 def _is_actor_id(actor_id: int) -> bool:
     """Whether actor_id fits CARLA's 32-bit unsigned actor ids."""
     return 0 <= actor_id <= 0xFFFFFFFF

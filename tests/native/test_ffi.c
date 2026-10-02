@@ -605,9 +605,9 @@ static void test_mock_milestone4(void) {
 
   /* Debug drawing is accepted; OpenDRIVE worlds need an OpenDRIVE document. */
   tsc_color_t red = {255, 0, 0, 255};
-  CHECK_OK(tsc_debug_draw_point(world, &nav, 0.2, red, 1.0));
-  CHECK_OK(tsc_debug_draw_string(world, &nav, "hi", 2, 0, red, 1.0));
-  CHECK(tsc_debug_draw_point(world, &nav, 0.2, red, 1.0 / 0.0) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_debug_draw_point(world, &nav, 0.2, &red, 1.0));
+  CHECK_OK(tsc_debug_draw_string(world, &nav, "hi", 2, 0, &red, 1.0));
+  CHECK(tsc_debug_draw_point(world, &nav, 0.2, &red, 1.0 / 0.0) == TSC_INVALID_ARGUMENT);
   tsc_opendrive_parameters_t params = {2.0, 50.0, 1.0, 0.6, 1, 1, 1, 0};
   tsc_world_t *odr = NULL;
   CHECK(tsc_client_generate_opendrive_world(client, "<xml/>", 6, &params, 1, &odr) == TSC_ERROR);
