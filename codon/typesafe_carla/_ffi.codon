@@ -13,8 +13,8 @@ from internal.gc import register_finalizer
 LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
-TSC_ABI_VERSION_MAJOR = 2
-TSC_ABI_VERSION_MINOR = 1
+TSC_ABI_VERSION_MAJOR = 3
+TSC_ABI_VERSION_MINOR = 0
 
 TSC_OK = 0
 TSC_ERROR = 1
