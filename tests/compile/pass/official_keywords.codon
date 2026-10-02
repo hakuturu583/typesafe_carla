@@ -20,6 +20,8 @@ def traffic_manager(tm: carla.TrafficManager, v: carla.Vehicle):
     tm.update_vehicle_lights(actor=v, do_update=True)
     tm.vehicle_lane_offset(actor=v, offset=0.5)
     tm.vehicle_percentage_speed_difference(actor=v, percentage=-20.0)
+    # The official binding leaves the wheel positional and names the angle `wheel_location`.
+    v.set_wheel_steer_direction(carla.VehicleWheelLocation.FR_Wheel, wheel_location=10.0)
 
 def traffic_light(light: carla.TrafficLight, actor: carla.Actor):
     light.set_green_time(green_time=5.0)

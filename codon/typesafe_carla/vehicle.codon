@@ -245,11 +245,12 @@ class Vehicle:
             self._h.ptr, _i32(wheel_location.value, "wheel_location"), out))
         return out[0]
 
-    def set_wheel_steer_direction(self, wheel_location: VehicleWheelLocation,
-                                  angle_in_deg: float):
-        """Turns the wheel's bone (visual only; the physics is unaffected)."""
+    def set_wheel_steer_direction(self, wheel: VehicleWheelLocation, wheel_location: float):
+        """Turns the wheel's bone to `wheel_location` degrees (visual only; the
+        physics is unaffected). The names mirror the official binding: it
+        leaves the wheel positional-only and calls the angle `wheel_location`."""
         _check(tsc_vehicle_set_wheel_steer_direction(
-            self._h.ptr, _i32(wheel_location.value, "wheel_location"), angle_in_deg))
+            self._h.ptr, _i32(wheel.value, "wheel"), wheel_location))
 
     def get_vehicle_bone_world_transforms(self) -> List[Transform]:
         """One RPC. Needs a LibCarla with Vehicle::GetVehicleBoneWorldTransforms
