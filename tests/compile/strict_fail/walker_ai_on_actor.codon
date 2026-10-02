@@ -1,0 +1,10 @@
+# Strict mode: a walker AI controller needs as_walker_ai_controller(), and
+# stop() (shared by sensors and AI controllers) a conversion too.
+# expect-error: strict mode: call as_sensor() or as_walker_ai_controller() first (Actor.stop is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def halt(world: carla.World, controller_id: int):
+    world.get_actor(controller_id).stop()
+
+# Compile-only: Codon type-checks a function only when it is called.
+halt(carla.Client("localhost", 2000).get_world(), 3)

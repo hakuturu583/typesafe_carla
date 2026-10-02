@@ -1,0 +1,237 @@
+# Python-API compatibility: subclass methods callable on a plain Actor.
+#
+# The CARLA Python API returns the concrete subclass from world.get_actor(),
+# so `world.get_actor(i).apply_control(...)` works there. Here every such
+# method on Actor does the checked as_*() conversion at run time (raising
+# ActorTypeError when the actor is of another kind) and delegates to the
+# subclass, so argument types are still checked at compile time.
+#
+# These shortcuts are not statically checked for the actor kind. Each prints a
+# warning the first time it is used, and is a compile error in strict mode
+# (typesafe-codon --strict); call as_vehicle() & co. for the static path.
+#
+# Lives in its own module because it needs every subclass, and the subclass
+# modules import actor.codon.
+#
+# Only a plain Actor has the shortcuts. Subclasses inherit methods added to
+# Actor, and Codon realizes an inherited method with `self: Actor` unless self
+# has a generic type, so each shortcut takes `self: S, S: type` and
+# _plain_actor_only() rejects any S other than Actor at compile time (static
+# isinstance is exact): `vehicle.listen()` is a compile error in every mode, as
+# carla.Vehicle has no listen() in the Python API. A subclass's own method of
+# the same name shadows all of them (vehicle.apply_control(WalkerControl)
+# stays a compile error).
+
+from ._ffi import TSC_KIND_WALKER_AI_CONTROLLER, tsc_handle_kind
+from ._strict import compat_shortcut
+from .errors import ActorTypeError
+from .control import VehicleControl, WalkerControl
+from .actor import Actor, Vehicle
+from .walker import Walker, WalkerAIController
+from .traffic_light import TrafficLight
+from .sensor import Sensor
+
+def _plain_actor_only(actor, name: Literal[str]):
+    """Compile error unless `actor` is statically a plain Actor (not a subclass)."""
+    if not isinstance(actor, Actor):
+        compile_error(type(actor).__name__ + " has no method " + name +
+                      " (it is an Actor compatibility shortcut; call it on the right actor type)")
+
+@extend
+class Actor:
+    # Vehicle and Walker share apply_control(); the argument type picks one.
+
+    def apply_control(self: S, control: VehicleControl, S: type):
+        _plain_actor_only(self, "apply_control()")
+        compat_shortcut("Actor.apply_control", "[tsc-compat] Actor.apply_control(VehicleControl) without as_vehicle()", "call as_vehicle() first")
+        self.as_vehicle().apply_control(control)
+
+    def apply_control(self: S, control: WalkerControl, S: type):
+        _plain_actor_only(self, "apply_control()")
+        compat_shortcut("Actor.apply_control", "[tsc-compat] Actor.apply_control(WalkerControl) without as_walker()", "call as_walker() first")
+        self.as_walker().apply_control(control)
+
+    def get_control(self: S, S: type) -> VehicleControl:
+        """Vehicles only: the return type cannot depend on the actor kind.
+
+        Use as_walker().get_control() for a walker's WalkerControl."""
+        _plain_actor_only(self, "get_control()")
+        compat_shortcut("Actor.get_control", "[tsc-compat] Actor.get_control() without as_vehicle()", "call as_vehicle() first")
+        if self.is_walker():
+            raise ActorTypeError(f"actor {self.id} is a walker; Actor.get_control() returns a "
+                                 "VehicleControl, use as_walker().get_control()")
+        return self.as_vehicle().get_control()
+
+    # Vehicle
+
+    def get_physics_control(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_physics_control()")
+        compat_shortcut("Actor.get_physics_control", "[tsc-compat] Actor.get_physics_control() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_physics_control(*args, **kwargs)
+
+    def apply_physics_control(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "apply_physics_control()")
+        compat_shortcut("Actor.apply_physics_control", "[tsc-compat] Actor.apply_physics_control() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().apply_physics_control(*args, **kwargs)
+
+    def set_light_state(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_light_state()")
+        compat_shortcut("Actor.set_light_state", "[tsc-compat] Actor.set_light_state() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().set_light_state(*args, **kwargs)
+
+    def get_light_state(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_light_state()")
+        compat_shortcut("Actor.get_light_state", "[tsc-compat] Actor.get_light_state() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_light_state(*args, **kwargs)
+
+    def get_speed_limit(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_speed_limit()")
+        compat_shortcut("Actor.get_speed_limit", "[tsc-compat] Actor.get_speed_limit() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_speed_limit(*args, **kwargs)
+
+    def get_traffic_light_state(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_traffic_light_state()")
+        compat_shortcut("Actor.get_traffic_light_state", "[tsc-compat] Actor.get_traffic_light_state() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_traffic_light_state(*args, **kwargs)
+
+    def is_at_traffic_light(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "is_at_traffic_light()")
+        compat_shortcut("Actor.is_at_traffic_light", "[tsc-compat] Actor.is_at_traffic_light() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().is_at_traffic_light(*args, **kwargs)
+
+    def get_traffic_light(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_traffic_light()")
+        compat_shortcut("Actor.get_traffic_light", "[tsc-compat] Actor.get_traffic_light() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_traffic_light(*args, **kwargs)
+
+    def set_autopilot(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_autopilot()")
+        compat_shortcut("Actor.set_autopilot", "[tsc-compat] Actor.set_autopilot() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().set_autopilot(*args, **kwargs)
+
+    # WalkerAIController (stop() is shared with Sensor, below)
+
+    def start(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "start()")
+        compat_shortcut("Actor.start", "[tsc-compat] Actor.start() without as_walker_ai_controller()", "call as_walker_ai_controller() first")
+        return self.as_walker_ai_controller().start(*args, **kwargs)
+
+    def go_to_location(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "go_to_location()")
+        compat_shortcut("Actor.go_to_location", "[tsc-compat] Actor.go_to_location() without as_walker_ai_controller()", "call as_walker_ai_controller() first")
+        return self.as_walker_ai_controller().go_to_location(*args, **kwargs)
+
+    def set_max_speed(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_max_speed()")
+        compat_shortcut("Actor.set_max_speed", "[tsc-compat] Actor.set_max_speed() without as_walker_ai_controller()", "call as_walker_ai_controller() first")
+        return self.as_walker_ai_controller().set_max_speed(*args, **kwargs)
+
+    # TrafficLight
+
+    def get_state(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_state()")
+        compat_shortcut("Actor.get_state", "[tsc-compat] Actor.get_state() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_state(*args, **kwargs)
+
+    def set_state(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_state()")
+        compat_shortcut("Actor.set_state", "[tsc-compat] Actor.set_state() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().set_state(*args, **kwargs)
+
+    def get_green_time(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_green_time()")
+        compat_shortcut("Actor.get_green_time", "[tsc-compat] Actor.get_green_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_green_time(*args, **kwargs)
+
+    def set_green_time(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_green_time()")
+        compat_shortcut("Actor.set_green_time", "[tsc-compat] Actor.set_green_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().set_green_time(*args, **kwargs)
+
+    def get_yellow_time(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_yellow_time()")
+        compat_shortcut("Actor.get_yellow_time", "[tsc-compat] Actor.get_yellow_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_yellow_time(*args, **kwargs)
+
+    def set_yellow_time(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_yellow_time()")
+        compat_shortcut("Actor.set_yellow_time", "[tsc-compat] Actor.set_yellow_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().set_yellow_time(*args, **kwargs)
+
+    def get_red_time(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_red_time()")
+        compat_shortcut("Actor.get_red_time", "[tsc-compat] Actor.get_red_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_red_time(*args, **kwargs)
+
+    def set_red_time(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_red_time()")
+        compat_shortcut("Actor.set_red_time", "[tsc-compat] Actor.set_red_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().set_red_time(*args, **kwargs)
+
+    def get_elapsed_time(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_elapsed_time()")
+        compat_shortcut("Actor.get_elapsed_time", "[tsc-compat] Actor.get_elapsed_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_elapsed_time(*args, **kwargs)
+
+    def freeze(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "freeze()")
+        compat_shortcut("Actor.freeze", "[tsc-compat] Actor.freeze() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().freeze(*args, **kwargs)
+
+    def is_frozen(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "is_frozen()")
+        compat_shortcut("Actor.is_frozen", "[tsc-compat] Actor.is_frozen() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().is_frozen(*args, **kwargs)
+
+    def get_pole_index(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_pole_index()")
+        compat_shortcut("Actor.get_pole_index", "[tsc-compat] Actor.get_pole_index() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_pole_index(*args, **kwargs)
+
+    def reset_group(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "reset_group()")
+        compat_shortcut("Actor.reset_group", "[tsc-compat] Actor.reset_group() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().reset_group(*args, **kwargs)
+
+    # Sensor
+
+    def listen(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "listen()")
+        compat_shortcut("Actor.listen", "[tsc-compat] Actor.listen() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().listen(*args, **kwargs)
+
+    @property
+    def is_listening(self: S, S: type) -> bool:
+        _plain_actor_only(self, "is_listening")
+        compat_shortcut("Actor.is_listening", "[tsc-compat] Actor.is_listening without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().is_listening
+
+    @property
+    def dropped_count(self: S, S: type) -> int:
+        _plain_actor_only(self, "dropped_count")
+        compat_shortcut("Actor.dropped_count", "[tsc-compat] Actor.dropped_count without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().dropped_count
+
+    def poll(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "poll()")
+        compat_shortcut("Actor.poll", "[tsc-compat] Actor.poll() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().poll(*args, **kwargs)
+
+    def wait_for_data(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "wait_for_data()")
+        compat_shortcut("Actor.wait_for_data", "[tsc-compat] Actor.wait_for_data() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().wait_for_data(*args, **kwargs)
+
+    # Sensor and WalkerAIController
+
+    def stop(self: S, S: type):
+        """Sensor.stop() or WalkerAIController.stop(), whichever this actor is."""
+        _plain_actor_only(self, "stop()")
+        compat_shortcut("Actor.stop", "[tsc-compat] Actor.stop() without as_sensor() / as_walker_ai_controller()", "call as_sensor() or as_walker_ai_controller() first")
+        if self.is_sensor():
+            self.as_sensor().stop()
+        elif int(tsc_handle_kind(self._h.ptr)) == TSC_KIND_WALKER_AI_CONTROLLER:
+            self.as_walker_ai_controller().stop()
+        else:
+            raise ActorTypeError(f"actor {self.id} ({self.type_id}) is neither a sensor nor a "
+                                 "walker AI controller")

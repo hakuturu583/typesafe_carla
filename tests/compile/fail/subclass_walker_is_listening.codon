@@ -1,0 +1,9 @@
+# Only a plain Actor has the compatibility shortcuts, properties included.
+# expect-error: Walker has no method is_listening (it is an Actor compatibility shortcut; call it on the right actor type)
+import typesafe_carla as carla
+
+def check(walker: carla.Walker) -> bool:
+    return walker.is_listening
+
+# Compile-only: Codon type-checks a function only when it is called.
+check(carla.Client("localhost", 2000).get_world().get_actors()[0].as_walker())

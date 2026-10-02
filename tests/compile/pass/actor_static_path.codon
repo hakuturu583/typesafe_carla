@@ -1,0 +1,28 @@
+# The static path: convert with as_vehicle() & co., then call the subclass
+# method. It compiles in strict mode too, where the Actor shortcuts do not.
+# strict
+import typesafe_carla as carla
+
+def static_path(world: carla.World):
+    vehicle: carla.Vehicle = world.get_actor(1).as_vehicle()
+    vehicle.apply_control(carla.VehicleControl(throttle=0.5))
+    vehicle.set_autopilot(True)
+    print(vehicle.get_control(), vehicle.get_traffic_light())
+    walker = world.get_actor(2).as_walker()
+    walker.apply_control(carla.WalkerControl(carla.Vector3D(1.0, 0.0, 0.0), 1.5))
+    print(walker.get_control())
+    ai = world.get_actor(3).as_walker_ai_controller()
+    ai.start()
+    ai.stop()
+    light = world.get_actor(4).as_traffic_light()
+    light.set_state(carla.TrafficLightState.Red)
+    print(light.get_state())
+    sensor = world.get_actor(5).as_sensor()
+    sensor.listen()
+    print(sensor.is_listening, sensor.poll())
+    sensor.stop()
+    # Methods every Actor has are not compatibility shortcuts.
+    actor = world.get_actor(1)
+    print(actor.get_transform(), actor.is_alive, actor.is_vehicle())
+
+static_path(carla.Client("localhost", 2000).get_world())

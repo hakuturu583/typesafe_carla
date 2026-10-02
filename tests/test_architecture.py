@@ -97,3 +97,30 @@ def test_generated_functions_are_not_hand_written():
                   for name in re.findall(r"^tsc_status_t (tsc_\w+)\(", p.read_text(), re.MULTILINE)
                   if name in names]
     assert not duplicates, duplicates
+
+
+
+def actor_shortcuts() -> list[tuple[str, str, str, str]]:
+    """(name, parameters, first statement, second statement) of each public
+    method _actor_compat.codon adds to Actor (docstrings skipped)."""
+    compat = (ROOT / "codon" / "typesafe_carla" / "_actor_compat.codon").read_text()
+    actor_block = compat.split("@extend\nclass Actor:", 1)[1]
+    methods = re.findall(r"^    def (\w+)\((.*?)\).*?:\n(?:        \"\"\"[\s\S]*?\"\"\"\n)?(.*)\n(.*)\n",
+                         actor_block, re.MULTILINE)
+    return [m for m in methods if not m[0].startswith("_")]
+
+
+def test_actor_shortcuts_reject_subclasses_and_are_marked():
+    """Every Actor compatibility shortcut is a compile error on typed subclasses,
+    then a strict-mode error / warning through compat_shortcut.
+
+    Subclasses inherit methods added to Actor; only a generic `self: S` lets
+    _plain_actor_only() see the real static type and reject it.
+    """
+    shortcuts = actor_shortcuts()
+    assert len(shortcuts) == 34
+    for name, params, first, second in shortcuts:
+        assert params.startswith("self: S") and "S: type" in params, name
+        assert first.strip().startswith(f'_plain_actor_only(self, "{name}'), name
+        assert second.strip().startswith(
+            f'compat_shortcut("Actor.{name}", "[tsc-compat] Actor.{name}'), name

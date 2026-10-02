@@ -1,0 +1,10 @@
+# Only a plain Actor has the compatibility shortcuts: a typed Vehicle has no
+# listen(), in every mode (as carla.Vehicle has none in the Python API).
+# expect-error: Vehicle has no method listen() (it is an Actor compatibility shortcut; call it on the right actor type)
+import typesafe_carla as carla
+
+def start(vehicle: carla.Vehicle):
+    vehicle.listen()
+
+# Compile-only: Codon type-checks a function only when it is called.
+start(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

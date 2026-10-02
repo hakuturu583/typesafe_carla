@@ -185,6 +185,14 @@ try:
     loc = vehicle.get_location()
     out("driven", f"{loc.x:.3f},{loc.y:.3f}")
     out("speed", f"{vehicle.get_velocity().length():.3f}")
+    # Subclass methods on what world.get_actor() returns (issue #8).
+    same = world.get_actor(vehicle.id)
+    same.apply_control(carla.VehicleControl(throttle=0.0, brake=1.0))
+    world.tick()
+    c = same.get_control()
+    light0 = world.get_actor(lights[0].id)
+    out("actor_compat", f"{c.throttle:.3f},{c.brake:.3f},{int(same.is_at_traffic_light())},"
+                        f"{light0.get_pole_index()},{light0.get_green_time():.3f}")
 finally:
     world.apply_settings(original)
     out("destroyed", int(vehicle.destroy()))

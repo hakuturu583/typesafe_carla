@@ -1,0 +1,63 @@
+# Python API compatibility: the subclass methods of Vehicle, Walker,
+# WalkerAIController, TrafficLight and Sensor can be called on the plain Actor
+# that world.get_actor() returns. Each converts at run time (ActorTypeError on
+# the wrong kind); argument and return types are checked at compile time.
+import typesafe_carla as carla
+
+def vehicle_methods(actor: carla.Actor):
+    actor.apply_control(carla.VehicleControl(throttle=0.5))
+    control: carla.VehicleControl = actor.get_control()
+    physics: carla.VehiclePhysicsControl = actor.get_physics_control()
+    actor.apply_physics_control(physics)
+    actor.set_light_state(carla.VehicleLightState.LowBeam)
+    lights: int = actor.get_light_state()
+    limit: float = actor.get_speed_limit()
+    state: int = actor.get_traffic_light_state()
+    at_light: bool = actor.is_at_traffic_light()
+    light: Optional[carla.TrafficLight] = actor.get_traffic_light()
+    actor.set_autopilot(True)
+    actor.set_autopilot(enabled=False, tm_port=8000)
+    print(control, lights, limit, state, at_light, light)
+
+def walker_methods(actor: carla.Actor):
+    # Same name as Vehicle.apply_control; the argument type picks the overload.
+    actor.apply_control(carla.WalkerControl(carla.Vector3D(1.0, 0.0, 0.0), 1.5))
+    walker_control: carla.WalkerControl = actor.as_walker().get_control()
+    print(walker_control)
+
+def walker_ai_methods(actor: carla.Actor):
+    actor.start()
+    actor.go_to_location(carla.Location(1.0, 2.0, 0.0))
+    actor.set_max_speed(1.4)
+    actor.stop()
+
+def traffic_light_methods(actor: carla.Actor):
+    actor.set_state(carla.TrafficLightState.Green)
+    state: int = actor.get_state()
+    actor.set_green_time(10.0)
+    actor.set_yellow_time(3.0)
+    actor.set_red_time(5.0)
+    times: float = actor.get_green_time() + actor.get_yellow_time() + actor.get_red_time()
+    elapsed: float = actor.get_elapsed_time()
+    actor.freeze(True)
+    frozen: bool = actor.is_frozen()
+    pole: int = actor.get_pole_index()
+    actor.reset_group()
+    print(state, times, elapsed, frozen, pole)
+
+def sensor_methods(actor: carla.Actor):
+    actor.listen()
+    actor.listen(queue_size=8)
+    listening: bool = actor.is_listening
+    dropped: int = actor.dropped_count
+    data: Optional[carla.SensorData] = actor.poll()
+    waited: carla.SensorData = actor.wait_for_data(2.0)
+    actor.stop()
+    print(listening, dropped, data, waited)
+
+world = carla.Client("localhost", 2000).get_world()
+vehicle_methods(world.get_actor(1))
+walker_methods(world.get_actor(2))
+walker_ai_methods(world.get_actor(3))
+traffic_light_methods(world.get_actor(4))
+sensor_methods(world.get_actor(5))
