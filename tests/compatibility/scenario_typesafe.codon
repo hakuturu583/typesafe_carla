@@ -117,6 +117,38 @@ try:
     pc = vehicle.get_physics_control()
     out("physics", fmt(pc.mass) + "," + fmt(pc.max_rpm) + "," + fmt(pc.wheels[0].wheel_radius))
     out("physics_wheels", str(len(pc.wheels)))
+    # Every physics field the official API can read (it cannot convert the gear
+    # ratio lists in 0.10.0), except the wheels' per-frame location/velocity.
+    vals = [pc.max_torque, pc.max_rpm, pc.idle_rpm, pc.brake_effect, pc.rev_up_moi,
+            pc.rev_down_rate, pc.front_rear_split, pc.gear_change_time, pc.final_ratio,
+            pc.change_up_rpm, pc.change_down_rpm, pc.transmission_efficiency, pc.mass,
+            pc.drag_coefficient, pc.chassis_width, pc.chassis_height, pc.downforce_coefficient,
+            pc.drag_area, pc.sleep_threshold, pc.sleep_slope_limit]
+    vals += [pc.center_of_mass.x, pc.center_of_mass.y, pc.center_of_mass.z]
+    vals += [pc.inertia_tensor_scale.x, pc.inertia_tensor_scale.y, pc.inertia_tensor_scale.z]
+    for p in pc.torque_curve + pc.steering_curve:
+        vals += [p.x, p.y]
+    codes = [pc.differential_type, int(pc.use_automatic_gears),
+             int(pc.use_sweep_wheel_collision), len(pc.torque_curve), len(pc.steering_curve)]
+    for w in pc.wheels:
+        vals += [w.wheel_radius, w.wheel_width, w.wheel_mass, w.cornering_stiffness,
+                 w.friction_force_multiplier, w.side_slip_modifier, w.slip_threshold,
+                 w.skid_threshold, w.max_steer_angle,
+                 w.max_wheelspin_rotation, w.suspension_max_raise, w.suspension_max_drop,
+                 w.suspension_damping_ratio, w.wheel_load_ratio, w.spring_rate, w.spring_preload,
+                 w.rollbar_scaling, w.max_brake_torque, w.max_hand_brake_torque]
+        for v in (w.offset, w.suspension_axis, w.suspension_force_offset):
+            vals += [v.x, v.y, v.z]
+        for p in w.lateral_slip_graph:
+            vals += [p.x, p.y]
+        codes += [w.axle_type, w.external_torque_combine_method, w.sweep_shape, w.sweep_type,
+                  w.suspension_smoothing, w.wheel_index]
+        codes += [int(w.affected_by_steering), int(w.affected_by_brake),
+                  int(w.affected_by_handbrake), int(w.affected_by_engine), int(w.abs_enabled),
+                  int(w.traction_control_enabled)]
+        codes.append(len(w.lateral_slip_graph))
+    out("physics_all", ",".join([fmt(v) for v in vals]))
+    out("physics_codes", ",".join([str(c) for c in codes]))
     for _ in range(20):
         world.tick()
     t = vehicle.get_transform()

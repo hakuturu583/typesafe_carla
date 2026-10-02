@@ -1,0 +1,11 @@
+# Curves are lists of (x, y) Vector2D points, not flat lists of floats.
+# expect-error: 'List[float]' does not match expected type 'List[Vector2D]'
+import typesafe_carla as carla
+
+def flat_curve(vehicle: carla.Vehicle):
+    pc = vehicle.get_physics_control()
+    pc.torque_curve = [0.0, 500.0, 5000.0, 500.0]
+    vehicle.apply_physics_control(pc)
+
+# Compile-only: Codon type-checks a function only when it is called.
+flat_curve(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

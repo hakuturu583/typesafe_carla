@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <atomic>
 #include <initializer_list>
+#include <limits>
 #include <cmath>
 #include <cstring>
 #include <optional>
@@ -68,8 +69,14 @@ T *require_ptr(T *p, const char *name) {
   return p;
 }
 
+// Caller arrays and strings: NULL is allowed only for size 0.
+template <typename T>
+void require_array(const T *data, size_t size, const char *name) {
+  if (data == nullptr && size != 0) fail(TSC_INVALID_ARGUMENT, std::string(name) + " is NULL");
+}
+
 inline std::string to_string(const char *data, size_t len, const char *name) {
-  if (data == nullptr && len != 0) fail(TSC_INVALID_ARGUMENT, std::string(name) + " is NULL");
+  require_array(data, len, name);
   return data == nullptr ? std::string() : std::string(data, len);
 }
 
@@ -176,6 +183,17 @@ struct tsc_junction : tsc_handle {
   carla::SharedPtr<carla::client::Junction> junction;
   explicit tsc_junction(carla::SharedPtr<carla::client::Junction> j)
       : tsc_handle(TSC_KIND_JUNCTION), junction(std::move(j)) {}
+};
+
+// A physics control snapshot, already converted to the C layout: `view` points
+// into the vectors below, which never change after construction.
+struct tsc_physics_control : tsc_handle {
+  std::vector<tsc_vector2d_t> torque_curve, steering_curve;
+  std::vector<double> forward_gear_ratios, reverse_gear_ratios;
+  std::vector<std::vector<tsc_vector2d_t>> lateral_slip_graphs;  // one per wheel
+  std::vector<tsc_wheel_physics_control_t> wheels;
+  tsc_vehicle_physics_control_t view{};
+  explicit tsc_physics_control(const carla::rpc::VehiclePhysicsControl &pc);  // vehicle.cpp
 };
 
 struct tsc_sensor_data : tsc_handle {
@@ -345,6 +363,9 @@ inline carla::geom::Transform to_carla(const tsc_transform_t &t) {
 inline tsc_vector3d_t from_carla(const carla::geom::Vector3D &v) {
   return tsc_vector3d_t{v.x, v.y, v.z};
 }
+inline tsc_vector2d_t from_carla(const carla::geom::Vector2D &v) {
+  return tsc_vector2d_t{v.x, v.y};
+}
 inline tsc_rotation_t from_carla(const carla::geom::Rotation &r) {
   return tsc_rotation_t{r.pitch, r.yaw, r.roll};
 }
@@ -369,18 +390,23 @@ void copy_out(const Vec &values, Out *out, size_t capacity, size_t *out_count) {
   for (size_t i = 0; i < values.size() && i < capacity; ++i) out[i] = from_carla(values[i]);
 }
 
-// LibCarla's float parameters: `name` must be finite (and non-negative; NaN
-// fails too).
-inline float check_finite(double v, const char *name) {
-  if (!std::isfinite(v)) fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite");
+// LibCarla's float parameters. A finite double above FLT_MAX would become
+// +-inf in the float cast, so the float range is checked too (NaN fails).
+inline float check_float(double v, const char *name) {
+  if (!(std::fabs(v) <= static_cast<double>(std::numeric_limits<float>::max()))) {
+    fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite and within float range");
+  }
   return static_cast<float>(v);
 }
 
+// Kept for existing callers; same check as check_float.
+inline float check_finite(double v, const char *name) { return check_float(v, name); }
+
 inline float check_non_negative(double v, const char *name) {
-  if (!(v >= 0.0) || !std::isfinite(v)) {
+  if (!(v >= 0.0)) {
     fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite and non-negative");
   }
-  return static_cast<float>(v);
+  return check_float(v, name);
 }
 
 inline carla::rpc::TrafficLightState to_light_state(int32_t state) {

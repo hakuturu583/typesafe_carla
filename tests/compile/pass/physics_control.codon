@@ -9,6 +9,32 @@ def heavier(vehicle: carla.Vehicle) -> carla.BoundingBox:
     vehicle.apply_physics_control(pc)
     return vehicle.bounding_box
 
+def every_kind(vehicle: carla.Vehicle) -> carla.VehiclePhysicsControl:
+    pc = vehicle.get_physics_control()
+    curve: List[carla.Vector2D] = pc.torque_curve
+    curve.append(carla.Vector2D(7000.0, 200.0))
+    pc.steering_curve = [carla.Vector2D(0.0, 1.0), carla.Vector2D(20.0, 0.6)]
+    ratios: List[float] = pc.forward_gear_ratios
+    ratios[0] = 3.2
+    pc.reverse_gear_ratios = [3.0]
+    pc.differential_type = 1
+    pc.use_sweep_wheel_collision = True
+    pc.inertia_tensor_scale = carla.Vector3D(1.0, 1.2, 1.0)
+    w = pc.wheels[0]
+    w.axle_type = 1
+    w.abs_enabled = True
+    w.suspension_smoothing = 2
+    w.offset = carla.Vector3D(1.0, 0.0, 0.0)
+    w.old_location = carla.Location()
+    w.velocity = carla.Vector3D()
+    w.lateral_slip_graph = [carla.Vector2D(0.0, 0.0), carla.Vector2D(3.0, 1.0)]
+    pc.wheels[1] = carla.WheelPhysicsControl(wheel_radius=32.0, max_brake_torque=2000.0)
+    vehicle.apply_physics_control(pc)
+    fresh = carla.VehiclePhysicsControl(mass=1200.0, torque_curve=[carla.Vector2D(0.0, 300.0)],
+                                        wheels=pc.wheels)
+    return fresh if fresh != pc else pc
+
 # Compile-only: Codon type-checks a function only when it is called.
 _world = carla.Client("localhost", 2000).get_world()
 print(heavier(_world.get_actors()[0].as_vehicle()))
+print(every_kind(_world.get_actors()[0].as_vehicle()))

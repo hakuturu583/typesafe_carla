@@ -1,0 +1,11 @@
+# A gear ratio is a float; a Vector2D cannot go into forward_gear_ratios.
+# expect-error: no function 'List.__setitem__' with arguments (List[float], int, Vector2D)
+import typesafe_carla as carla
+
+def gears(vehicle: carla.Vehicle):
+    pc = vehicle.get_physics_control()
+    pc.forward_gear_ratios[0] = carla.Vector2D(1.0, 2.0)
+    vehicle.apply_physics_control(pc)
+
+# Compile-only: Codon type-checks a function only when it is called.
+gears(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

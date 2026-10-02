@@ -33,9 +33,11 @@ extern "C" {
 
 /* ABI version. Bump MAJOR on any incompatible change to this header.
  * 2.0: tsc_command_t gained `scalar` (and new command types), Milestone 4.
- * 2.1: tsc_sensor_pending_count; tsc_sensor_listen queue_capacity 0 = unbounded. */
-#define TSC_ABI_VERSION_MAJOR 2
-#define TSC_ABI_VERSION_MINOR 1
+ * 2.1: tsc_sensor_pending_count; tsc_sensor_listen queue_capacity 0 = unbounded.
+ * 3.0: VehiclePhysicsControl with every LibCarla field: physics-control
+ *      snapshot handles, new vehicle/wheel structs (issue #12). */
+#define TSC_ABI_VERSION_MAJOR 3
+#define TSC_ABI_VERSION_MINOR 0
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -111,7 +113,8 @@ typedef enum {
   TSC_KIND_TRAFFIC_LIGHT = 16, /* also an actor */
   TSC_KIND_TRAFFIC_MANAGER = 17,
   TSC_KIND_LANDMARK_LIST = 18,
-  TSC_KIND_JUNCTION = 19
+  TSC_KIND_JUNCTION = 19,
+  TSC_KIND_PHYSICS_CONTROL = 20 /* ABI 3.0 */
 } tsc_handle_kind_t;
 
 typedef struct tsc_handle tsc_handle_t;
@@ -417,40 +420,113 @@ TSC_API tsc_status_t tsc_waypoint_list_get(const tsc_waypoint_list_t *list, size
 
 /* --- Physics control ------------------------------------------------------ */
 
-#define TSC_MAX_WHEELS 8
+/* Every field of LibCarla UE5's rpc::VehiclePhysicsControl and
+ * rpc::WheelPhysicsControl (identical in CARLA 0.10.0 and ue5-dev), with the
+ * Python API's names. LibCarla's float fields cross as double, uint8_t enum
+ * codes and bools as int32_t. Variable-length data (curves, gear ratios,
+ * wheels, each wheel's lateral slip graph) is a (pointer, size) pair:
+ *   - in tsc_physics_control_view(), the pointers borrow from the
+ *     tsc_physics_control_t handle and stay valid while it is alive;
+ *   - in tsc_vehicle_apply_physics_control(), they point to caller memory that
+ *     is only read during the call (NULL is allowed for size 0). (ABI 3.0) */
+typedef struct {
+  double x;
+  double y;
+} tsc_vector2d_t;
 
 typedef struct {
+  const tsc_vector2d_t *lateral_slip_graph;
+  size_t lateral_slip_graph_size;
+  tsc_vector3d_t offset;
+  tsc_vector3d_t suspension_axis;
+  tsc_vector3d_t suspension_force_offset;
+  tsc_location_t location;
+  tsc_location_t old_location;
+  tsc_vector3d_t velocity; /* geom::Location in LibCarla */
   double wheel_radius;
   double wheel_width;
   double wheel_mass;
+  double cornering_stiffness;
+  double friction_force_multiplier;
+  double side_slip_modifier;
+  double slip_threshold;
+  double skid_threshold;
   double max_steer_angle;
+  double max_wheelspin_rotation;
+  double suspension_max_raise;
+  double suspension_max_drop;
+  double suspension_damping_ratio;
+  double wheel_load_ratio;
+  double spring_rate;
+  double spring_preload;
+  double rollbar_scaling;
   double max_brake_torque;
   double max_hand_brake_torque;
-  double friction_force_multiplier;
-  double cornering_stiffness;
+  int32_t axle_type;                      /* uint8_t: 0..255 */
+  int32_t external_torque_combine_method; /* uint8_t: 0..255 */
+  int32_t sweep_shape;                    /* uint8_t: 0..255 */
+  int32_t sweep_type;                     /* uint8_t: 0..255 */
+  int32_t suspension_smoothing;
+  int32_t wheel_index;
   int32_t affected_by_steering;
   int32_t affected_by_brake;
   int32_t affected_by_handbrake;
   int32_t affected_by_engine;
+  int32_t abs_enabled;
+  int32_t traction_control_enabled;
 } tsc_wheel_physics_control_t;
 
-/* A typed subset of rpc::VehiclePhysicsControl. apply() reads the current
- * control and overwrites only these fields, so the rest keep server values. */
 typedef struct {
+  const tsc_vector2d_t *torque_curve;
+  size_t torque_curve_size;
+  const tsc_vector2d_t *steering_curve;
+  size_t steering_curve_size;
+  const double *forward_gear_ratios;
+  size_t forward_gear_ratios_size;
+  const double *reverse_gear_ratios;
+  size_t reverse_gear_ratios_size;
+  const tsc_wheel_physics_control_t *wheels;
+  size_t wheel_count;
   double max_torque;
   double max_rpm;
-  double final_ratio;
+  double idle_rpm;
+  double brake_effect;
+  double rev_up_moi;
+  double rev_down_rate;
+  double front_rear_split;
   double gear_change_time;
+  double final_ratio;
+  double change_up_rpm;
+  double change_down_rpm;
+  double transmission_efficiency;
   double mass;
   double drag_coefficient;
+  double chassis_width;
+  double chassis_height;
+  double downforce_coefficient;
+  double drag_area;
+  double sleep_threshold;
+  double sleep_slope_limit;
   tsc_location_t center_of_mass;
+  tsc_vector3d_t inertia_tensor_scale;
+  int32_t differential_type; /* uint8_t: 0..255 */
   int32_t use_automatic_gears;
-  int32_t wheel_count; /* <= TSC_MAX_WHEELS */
-  tsc_wheel_physics_control_t wheels[TSC_MAX_WHEELS];
+  int32_t use_sweep_wheel_collision;
+  int32_t reserved0;
 } tsc_vehicle_physics_control_t;
 
+/* A snapshot of one vehicle's physics control (one RPC), owned by the caller. */
+typedef struct tsc_physics_control tsc_physics_control_t;
+
 TSC_API tsc_status_t tsc_vehicle_get_physics_control(tsc_vehicle_t *vehicle,
-                                                     tsc_vehicle_physics_control_t *out);
+                                                     tsc_physics_control_t **out);
+/* Fills *out from the snapshot; its arrays borrow from `control`. */
+TSC_API tsc_status_t tsc_physics_control_view(const tsc_physics_control_t *control,
+                                              tsc_vehicle_physics_control_t *out);
+/* Reads the vehicle's current control, overwrites every field above and
+ * applies it, so fields a future LibCarla adds keep the server's values.
+ * wheel_count must equal the vehicle's; mass must be positive; every value
+ * must be finite and every uint8_t field in range (TSC_INVALID_ARGUMENT). */
 TSC_API tsc_status_t tsc_vehicle_apply_physics_control(tsc_vehicle_t *vehicle,
                                                        const tsc_vehicle_physics_control_t *pc);
 
