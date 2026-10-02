@@ -6,6 +6,11 @@ blocks:
   world_core:
     get_id: {call: GetId, out: {type: uint64, name: out_id}}
     get_actors: {call: GetActors, out: {type: actor_list_handle, name: out_list}}
+    get_actors_by_id:
+      call: GetActors
+      args: {actor_ids: uint32_array}
+      out: {type: actor_list_handle, name: out_list}
+      doc: "In request order; ids that name no actor are left out (as in LibCarla)."
     get_blueprint_library:
       call: GetBlueprintLibrary
       out: {type: blueprint_library_handle, name: out_library}

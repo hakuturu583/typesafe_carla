@@ -1,0 +1,38 @@
+# World.get_actors(actor_ids) (issue #38) on the mock backend.
+import typesafe_carla as carla
+
+client = carla.Client("localhost", 2000)
+world = client.reload_world()
+
+def raises_carla_error(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError:
+        return True
+    return False
+
+lib = world.get_blueprint_library()
+bp = lib.find("vehicle.lincoln.mkz_2020")
+spawned = [world.spawn_actor(bp, carla.Transform(carla.Location(10.0 * i, 0.0, 0.5),
+                                                 carla.Rotation()))
+           for i in range(4)]
+ids = [a.id for a in spawned]
+everyone = len(world.get_actors())
+
+# A subset, in request order; unknown ids are left out, repeats kept (as LibCarla).
+unknown = max(a.id for a in world.get_actors()) + 1000
+subset = world.get_actors([ids[2], unknown, ids[0], ids[2]])
+assert [a.id for a in subset] == [ids[2], ids[0], ids[2]]
+assert all(a.type_id == "vehicle.lincoln.mkz_2020" for a in subset)
+assert len(world.get_actors(List[int]())) == 0
+assert len(world.get_actors([unknown])) == 0
+assert len(world.get_actors(ids).filter("vehicle.*")) == 4
+assert len(world.get_actors()) == everyone  # the no-argument overload still works
+
+# Ids outside the 32-bit unsigned range are rejected.
+assert raises_carla_error(lambda: world.get_actors([ids[0], -1]))
+assert raises_carla_error(lambda: world.get_actors([1 << 32]))
+
+for a in spawned:
+    a.destroy()
+print("OK")

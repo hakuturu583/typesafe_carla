@@ -1,12 +1,13 @@
 # World and WorldSettings.
 
 from ._ffi import (Handle, CTransform, CWorldSettings, tsc_world_get_id, tsc_world_get_actors,
+                   tsc_world_get_actors_by_id, TSC_INVALID_ARGUMENT, array,
                    tsc_world_get_actor, tsc_world_get_blueprint_library, tsc_world_spawn_actor,
                    tsc_world_try_spawn_actor, tsc_world_tick,
                    TSC_NOT_FOUND, tsc_world_get_map,
                    tsc_world_get_snapshot, tsc_world_wait_for_tick)
 from ._ffi import CWorldSettingsExt, tsc_world_get_settings_ext, tsc_world_apply_settings_ext
-from .errors import _check, _is_actor_id
+from .errors import _check, _is_actor_id, CarlaError
 from .geometry import Transform
 from .actor import Actor, ActorList, _make_actor
 from .blueprint import ActorBlueprint, BlueprintLibrary
@@ -113,6 +114,18 @@ class World:
     def get_actors(self) -> ActorList:
         out = Ptr[cobj](1)
         _check(tsc_world_get_actors(self._h.ptr, out))
+        return ActorList(Handle(out[0]))
+
+    def get_actors(self, actor_ids: List[int]) -> ActorList:
+        """The actors with these ids, in the order given. Ids that name no actor
+        are left out, as in LibCarla; an id outside CARLA's 32-bit unsigned
+        range raises CarlaError (TSC_INVALID_ARGUMENT)."""
+        for actor_id in actor_ids:
+            if not _is_actor_id(actor_id):
+                raise CarlaError(f"actor id {actor_id} is out of range", TSC_INVALID_ARGUMENT)
+        ids = array([u32(i) for i in actor_ids])
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_actors_by_id(self._h.ptr, ids, len(actor_ids), out))
         return ActorList(Handle(out[0]))
 
     def get_actor(self, actor_id: int) -> Optional[Actor]:
