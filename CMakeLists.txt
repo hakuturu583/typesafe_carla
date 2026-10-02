@@ -158,6 +158,15 @@ else()
     message(STATUS "typesafe_carla: carla-client links Boost::python; using an empty stand-in")
   endif()
 
+  # CARLA 0.10.0's carla/client/FileTransfer.h uses uint8_t without including
+  # <cstdint>; newer GCC (14, in the manylinux release image) no longer
+  # provides it transitively. Force-include it for CARLA and for the shim
+  # (which includes that header through Client.h). Harmless for other refs.
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>")
+    target_compile_options(typesafe_carla_ffi PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>")
+  endif()
+
   # CMake 4 removed compatibility with cmake_minimum_required < 3.5, which some
   # of CARLA's dependencies (e.g. libpng in 0.10.0) still declare. ue5-dev sets
   # this itself; older refs need it from us.
