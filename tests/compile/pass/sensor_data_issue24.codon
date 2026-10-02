@@ -1,0 +1,77 @@
+# The measurement types and operations of issue #24, with explicit types.
+# strict
+import typesafe_carla as carla
+
+def perceive(world: carla.World, vehicle: carla.Vehicle) -> float:
+    lib = world.get_blueprint_library()
+    sensors = [world.spawn_actor(lib.find(id), carla.Transform(), attach_to=vehicle).as_sensor()
+               for id in ("sensor.camera.depth", "sensor.lidar.ray_cast", "sensor.other.radar",
+                          "sensor.lidar.ray_cast_semantic", "sensor.other.lane_invasion",
+                          "sensor.other.obstacle", "sensor.camera.dvs",
+                          "sensor.camera.optical_flow", "sensor.other.collision")]
+    for s in sensors:
+        s.listen()
+    world.tick()
+    total = 0.0
+
+    image: carla.Image = sensors[0].wait_for_data(1.0).as_image()
+    written: str = image.save_to_disk("out/depth.png", carla.ColorConverter.LogarithmicDepth)
+    image.convert(carla.ColorConverter.Depth)
+    first: carla.Color = image[0]
+    frame_number: int = image.frame_number
+    total += float(first.r + frame_number + len(written))
+
+    sweep: carla.LidarMeasurement = sensors[1].wait_for_data(1.0).as_lidar()
+    ply: str = sweep.save_to_disk("out/sweep.ply")
+    raw: Ptr[u8] = sweep.raw_data()
+    total += float(len(ply) + int(raw[0]))
+
+    radar: carla.RadarMeasurement = sensors[2].wait_for_data(1.0).as_radar()
+    for d in radar:
+        detection: carla.RadarDetection = d
+        total += detection.velocity + detection.depth
+    total += float(radar.get_detection_count())
+
+    semantic: carla.SemanticLidarMeasurement = sensors[3].wait_for_data(1.0).as_semantic_lidar()
+    hit: carla.SemanticLidarDetection = semantic[0]
+    point: carla.Location = hit.point
+    total += point.x + float(hit.object_tag + semantic.get_point_count(0))
+    semantic.save_to_disk("out/semantic.ply")
+
+    invasion: carla.LaneInvasionEvent = sensors[4].wait_for_data(1.0).as_lane_invasion()
+    lane_sensor: carla.LaneInvasionSensor = sensors[4]
+    markings: List[carla.LaneMarking] = invasion.crossed_lane_markings
+    parent: carla.Actor = invasion.actor
+    if markings and markings[0].type == carla.LaneMarkingType.Solid:
+        total += markings[0].width + float(parent.id + lane_sensor.id)
+
+    obstacle: carla.ObstacleDetectionEvent = sensors[5].wait_for_data(1.0).as_obstacle()
+    other: Optional[carla.Actor] = obstacle.other_actor
+    if other is not None:
+        total += obstacle.distance + float(other.id)
+
+    events: carla.DVSEventArray = sensors[6].wait_for_data(1.0).as_dvs()
+    e: carla.DVSEvent = events[0]
+    pixels: List[carla.Color] = events.to_image()
+    rows: List[List[int]] = events.to_array()
+    total += float(e.x + e.t + len(pixels) + len(rows) + len(events.to_array_pol()))
+
+    flow: carla.OpticalFlowImage = sensors[7].wait_for_data(1.0).as_optical_flow()
+    p: carla.OpticalFlowPixel = flow[0]
+    coded: carla.FakeImage = flow.get_color_coded_flow()
+    total += p.x + float(coded.width + coded[0])
+
+    collision: carla.CollisionEvent = sensors[8].wait_for_data(1.0).as_collision()
+    collided: Optional[carla.Actor] = collision.other_actor
+    if collided is not None:
+        total += float(collided.id)
+
+    # Callbacks receive a SensorData of any of these types.
+    sensors[2].listen(lambda data: print(len(data.as_radar())))
+    for s in sensors:
+        s.stop()
+    return total
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+print(perceive(_world, _world.get_actors()[0].as_vehicle()))

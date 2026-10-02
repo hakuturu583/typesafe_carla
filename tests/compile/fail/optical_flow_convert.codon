@@ -1,0 +1,9 @@
+# Only camera images take a color converter; optical flow has get_color_coded_flow().
+# expect-error: 'OpticalFlowImage' object has no attribute 'convert'
+import typesafe_carla as carla
+
+def show(camera: carla.Sensor):
+    camera.wait_for_data(1.0).as_optical_flow().convert(carla.ColorConverter.Raw)
+
+# Compile-only: Codon type-checks a function only when it is called.
+show(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor())

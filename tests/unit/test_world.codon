@@ -6,7 +6,7 @@ world = client.get_world()
 first_id = world.id
 
 library = world.get_blueprint_library()
-assert len(library) == 11  # 3 vehicles, a walker, 5 sensors, an AI controller, a prop
+assert len(library) == 19  # 3 vehicles, a walker, 13 sensors, an AI controller, a prop
 vehicles = library.filter("vehicle.*")
 assert len(vehicles) == 3
 ids = [bp.id for bp in vehicles]

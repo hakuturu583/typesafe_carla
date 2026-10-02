@@ -1,0 +1,13 @@
+# Lane-invasion events (issue #24): tsc_lane_invasion_event_<name>, on a sensor
+# data handle holding a carla::sensor::data::LaneInvasionEvent (TSC_TYPE_ERROR
+# otherwise).
+class: carla::sensor::data::LaneInvasionEvent
+prefix: lane_invasion_event
+self: {type: const tsc_sensor_data_t, name: data, get: lane_invasion_event_of}
+blocks:
+  lane_invasion_event:
+    get_actor:
+      call: GetActor
+      out: actor_handle
+      doc: "LibCarla never gives these client-side events an episode, so this fails (TSC_ERROR) on 0.10.0 and ue5-dev."
+    get_crossed_lane_markings: {call: GetCrossedLaneMarkings, out: lane_marking_buffer}

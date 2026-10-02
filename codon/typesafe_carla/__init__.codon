@@ -26,7 +26,11 @@ from .geo import (GeoLocation, GeoEllipsoid, GeoOffsetTransform, GeoProjection, 
 from .snapshot import WorldSnapshot, ActorSnapshot, Timestamp
 from .command import Command, CommandResponse
 from .sensor import (Sensor, SensorData, SensorDataType, Image, LidarMeasurement, LidarDetection,
-                     GnssMeasurement, IMUMeasurement, CollisionEvent, dispatch_sensor_callbacks)
+                     GnssMeasurement, IMUMeasurement, CollisionEvent, dispatch_sensor_callbacks,
+                     ColorConverter, RadarMeasurement, RadarDetection, SemanticLidarMeasurement,
+                     SemanticLidarDetection, LaneInvasionEvent, LaneInvasionSensor,
+                     ObstacleDetectionEvent, DVSEventArray, DVSEvent, OpticalFlowImage,
+                     OpticalFlowPixel, FakeImage)
 from ._callbacks import dispatch_callbacks
 from .client import Client, OpendriveGenerationParameters
 from .walker import (Walker, WalkerAIController, WalkerBoneControlIn, WalkerBoneControlOut,

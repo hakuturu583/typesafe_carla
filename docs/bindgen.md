@@ -53,6 +53,13 @@ blocks:
     reset_group: {call: ResetGroup}
 ```
 
+`self.get` is any accessor from `native/src/internal.hpp` that validates the
+handle and returns the LibCarla object. It need not be an actor: in
+`obstacle_detection_event.yaml` it is `obstacle_event_of`, which takes a
+sensor data handle and fails with `TSC_TYPE_ERROR` unless it holds an
+`ObstacleDetectionEvent`. `self.type` is pasted into the C signature as
+written, so it may be `const`-qualified (`const tsc_sensor_data_t` there).
+
 A function has:
 - `call`: the LibCarla method;
 - `args`: name to type, in order (optional);

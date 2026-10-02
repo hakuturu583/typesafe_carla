@@ -38,6 +38,13 @@ COVERAGE_CLASSES = [
     "carla::client::ActorList", "carla::client::WorldSnapshot", "carla::client::DebugHelper",
     "carla::client::LightManager",  # issue #21
     "carla::traffic_manager::TrafficManager",
+    # Measurements (issue #24). Image and OpticalFlowImage are instantiations
+    # of the ImageTmpl template, which the report does not list.
+    "carla::sensor::SensorData", "carla::sensor::data::LidarMeasurement",
+    "carla::sensor::data::SemanticLidarMeasurement", "carla::sensor::data::RadarMeasurement",
+    "carla::sensor::data::GnssMeasurement", "carla::sensor::data::IMUMeasurement",
+    "carla::sensor::data::CollisionEvent", "carla::sensor::data::ObstacleDetectionEvent",
+    "carla::sensor::data::LaneInvasionEvent", "carla::sensor::data::DVSEventArray",
 ]
 
 

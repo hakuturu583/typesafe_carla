@@ -2,6 +2,7 @@
 // polls or dispatches to callbacks on the program's thread (design sections
 // 15-16). Measurement buffers are exposed zero-copy.
 #include "internal.hpp"
+#include "sensor_image.hpp"
 
 using namespace tsc;
 namespace data = carla::sensor::data;
@@ -20,17 +21,21 @@ SensorQueue &queue_of(tsc_sensor_t *s) {
   return *h.queue;
 }
 
-const carla::sensor::SensorData &data_of(const tsc_sensor_data_t *d) {
-  return *check_handle(d, "data", TSC_KIND_SENSOR_DATA)->data;
+// Calls f with the measurement as the first of Ts that it is, or fails with
+// TSC_TYPE_ERROR ("sensor data is not <what>").
+template <typename T, typename... Ts, typename F>
+auto visit_as(const carla::sensor::SensorData &sd, const char *what, F &&f) {
+  if (auto typed = dynamic_cast<const T *>(&sd)) return f(*typed);
+  if constexpr (sizeof...(Ts) == 0) {
+    fail(TSC_TYPE_ERROR, std::string("sensor data is not ") + what);
+  } else {
+    return visit_as<Ts...>(sd, what, std::forward<F>(f));
+  }
 }
 
-// The handle keeps the data alive, so plain pointer casts suffice (no
-// SharedPtr refcount traffic per measurement).
-template <typename T>
-const T &data_as(const tsc_sensor_data_t *d, const char *what) {
-  auto typed = dynamic_cast<const T *>(&data_of(d));
-  if (typed == nullptr) fail(TSC_TYPE_ERROR, std::string("sensor data is not ") + what);
-  return *typed;
+template <typename T, typename... Ts, typename F>
+auto visit_as(const tsc_sensor_data_t *d, const char *what, F &&f) {
+  return visit_as<T, Ts...>(sensor_data_of(d), what, std::forward<F>(f));
 }
 
 tsc_sensor_data_type_t type_of(const carla::sensor::SensorData &d) {
@@ -39,8 +44,16 @@ tsc_sensor_data_type_t type_of(const carla::sensor::SensorData &d) {
   if (dynamic_cast<const data::GnssMeasurement *>(&d)) return TSC_SENSOR_DATA_GNSS;
   if (dynamic_cast<const data::IMUMeasurement *>(&d)) return TSC_SENSOR_DATA_IMU;
   if (dynamic_cast<const data::CollisionEvent *>(&d)) return TSC_SENSOR_DATA_COLLISION;
+  if (dynamic_cast<const data::RadarMeasurement *>(&d)) return TSC_SENSOR_DATA_RADAR;
+  if (dynamic_cast<const data::SemanticLidarMeasurement *>(&d)) return TSC_SENSOR_DATA_SEMANTIC_LIDAR;
+  if (dynamic_cast<const data::LaneInvasionEvent *>(&d)) return TSC_SENSOR_DATA_LANE_INVASION;
+  if (dynamic_cast<const data::ObstacleDetectionEvent *>(&d)) return TSC_SENSOR_DATA_OBSTACLE;
+  if (dynamic_cast<const data::DVSEventArray *>(&d)) return TSC_SENSOR_DATA_DVS;
+  if (dynamic_cast<const data::OpticalFlowImage *>(&d)) return TSC_SENSOR_DATA_OPTICAL_FLOW;
   return TSC_SENSOR_DATA_OTHER;
 }
+
+constexpr const char *kPointCloud = "a LiDAR or semantic LiDAR measurement";
 
 uint32_t id_or_zero(const carla::SharedPtr<carla::client::Actor> &a) {
   return a == nullptr ? 0u : a->GetId();
@@ -52,6 +65,12 @@ uint32_t id_or_zero(const carla::SharedPtr<carla::client::Actor> &a) {
 static_assert(sizeof(data::Color) == 4, "Image pixels are 4 bytes (BGRA)");
 static_assert(sizeof(data::LidarDetection) == 4 * sizeof(float),
               "LiDAR detections are {x, y, z, intensity} floats");
+static_assert(sizeof(data::RadarDetection) == sizeof(tsc_radar_detection_t),
+              "radar detections are {velocity, azimuth, altitude, depth} floats");
+static_assert(sizeof(data::SemanticLidarDetection) == sizeof(tsc_semantic_lidar_detection_t),
+              "semantic LiDAR detections are {x, y, z, cos_inc_angle, object_idx, object_tag}");
+static_assert(sizeof(data::DVSEvent) == TSC_DVS_EVENT_SIZE, "DVS events are packed, 13 bytes");
+static_assert(sizeof(data::OpticalFlowPixel) == 2 * sizeof(float), "optical flow pixels are {x, y}");
 
 extern "C" {
 
@@ -121,7 +140,7 @@ tsc_status_t tsc_sensor_wait_for_data(tsc_sensor_t *sensor, double timeout_secon
 tsc_status_t tsc_sensor_data_get_info(const tsc_sensor_data_t *d, tsc_sensor_data_info_t *out) {
   return TSC_GUARD({
     require_ptr(out, "out");
-    const auto &sd = data_of(d);
+    const auto &sd = sensor_data_of(d);
     tsc_sensor_data_info_t info{};
     info.frame = sd.GetFrame();
     info.timestamp = sd.GetTimestamp();
@@ -134,7 +153,7 @@ tsc_status_t tsc_sensor_data_get_info(const tsc_sensor_data_t *d, tsc_sensor_dat
 tsc_status_t tsc_sensor_data_as_image(const tsc_sensor_data_t *d, tsc_image_t *out) {
   return TSC_GUARD({
     require_ptr(out, "out");
-    const auto &image = data_as<data::Image>(d, "an image");
+    const auto &image = sensor_data_as<data::Image>(d, "an image");
     tsc_image_t r{};
     r.width = static_cast<uint32_t>(image.GetWidth());
     r.height = static_cast<uint32_t>(image.GetHeight());
@@ -148,7 +167,7 @@ tsc_status_t tsc_sensor_data_as_image(const tsc_sensor_data_t *d, tsc_image_t *o
 tsc_status_t tsc_sensor_data_as_lidar(const tsc_sensor_data_t *d, tsc_lidar_t *out) {
   return TSC_GUARD({
     require_ptr(out, "out");
-    const auto &lidar = data_as<data::LidarMeasurement>(d, "a LiDAR measurement");
+    const auto &lidar = sensor_data_as<data::LidarMeasurement>(d, "a LiDAR measurement");
     tsc_lidar_t r{};
     r.channels = static_cast<uint32_t>(lidar.GetChannelCount());
     r.horizontal_angle = lidar.GetHorizontalAngle();
@@ -162,18 +181,20 @@ tsc_status_t tsc_lidar_channel_point_count(const tsc_sensor_data_t *d, uint32_t 
                                            uint32_t *out) {
   return TSC_GUARD({
     require_ptr(out, "out");
-    const auto &lidar = data_as<data::LidarMeasurement>(d, "a LiDAR measurement");
-    if (channel >= lidar.GetChannelCount()) {
-      fail(TSC_NOT_FOUND, "channel " + std::to_string(channel) + " out of range for " +
-                              std::to_string(lidar.GetChannelCount()) + " channels");
-    }
-    *out = static_cast<uint32_t>(lidar.GetPointCount(channel));
+    *out = visit_as<data::LidarMeasurement, data::SemanticLidarMeasurement>(
+        d, kPointCloud, [&](const auto &lidar) {
+          if (channel >= lidar.GetChannelCount()) {
+            fail(TSC_NOT_FOUND, "channel " + std::to_string(channel) + " out of range for " +
+                                    std::to_string(lidar.GetChannelCount()) + " channels");
+          }
+          return static_cast<uint32_t>(lidar.GetPointCount(channel));
+        });
   });
 }
 
 tsc_status_t tsc_sensor_data_as_gnss(const tsc_sensor_data_t *d, tsc_gnss_t *out) {
   return TSC_GUARD({
-    const auto &gnss = data_as<data::GnssMeasurement>(d, "a GNSS measurement");
+    const auto &gnss = sensor_data_as<data::GnssMeasurement>(d, "a GNSS measurement");
     *require_ptr(out, "out") =
         tsc_gnss_t{gnss.GetLatitude(), gnss.GetLongitude(), gnss.GetAltitude()};
   });
@@ -181,7 +202,7 @@ tsc_status_t tsc_sensor_data_as_gnss(const tsc_sensor_data_t *d, tsc_gnss_t *out
 
 tsc_status_t tsc_sensor_data_as_imu(const tsc_sensor_data_t *d, tsc_imu_t *out) {
   return TSC_GUARD({
-    const auto &imu = data_as<data::IMUMeasurement>(d, "an IMU measurement");
+    const auto &imu = sensor_data_as<data::IMUMeasurement>(d, "an IMU measurement");
     *require_ptr(out, "out") = tsc_imu_t{from_carla(imu.GetAccelerometer()),
                                          from_carla(imu.GetGyroscope()), imu.GetCompass()};
   });
@@ -189,10 +210,113 @@ tsc_status_t tsc_sensor_data_as_imu(const tsc_sensor_data_t *d, tsc_imu_t *out) 
 
 tsc_status_t tsc_sensor_data_as_collision(const tsc_sensor_data_t *d, tsc_collision_t *out) {
   return TSC_GUARD({
-    const auto &event = data_as<data::CollisionEvent>(d, "a collision event");
+    const auto &event = sensor_data_as<data::CollisionEvent>(d, "a collision event");
     *require_ptr(out, "out") = tsc_collision_t{id_or_zero(event.GetActor()),
                                                id_or_zero(event.GetOtherActor()),
                                                from_carla(event.GetNormalImpulse())};
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Issue #24: image conversion and files, more measurement types. The event
+// actors and lane markings are generated (bindings/*_event.yaml).
+
+tsc_status_t tsc_image_convert(tsc_sensor_data_t *d, int32_t color_converter) {
+  return TSC_GUARD({
+    // The handle owns the (non-const) measurement: convert changes it in place.
+    auto &image = const_cast<data::Image &>(sensor_data_as<data::Image>(d, "an image"));
+    tsc::image::convert_bgra(reinterpret_cast<uint8_t *>(image.data()), image.size(),
+                             color_converter);
+  });
+}
+
+tsc_status_t tsc_image_save_to_disk(const tsc_sensor_data_t *d, const char *path, size_t path_len,
+                                    int32_t color_converter, tsc_string_t *out_path) {
+  return TSC_GUARD({
+    require_ptr(out_path, "out_path");
+    const auto &image = sensor_data_as<data::Image>(d, "an image");
+    std::string file = to_string(path, path_len, "path");
+    // Checked before ValidateFilePath creates directories.
+    tsc::image::check_png(image.GetWidth(), image.GetHeight(), image.size(), color_converter);
+    carla::FileSystem::ValidateFilePath(file, ".png");
+    tsc::image::write_png(file, image.GetWidth(), image.GetHeight(),
+                          reinterpret_cast<const uint8_t *>(image.data()), image.size(),
+                          color_converter);
+    string_assign(out_path, file);
+  });
+}
+
+tsc_status_t tsc_point_cloud_save_to_disk(const tsc_sensor_data_t *d, const char *path,
+                                          size_t path_len, tsc_string_t *out_path) {
+  return TSC_GUARD({
+    require_ptr(out_path, "out_path");
+    std::string file = to_string(path, path_len, "path");
+    // PointCloudIO writes the header from the first point: an empty cloud
+    // would read past the end in LibCarla.
+    string_assign(out_path, visit_as<data::LidarMeasurement, data::SemanticLidarMeasurement>(
+                                d, kPointCloud, [&](const auto &cloud) {
+                                  if (cloud.size() == 0) {
+                                    fail(TSC_ERROR, "cannot save a measurement without points");
+                                  }
+                                  return carla::pointcloud::PointCloudIO::SaveToDisk(
+                                      std::move(file), cloud.begin(), cloud.end());
+                                }));
+  });
+}
+
+tsc_status_t tsc_sensor_data_as_radar(const tsc_sensor_data_t *d, tsc_radar_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+    const auto &radar = sensor_data_as<data::RadarMeasurement>(d, "a radar measurement");
+    *out = tsc_radar_t{reinterpret_cast<const tsc_radar_detection_t *>(radar.data()),
+                       radar.GetDetectionAmount()};
+  });
+}
+
+tsc_status_t tsc_sensor_data_as_semantic_lidar(const tsc_sensor_data_t *d,
+                                               tsc_semantic_lidar_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+    const auto &lidar =
+        sensor_data_as<data::SemanticLidarMeasurement>(d, "a semantic LiDAR measurement");
+    *out = tsc_semantic_lidar_t{static_cast<uint32_t>(lidar.GetChannelCount()), 0,
+                                lidar.GetHorizontalAngle(),
+                                reinterpret_cast<const tsc_semantic_lidar_detection_t *>(lidar.data()),
+                                lidar.size()};
+  });
+}
+
+tsc_status_t tsc_sensor_data_as_dvs(const tsc_sensor_data_t *d, tsc_dvs_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+    const auto &events = sensor_data_as<data::DVSEventArray>(d, "a DVS event array");
+    *out = tsc_dvs_t{static_cast<uint32_t>(events.GetWidth()),
+                     static_cast<uint32_t>(events.GetHeight()), events.GetFOVAngle(),
+                     reinterpret_cast<const uint8_t *>(events.data()), events.size()};
+  });
+}
+
+tsc_status_t tsc_sensor_data_as_optical_flow(const tsc_sensor_data_t *d, tsc_optical_flow_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+    const auto &image = sensor_data_as<data::OpticalFlowImage>(d, "an optical flow image");
+    *out = tsc_optical_flow_t{static_cast<uint32_t>(image.GetWidth()),
+                              static_cast<uint32_t>(image.GetHeight()), image.GetFOVAngle(),
+                              reinterpret_cast<const float *>(image.data()), image.size()};
+  });
+}
+
+tsc_status_t tsc_optical_flow_color_coded(const tsc_sensor_data_t *d, uint8_t *out,
+                                          size_t capacity) {
+  return TSC_GUARD({
+    const auto &image = sensor_data_as<data::OpticalFlowImage>(d, "an optical flow image");
+    const size_t needed = 4 * image.size();
+    require_array(out, needed, "out");
+    if (capacity < needed) {
+      fail(TSC_INVALID_ARGUMENT, "out holds " + std::to_string(capacity) + " bytes, " +
+                                     std::to_string(needed) + " needed");
+    }
+    tsc::image::color_coded_flow(reinterpret_cast<const float *>(image.data()), image.size(), out);
   });
 }
 

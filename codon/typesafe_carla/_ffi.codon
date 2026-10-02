@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 3
-TSC_ABI_VERSION_MINOR = 5
+TSC_ABI_VERSION_MINOR = 6
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -292,6 +292,59 @@ class CCollision:
     actor_id: u32
     other_actor_id: u32
     normal_impulse: CVector3D
+
+# Issue #24 (ABI 3.6): more measurement types.
+@tuple
+class CRadarDetection:
+    velocity: float32
+    azimuth: float32
+    altitude: float32
+    depth: float32
+
+@tuple
+class CRadar:
+    detections: Ptr[CRadarDetection]
+    detection_count: int
+
+@tuple
+class CSemanticLidarDetection:
+    x: float32
+    y: float32
+    z: float32
+    cos_inc_angle: float32
+    object_idx: u32
+    object_tag: u32
+
+@tuple
+class CSemanticLidar:
+    channels: u32
+    reserved0: u32
+    horizontal_angle: float
+    points: Ptr[CSemanticLidarDetection]
+    point_count: int
+
+TSC_DVS_EVENT_SIZE = 13
+
+@tuple
+class CDvs:
+    width: u32
+    height: u32
+    fov: float
+    events: Ptr[u8]  # packed {u16 x, u16 y, i64 t, u8 pol}, TSC_DVS_EVENT_SIZE bytes each
+    event_count: int
+
+@tuple
+class COpticalFlowPixel:
+    x: float32
+    y: float32
+
+@tuple
+class COpticalFlow:
+    width: u32
+    height: u32
+    fov: float
+    pixels: Ptr[COpticalFlowPixel]
+    pixel_count: int
 
 @tuple
 class CWalkerControl:
@@ -661,6 +714,28 @@ from C import LIB.tsc_lidar_channel_point_count(cobj, u32, Ptr[u32]) -> i32
 from C import LIB.tsc_sensor_data_as_gnss(cobj, Ptr[CGnss]) -> i32
 from C import LIB.tsc_sensor_data_as_imu(cobj, Ptr[CImu]) -> i32
 from C import LIB.tsc_sensor_data_as_collision(cobj, Ptr[CCollision]) -> i32
+# ABI 3.6 (issue #24)
+from C import LIB.tsc_image_convert(cobj, i32) -> i32
+from C import LIB.tsc_image_save_to_disk(cobj, cobj, int, i32, Ptr[CString]) -> i32
+from C import LIB.tsc_point_cloud_save_to_disk(cobj, cobj, int, Ptr[CString]) -> i32
+from C import LIB.tsc_sensor_data_as_radar(cobj, Ptr[CRadar]) -> i32
+from C import LIB.tsc_sensor_data_as_semantic_lidar(cobj, Ptr[CSemanticLidar]) -> i32
+from C import LIB.tsc_sensor_data_as_dvs(cobj, Ptr[CDvs]) -> i32
+from C import LIB.tsc_sensor_data_as_optical_flow(cobj, Ptr[COpticalFlow]) -> i32
+from C import LIB.tsc_optical_flow_color_coded(cobj, Ptr[u8], int) -> i32
+# BEGIN GENERATED collision_event from bindings/collision_event.yaml, do not edit
+from C import LIB.tsc_collision_event_get_actor(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_collision_event_get_other_actor(cobj, Ptr[cobj]) -> i32
+# END GENERATED collision_event
+# BEGIN GENERATED lane_invasion_event from bindings/lane_invasion_event.yaml, do not edit
+from C import LIB.tsc_lane_invasion_event_get_actor(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_invasion_event_get_crossed_lane_markings(cobj, Ptr[CLaneMarking], int, Ptr[int]) -> i32
+# END GENERATED lane_invasion_event
+# BEGIN GENERATED obstacle_detection from bindings/obstacle_detection_event.yaml, do not edit
+from C import LIB.tsc_obstacle_detection_get_distance(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_obstacle_detection_get_actor(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_obstacle_detection_get_other_actor(cobj, Ptr[cobj]) -> i32
+# END GENERATED obstacle_detection
 
 # ABI 2.0 (Milestone 4)
 # BEGIN GENERATED actor_physics from bindings/actor.yaml, do not edit

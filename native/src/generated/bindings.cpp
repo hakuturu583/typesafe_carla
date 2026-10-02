@@ -269,6 +269,20 @@ tsc_status_t tsc_client_set_files_base_folder(tsc_client_t *client,
   });
 }
 
+// bindings/collision_event.yaml: carla::sensor::data::CollisionEvent
+
+tsc_status_t tsc_collision_event_get_actor(const tsc_sensor_data_t *data, tsc_actor_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_actor_handle(collision_event_of(data).GetActor());
+  });
+}
+
+tsc_status_t tsc_collision_event_get_other_actor(const tsc_sensor_data_t *data, tsc_actor_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_actor_handle(collision_event_of(data).GetOtherActor());
+  });
+}
+
 // bindings/debug.yaml: carla::client::DebugHelper
 
 tsc_status_t tsc_debug_clear_shapes(tsc_world_t *world) {
@@ -312,6 +326,21 @@ tsc_status_t tsc_landmark_get_lane_validities(
     const tsc_landmark_handle_t *landmark,
     tsc_lane_validity_t *out, size_t capacity, size_t *out_count) {
   return TSC_GUARD({ copy_out(landmark_of(landmark).GetValidities(), out, capacity, out_count); });
+}
+
+// bindings/lane_invasion_event.yaml: carla::sensor::data::LaneInvasionEvent
+
+tsc_status_t tsc_lane_invasion_event_get_actor(const tsc_sensor_data_t *data, tsc_actor_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_actor_handle(lane_invasion_event_of(data).GetActor());
+  });
+}
+
+tsc_status_t tsc_lane_invasion_event_get_crossed_lane_markings(
+    const tsc_sensor_data_t *data, tsc_lane_marking_t *out, size_t capacity, size_t *out_count) {
+  return TSC_GUARD({
+    copy_out(lane_invasion_event_of(data).GetCrossedLaneMarkings(), out, capacity, out_count);
+  });
 }
 
 // bindings/light_manager.yaml: carla::client::LightManager
@@ -371,6 +400,25 @@ tsc_status_t tsc_map_get_landmark_group(const tsc_map_t *map, const tsc_landmark
 
 tsc_status_t tsc_map_cook_in_memory_map(const tsc_map_t *map, const char *path, size_t path_len) {
   return TSC_GUARD({ map_of(map).CookInMemoryMap(to_string(path, path_len, "path")); });
+}
+
+// bindings/obstacle_detection_event.yaml: carla::sensor::data::ObstacleDetectionEvent
+
+tsc_status_t tsc_obstacle_detection_get_distance(const tsc_sensor_data_t *data, double *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = obstacle_event_of(data).GetDistance(); });
+}
+
+tsc_status_t tsc_obstacle_detection_get_actor(const tsc_sensor_data_t *data, tsc_actor_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_actor_handle(obstacle_event_of(data).GetActor());
+  });
+}
+
+tsc_status_t tsc_obstacle_detection_get_other_actor(const tsc_sensor_data_t *data,
+                                                    tsc_actor_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_actor_handle(obstacle_event_of(data).GetOtherActor());
+  });
 }
 
 // bindings/traffic_light.yaml: carla::client::TrafficLight

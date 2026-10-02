@@ -30,7 +30,7 @@ Milestones (design section 43):
 | 2: sensors | ✅ verified against a CARLA 0.10.0 server |
 | 3: distribution | ✅ release pipeline verified end to end (manylinux wheels from CI, clean-container `uv sync` → `build` → `./main` against a CARLA server); publishing to PyPI needs the one-time setup in [docs/releasing.md](docs/releasing.md) |
 | 4: broader compatibility | ✅ verified against a CARLA 0.10.0 server |
-| 5: binding generation | ✅ 161 C ABI functions generated from `bindings/*.yaml`, spec validated against LibCarla 0.10.0 and ue5-dev with libclang, [coverage report](docs/coverage.md) |
+| 5: binding generation | ✅ 168 C ABI functions generated from `bindings/*.yaml`, spec validated against LibCarla 0.10.0 and ue5-dev with libclang, [coverage report](docs/coverage.md) |
 
 | Area | Implemented |
 |---|---|
@@ -48,7 +48,7 @@ Milestones (design section 43):
 | Waypoint | `id`, `transform`, `road_id`, `section_id`, `lane_id`, `s`, `is_junction`, `is_intersection`, `junction_id`, `lane_width`, `lane_type`, `lane_change` (`LaneChange`), `left_lane_marking` / `right_lane_marking` (→ `Optional[LaneMarking]`: `LaneMarkingType`, `LaneMarkingColor`), `is_rht`, `next`, `previous`, `next_until_lane_end`, `previous_until_lane_start`, `get_left_lane` / `get_right_lane` / `get_junction` (→ `Optional`), `get_landmarks`, `get_landmarks_of_type` |
 | Landmark | every field of the Python API (`id`, `name`, `type`, `road_id`, `s`, `t`, `distance`, `orientation` (`LandmarkOrientation`), `h_offset`, `pitch`, `roll`, `is_dynamic`, ...), `waypoint` (→ `Optional[Waypoint]`), `get_lane_validities`; `LandmarkType` |
 | Snapshots | `WorldSnapshot` (`id`, `frame` / `frame_count`, `timestamp`, `elapsed_seconds`, `delta_seconds`, `platform_timestamp`, `find` → `Optional`, `has_actor`, indexing, iteration), `ActorSnapshot`, `Timestamp` (`frame` / `frame_count`) |
-| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`; `SensorData.as_image()` / `as_lidar()` / `as_gnss()` / `as_imu()` / `as_collision()` (checked); `Image` (zero-copy `raw_data()`, `pixel`), `LidarMeasurement` (zero-copy `raw_points()`, iteration, `get_point_count`), `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` |
+| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`; `SensorData` (`frame`, `frame_number`, `timestamp`, `transform`) with checked `as_image()` / `as_lidar()` / `as_semantic_lidar()` / `as_radar()` / `as_gnss()` / `as_imu()` / `as_collision()` / `as_obstacle()` / `as_lane_invasion()` / `as_dvs()` / `as_optical_flow()`; `Image` (zero-copy `raw_data()`, indexing and iteration → `Color`, `pixel`, `convert(ColorConverter)`, `save_to_disk(path, ColorConverter)` as PNG), `ColorConverter` (`Raw`, `Depth`, `LogarithmicDepth`, `CityScapesPalette`), `LidarMeasurement` (zero-copy `raw_data()` / `raw_points()`, iteration, `get_point_count`, `save_to_disk` as PLY), `SemanticLidarMeasurement` / `SemanticLidarDetection`, `RadarMeasurement` / `RadarDetection`, `DVSEventArray` / `DVSEvent` (`to_image`, `to_array`, `to_array_x/y/t/pol`), `OpticalFlowImage` / `OpticalFlowPixel` (`get_color_coded_flow` → `FakeImage`) — all zero-copy views of LibCarla's buffers; `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` / `ObstacleDetectionEvent` (`actor`, `other_actor` → `Optional[Actor]`, `distance`), `LaneInvasionEvent` (`crossed_lane_markings` → `List[LaneMarking]`, `actor`), `LaneInvasionSensor`, `LaneMarking` / `LaneMarkingType` / `LaneMarkingColor` / `LaneChange` |
 | Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyWalkerControl`, `ApplyTransform`, `ApplyLocation`, `ApplyTargetVelocity`, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, `SetAutopilot`, `SetSimulatePhysics`, `SetEnableGravity`, `SetVehicleLightState`, `SetTrafficLightState`, `ApplyVehicleAckermannControl`, `ShowDebugTelemetry`; `CommandResponse` |
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, `filter_by_attribute`, indexing, iteration), `ActorBlueprint` (`id`, `tags`, `has_tag`, `match_tags`, `has_attribute`, `get_attribute`, `set_attribute`), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`) |
 | Values | `TextureColor`, `TextureFloatColor`, `FloatColor`, `MaterialParameter`, `CityObjectLabel`, `ActorState` (issue #19), `MapLayer`, `EnvironmentObject`, `LabelledPoint` (issue #21), `Location`, `Rotation` (`get_forward_vector` / `get_right_vector` / `get_up_vector`, `get_normalized`), `Transform` (`get_forward_vector` / `get_right_vector` / `get_up_vector`, `get_matrix`, `get_inverse_matrix`, `transform` (a point or a list of points, in place), `transform_vector`), `Vector2D` (`length`, `squared_length`, `make_unit_vector`), `Vector3D`, `Velocity`, `AngularVelocity`, `Acceleration`, `Quaternion`, `BoundingBox` (`contains`, `get_local_vertices`, `get_world_vertices`), `VehicleControl`, `VehiclePhysicsControl` and `WheelPhysicsControl` (all fields: curves, gear ratios, wheels), `WorldSettings` (every LibCarla field, including `max_culling_distance`, `deterministic_ragdolls`, `tile_stream_distance`, `actor_active_distance`, `spectator_as_ego`), `Color`, `VehicleAckermannControl`, `AckermannControllerSettings`, `VehicleTelemetryData`, `WheelTelemetryData`, `WalkerBoneControlIn` / `WalkerBoneControlOut`, `bone_transform` / `bone_transform_out`; enumerations `VehicleDoor`, `VehicleWheelLocation`, `VehicleFailureState`; constants `AttachmentType`, `GBufferTextureID` |
@@ -161,7 +161,7 @@ Notes on issue #20 (Vehicle and Walker API gaps):
   bone only; `get_wheel_steer_angle` reports the physics angle.
 
 Notes on Milestone 5:
-- **Generated plumbing, hand-written API.** 131 C ABI functions are generated from
+- **Generated plumbing, hand-written API.** 168 C ABI functions are generated from
   `bindings/*.yaml`: the C declarations, the C++ shim and the Codon FFI. Each one is a handle check,
   argument conversions and a single LibCarla call. The ABI is unchanged; libclang compared every
   prototype and struct size before and after the migration. See [docs/bindgen.md](docs/bindgen.md).
@@ -205,7 +205,7 @@ resolved commit are compiled in: `typesafe-codon info`,
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
-| 0.1.0 | 3.5 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
+| 0.1.0 | 3.6 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
 
 ### Backends
 
@@ -476,6 +476,43 @@ Deliberate differences, all in favour of static checking:
   give 0 rather than NaN; and a vector tiny enough to underflow in float32
   becomes a zero vector in `make_unit_vector()` in Python, but a unit vector
   here.
+
+* **Sensor data (issue #24).**
+  - `raw_data()` is a method returning a zero-copy `Ptr[u8]` (with
+    `raw_size()` in bytes), not a `memoryview`. Elements (`image[i]`,
+    `radar[i]`, ...) are read-only copies; the Python API's `__setitem__` is
+    not provided.
+  - `Image.save_to_disk` writes PNG only, as LibCarla does when built with
+    PNG support only (CARLA's default build): any other extension is replaced
+    by `.png`, missing directories are created, and the path written is
+    returned. Depth and LogarithmicDepth give 8-bit gray, the others 8-bit
+    RGBA. The file is written uncompressed (stored deflate blocks, about 4
+    bytes per pixel), because LibCarla's `ImageIO` needs libpng's headers,
+    which LibCarla's build does not export to its users. The converters
+    reproduce LibCarla's `ColorConverter` (with Boost.GIL's rounding) and use
+    LibCarla's CityScapes palette (29 tags in 0.10.0, 30 in ue5-dev). One
+    PNG IDAT chunk holds the image, which limits it to about 0.5 Gpx.
+  - Paths of `save_to_disk` (images and point clouds) go through LibCarla's
+    `FileSystem::ValidateFilePath`. A bare file name (`"out.png"`) raises
+    `CarlaError` with CARLA 0.10.0 and ue5-dev alike, as it raises in the
+    official API: its parent path is empty, which libstdc++'s
+    `create_directories` (0.10.0) and `absolute` (ue5-dev) reject. Write
+    `"./out.png"` or give a directory.
+  - `LaneInvasionEvent.actor` always raises `CarlaError` ("trying to operate
+    on a destroyed actor ..."), as it raises `RuntimeError` in the Python API:
+    lane invasion is computed on the client, and LibCarla (0.10.0 and
+    ue5-dev) never gives these events an episode to resolve the actor in. The
+    actor is the lane-invasion sensor's parent.
+  - `LaneInvasionSensor` is the same type as `Sensor`.
+  - `OpticalFlowImage.get_color_coded_flow()` returns a `FakeImage` (the
+    Python API's name) with `raw_data()`, `pixel(x, y)` and byte indexing.
+  - DVS events are packed 13-byte records in LibCarla; `DVSEventArray` reads
+    them in place, and `to_image()` / `to_array*()` are computed in Codon
+    from that view (same results as LibCarla's `ToImage` / `ToArray*`).
+  - **Not supported: V2X** (`CAMEvent`, `CAMMessage`, `CustomV2XEvent`,
+    `CustomV2XData`, `CustomV2XBytes`). LibCarla 0.10.0 has no V2X data
+    types (they exist only in ue5-dev), so a 0.10.0 server cannot send them.
+    GBuffer textures (`Sensor.listen_to_gbuffer`) are not supported either.
 
 **Not a difference: lookups that can miss return `None`, as in Python.**
 `World.get_actor`, `World.try_spawn_actor`, `ActorList.find`,

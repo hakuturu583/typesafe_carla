@@ -88,6 +88,10 @@ static void test_layout(void) {
   CHECK(offsetof(tsc_vehicle_physics_control_t, max_torque) == 80);
   CHECK(offsetof(tsc_vehicle_physics_control_t, center_of_mass) == 240);
   CHECK(offsetof(tsc_vehicle_physics_control_t, differential_type) == 288);
+  /* Issue #24 */
+  CHECK(sizeof(tsc_radar_detection_t) == 16 && sizeof(tsc_radar_t) == 16);
+  CHECK(sizeof(tsc_semantic_lidar_detection_t) == 24 && sizeof(tsc_semantic_lidar_t) == 32);
+  CHECK(sizeof(tsc_dvs_t) == 32 && sizeof(tsc_optical_flow_t) == 32);
   /* Issue #22 */
   CHECK(sizeof(tsc_lane_marking_t) == 24);
   CHECK(sizeof(tsc_geo_location_t) == 24);
@@ -695,6 +699,20 @@ static void test_mock_sensors(void) {
   CHECK(image.data[4 * 3] == 3 && image.data[4 * 8 + 1] == 1); /* B = x, G = y */
   tsc_lidar_t lidar;
   CHECK(tsc_sensor_data_as_lidar(data, &lidar) == TSC_TYPE_ERROR);
+  /* Issue #24: conversions are checked; an image has no event actors. */
+  tsc_radar_t radar;
+  CHECK(tsc_sensor_data_as_radar(data, &radar) == TSC_TYPE_ERROR);
+  double distance = 0.0;
+  CHECK(tsc_obstacle_detection_get_distance(data, &distance) == TSC_TYPE_ERROR);
+  tsc_actor_t *event_actor = (tsc_actor_t *)0x1;
+  CHECK(tsc_collision_event_get_actor(data, &event_actor) == TSC_TYPE_ERROR && event_actor == NULL);
+  tsc_string_t written = {0};
+  CHECK(tsc_point_cloud_save_to_disk(data, "x.ply", 5, &written) == TSC_TYPE_ERROR);
+  CHECK(tsc_image_convert(data, 4) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_image_convert(data, TSC_COLOR_CONVERTER_RAW) == TSC_OK);
+  CHECK(image.data[4 * 3] == 3); /* Raw leaves the pixels unchanged */
+  CHECK(tsc_image_save_to_disk(data, "x.png", 5, -1, &written) == TSC_INVALID_ARGUMENT);
+  CHECK(written.data == NULL);
 
   CHECK_OK(tsc_sensor_stop(camera));
   CHECK_OK(tsc_sensor_is_listening(camera, &listening));

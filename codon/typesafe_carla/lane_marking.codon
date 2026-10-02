@@ -53,6 +53,13 @@ class LaneMarking:
     def _from_c(c: CLaneMarking) -> LaneMarking:
         return LaneMarking(int(c.type), int(c.color), int(c.lane_change), c.width)
 
+    def __eq__(self, other: LaneMarking) -> bool:
+        return (self.type == other.type and self.color == other.color and
+                self.lane_change == other.lane_change and self.width == other.width)
+
+    def __ne__(self, other: LaneMarking) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
         return (f"LaneMarking(type={self.type}, color={self.color}, "
                 f"lane_change={self.lane_change}, width={self.width})")

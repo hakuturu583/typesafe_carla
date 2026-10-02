@@ -1,0 +1,11 @@
+# CollisionEvent.other_actor is an Optional[Actor], not an actor id.
+# expect-error: 'int' does not match expected type 'Actor'
+import typesafe_carla as carla
+
+def other_id(collision: carla.Sensor) -> int:
+    event = collision.wait_for_data(1.0).as_collision()
+    actor_id: int = event.other_actor
+    return actor_id
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(other_id(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()))

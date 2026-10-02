@@ -209,6 +209,55 @@ try:
     for s in sensors:
         s.stop()
         s.destroy()
+    # Issue #24: more measurement types, conversion and files.
+    out("frame_number", int(image.frame_number == image.frame))
+    new_ids = ("sensor.other.radar", "sensor.lidar.ray_cast_semantic", "sensor.other.lane_invasion",
+               "sensor.other.obstacle", "sensor.camera.dvs", "sensor.camera.optical_flow",
+               "sensor.camera.depth", "sensor.camera.semantic_segmentation")
+    out("sensor_types", ",".join(str(int(len(lib.filter(i)) > 0)) for i in new_ids))
+    tmp = os.path.join(os.environ.get("TMPDIR", "/tmp"), "tsc_compat_official")
+    bps24 = []
+    for i in ("sensor.camera.depth", "sensor.camera.semantic_segmentation"):
+        b = lib.find(i)
+        b.set_attribute("image_size_x", "32")
+        b.set_attribute("image_size_y", "24")
+        bps24.append(b)
+    sem_bp = lib.find("sensor.lidar.ray_cast_semantic")
+    sem_bp.set_attribute("channels", "16")
+    bps24 += [sem_bp, lidar_bp, lib.find("sensor.other.radar")]
+    sensors = [world.spawn_actor(b, carla.Transform(carla.Location(0.0, 0.0, 2.0)), attach_to=vehicle)
+               for b in bps24]
+    queues = [queue.Queue() for _ in sensors]
+    for s, q in zip(sensors, queues):
+        s.listen(q.put)
+    world.tick()
+    depth, seg, sem, sweep, radar = (q.get(timeout=20.0) for q in queues)
+    saved = depth.save_to_disk(os.path.join(tmp, "depth.jpg"), carla.ColorConverter.Depth)
+    out("image_saved", os.path.basename(saved))
+    os.remove(saved)
+    depth.convert(carla.ColorConverter.LogarithmicDepth)
+    reds = bytes(depth.raw_data)[2::4]
+    out("depth_log_mean", f"{sum(reds) / len(reds):.3f}")
+    tags = bytes(seg.raw_data)[2::4]
+    seg.convert(carla.ColorConverter.CityScapesPalette)
+    data = bytes(seg.raw_data)
+    pairs = sorted({f"{tags[i]}:{data[4 * i + 2]},{data[4 * i + 1]},{data[4 * i]},{data[4 * i + 3]}"
+                    for i in range(len(tags))})
+    out("palette", ";".join(pairs))
+    out("semantic_lidar", f"{sem.channels},"
+                          f"{int(sum(sem.get_point_count(c) for c in range(sem.channels)) == len(sem))},"
+                          f"{int(len(sem.raw_data) == 24 * len(sem))}")
+    ply = sweep.save_to_disk(os.path.join(tmp, "cloud.txt"))
+    with open(ply) as f:
+        header = [next(f).strip() for _ in range(8)]
+    os.remove(ply)
+    header[2] = header[2].rsplit(" ", 1)[0] + (" N" if header[2].endswith(f" {len(sweep)}") else " ?")
+    out("lidar_ply", os.path.basename(ply) + ";" + ";".join(header))
+    out("radar_view", f"{int(radar.get_detection_count() == len(radar))},"
+                      f"{int(len(radar.raw_data) == 16 * len(radar))}")
+    for s in sensors:
+        s.stop()
+        s.destroy()
     # Issue #11: Sensor.listen(callback); one image per synchronous tick.
     cb_frames = []
     cam = world.spawn_actor(cam_bp, carla.Transform(carla.Location(0.0, 0.0, 2.0)),

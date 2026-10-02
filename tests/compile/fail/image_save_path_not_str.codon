@@ -1,0 +1,9 @@
+# save_to_disk takes the path first; a converter is not a path.
+# expect-error: 'int' does not match expected type 'str'
+import typesafe_carla as carla
+
+def save(camera: carla.Sensor) -> str:
+    return camera.wait_for_data(1.0).as_image().save_to_disk(carla.ColorConverter.Depth)
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(save(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()))
