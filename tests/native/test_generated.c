@@ -96,11 +96,11 @@ int main(void) {
   expect_null_rejected(tsc_client_set_files_base_folder(NULL, NULL, 1, (int32_t[1]){0}), "tsc_client_set_files_base_folder");
   expect_null_rejected(tsc_collision_event_get_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_collision_event_get_actor");
   expect_null_rejected(tsc_collision_event_get_other_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_collision_event_get_other_actor");
-  expect_null_rejected(tsc_debug_draw_point(NULL, NULL, 0, NULL, NAN), "tsc_debug_draw_point");
-  expect_null_rejected(tsc_debug_draw_line(NULL, NULL, NULL, 0, NULL, NAN), "tsc_debug_draw_line");
-  expect_null_rejected(tsc_debug_draw_arrow(NULL, NULL, NULL, 0, 0, NULL, NAN), "tsc_debug_draw_arrow");
-  expect_null_rejected(tsc_debug_draw_box(NULL, NULL, NULL, 0, NULL, NAN), "tsc_debug_draw_box");
-  expect_null_rejected(tsc_debug_draw_string(NULL, NULL, NULL, 1, 0, NULL, NAN), "tsc_debug_draw_string");
+  expect_null_rejected(tsc_debug_draw_point(NULL, NULL, 0, NULL, NAN, 0), "tsc_debug_draw_point");
+  expect_null_rejected(tsc_debug_draw_line(NULL, NULL, NULL, 0, NULL, NAN, 0), "tsc_debug_draw_line");
+  expect_null_rejected(tsc_debug_draw_arrow(NULL, NULL, NULL, 0, 0, NULL, NAN, 0), "tsc_debug_draw_arrow");
+  expect_null_rejected(tsc_debug_draw_box(NULL, NULL, NULL, 0, NULL, NAN, 0), "tsc_debug_draw_box");
+  expect_null_rejected(tsc_debug_draw_string(NULL, NULL, NULL, 1, 0, NULL, NAN, 0), "tsc_debug_draw_string");
   expect_null_rejected(tsc_debug_clear_shapes(NULL), "tsc_debug_clear_shapes");
   expect_null_rejected(tsc_debug_clear_strings(NULL), "tsc_debug_clear_strings");
   expect_null_rejected(tsc_junction_get_id(NULL, (int32_t[1]){0}), "tsc_junction_get_id");
