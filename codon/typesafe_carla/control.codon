@@ -4,7 +4,7 @@ from ._ffi import (Handle, CVehicleControl, CWalkerControl, CVector2D, CVehicleP
                    CWheelPhysicsControl, tsc_vehicle_get_physics_control,
                    tsc_physics_control_view, tsc_vehicle_apply_physics_control)
 from .errors import _check, _u8, _i32
-from .geometry import Location, Vector2D, Vector3D
+from .geometry import Location, Vector2D, Vector3D, _vector_or, _location_or
 
 class VehicleControl:
     throttle: float  # [0, 1]
@@ -128,7 +128,7 @@ class WheelPhysicsControl:
 
     def __init__(self,
                  axle_type: int = 0,
-                 offset: Optional[Vector3D] = None,
+                 offset = None,
                  wheel_radius: float = 30.0,
                  wheel_width: float = 30.0,
                  wheel_mass: float = 30.0,
@@ -147,8 +147,8 @@ class WheelPhysicsControl:
                  max_wheelspin_rotation: float = 30.0,
                  external_torque_combine_method: int = 0,
                  lateral_slip_graph: Optional[List[Vector2D]] = None,
-                 suspension_axis: Optional[Vector3D] = None,
-                 suspension_force_offset: Optional[Vector3D] = None,
+                 suspension_axis = None,
+                 suspension_force_offset = None,
                  suspension_max_raise: float = 10.0,
                  suspension_max_drop: float = 10.0,
                  suspension_damping_ratio: float = 0.5,
@@ -162,11 +162,13 @@ class WheelPhysicsControl:
                  max_brake_torque: float = 1500.0,
                  max_hand_brake_torque: float = 3000.0,
                  wheel_index: int = -1,
-                 location: Optional[Location] = None,
-                 old_location: Optional[Location] = None,
-                 velocity: Optional[Vector3D] = None):
+                 location = None,
+                 old_location = None,
+                 velocity = None):
         self.axle_type = axle_type
-        self.offset = offset if offset is not None else Vector3D()
+        # Vector and position parameters accept the other type, as in the Python API
+        # (geometry._vector_or / _location_or): a compat warning, or a strict error.
+        self.offset = _vector_or(offset, Vector3D(), "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(offset=...)")
         self.wheel_radius = wheel_radius
         self.wheel_width = wheel_width
         self.wheel_mass = wheel_mass
@@ -186,10 +188,12 @@ class WheelPhysicsControl:
         self.external_torque_combine_method = external_torque_combine_method
         self.lateral_slip_graph = (lateral_slip_graph if lateral_slip_graph is not None
                                    else List[Vector2D]())
-        self.suspension_axis = (suspension_axis if suspension_axis is not None
-                                else Vector3D(0.0, 0.0, -1.0))
-        self.suspension_force_offset = (
-            suspension_force_offset if suspension_force_offset is not None else Vector3D())
+        self.suspension_axis = _vector_or(
+            suspension_axis, Vector3D(0.0, 0.0, -1.0),
+            "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(suspension_axis=...)")
+        self.suspension_force_offset = _vector_or(
+            suspension_force_offset, Vector3D(),
+            "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(suspension_force_offset=...)")
         self.suspension_max_raise = suspension_max_raise
         self.suspension_max_drop = suspension_max_drop
         self.suspension_damping_ratio = suspension_damping_ratio
@@ -203,9 +207,10 @@ class WheelPhysicsControl:
         self.max_brake_torque = max_brake_torque
         self.max_hand_brake_torque = max_hand_brake_torque
         self.wheel_index = wheel_index
-        self.location = location if location is not None else Location()
-        self.old_location = old_location if old_location is not None else Location()
-        self.velocity = velocity if velocity is not None else Vector3D()
+        self.location = _location_or(location, "[tsc-compat] a Vector3D passed as a Location to WheelPhysicsControl(location=...)")
+        self.old_location = _location_or(
+            old_location, "[tsc-compat] a Vector3D passed as a Location to WheelPhysicsControl(old_location=...)")
+        self.velocity = _vector_or(velocity, Vector3D(), "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(velocity=...)")
 
     def __eq__(self, other: WheelPhysicsControl) -> bool:
         return _fields_eq(self, other)
@@ -335,12 +340,12 @@ class VehiclePhysicsControl:
                  transmission_efficiency: float = 0.9,
                  mass: float = 1000.0,
                  drag_coefficient: float = 0.3,
-                 center_of_mass: Optional[Location] = None,
+                 center_of_mass = None,
                  chassis_width: float = 180.0,
                  chassis_height: float = 140.0,
                  downforce_coefficient: float = 0.3,
                  drag_area: float = 0.0,
-                 inertia_tensor_scale: Optional[Vector3D] = None,
+                 inertia_tensor_scale = None,
                  sleep_threshold: float = 10.0,
                  sleep_slope_limit: float = 0.866,
                  steering_curve: Optional[List[Vector2D]] = None,
@@ -368,13 +373,16 @@ class VehiclePhysicsControl:
         self.transmission_efficiency = transmission_efficiency
         self.mass = mass
         self.drag_coefficient = drag_coefficient
-        self.center_of_mass = center_of_mass if center_of_mass is not None else Location()
+        # Vector and position parameters accept the other type, as in the Python API.
+        self.center_of_mass = _location_or(
+            center_of_mass, "[tsc-compat] a Vector3D passed as a Location to VehiclePhysicsControl(center_of_mass=...)")
         self.chassis_width = chassis_width
         self.chassis_height = chassis_height
         self.downforce_coefficient = downforce_coefficient
         self.drag_area = drag_area
-        self.inertia_tensor_scale = (inertia_tensor_scale if inertia_tensor_scale is not None
-                                     else Vector3D(1.0, 1.0, 1.0))
+        self.inertia_tensor_scale = _vector_or(
+            inertia_tensor_scale, Vector3D(1.0, 1.0, 1.0),
+            "[tsc-compat] a Location passed as a Vector3D to VehiclePhysicsControl(inertia_tensor_scale=...)")
         self.sleep_threshold = sleep_threshold
         self.sleep_slope_limit = sleep_slope_limit
         self.steering_curve = (steering_curve if steering_curve is not None
@@ -466,9 +474,11 @@ class WalkerControl:
     speed: float  # m/s
     jump: bool
 
-    def __init__(self, direction: Optional[Vector3D] = None, speed: float = 0.0,
-                 jump: bool = False):
-        self.direction = direction if direction is not None else Vector3D(1.0, 0.0, 0.0)
+    def __init__(self, direction = None, speed: float = 0.0, jump: bool = False):
+        """direction: Optional[Vector3D] (a Location is accepted as in the Python API)."""
+        self.direction = _vector_or(
+            direction, Vector3D(1.0, 0.0, 0.0),
+            "[tsc-compat] a Location passed as a Vector3D to WalkerControl(direction=...)")
         self.speed = speed
         self.jump = jump
 

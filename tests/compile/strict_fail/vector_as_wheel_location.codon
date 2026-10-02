@@ -1,0 +1,8 @@
+# In strict mode a wheel location is a Location.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def wheel(v: carla.Vector3D) -> carla.WheelPhysicsControl:
+    return carla.WheelPhysicsControl(location=v)
+
+wheel(carla.Vector3D())

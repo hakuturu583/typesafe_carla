@@ -1,0 +1,76 @@
+# Issue #10 against a real CARLA server: a Location drives a target velocity,
+# directly and via a batch command, and agrees with the explicit as_vector()
+# path. Location - Location is a Vector3D, as in the CARLA 0.10.0 Python API.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(20.0)
+world = client.get_world()
+m = world.get_map()
+spawn = m.get_spawn_points()[0]
+bp = world.get_blueprint_library().find("vehicle.lincoln.mkz")
+vehicle = world.spawn_actor(bp, spawn).as_vehicle()
+original = world.get_settings()
+try:
+    settings = world.get_settings()
+    settings.synchronous_mode = True
+    settings.fixed_delta_seconds = 0.05
+    world.apply_settings(settings)
+    for _ in range(20):
+        world.tick()
+
+    here = vehicle.get_location()
+    ahead = here + carla.Location(spawn.get_forward_vector().x * 10.0, spawn.get_forward_vector().y * 10.0, 0.0)
+    offset = ahead - here                      # a Vector3D, as in the Python API
+    assert type(offset).__name__ == "Vector3D"
+    target = offset.make_unit_vector() * 5.0   # a Vector3D
+    assert type(target).__name__ == "Vector3D"
+
+    # Location passed where a Vector3D is expected (compat path, warns once).
+    vehicle.set_target_velocity(carla.Location(target.x, target.y, target.z))
+    world.tick()
+    v1 = vehicle.get_velocity()
+    print("velocity after Location target", v1, "speed", v1.length())
+    assert v1.length() > 2.0, v1
+    assert v1.dot(target) > 0.0, (v1, target)
+
+    vehicle.set_target_velocity(carla.Vector3D())
+    for _ in range(10):
+        world.tick()
+
+    # Batch command with a Location velocity.
+    loc_target = carla.Location(target.x, target.y, target.z)
+    r = client.apply_batch_sync([carla.command.ApplyTargetVelocity(vehicle.id, loc_target)], True)
+    assert not r[0].has_error(), r[0].error
+    v2 = vehicle.get_velocity()
+    print("velocity after batch Location target", v2)
+    assert v2.length() > 2.0 and v2.dot(target) > 0.0, v2
+
+    vehicle.set_target_velocity(carla.Vector3D())
+    for _ in range(10):
+        world.tick()
+
+    # The explicit path gives the same motion.
+    vehicle.set_target_velocity(loc_target.as_vector())
+    world.tick()
+    v3 = vehicle.get_velocity()
+    print("velocity after as_vector() target", v3)
+    assert v3.length() > 2.0 and v3.dot(target) > 0.0, v3
+    assert abs(v3.length() - v1.length()) < 1.0, (v1, v3)
+
+    # Impulse/force with Location values are accepted by the server.
+    vehicle.add_impulse(carla.Location(0.0, 0.0, 10.0))
+    vehicle.add_force(carla.Location(0.0, 0.0, 10.0))
+    world.tick()
+    p = vehicle.get_location()
+    assert p.distance(here) < 50.0, (p, here)
+finally:
+    world.apply_settings(original)
+    destroyed = vehicle.destroy()
+assert destroyed
+print("OK")

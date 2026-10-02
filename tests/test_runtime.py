@@ -137,3 +137,71 @@ def test_program_arguments_reach_the_program(launcher, tmp_path):
     result = launcher("run", source, "a", "-b")
     assert result.returncode == 3, result.stderr
     assert result.stdout.strip() == "['a', '-b']"
+
+COMPAT = Path(__file__).resolve().parent / "unit" / "compat"
+_WARNING = "typesafe_carla: warning: "
+
+
+def test_compat_warning_printed_once_per_api(launcher):
+    """A Location passed as a Vector3D (or the reverse) warns once per API, on stderr (#10)."""
+    result = launcher("run", str(COMPAT / "location_as_vector.codon"),
+                      env={"TYPESAFE_CARLA_COMPAT_WARNINGS": "1", "TYPESAFE_CARLA_STRICT": "0"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip().endswith("OK")
+    warnings = [l for l in result.stderr.splitlines() if l.startswith(_WARNING)]
+    assert len(warnings) == 3, result.stderr
+    assert "a Location passed as a Vector3D to Actor.set_target_velocity" in warnings[0]
+    assert "a Location passed as a Vector3D to Actor.add_force" in warnings[1]
+    assert "a Vector3D passed as a Location to Actor.set_location" in warnings[2]
+    assert "carla.Location(v)" in warnings[2]
+    assert "location.as_vector()" in warnings[0] and "[tsc-compat]" not in result.stderr
+    compile_warnings = [l for l in result.stderr.splitlines()
+                        if l.startswith("typesafe-codon: compile-time warning: ")]
+    assert sorted(l.split(": ")[2] for l in compile_warnings) == [
+        "a Location passed as a Vector3D to Actor.add_force",
+        "a Location passed as a Vector3D to Actor.set_target_velocity",
+        "a Vector3D passed as a Location to Actor.set_location"], result.stderr
+
+
+def test_compat_warning_silenced(launcher):
+    result = launcher("run", str(COMPAT / "location_as_vector.codon"),
+                      env={"TYPESAFE_CARLA_COMPAT_WARNINGS": "0", "TYPESAFE_CARLA_STRICT": "0"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "warning" not in result.stderr, result.stderr
+
+
+def test_no_compat_warning_for_explicit_conversion(launcher):
+    result = launcher("run", str(COMPAT / "explicit_as_vector.codon"),
+                      env={"TYPESAFE_CARLA_COMPAT_WARNINGS": "1", "TYPESAFE_CARLA_STRICT": "0"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "warning" not in result.stderr, result.stderr
+
+
+def test_explicit_conversion_runs_in_strict_mode(launcher):
+    result = launcher("--strict", "run", str(COMPAT / "explicit_as_vector.codon"))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_strict_rejects_location_as_vector(launcher):
+    result = launcher("--strict", "run", str(COMPAT / "location_as_vector.codon"))
+    assert result.returncode != 0
+    assert ("strict mode: convert with location.as_vector() (Location as Vector3D is a "
+            "Python-API compatibility shortcut)") in result.stderr, result.stderr
+
+
+def test_compat_literal_only_in_programs_that_use_the_path(launcher, tmp_path):
+    """The "[tsc-compat] " string constant is in the IR exactly when the path is used."""
+    import re
+    literal = re.compile(r'c"\[tsc-compat\] ([^"]*)\\00"')
+    found = {}
+    for name in ("location_as_vector", "explicit_as_vector"):
+        ll = tmp_path / f"{name}.ll"
+        result = launcher("build", "--llvm", "-o", str(ll), str(COMPAT / f"{name}.codon"),
+                          env={"TYPESAFE_CARLA_STRICT": "0"})
+        assert result.returncode == 0, result.stderr
+        found[name] = set(literal.findall(ll.read_text()))
+    assert found["location_as_vector"] == {
+        "a Location passed as a Vector3D to Actor.set_target_velocity",
+        "a Location passed as a Vector3D to Actor.add_force",
+        "a Vector3D passed as a Location to Actor.set_location"}
+    assert found["explicit_as_vector"] == set()

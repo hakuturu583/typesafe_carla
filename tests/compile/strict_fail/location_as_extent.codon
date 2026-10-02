@@ -1,0 +1,8 @@
+# In strict mode a BoundingBox extent is a Vector3D, not a position.
+# expect-error: strict mode: convert with location.as_vector() (Location as Vector3D is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def box(l: carla.Location) -> carla.BoundingBox:
+    return carla.BoundingBox(carla.Location(), l)
+
+box(carla.Location())

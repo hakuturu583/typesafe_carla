@@ -1,0 +1,9 @@
+# Accepting a Location as a Vector3D does not open the door to other types.
+# expect-error: 'Rotation' does not match expected type 'Vector3D'
+import typesafe_carla as carla
+
+def push(actor: carla.Actor):
+    actor.set_target_velocity(actor.get_transform().rotation)
+
+_world = carla.Client("localhost", 2000).get_world()
+push(_world.get_actors()[0])

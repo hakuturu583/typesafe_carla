@@ -1,0 +1,8 @@
+# In strict mode a BoundingBox center is a Location.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def box(v: carla.Vector3D) -> carla.BoundingBox:
+    return carla.BoundingBox(v, carla.Vector3D(1.0, 1.0, 1.0))
+
+box(carla.Vector3D())

@@ -1,0 +1,8 @@
+# Vector3D's operators and methods take a Vector3D or a Location, nothing else.
+# expect-error: 'Rotation' does not match expected type 'Vector3D'
+import typesafe_carla as carla
+
+def shift(l: carla.Location, r: carla.Rotation) -> carla.Vector3D:
+    return l + r
+
+shift(carla.Location(), carla.Rotation())

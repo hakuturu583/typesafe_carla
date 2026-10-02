@@ -31,7 +31,7 @@ from ._ffi import (Handle, CSensorDataInfo, CImage, CLidar, CLidarPoint, CGnss, 
                    tsc_sensor_data_as_imu, tsc_sensor_data_as_collision,
                    TSC_INVALID_ARGUMENT, TSC_ERROR)
 from .errors import _check, CarlaError, _normalize_index
-from .geometry import Location, Transform, Vector3D
+from .geometry import Location, Transform, Vector3D, _location_arg
 from .blueprint import Color
 from .actor import Actor
 from ._callbacks import (_register_callback, _unregister_callback, _find_callback, _pop,
@@ -134,8 +134,10 @@ class LidarDetection:
     point: Location
     intensity: float
 
-    def __init__(self, point: Location, intensity: float):
-        self.point = point
+    def __init__(self, point, intensity: float):
+        """point: Location (a Vector3D is accepted as in the Python API)."""
+        self.point = _location_arg(
+            point, "[tsc-compat] a Vector3D passed as a Location to LidarDetection(point)")
         self.intensity = intensity
 
     def __repr__(self) -> str:

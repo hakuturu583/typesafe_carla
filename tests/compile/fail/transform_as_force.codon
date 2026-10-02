@@ -1,0 +1,9 @@
+# A Transform is not a Vector3D (batch commands check it too).
+# expect-error: 'Transform' does not match expected type 'Vector3D'
+import typesafe_carla as carla
+
+def push(actor: carla.Actor):
+    return carla.command.ApplyForce(actor.id, actor.get_transform())
+
+_world = carla.Client("localhost", 2000).get_world()
+push(_world.get_actors()[0])

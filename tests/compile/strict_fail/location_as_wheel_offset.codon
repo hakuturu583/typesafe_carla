@@ -1,0 +1,8 @@
+# In strict mode a wheel offset is a Vector3D, not a position.
+# expect-error: strict mode: convert with location.as_vector() (Location as Vector3D is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def wheel(l: carla.Location) -> carla.WheelPhysicsControl:
+    return carla.WheelPhysicsControl(offset=l)
+
+wheel(carla.Location())

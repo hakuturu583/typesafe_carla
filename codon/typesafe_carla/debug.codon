@@ -4,7 +4,7 @@ from ._ffi import (CColor, CVector3D, CBoundingBox, CRotation, tsc_debug_draw_po
                    tsc_debug_draw_line, tsc_debug_draw_arrow, tsc_debug_draw_box,
                    tsc_debug_draw_string, TSC_INVALID_ARGUMENT)
 from .errors import _check, CarlaError
-from .geometry import Location, Rotation, BoundingBox
+from .geometry import Location, Rotation, BoundingBox, _location_arg
 from .blueprint import Color
 from .world import World
 
@@ -16,9 +16,10 @@ def _color(c: Color) -> Ptr[CColor]:
     p[0] = CColor(u8(c.r), u8(c.g), u8(c.b), u8(c.a))
     return p
 
-def _loc(l: Location) -> Ptr[CVector3D]:
+def _loc(l, what: Literal[str]) -> Ptr[CVector3D]:
+    """l: Location (a Vector3D is accepted as in the Python API)."""
     p = Ptr[CVector3D](1)
-    p[0] = l._to_c()
+    p[0] = _location_arg(l, what)._to_c()
     return p
 
 class DebugHelper:
@@ -28,21 +29,24 @@ class DebugHelper:
     def __init__(self, world: World):
         self._world = world
 
-    def draw_point(self, location: Location, size: float = 0.1,
+    def draw_point(self, location, size: float = 0.1,
                    color: Color = Color(255, 0, 0), life_time: float = -1.0):
-        _check(tsc_debug_draw_point(self._world._h.ptr, _loc(location), size, _color(color),
-                                    life_time))
+        p = _loc(location, "[tsc-compat] a Vector3D passed as a Location to debug.draw_point")
+        _check(tsc_debug_draw_point(self._world._h.ptr, p, size, _color(color), life_time))
 
-    def draw_line(self, begin: Location, end: Location, thickness: float = 0.1,
+    def draw_line(self, begin, end, thickness: float = 0.1,
                   color: Color = Color(255, 0, 0), life_time: float = -1.0):
-        _check(tsc_debug_draw_line(self._world._h.ptr, _loc(begin), _loc(end), thickness,
-                                   _color(color), life_time))
+        b = _loc(begin, "[tsc-compat] a Vector3D passed as a Location to debug.draw_line")
+        e = _loc(end, "[tsc-compat] a Vector3D passed as a Location to debug.draw_line")
+        _check(tsc_debug_draw_line(self._world._h.ptr, b, e, thickness, _color(color), life_time))
 
-    def draw_arrow(self, begin: Location, end: Location, thickness: float = 0.1,
+    def draw_arrow(self, begin, end, thickness: float = 0.1,
                    arrow_size: float = 0.1, color: Color = Color(255, 0, 0),
                    life_time: float = -1.0):
-        _check(tsc_debug_draw_arrow(self._world._h.ptr, _loc(begin), _loc(end), thickness,
-                                    arrow_size, _color(color), life_time))
+        b = _loc(begin, "[tsc-compat] a Vector3D passed as a Location to debug.draw_arrow")
+        e = _loc(end, "[tsc-compat] a Vector3D passed as a Location to debug.draw_arrow")
+        _check(tsc_debug_draw_arrow(self._world._h.ptr, b, e, thickness, arrow_size, _color(color),
+                                    life_time))
 
     def draw_box(self, box: BoundingBox, rotation: Rotation, thickness: float = 0.1,
                  color: Color = Color(255, 0, 0), life_time: float = -1.0):
@@ -52,9 +56,10 @@ class DebugHelper:
         r[0] = rotation._to_c()
         _check(tsc_debug_draw_box(self._world._h.ptr, b, r, thickness, _color(color), life_time))
 
-    def draw_string(self, location: Location, text: str, draw_shadow: bool = False,
+    def draw_string(self, location, text: str, draw_shadow: bool = False,
                     color: Color = Color(255, 0, 0), life_time: float = -1.0):
-        _check(tsc_debug_draw_string(self._world._h.ptr, _loc(location), text.ptr, text.len,
+        p = _loc(location, "[tsc-compat] a Vector3D passed as a Location to debug.draw_string")
+        _check(tsc_debug_draw_string(self._world._h.ptr, p, text.ptr, text.len,
                                      i32(int(draw_shadow)), _color(color), life_time))
 
 @extend

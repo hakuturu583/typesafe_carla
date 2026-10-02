@@ -1,0 +1,8 @@
+# In strict mode command.ApplyLocation takes a Location.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def move(actor_id: int, v: carla.Vector3D):
+    return carla.command.ApplyLocation(actor_id, v)
+
+move(1, carla.Vector3D())

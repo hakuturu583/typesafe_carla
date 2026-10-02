@@ -1,0 +1,9 @@
+# Accepting a Vector3D as a Location does not open the door to other types.
+# expect-error: 'Rotation' does not match expected type 'Location'
+import typesafe_carla as carla
+
+def teleport(actor: carla.Actor):
+    actor.set_location(actor.get_transform().rotation)
+
+_world = carla.Client("localhost", 2000).get_world()
+teleport(_world.get_actors()[0])

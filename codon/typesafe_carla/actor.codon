@@ -24,7 +24,7 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_vehicle_is_at_traffic_light)
 from .errors import _check, _check_light_state, _check_port, _normalize_index
 from ._callbacks import _unregister_callback
-from .geometry import BoundingBox, Location, Transform, Vector3D
+from .geometry import BoundingBox, Location, Transform, Vector3D, _vector_arg, _location_arg
 from .control import VehicleControl, VehiclePhysicsControl
 
 TM_DEFAULT_PORT = 8000
@@ -68,20 +68,20 @@ class Actor:
         _check(tsc_actor_get_location(self._h.ptr, out))
         return Location._from_c(out[0])
 
-    def set_location(self, location: Location):
-        v = Ptr[CVector3D](1)
-        v[0] = location._to_c()
-        _check(tsc_actor_set_location(self._h.ptr, v))
+    def set_location(self, location):
+        """location: Location (a Vector3D is accepted as in the Python API)."""
+        self._vector_call(tsc_actor_set_location, _location_arg(
+            location, "[tsc-compat] a Vector3D passed as a Location to Actor.set_location"))
 
     def get_velocity(self) -> Vector3D:
         out = Ptr[CVector3D](1)
         _check(tsc_actor_get_velocity(self._h.ptr, out))
         return Vector3D._from_c(out[0])
 
-    def set_target_velocity(self, velocity: Vector3D):
-        v = Ptr[CVector3D](1)
-        v[0] = velocity._to_c()
-        _check(tsc_actor_set_target_velocity(self._h.ptr, v))
+    def set_target_velocity(self, velocity):
+        """velocity: Vector3D, m/s (a Location is accepted as in the Python API)."""
+        self._vector_call(tsc_actor_set_target_velocity, _vector_arg(
+            velocity, "[tsc-compat] a Location passed as a Vector3D to Actor.set_target_velocity"))
 
     def get_acceleration(self) -> Vector3D:
         out = Ptr[CVector3D](1)
@@ -100,21 +100,30 @@ class Actor:
         p[0] = v._to_c()
         _check(fn(self._h.ptr, p))
 
-    def set_target_angular_velocity(self, angular_velocity: Vector3D):
-        """Degrees per second."""
-        self._vector_call(tsc_actor_set_target_angular_velocity, angular_velocity)
+    def set_target_angular_velocity(self, angular_velocity):
+        """angular_velocity: Vector3D, degrees per second (a Location is accepted as in the Python API)."""
+        self._vector_call(tsc_actor_set_target_angular_velocity, _vector_arg(
+            angular_velocity, "[tsc-compat] a Location passed as a Vector3D to Actor.set_target_angular_velocity"))
 
-    def add_impulse(self, impulse: Vector3D):
-        self._vector_call(tsc_actor_add_impulse, impulse)
+    def add_impulse(self, impulse):
+        """impulse: Vector3D (a Location is accepted as in the Python API)."""
+        self._vector_call(tsc_actor_add_impulse, _vector_arg(
+            impulse, "[tsc-compat] a Location passed as a Vector3D to Actor.add_impulse"))
 
-    def add_force(self, force: Vector3D):
-        self._vector_call(tsc_actor_add_force, force)
+    def add_force(self, force):
+        """force: Vector3D (a Location is accepted as in the Python API)."""
+        self._vector_call(tsc_actor_add_force, _vector_arg(
+            force, "[tsc-compat] a Location passed as a Vector3D to Actor.add_force"))
 
-    def add_angular_impulse(self, angular_impulse: Vector3D):
-        self._vector_call(tsc_actor_add_angular_impulse, angular_impulse)
+    def add_angular_impulse(self, angular_impulse):
+        """angular_impulse: Vector3D (a Location is accepted as in the Python API)."""
+        self._vector_call(tsc_actor_add_angular_impulse, _vector_arg(
+            angular_impulse, "[tsc-compat] a Location passed as a Vector3D to Actor.add_angular_impulse"))
 
-    def add_torque(self, torque: Vector3D):
-        self._vector_call(tsc_actor_add_torque, torque)
+    def add_torque(self, torque):
+        """torque: Vector3D (a Location is accepted as in the Python API)."""
+        self._vector_call(tsc_actor_add_torque, _vector_arg(
+            torque, "[tsc-compat] a Location passed as a Vector3D to Actor.add_torque"))
 
     def set_simulate_physics(self, enabled: bool = True):
         _check(tsc_actor_set_simulate_physics(self._h.ptr, i32(int(enabled))))

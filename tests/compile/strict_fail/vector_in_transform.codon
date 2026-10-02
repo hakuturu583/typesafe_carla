@@ -1,0 +1,9 @@
+# In strict mode, Location arithmetic (a Vector3D) must be converted back to a
+# Location before it becomes a Transform's location.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def ahead(t: carla.Transform) -> carla.Transform:
+    return carla.Transform(t.location + carla.Location(0.0, 0.0, 1.0), t.rotation)
+
+ahead(carla.Transform())

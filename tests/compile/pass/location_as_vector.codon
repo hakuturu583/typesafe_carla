@@ -1,0 +1,103 @@
+# As in the CARLA Python API, Location derives from Vector3D: a Location is
+# accepted wherever a Vector3D is (with a one-time warning at run time; a
+# compile error under `# strict`, see fail/strict_location_as_velocity.codon).
+import typesafe_carla as carla
+
+def push(actor: carla.Actor, other: carla.Actor):
+    here: carla.Location = actor.get_location()
+    # Location - Location is a Vector3D, as in the CARLA 0.10.0 Python API.
+    offset: carla.Vector3D = other.get_location() - here
+    actor.set_target_velocity(offset)
+    actor.set_target_velocity(other.get_location() - here)
+    actor.set_target_velocity(actor.get_location())
+    actor.set_target_angular_velocity(here)
+    actor.add_impulse(here)
+    actor.add_force(here)
+    actor.add_angular_impulse(here)
+    actor.add_torque(here)
+    batch = [carla.command.ApplyTargetVelocity(actor.id, offset),
+             carla.command.ApplyTargetAngularVelocity(actor.id, here),
+             carla.command.ApplyImpulse(actor.id, here), carla.command.ApplyForce(actor.id, here),
+             carla.command.ApplyAngularImpulse(actor.id, here), carla.command.ApplyTorque(actor.id, here)]
+    # A Location itself, passed as a Vector3D (compat path).
+    o: Optional[carla.Location] = here
+    walk = carla.WalkerControl(here, 1.0)
+    walk2 = carla.WalkerControl(direction=o)
+    # An Optional[Location] passed straight to a vector parameter.
+    actor.set_target_velocity(o)
+    actor.add_force(o)
+    batch.append(carla.command.ApplyImpulse(actor.id, o))
+    box = carla.BoundingBox(here, here)
+    wheel = carla.WheelPhysicsControl(offset=here, suspension_axis=here,
+                                      suspension_force_offset=here, velocity=here)
+    phys = carla.VehiclePhysicsControl(inertia_tensor_scale=here)
+
+# Python idioms: Vector3D's methods and operators on Locations.
+def geometry(a: carla.Location, b: carla.Location, v: carla.Vector3D):
+    s: carla.Vector3D = a + b
+    d: carla.Vector3D = a - b
+    m: carla.Vector3D = abs(a)
+    n2: float = a.dot_2d(b)
+    scaled: carla.Vector3D = a * 2.0
+    scaled2: carla.Vector3D = 2.0 * a
+    halved: carla.Vector3D = a / 2.0
+    mixed: carla.Vector3D = v + a
+    mixed2: carla.Vector3D = a + v
+    mixed3: carla.Vector3D = v - a
+    n: float = a.length() + a.squared_length() + a.dot(v) + v.dot(a)
+    c: carla.Vector3D = a.cross(b)
+    u: carla.Vector3D = a.make_unit_vector()
+    dist: float = a.distance(b) + a.distance_2d(b) + a.distance_squared(v) + a.distance_squared_2d(b)
+    ang: float = a.get_vector_angle(v)
+    same: bool = a == v or v == a or a != b
+    x: float = a.x + a.y + a.z
+    # A Location goes into a Vector3D variable, list or user function.
+    as_v: carla.Vector3D = a
+    vs = [v, a]
+    vs.append(b)
+    take_vector(a)
+    # Explicit conversions still work.
+    back: carla.Location = carla.Location.from_vector(v)
+    back2: carla.Location = carla.Location(v)
+    as_vec: carla.Vector3D = carla.Vector3D(a)        # Vector3D(location), as in Python
+    copy: carla.Vector3D = carla.Vector3D(v)
+    exp: carla.Vector3D = a.as_vector()
+
+# Arguments whose type Codon infers late: geometry reached through an
+# Optional (implicitly unwrapped), as in test_m1_world.codon.
+def through_optional(world: carla.World):
+    m = world.get_map()
+    sp = m.get_spawn_points()
+    wp = m.get_waypoint(sp[0].location)          # Optional[Waypoint]
+    ahead = wp.next(10.0)
+    d: float = ahead[0].transform.location.distance(wp.transform.location)
+    here = sp[0].location
+    v = carla.Vector3D(1.0, 0.0, 0.0)
+    s: carla.Vector3D = here + wp.transform.location
+    diff: carla.Vector3D = here - wp.transform.location
+    same: bool = here == wp.transform.location or here != wp.transform.location
+    n: float = (here.distance_2d(wp.transform.location) + here.distance_squared(wp.transform.location) +
+                here.distance_squared_2d(wp.transform.location) + v.dot(wp.transform.location) +
+                v.get_vector_angle(wp.transform.location) + wp.transform.location.length())
+    c: carla.Vector3D = v.cross(wp.transform.location)
+    mixed: carla.Vector3D = v + wp.transform.location
+    fv: carla.Location = carla.Location.from_vector(wp.transform.location)
+    lv: carla.Location = carla.Location(wp.transform.location)
+    vv: carla.Vector3D = carla.Vector3D(wp.transform.location)
+    av: carla.Vector3D = wp.transform.location.as_vector()
+    lane = wp.get_left_lane()                    # Optional[Waypoint]
+    if lane is not None:
+        d2: float = lane.transform.location.distance(here)
+    actor = world.get_actor(1)                   # Optional[Actor]
+    if actor is not None:
+        d3: float = actor.get_location().distance(wp.transform.location)
+        actor.set_target_velocity(wp.transform.location - actor.get_location())
+
+def take_vector(v: carla.Vector3D) -> float:
+    return v.length()
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+push(_world.get_actors()[0], _world.get_actors()[0])
+through_optional(_world)
+geometry(carla.Location(1.0, 2.0, 3.0), carla.Location(), carla.Vector3D(1.0, 0.0, 0.0))

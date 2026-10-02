@@ -1,0 +1,185 @@
+# Location derives from Vector3D (issue #10): Python-API arithmetic, methods,
+# and Locations passed where the API takes a Vector3D.
+import typesafe_carla as carla
+
+def close(a: float, b: float) -> bool:
+    return abs(a - b) < 1e-9
+
+a = carla.Location(1.0, 2.0, 3.0)
+b = carla.Location(4.0, 6.0, 3.0)
+v = carla.Vector3D(1.0, 0.0, 0.0)
+
+# Result types follow the CARLA 0.10.0 Python API: all arithmetic gives a Vector3D.
+d = b - a
+assert type(d).__name__ == "Vector3D" and d == carla.Location(3.0, 4.0, 0.0)
+s = a + b
+assert type(s).__name__ == "Vector3D" and s == carla.Vector3D(5.0, 8.0, 6.0)
+m = abs(carla.Location(-1.0, 2.0, -3.0))
+assert type(m).__name__ == "Vector3D" and m == carla.Vector3D(1.0, 2.0, 3.0)
+assert type(a / 2.0).__name__ == "Vector3D" and type(2.0 * a).__name__ == "Vector3D"
+assert a.dot_2d(b) == 16.0
+assert type(a * 2.0).__name__ == "Vector3D" and a * 2.0 == carla.Vector3D(2.0, 4.0, 6.0)
+assert 2.0 * a == carla.Vector3D(2.0, 4.0, 6.0) and a / 2.0 == carla.Vector3D(0.5, 1.0, 1.5)
+assert type(v + a).__name__ == "Vector3D" and v + a == carla.Vector3D(2.0, 2.0, 3.0)
+assert type(a + v).__name__ == "Vector3D" and a + v == carla.Vector3D(2.0, 2.0, 3.0)
+assert a - v == carla.Vector3D(0.0, 2.0, 3.0) and v - a == carla.Vector3D(0.0, -2.0, -3.0)
+assert carla.Location(1.0, 0.0, 0.0) == v and v == carla.Location(1.0, 0.0, 0.0)
+assert a != v and repr(a) == "Location(x=1, y=2, z=3)" and repr(d) == "Vector3D(x=3, y=4, z=0)"
+
+# Vector3D's methods, on Vector3D and Location alike.
+assert d.length() == 5.0 and d.squared_length() == 25.0
+assert a.dot(v) == 1.0 and v.dot(a) == 1.0 and a.dot(b) == 25.0
+assert carla.Vector3D(1.0, 0.0, 0.0).cross(carla.Location(0.0, 1.0, 0.0)) == carla.Vector3D(0.0, 0.0, 1.0)
+u = d.make_unit_vector()
+assert type(u).__name__ == "Vector3D" and close(u.x, 0.6) and close(u.y, 0.8) and u.z == 0.0
+assert carla.Vector3D().make_unit_vector() == carla.Vector3D()  # as CARLA 0.10.0
+assert a.distance(b) == 5.0 and b.distance(a) == 5.0 and a.distance_squared(b) == 25.0
+assert carla.Location(0.0, 0.0, 7.0).distance_2d(carla.Location(3.0, 4.0, 0.0)) == 5.0
+assert carla.Location(0.0, 0.0, 7.0).distance_squared_2d(carla.Location(3.0, 4.0, 0.0)) == 25.0
+assert v.distance(a) == a.distance(v)
+assert close(v.get_vector_angle(carla.Location(0.0, 2.0, 0.0)), 1.5707963267948966)
+assert v.get_vector_angle(v) == 0.0
+from math import isnan
+assert isnan(v.get_vector_angle(carla.Vector3D()))  # as CARLA 0.10.0
+assert close(a.get_vector_angle(carla.Vector3D(0.0, 2.0, 0.0)), 1.0068536854342678)
+
+# A Location is usable as a Vector3D value.
+as_v: carla.Vector3D = a
+assert as_v.x == 1.0 and as_v.length() == a.length()
+vs = [v, a]
+assert len(vs) == 2 and vs[1].z == 3.0
+
+# Conversions, both ways.
+assert carla.Location.from_vector(v) == carla.Location(1.0, 0.0, 0.0)
+assert carla.Location(v) == carla.Location(1.0, 0.0, 0.0) and type(carla.Location(v)).__name__ == "Location"
+assert a.as_vector() == carla.Vector3D(1.0, 2.0, 3.0) and type(a.as_vector()).__name__ == "Vector3D"
+
+# Geometry reached through an Optional (types Codon infers late).
+m = carla.Client("localhost", 2000).get_world().get_map()
+wp = m.get_waypoint(carla.Location(12.0, 0.4, 5.0))       # Optional[Waypoint]
+ahead = wp.next(5.0)
+assert close(ahead[0].transform.location.distance(wp.transform.location), 5.0)
+origin = carla.Location()
+here = wp.transform.location
+assert origin.distance(wp.transform.location) == here.length()
+diff = wp.transform.location - origin
+assert type(diff).__name__ == "Vector3D" and diff == here
+summed = origin + wp.transform.location
+assert type(summed).__name__ == "Vector3D" and summed == here
+assert origin.distance_2d(wp.transform.location) == here.distance_2d(origin)
+assert carla.Vector3D(1.0, 0.0, 0.0).dot(wp.transform.location) == here.x
+assert type(carla.Vector3D() + wp.transform.location).__name__ == "Vector3D"
+assert origin != wp.transform.location
+
+# A Location in a Vector3D variable keeps Vector3D's static result types.
+held: carla.Vector3D = carla.Location(1.0, 2.0, 3.0)
+assert type(held - v).__name__ == "Vector3D" and held - v == carla.Vector3D(0.0, 2.0, 3.0)
+
+# Locations passed to the API where it takes a Vector3D (mock backend).
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+vehicle = world.get_actors()[0].as_vehicle()
+vehicle.set_target_velocity(b - a)  # a Vector3D: no warning
+assert vehicle.get_velocity() == carla.Vector3D(3.0, 4.0, 0.0)
+vehicle.set_target_velocity(carla.Location())
+vehicle.add_impulse(carla.Location(3000.0, 0.0, 0.0))  # mock: 1500 kg
+assert vehicle.get_velocity().x == 2.0
+vehicle.set_target_velocity(carla.Vector3D())
+vehicle.set_target_angular_velocity(carla.Location(0.0, 0.0, 10.0))
+vehicle.add_force(carla.Location(1.0, 0.0, 0.0))
+vehicle.add_angular_impulse(carla.Location(1.0, 0.0, 0.0))
+vehicle.add_torque(carla.Location(1.0, 0.0, 0.0))
+
+client.apply_batch_sync([carla.command.ApplyTargetVelocity(vehicle.id, carla.Location(0.0, 5.0, 0.0))])
+assert vehicle.get_velocity() == carla.Vector3D(0.0, 5.0, 0.0)
+responses = client.apply_batch_sync([
+    carla.command.ApplyTargetAngularVelocity(vehicle.id, a), carla.command.ApplyImpulse(vehicle.id, a),
+    carla.command.ApplyForce(vehicle.id, a), carla.command.ApplyAngularImpulse(vehicle.id, a),
+    carla.command.ApplyTorque(vehicle.id, a)])
+assert len(responses) == 5 and not any(r.has_error() for r in responses)
+vehicle.set_target_velocity(carla.Vector3D())
+
+w = carla.WalkerControl(carla.Location(0.0, 1.0, 0.0), 1.4)
+assert type(w.direction).__name__ == "Vector3D" and w.direction == carla.Vector3D(0.0, 1.0, 0.0)
+opt: Optional[carla.Location] = carla.Location(0.0, 0.0, 1.0)
+assert carla.WalkerControl(direction=opt).direction == carla.Vector3D(0.0, 0.0, 1.0)
+none: Optional[carla.Vector3D] = None
+assert carla.WalkerControl(none).direction == carla.Vector3D(1.0, 0.0, 0.0)
+assert carla.WalkerControl().direction == carla.Vector3D(1.0, 0.0, 0.0)
+box = carla.BoundingBox(carla.Location(), carla.Location(1.0, 2.0, 3.0))
+assert box.extent == carla.Vector3D(1.0, 2.0, 3.0)
+assert carla.BoundingBox().extent == carla.Vector3D()
+
+# A Vector3D passed where the API takes a Location (implicit in CARLA 0.10.0).
+up = vehicle.get_location() + carla.Location(0.0, 0.0, 1.0)   # a Vector3D
+t = carla.Transform(up, carla.Rotation(yaw=90.0))
+assert type(t.location).__name__ == "Location" and t.location == up
+assert carla.Transform(location=up).location == up
+ov: Optional[carla.Vector3D] = up
+assert carla.Transform(ov).location == up
+nv: Optional[carla.Vector3D] = None
+assert carla.Transform(nv).location == carla.Location()
+assert carla.BoundingBox(up).location == up
+vehicle.set_location(carla.Vector3D(3.0, 4.0, 0.0))
+assert vehicle.get_location() == carla.Location(3.0, 4.0, 0.0)
+assert m.get_waypoint(carla.Vector3D(12.0, 0.4, 5.0)) is not None
+world.debug.draw_point(up)
+world.debug.draw_line(up, up + v)
+world.debug.draw_arrow(up, up + v)
+world.debug.draw_string(up, "up")
+r = client.apply_batch_sync([carla.command.ApplyLocation(vehicle.id, carla.Vector3D(5.0, 0.0, 0.0))])
+assert not r[0].has_error() and vehicle.get_location() == carla.Location(5.0, 0.0, 0.0)
+
+# Physics control and lidar detections take a Vector3D as a Location too.
+pc = carla.VehiclePhysicsControl(center_of_mass=up)
+assert type(pc.center_of_mass).__name__ == "Location" and pc.center_of_mass == up
+assert carla.VehiclePhysicsControl().center_of_mass == carla.Location()
+wheel = carla.WheelPhysicsControl(offset=carla.Location(1.0, 0.0, 0.0), location=up,
+                                  velocity=carla.Location(0.0, 2.0, 0.0))
+assert type(wheel.offset).__name__ == "Vector3D" and wheel.offset == carla.Vector3D(1.0, 0.0, 0.0)
+assert type(wheel.location).__name__ == "Location" and wheel.location == up
+assert wheel.velocity == carla.Vector3D(0.0, 2.0, 0.0)
+assert carla.WheelPhysicsControl().suspension_axis == carla.Vector3D(0.0, 0.0, -1.0)
+assert carla.VehiclePhysicsControl(inertia_tensor_scale=carla.Location(2.0, 2.0, 2.0)).inertia_tensor_scale == carla.Vector3D(2.0, 2.0, 2.0)
+assert carla.VehiclePhysicsControl().inertia_tensor_scale == carla.Vector3D(1.0, 1.0, 1.0)
+det = carla.LidarDetection(up, 0.5)
+assert type(det.point).__name__ == "Location" and det.point == up
+
+# An Optional of the other type, passed straight to the API.
+ol: Optional[carla.Location] = carla.Location(0.0, 7.0, 0.0)
+vehicle.set_target_velocity(ol)
+assert vehicle.get_velocity() == carla.Vector3D(0.0, 7.0, 0.0)
+vehicle.set_target_velocity(carla.Vector3D())
+ovv: Optional[carla.Vector3D] = carla.Vector3D(6.0, 0.0, 0.0)
+vehicle.set_location(ovv)
+assert vehicle.get_location() == carla.Location(6.0, 0.0, 0.0)
+
+# Constructors and conversions from late-inferred Locations.
+assert carla.Vector3D(carla.Location(1.0, 2.0, 3.0)) == carla.Vector3D(1.0, 2.0, 3.0)
+assert type(carla.Vector3D(carla.Location(1.0, 2.0, 3.0))).__name__ == "Vector3D"
+assert carla.Vector3D(1.0) == carla.Vector3D(1.0, 0.0, 0.0) and carla.Location(1.0) == carla.Location(1.0, 0.0, 0.0)
+assert carla.Location.from_vector(wp.transform.location) == wp.transform.location
+assert carla.Vector3D(wp.transform.location) == wp.transform.location
+
+# Rebinding a Location local: convert back explicitly, or keep a vector.
+loc = carla.Location()
+for _ in range(3):
+    loc = carla.Location(loc + carla.Vector3D(0.0, 0.0, 1.0))
+assert type(loc).__name__ == "Location" and loc == carla.Location(0.0, 0.0, 3.0)
+pos = carla.Location(1.0, 0.0, 0.0).as_vector()
+pos += carla.Vector3D(1.0, 0.0, 0.0)
+assert pos == carla.Vector3D(2.0, 0.0, 0.0)
+
+# An Optional holding None, passed to a required vector or location parameter,
+# raises Codon's usual unpack error (it used to dereference None and crash).
+def unpack_error(f) -> str:
+    try:
+        f()
+    except ValueError as e:
+        return e.message
+    return ""
+none_loc: Optional[carla.Location] = None
+none_vec: Optional[carla.Vector3D] = None
+assert unpack_error(lambda: vehicle.add_force(none_loc)) == "optional unpack failed: expected Location, got None"
+assert unpack_error(lambda: vehicle.set_location(none_vec)) == "optional unpack failed: expected Vector3D, got None"
+print("OK")

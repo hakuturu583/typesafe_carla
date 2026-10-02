@@ -1,0 +1,8 @@
+# Location.distance takes a Location or a Vector3D, not a Transform.
+# expect-error: 'Transform' does not match expected type 'Vector3D'
+import typesafe_carla as carla
+
+def far(a: carla.Actor) -> float:
+    return a.get_location().distance(a.get_transform())
+
+far(carla.Client("localhost", 2000).get_world().get_actors()[0])

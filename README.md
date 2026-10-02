@@ -219,6 +219,66 @@ tests/unit/                Codon runtime tests against the mock backend
 examples/                  example programs
 ```
 
+## Writing new scenarios: use the statically checked style
+
+typesafe_carla has two ways to write the same thing. The **compatibility**
+style exists so that code written for the CARLA Python API ports with few
+changes. The **statically checked** style is what the type checker can verify
+at compile time. **For new scenarios, write the statically checked style, and
+enforce it with strict mode.**
+
+| | Compatibility style (ported code) | Statically checked style (recommended) |
+|---|---|---|
+| Vehicle methods on an actor from `get_actor` | `world.get_actor(i).apply_control(c)`: the actor kind is checked at run time (`ActorTypeError`) | `world.get_actor(i).as_vehicle().apply_control(c)`, or keep the `Vehicle` from `spawn_actor(...).as_vehicle()` |
+| A position where a vector is expected | `actor.set_target_velocity(target_location)`: compiles, and a position silently becomes a velocity | `actor.set_target_velocity(target_location.as_vector())`, or compute a real `Vector3D` |
+| A vector where a position is expected | `carla.Transform(loc + offset, rot)` | `carla.Transform(carla.Location(loc + offset), rot)` |
+
+Use the statically checked style even where the compatibility style happens to work. The
+compatibility style moves mistakes that would be compile errors (the wrong
+actor kind, a position passed as a velocity) to run time, or makes them
+silent.
+
+**Warnings.** Every compatibility path a program uses is reported twice. At
+compile time, `typesafe-codon` lists every one the program contains before it
+runs:
+
+```
+typesafe-codon: compile-time warning: Actor.apply_control(VehicleControl) without as_vehicle(): Python-API compatibility path, not statically checked (use --strict to make this an error)
+```
+
+At run time, each one is reported once, when it is first taken:
+
+```
+typesafe_carla: warning: Actor.apply_control(VehicleControl) without as_vehicle() is a Python-API compatibility path that is not statically checked; call as_vehicle() first (...)
+```
+
+`TYPESAFE_CARLA_COMPAT_WARNINGS=0` silences both, e.g. while porting a large
+script. A program that uses only the statically checked style gets no
+warnings at all.
+
+**Strict mode** turns every compatibility path into a compile error; the last line of the
+trace is the line using it:
+
+```sh
+uv run typesafe-codon --strict run main.py           # or: build
+TYPESAFE_CARLA_STRICT=1 uv run typesafe-codon run main.py
+```
+
+```
+_strict.codon:26 (9-108): error: strict mode: call as_vehicle() first (Actor.apply_control is a Python-API compatibility shortcut)
+├─ _actor_compat.codon:46 (9-24): error: during the realization of compat_shortcut(...)
+╰─ main.py:7 (1-52): error: during the realization of apply_control(self: Actor, control: VehicleControl, S: Actor)
+```
+
+Enable it in CI for new projects (`TYPESAFE_CARLA_STRICT=1`), so code stays in
+the statically checked style. Strict mode only adds errors: a program that
+compiles in strict mode behaves the same without it. Some things are checked
+in every mode, strict or not:
+- a typed actor never gets another kind's methods (`vehicle.listen()` does
+  not compile);
+- argument types are always checked (`apply_control(carla.Transform())` does
+  not compile).
+
 ## Differences from the CARLA Python API
 
 Most code ports by changing `import carla` to `import typesafe_carla as carla`.
@@ -238,9 +298,19 @@ Deliberate differences, all in favour of static checking:
   method is a compile error in every mode (`vehicle.listen()`: "Vehicle has
   no method listen()"), as in the Python API, where `carla.Vehicle` has no
   `listen`.
-* **`Location` is not a `Vector3D`.** A position cannot be passed where a
-  velocity is expected (`set_target_velocity(actor.get_location())` fails to
-  compile). Convert explicitly with `as_vector()` / `Location.from_vector()`.
+* **A `Vector3D` does not become a `Location` on assignment.** As in CARLA
+  0.10.0, `Location` arithmetic gives a `Vector3D`, and the Python API
+  converts it back implicitly. API parameters do the same here (with a
+  warning; see docs/usage.md). Assignments cannot convert, because Codon has
+  no hook for it and a variable keeps one static type. These do not compile,
+  each with `'Vector3D' does not match expected type 'Location'`:
+  - a field: `t.location = loc + offset`;
+  - a rebound local: `loc = actor.get_location()` followed by
+    `loc += offset`, `loc = loc + offset` in a loop, or a conditional
+    `loc = loc + offset`.
+
+  Write `loc = carla.Location(loc + offset)`, or start from a vector
+  (`pos = actor.get_location().as_vector()`, then `pos += offset`).
 * **Attribute values are typed.** `ActorAttribute.as_int()` raises when the
   attribute is not an int; `str(attribute)` gives the raw value.
 * **Sensor callbacks run at dispatch points, not on CARLA's threads.**
@@ -268,7 +338,13 @@ Deliberate differences, all in favour of static checking:
   `center_of_mass`) stay `Location`.
 * **Float precision.** Values cross into LibCarla as float32, as they do in
   the Python API, so `get_control().throttle` after setting `0.2` is
-  `0.2000000029802322`.
+  `0.2000000029802322`. `Vector3D` and `Location` arithmetic runs in double
+  precision here and in float32 in the Python API. Results can differ in the
+  last digits. Near the edges they can differ outright:
+  `get_vector_angle` clamps the cosine to [-1, 1], so nearly parallel vectors
+  give 0 rather than NaN; and a vector tiny enough to underflow in float32
+  becomes a zero vector in `make_unit_vector()` in Python, but a unit vector
+  here.
 
 **Not a difference: lookups that can miss return `None`, as in Python.**
 `World.get_actor`, `World.try_spawn_actor`, `ActorList.find`,
@@ -335,7 +411,21 @@ These affect how the design's guarantees should be read:
    'Optional[Waypoint]'`, even after an `is not None` check. Unannotated
    code is not affected. Unwrap explicitly with Codon's `unwrap()`:
    `unwrap(wp).get_left_lane()` or `unwrap(wp.get_left_lane())`.
-6. Float format specifiers (`f"{x:.6f}"`) need an installed `en_US` locale in
+6. **Subclass values do not upcast inside `Optional`, `isinstance` is exact,
+   and arguments typed late bind badly.** `Location` derives from `Vector3D`,
+   but Codon rejects an `Optional[Location]` for an `Optional[Vector3D]`
+   parameter, and `isinstance(location, Vector3D)` is `False`. An argument
+   reached through an implicitly unwrapped `Optional` can be bound to a
+   `Vector3D` parameter before Codon knows that it is a `Location`. The vector
+   and location parameters of the API (and of `Vector3D`'s methods) are
+   therefore generic and checked statically. This is also what lets a
+   `Location` passed as a `Vector3D`, or a `Vector3D` passed as a `Location`
+   (both implicit in the Python API), warn, or fail in strict mode. Other
+   types still fail with `'Rotation' does not match expected type 'Vector3D'`.
+7. **`-D` defines are visible only in the main file**, not in imported
+   modules. The launcher passes the strict-mode setting to the library
+   through a generated module (`_tsc_build_config`) instead.
+8. Float format specifiers (`f"{x:.6f}"`) need an installed `en_US` locale in
    Codon 0.19.3, so `repr`s use plain `str(float)`.
 
 ## License

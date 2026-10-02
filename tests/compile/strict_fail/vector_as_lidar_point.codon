@@ -1,0 +1,8 @@
+# In strict mode a LidarDetection point is a Location.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def detection(v: carla.Vector3D) -> carla.LidarDetection:
+    return carla.LidarDetection(v, 1.0)
+
+detection(carla.Vector3D())

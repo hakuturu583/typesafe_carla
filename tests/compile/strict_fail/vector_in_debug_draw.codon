@@ -1,0 +1,8 @@
+# In strict mode the debug helpers take a Location, not Location arithmetic.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def draw(world: carla.World, here: carla.Location):
+    world.debug.draw_line(here, here + carla.Location(0.0, 0.0, 3.0))
+
+draw(carla.Client("localhost", 2000).get_world(), carla.Location())
