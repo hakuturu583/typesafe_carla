@@ -11,9 +11,10 @@
 # Actors are given by id (`actor.id`).
 
 from ._ffi import CCommand, CCommandResponse, CString, take_string, TSC_INVALID_ARGUMENT
-from .errors import CarlaError, _check_port, _is_actor_id
-from .geometry import Transform, Vector3D
-from .control import VehicleControl
+from .errors import (CarlaError, _check_light_state, _check_port, _check_traffic_light_state,
+                     _is_actor_id)
+from .geometry import Location, Transform, Vector3D
+from .control import VehicleControl, WalkerControl
 from .blueprint import ActorBlueprint
 
 # In a command passed to SpawnActor(...).then(...), the actor being spawned.
@@ -26,6 +27,22 @@ _APPLY_TRANSFORM = 4
 _APPLY_TARGET_VELOCITY = 5
 _SET_AUTOPILOT = 6
 _SET_SIMULATE_PHYSICS = 7
+_APPLY_WALKER_CONTROL = 8
+_APPLY_TARGET_ANGULAR_VELOCITY = 9
+_APPLY_IMPULSE = 10
+_APPLY_FORCE = 11
+_APPLY_ANGULAR_IMPULSE = 12
+_APPLY_TORQUE = 13
+_SET_ENABLE_GRAVITY = 14
+_SET_VEHICLE_LIGHT_STATE = 15
+_APPLY_LOCATION = 16
+_SET_TRAFFIC_LIGHT_STATE = 17
+
+_NAMES = ["", "SpawnActor", "DestroyActor", "ApplyVehicleControl", "ApplyTransform",
+          "ApplyTargetVelocity", "SetAutopilot", "SetSimulatePhysics", "ApplyWalkerControl",
+          "ApplyTargetAngularVelocity", "ApplyImpulse", "ApplyForce", "ApplyAngularImpulse",
+          "ApplyTorque", "SetEnableGravity", "SetVehicleLightState", "ApplyLocation",
+          "SetTrafficLightState"]
 
 def _actor_id(actor_id: int) -> u32:
     if not _is_actor_id(actor_id):
@@ -40,7 +57,8 @@ class Command:
     _transform: Transform
     _control: VehicleControl
     _vector: Vector3D
-    _flag: bool
+    _flag: int  # bool commands use 0/1; light states use their value
+    _scalar: float
     _tm_port: int
     _then: List[Command]
 
@@ -53,7 +71,8 @@ class Command:
         self._transform = Transform()
         self._control = VehicleControl()
         self._vector = Vector3D()
-        self._flag = False
+        self._flag = 0
+        self._scalar = 0.0
         self._tm_port = 0
         self._then = List[Command]()
 
@@ -78,13 +97,11 @@ class Command:
         bp = self._blueprint
         return CCommand(i32(self._type), i32(then_of), u32(self._actor_id), u32(self._parent_id),
                         bp._h.ptr if bp is not None else cobj(), self._transform._to_c(),
-                        self._control._to_c(), self._vector._to_c(), i32(int(self._flag)),
-                        u16(self._tm_port), u16(0))
+                        self._control._to_c(), self._vector._to_c(), i32(self._flag),
+                        u16(self._tm_port), u16(0), self._scalar)
 
     def __repr__(self) -> str:
-        names = ["", "SpawnActor", "DestroyActor", "ApplyVehicleControl", "ApplyTransform",
-                 "ApplyTargetVelocity", "SetAutopilot", "SetSimulatePhysics"]
-        return f"command.{names[self._type]}(actor_id={self._actor_id}, then={len(self._then)})"
+        return f"command.{_NAMES[self._type]}(actor_id={self._actor_id}, then={len(self._then)})"
 
 class CommandResponse:
     actor_id: int  # the spawned actor, or the actor the command applied to
@@ -131,14 +148,63 @@ def ApplyTargetVelocity(actor_id: int, velocity: Vector3D) -> Command:
 def SetAutopilot(actor_id: int, enabled: bool, tm_port: int = 8000) -> Command:
     _check_port("tm_port", tm_port)
     c = Command(_SET_AUTOPILOT, actor_id)
-    c._flag = enabled
+    c._flag = int(enabled)
     c._tm_port = tm_port
     return c
 
-def SetSimulatePhysics(actor_id: int, enabled: bool) -> Command:
-    c = Command(_SET_SIMULATE_PHYSICS, actor_id)
-    c._flag = enabled
+def _flag_command(kind: int, actor_id: int, flag: int) -> Command:
+    c = Command(kind, actor_id)
+    c._flag = flag
     return c
+
+def SetSimulatePhysics(actor_id: int, enabled: bool) -> Command:
+    return _flag_command(_SET_SIMULATE_PHYSICS, actor_id, int(enabled))
+
+def ApplyWalkerControl(actor_id: int, control: WalkerControl) -> Command:
+    c = Command(_APPLY_WALKER_CONTROL, actor_id)
+    c._vector = control.direction
+    c._scalar = control.speed
+    c._flag = int(control.jump)
+    return c
+
+def _vector_command(kind: int, actor_id: int, vector: Vector3D) -> Command:
+    c = Command(kind, actor_id)
+    c._vector = vector
+    return c
+
+def ApplyTargetAngularVelocity(actor_id: int, angular_velocity: Vector3D) -> Command:
+    return _vector_command(_APPLY_TARGET_ANGULAR_VELOCITY, actor_id, angular_velocity)
+
+def ApplyImpulse(actor_id: int, impulse: Vector3D) -> Command:
+    return _vector_command(_APPLY_IMPULSE, actor_id, impulse)
+
+def ApplyForce(actor_id: int, force: Vector3D) -> Command:
+    return _vector_command(_APPLY_FORCE, actor_id, force)
+
+def ApplyAngularImpulse(actor_id: int, impulse: Vector3D) -> Command:
+    return _vector_command(_APPLY_ANGULAR_IMPULSE, actor_id, impulse)
+
+def ApplyTorque(actor_id: int, torque: Vector3D) -> Command:
+    return _vector_command(_APPLY_TORQUE, actor_id, torque)
+
+def SetEnableGravity(actor_id: int, enabled: bool) -> Command:
+    return _flag_command(_SET_ENABLE_GRAVITY, actor_id, int(enabled))
+
+def SetVehicleLightState(actor_id: int, light_state: int) -> Command:
+    """light_state: VehicleLightState flags."""
+    _check_light_state(light_state)
+    # The bit pattern travels as int32.
+    return _flag_command(_SET_VEHICLE_LIGHT_STATE, actor_id, int(i32(light_state)))
+
+def ApplyLocation(actor_id: int, location: Location) -> Command:
+    c = Command(_APPLY_LOCATION, actor_id)
+    c._transform = Transform(location)
+    return c
+
+def SetTrafficLightState(actor_id: int, state: int) -> Command:
+    """state: TrafficLightState."""
+    _check_traffic_light_state(state)
+    return _flag_command(_SET_TRAFFIC_LIGHT_STATE, actor_id, state)
 
 def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int]:
     """C records for `commands` (then-commands follow their SpawnActor).

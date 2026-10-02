@@ -1,0 +1,89 @@
+# Walkers (pedestrians) and their AI controllers.
+#
+#     walker = world.spawn_actor(walker_bp, transform).as_walker()
+#     ai = world.spawn_actor(lib.find("controller.ai.walker"), carla.Transform(),
+#                            attach_to=walker).as_walker_ai_controller()
+#     ai.start()
+#     ai.go_to_location(world.get_random_location_from_navigation())
+
+from ._ffi import (Handle, CVector3D, CWalkerControl, TSC_KIND_WALKER,
+                   TSC_KIND_WALKER_AI_CONTROLLER, tsc_handle_kind, tsc_actor_as_walker,
+                   tsc_actor_as_walker_ai_controller, tsc_walker_apply_control,
+                   tsc_walker_get_control, tsc_walker_ai_controller_start,
+                   tsc_walker_ai_controller_stop, tsc_walker_ai_controller_go_to_location,
+                   tsc_walker_ai_controller_set_max_speed,
+                   tsc_world_get_random_location_from_navigation)
+from .errors import _check
+from .geometry import Location
+from .control import WalkerControl
+from .actor import Actor
+from .world import World
+
+class Walker(Actor):
+    def __init__(self, h: Handle):
+        super().__init__(h)
+
+    def apply_control(self, control: WalkerControl):
+        c = Ptr[CWalkerControl](1)
+        c[0] = control._to_c()
+        _check(tsc_walker_apply_control(self._h.ptr, c))
+
+    def get_control(self) -> WalkerControl:
+        out = Ptr[CWalkerControl](1)
+        _check(tsc_walker_get_control(self._h.ptr, out))
+        return WalkerControl._from_c(out[0])
+
+    def __repr__(self) -> str:
+        return f"Walker(id={self.id}, type={self.type_id})"
+
+class WalkerAIController(Actor):
+    """Steers the walker it is attached to (spawn with attach_to=walker)."""
+
+    def __init__(self, h: Handle):
+        super().__init__(h)
+
+    def start(self):
+        _check(tsc_walker_ai_controller_start(self._h.ptr))
+
+    def stop(self):
+        _check(tsc_walker_ai_controller_stop(self._h.ptr))
+
+    def go_to_location(self, destination: Location):
+        p = Ptr[CVector3D](1)
+        p[0] = destination._to_c()
+        _check(tsc_walker_ai_controller_go_to_location(self._h.ptr, p))
+
+    def set_max_speed(self, speed: float):
+        """m/s"""
+        _check(tsc_walker_ai_controller_set_max_speed(self._h.ptr, speed))
+
+    def __repr__(self) -> str:
+        return f"WalkerAIController(id={self.id})"
+
+@extend
+class Actor:
+    def is_walker(self) -> bool:
+        return int(tsc_handle_kind(self._h.ptr)) == TSC_KIND_WALKER
+
+    def as_walker(self) -> Walker:
+        """Checked conversion. Raises ActorTypeError if this actor is not a walker."""
+        out = Ptr[cobj](1)
+        _check(tsc_actor_as_walker(self._h.ptr, out))
+        return Walker(Handle(out[0]))
+
+    def as_walker_ai_controller(self) -> WalkerAIController:
+        """Checked conversion. Raises ActorTypeError otherwise."""
+        out = Ptr[cobj](1)
+        _check(tsc_actor_as_walker_ai_controller(self._h.ptr, out))
+        return WalkerAIController(Handle(out[0]))
+
+@extend
+class World:
+    def get_random_location_from_navigation(self) -> Optional[Location]:
+        """A random point on the pedestrian navigation mesh, or None."""
+        out = Ptr[CVector3D](1)
+        found = Ptr[i32](1)
+        _check(tsc_world_get_random_location_from_navigation(self._h.ptr, out, found))
+        if int(found[0]) == 0:
+            return None
+        return Location._from_c(out[0])

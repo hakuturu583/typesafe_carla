@@ -1,0 +1,10 @@
+# The Traffic Manager only drives vehicles.
+# expect-error: 'Walker' does not match expected type 'Vehicle'
+import typesafe_carla as carla
+
+def tune(client: carla.Client, walker: carla.Walker):
+    client.get_trafficmanager().ignore_lights_percentage(walker, 100.0)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_c = carla.Client("localhost", 2000)
+tune(_c, _c.get_world().get_actors()[0].as_walker())

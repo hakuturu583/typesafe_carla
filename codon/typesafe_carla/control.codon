@@ -1,8 +1,8 @@
 # Control value types.
 
-from ._ffi import (CVehicleControl, CVehiclePhysicsHead, CWheelPhysicsControl,
+from ._ffi import (CVehicleControl, CWalkerControl, CVehiclePhysicsHead, CWheelPhysicsControl,
                    TSC_MAX_WHEELS, PHYSICS_WHEELS_OFFSET)
-from .geometry import Location
+from .geometry import Location, Vector3D
 
 class VehicleControl:
     throttle: float  # [0, 1]
@@ -159,3 +159,47 @@ class VehiclePhysicsControl:
             h.max_torque, h.max_rpm, h.final_ratio, h.gear_change_time, h.mass,
             h.drag_coefficient, Location._from_c(h.center_of_mass), int(h.use_automatic_gears) != 0,
             [WheelPhysicsControl._from_c(wheels[i]) for i in range(int(h.wheel_count))])
+
+class WalkerControl:
+    direction: Vector3D  # world-space direction (normalized by CARLA)
+    speed: float  # m/s
+    jump: bool
+
+    def __init__(self, direction: Optional[Vector3D] = None, speed: float = 0.0,
+                 jump: bool = False):
+        self.direction = direction if direction is not None else Vector3D(1.0, 0.0, 0.0)
+        self.speed = speed
+        self.jump = jump
+
+    def __repr__(self) -> str:
+        return f"WalkerControl(direction={self.direction}, speed={self.speed}, jump={self.jump})"
+
+    def _to_c(self) -> CWalkerControl:
+        return CWalkerControl(self.direction._to_c(), self.speed, i32(int(self.jump)), i32(0))
+
+    @staticmethod
+    def _from_c(c: CWalkerControl) -> WalkerControl:
+        return WalkerControl(Vector3D._from_c(c.direction), c.speed, int(c.jump) != 0)
+
+class VehicleLightState:
+    """Vehicle light bit flags (combine with |), as carla.VehicleLightState."""
+    NONE: ClassVar[int] = 0
+    Position: ClassVar[int] = 0x1
+    LowBeam: ClassVar[int] = 0x1 << 1
+    HighBeam: ClassVar[int] = 0x1 << 2
+    Brake: ClassVar[int] = 0x1 << 3
+    RightBlinker: ClassVar[int] = 0x1 << 4
+    LeftBlinker: ClassVar[int] = 0x1 << 5
+    Reverse: ClassVar[int] = 0x1 << 6
+    Fog: ClassVar[int] = 0x1 << 7
+    Interior: ClassVar[int] = 0x1 << 8
+    Special1: ClassVar[int] = 0x1 << 9
+    Special2: ClassVar[int] = 0x1 << 10
+    All: ClassVar[int] = 0xFFFFFFFF
+
+class TrafficLightState:
+    Red: ClassVar[int] = 0
+    Yellow: ClassVar[int] = 1
+    Green: ClassVar[int] = 2
+    Off: ClassVar[int] = 3
+    Unknown: ClassVar[int] = 4

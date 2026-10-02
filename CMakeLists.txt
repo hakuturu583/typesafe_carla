@@ -62,16 +62,22 @@ endif()
 # ---------------------------------------------------------------------------
 add_library(typesafe_carla_ffi SHARED
   native/src/actor.cpp
+  native/src/actor_ext.cpp
   native/src/batch.cpp
   native/src/blueprint.cpp
   native/src/client.cpp
+  native/src/client_ext.cpp
   native/src/error.cpp
   native/src/handle.cpp
   native/src/map.cpp
+  native/src/map_ext.cpp
   native/src/sensor.cpp
   native/src/snapshot.cpp
+  native/src/traffic_manager.cpp
   native/src/vehicle.cpp
+  native/src/walker.cpp
   native/src/world.cpp
+  native/src/world_ext.cpp
 )
 target_include_directories(typesafe_carla_ffi
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/native/include"
@@ -94,7 +100,7 @@ set_target_properties(typesafe_carla_ffi PROPERTIES
 if(TSC_BACKEND STREQUAL "mock")
   set(TSC_CARLA_RESOLVED_REF "mock")
   set(TSC_CARLA_COMMIT "mock")
-  add_library(carla_mock STATIC native/mock/src/mock.cpp)
+  add_library(carla_mock STATIC native/mock/src/mock.cpp native/mock/src/weather.cpp)
   target_include_directories(carla_mock PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/native/mock/include")
   target_link_libraries(typesafe_carla_ffi PRIVATE carla_mock)
 else()

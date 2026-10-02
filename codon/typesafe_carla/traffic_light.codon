@@ -1,0 +1,84 @@
+# Traffic lights.
+
+from ._ffi import (Handle, CTrafficLightInfo, TSC_KIND_TRAFFIC_LIGHT, tsc_handle_kind,
+                   tsc_actor_as_traffic_light, tsc_traffic_light_get_info,
+                   tsc_traffic_light_set_state, tsc_traffic_light_set_green_time,
+                   tsc_traffic_light_set_yellow_time, tsc_traffic_light_set_red_time,
+                   tsc_traffic_light_freeze, tsc_traffic_light_reset_group,
+                   tsc_vehicle_get_traffic_light)
+from .errors import _check, _check_traffic_light_state
+from .actor import Actor, Vehicle
+
+class TrafficLight(Actor):
+    def __init__(self, h: Handle):
+        super().__init__(h)
+
+    def _info(self) -> CTrafficLightInfo:
+        out = Ptr[CTrafficLightInfo](1)
+        _check(tsc_traffic_light_get_info(self._h.ptr, out))
+        return out[0]
+
+    def get_state(self) -> int:
+        """A TrafficLightState value."""
+        return int(self._info().state)
+
+    def set_state(self, state: int):
+        _check_traffic_light_state(state)
+        _check(tsc_traffic_light_set_state(self._h.ptr, i32(state)))
+
+    def get_green_time(self) -> float:
+        return self._info().green_time
+
+    def set_green_time(self, seconds: float):
+        _check(tsc_traffic_light_set_green_time(self._h.ptr, seconds))
+
+    def get_yellow_time(self) -> float:
+        return self._info().yellow_time
+
+    def set_yellow_time(self, seconds: float):
+        _check(tsc_traffic_light_set_yellow_time(self._h.ptr, seconds))
+
+    def get_red_time(self) -> float:
+        return self._info().red_time
+
+    def set_red_time(self, seconds: float):
+        _check(tsc_traffic_light_set_red_time(self._h.ptr, seconds))
+
+    def get_elapsed_time(self) -> float:
+        return self._info().elapsed_time
+
+    def freeze(self, freeze: bool):
+        _check(tsc_traffic_light_freeze(self._h.ptr, i32(int(freeze))))
+
+    def is_frozen(self) -> bool:
+        return int(self._info().is_frozen) != 0
+
+    def get_pole_index(self) -> int:
+        return int(self._info().pole_index)
+
+    def reset_group(self):
+        _check(tsc_traffic_light_reset_group(self._h.ptr))
+
+    def __repr__(self) -> str:
+        return f"TrafficLight(id={self.id}, state={self.get_state()})"
+
+@extend
+class Actor:
+    def is_traffic_light(self) -> bool:
+        return int(tsc_handle_kind(self._h.ptr)) == TSC_KIND_TRAFFIC_LIGHT
+
+    def as_traffic_light(self) -> TrafficLight:
+        """Checked conversion. Raises ActorTypeError if this actor is not a traffic light."""
+        out = Ptr[cobj](1)
+        _check(tsc_actor_as_traffic_light(self._h.ptr, out))
+        return TrafficLight(Handle(out[0]))
+
+@extend
+class Vehicle:
+    def get_traffic_light(self) -> Optional[TrafficLight]:
+        """The traffic light affecting the vehicle, or None."""
+        out = Ptr[cobj](1)
+        _check(tsc_vehicle_get_traffic_light(self._h.ptr, out))
+        if out[0] == cobj():
+            return None
+        return TrafficLight(Handle(out[0]))

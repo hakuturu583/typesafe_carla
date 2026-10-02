@@ -198,3 +198,6 @@ class BoundingBox:
     def _from_c(b: CBoundingBox) -> BoundingBox:
         return BoundingBox(Location._from_c(b.location), Vector3D._from_c(b.extent),
                            Rotation._from_c(b.rotation))
+
+    def _to_c(self) -> CBoundingBox:
+        return CBoundingBox(self.location._to_c(), self.extent._to_c(), self.rotation._to_c())

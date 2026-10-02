@@ -23,10 +23,29 @@ struct ActorData {
   rpc::VehiclePhysicsControl physics;
   bool autopilot = false;
   bool simulate_physics = true;
+  bool gravity = true;
+  uint32_t light_state = 0u;
+  // Walkers and their AI controllers.
+  rpc::WalkerControl walker_control{geom::Vector3D(1.0f, 0.0f, 0.0f), 0.0f, false};
+  bool ai_running = false;
+  std::optional<geom::Location> ai_target;
+  float ai_max_speed = 1.4f;
+  // Traffic lights (CARLA's default times).
+  rpc::TrafficLightState light = rpc::TrafficLightState::Green;
+  float green_time = 10.0f, yellow_time = 3.0f, red_time = 2.0f, elapsed = 0.0f;
+  bool frozen = false;
   // Attached actors (sensors) follow their parent at a fixed offset.
   std::optional<rpc::ActorId> parent;
   geom::Transform offset;
   std::map<std::string, std::string> attributes;  // blueprint attributes at spawn
+
+  bool is_walker() const { return type_id.rfind("walker.", 0) == 0; }
+  bool is_walker_ai_controller() const { return type_id == "controller.ai.walker"; }
+  bool is_traffic_light() const { return type_id == "traffic.traffic_light"; }
+  void set_light(rpc::TrafficLightState state) {  // restarts the phase timer
+    light = state;
+    elapsed = 0.0f;
+  }
 };
 
 using Delivery = std::function<void()>;  // run after the episode lock is released
@@ -53,6 +72,13 @@ struct Episode : std::enable_shared_from_this<Episode> {
     std::function<void(SharedPtr<sensor::SensorData>)> callback;
   };
   std::map<rpc::ActorId, Listener> listeners;
+  rpc::WeatherParameters weather = rpc::WeatherParameters::ClearNoon;
+  size_t debug_shapes = 0;      // DebugHelper calls (nothing is drawn)
+  std::string recording;        // the active recorder file, if any
+  std::map<std::string, uint64_t> recordings;  // file -> frames recorded
+  float tm_global_speed_difference = 0.0f;     // percent slower than the limit
+
+  double Mass(const ActorData &a) const { return a.is_vehicle ? a.physics.mass : 80.0; }
 
   rpc::ActorId AddActorLocked(const std::string &type_id, bool is_vehicle,
                               const geom::Transform &transform) {
@@ -148,6 +174,9 @@ struct Episode : std::enable_shared_from_this<Episode> {
                      geom::Transform(geom::Location(0.0f, 0.0f, 0.5f)));
     }
     AddActorLocked("spectator", false, geom::Transform(geom::Location(0.0f, 0.0f, 50.0f)));
+    // One traffic light beside the road at x = 100, controlling lane traffic.
+    AddActorLocked("traffic.traffic_light", false,
+                   geom::Transform(geom::Location(100.0f, -3.0f, 0.0f)));
   }
 
   // Advances one frame; returns the sensor deliveries to run after unlocking.
@@ -157,7 +186,10 @@ struct Episode : std::enable_shared_from_this<Episode> {
       ActorData &a = entry.second;
       if (!a.is_vehicle || !a.simulate_physics) continue;
       rpc::VehicleControl c = a.control;
-      if (a.autopilot) c = rpc::VehicleControl(0.5f, 0.0f, 0.0f, false, false, false, 0);
+      if (a.autopilot) {
+        c = rpc::VehicleControl(0.5f * (1.0f - tm_global_speed_difference / 100.0f), 0.0f, 0.0f,
+                                false, false, false, 0);
+      }
       const double yaw = a.transform.rotation.yaw * M_PI / 180.0;
       const double speed_before = std::hypot(a.velocity.x, a.velocity.y);
       double accel = 6.0 * c.throttle * (c.reverse ? -1.0 : 1.0) - 0.2 * speed_before;
@@ -178,6 +210,44 @@ struct Episode : std::enable_shared_from_this<Episode> {
       a.velocity = new_velocity;
       a.transform.location.x += static_cast<float>(new_velocity.x * dt);
       a.transform.location.y += static_cast<float>(new_velocity.y * dt);
+    }
+    for (auto &entry : actors) {
+      ActorData &a = entry.second;
+      if (a.is_walker()) {
+        const auto &d = a.walker_control.direction;
+        const double n = std::hypot(d.x, d.y, d.z);
+        const double v = n > 0.0 ? a.walker_control.speed / n : 0.0;
+        a.velocity = geom::Vector3D(static_cast<float>(d.x * v), static_cast<float>(d.y * v),
+                                    static_cast<float>(d.z * v));
+        a.transform.location.x += static_cast<float>(a.velocity.x * dt);
+        a.transform.location.y += static_cast<float>(a.velocity.y * dt);
+      } else if (a.is_walker_ai_controller() && a.ai_running && a.ai_target && a.parent) {
+        auto walker = actors.find(*a.parent);
+        if (walker == actors.end()) continue;
+        auto &w = walker->second;
+        const double dx = a.ai_target->x - w.transform.location.x;
+        const double dy = a.ai_target->y - w.transform.location.y;
+        const double dist = std::hypot(dx, dy);
+        const double step = std::min(dist, static_cast<double>(a.ai_max_speed) * dt);
+        if (dist > 1e-6) {
+          w.walker_control = rpc::WalkerControl(
+              geom::Vector3D(static_cast<float>(dx / dist), static_cast<float>(dy / dist), 0.0f),
+              static_cast<float>(step / dt), false);
+        } else {
+          w.walker_control.speed = 0.0f;
+        }
+      } else if (a.is_traffic_light() && !a.frozen) {
+        a.elapsed += static_cast<float>(dt);
+        const float limit = a.light == rpc::TrafficLightState::Green    ? a.green_time
+                            : a.light == rpc::TrafficLightState::Yellow ? a.yellow_time
+                                                                        : a.red_time;
+        if (a.light <= rpc::TrafficLightState::Green && a.elapsed >= limit) {
+          a.elapsed = 0.0f;
+          a.light = a.light == rpc::TrafficLightState::Green    ? rpc::TrafficLightState::Yellow
+                    : a.light == rpc::TrafficLightState::Yellow ? rpc::TrafficLightState::Red
+                                                                : rpc::TrafficLightState::Green;
+        }
+      }
     }
     for (auto &entry : actors) {
       ActorData &a = entry.second;
@@ -282,6 +352,7 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
       ActorBlueprint("sensor.other.gnss", {"sensor", "other", "gnss"}, {}),
       ActorBlueprint("sensor.other.imu", {"sensor", "other", "imu"}, {}),
       ActorBlueprint("sensor.other.collision", {"sensor", "other", "collision"}, {}),
+      ActorBlueprint("controller.ai.walker", {"controller", "ai", "walker"}, {}),
       ActorBlueprint("static.prop.trafficcone01", {"static", "prop", "trafficcone01"},
                      {ActorAttribute("role_name", rpc::ActorAttributeType::String, "prop", true),
                       ActorAttribute("size", rpc::ActorAttributeType::String, "small", false)}),
@@ -291,6 +362,11 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
 SharedPtr<Actor> MakeActor(const std::shared_ptr<Episode> &episode, const ActorData &data) {
   if (data.is_vehicle) return std::make_shared<Vehicle>(episode, data.id);
   if (data.type_id.rfind("sensor.", 0) == 0) return std::make_shared<Sensor>(episode, data.id);
+  if (data.is_walker()) return std::make_shared<Walker>(episode, data.id);
+  if (data.is_walker_ai_controller()) {
+    return std::make_shared<WalkerAIController>(episode, data.id);
+  }
+  if (data.is_traffic_light()) return std::make_shared<TrafficLight>(episode, data.id);
   return std::make_shared<Actor>(episode, data.id);
 }
 
@@ -721,6 +797,16 @@ namespace {
 
 using Command = rpc::Command;
 
+geom::Vector3D Scaled(const geom::Vector3D &v, float k) {
+  return geom::Vector3D(v.x * k, v.y * k, v.z * k);
+}
+
+void ApplyImpulseLocked(mock::Episode &e, mock::ActorData &a, const geom::Vector3D &impulse) {
+  const float inv = static_cast<float>(1.0 / e.Mass(a));
+  a.velocity = geom::Vector3D(a.velocity.x + impulse.x * inv, a.velocity.y + impulse.y * inv,
+                              a.velocity.z + impulse.z * inv);
+}
+
 // Executes one command; `future` replaces actor id 0 in do_after commands.
 rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) {
   auto target = [&](rpc::ActorId id) -> mock::ActorData & {
@@ -761,11 +847,53 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
           auto &a = target(c.actor);
           a.simulate_physics = c.enabled;
           return a.id;
-        } else {
-          static_assert(std::is_same_v<T, Command::SetAutopilot>);
+        } else if constexpr (std::is_same_v<T, Command::SetAutopilot>) {
           auto &a = target(c.actor);
           if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
           a.autopilot = c.enabled;
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyWalkerControl>) {
+          auto &a = target(c.actor);
+          if (!a.is_walker()) {
+            throw std::runtime_error("actor " + std::to_string(a.id) + " is not a walker");
+          }
+          a.walker_control = c.control;
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyTargetAngularVelocity>) {
+          auto &a = target(c.actor);
+          a.angular_velocity = c.angular_velocity;
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyImpulse>) {
+          auto &a = target(c.actor);
+          ApplyImpulseLocked(e, a, c.impulse);
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyForce>) {
+          auto &a = target(c.actor);
+          ApplyImpulseLocked(e, a, Scaled(c.force, static_cast<float>(e.DeltaSeconds())));
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyAngularImpulse> ||
+                             std::is_same_v<T, Command::ApplyTorque>) {
+          return target(c.actor).id;  // no rotational dynamics in the mock
+        } else if constexpr (std::is_same_v<T, Command::SetEnableGravity>) {
+          auto &a = target(c.actor);
+          a.gravity = c.enabled;
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::SetVehicleLightState>) {
+          auto &a = target(c.actor);
+          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          a.light_state = c.light_state;
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyLocation>) {
+          auto &a = target(c.actor);
+          a.transform.location = c.location;
+          return a.id;
+        } else {
+          static_assert(std::is_same_v<T, Command::SetTrafficLightState>);
+          auto &a = target(c.actor);
+          if (!a.is_traffic_light()) {
+            throw std::runtime_error("actor " + std::to_string(a.id) + " is not a traffic light");
+          }
+          a.set_light(c.traffic_light_state);
           return a.id;
         }
       },
@@ -866,8 +994,8 @@ std::vector<Delivery> Episode::SenseLocked() {
         // A gradient that changes with the frame: B = x, G = y, R = frame.
         for (size_t y = 0; y < h; ++y) {
           for (size_t x = 0; x < w; ++x) {
-            image->data()[y * w + x] = sd::Color{static_cast<uint8_t>(x), static_cast<uint8_t>(y),
-                                                 static_cast<uint8_t>(f), 255u};
+            image->data()[y * w + x] = sd::Color(static_cast<uint8_t>(f), static_cast<uint8_t>(y),
+                                                 static_cast<uint8_t>(x), 255u);
           }
         }
         cb(std::move(image));
@@ -941,5 +1069,288 @@ std::vector<Delivery> Episode::SenseLocked() {
 
 }  // namespace mock
 
+// ---------------------------------------------------------------------------
+// Milestone 4: more actor operations, walkers, traffic lights, weather, debug,
+// recorder, OpenDRIVE worlds, map queries and the Traffic Manager.
+
+void Actor::SetTargetAngularVelocity(const geom::Vector3D &vector) {
+  WithData([&](mock::ActorData &a) { a.angular_velocity = vector; return 0; });
+}
+
+void Actor::AddImpulse(const geom::Vector3D &vector) {
+  WithData([&](mock::ActorData &a) { ApplyImpulseLocked(*_episode, a, vector); return 0; });
+}
+
+void Actor::AddForce(const geom::Vector3D &force) {
+  WithData([&](mock::ActorData &a) {
+    ApplyImpulseLocked(*_episode, a, Scaled(force, static_cast<float>(_episode->DeltaSeconds())));
+    return 0;
+  });
+}
+
+void Actor::AddAngularImpulse(const geom::Vector3D &) {
+  WithData([](mock::ActorData &) { return 0; });  // no rotational dynamics in the mock
+}
+
+void Actor::AddTorque(const geom::Vector3D &) {
+  WithData([](mock::ActorData &) { return 0; });
+}
+
+void Actor::SetSimulatePhysics(bool enabled) {
+  WithData([&](mock::ActorData &a) { a.simulate_physics = enabled; return 0; });
+}
+
+void Actor::SetEnableGravity(bool enabled) {
+  WithData([&](mock::ActorData &a) { a.gravity = enabled; return 0; });
+}
+
+void Vehicle::SetLightState(const LightState &light_state) {
+  WithData([&](mock::ActorData &a) { a.light_state = static_cast<uint32_t>(light_state); return 0; });
+}
+
+Vehicle::LightState Vehicle::GetLightState() const {
+  return WithData([](mock::ActorData &a) { return static_cast<LightState>(a.light_state); });
+}
+
+namespace {
+
+constexpr double kTrafficLightReach = 15.0;
+
+// The traffic light within reach of a vehicle, if any (episode lock held).
+const mock::ActorData *LightNear(const mock::Episode &e, const mock::ActorData &vehicle) {
+  for (const auto &entry : e.actors) {
+    const auto &l = entry.second;
+    if (!l.is_traffic_light()) continue;
+    const auto &p = vehicle.transform.location;
+    if (std::hypot(p.x - l.transform.location.x, p.y - l.transform.location.y) < kTrafficLightReach) {
+      return &l;
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+rpc::TrafficLightState Vehicle::GetTrafficLightState() const {
+  return WithData([&](mock::ActorData &a) {
+    const auto *l = LightNear(*_episode, a);
+    return l == nullptr ? rpc::TrafficLightState::Green : l->light;
+  });
+}
+
+bool Vehicle::IsAtTrafficLight() {
+  return WithData([&](mock::ActorData &a) { return LightNear(*_episode, a) != nullptr; });
+}
+
+SharedPtr<TrafficLight> Vehicle::GetTrafficLight() const {
+  const rpc::ActorId id = WithData([&](mock::ActorData &a) -> rpc::ActorId {
+    const auto *l = LightNear(*_episode, a);
+    return l == nullptr ? 0u : l->id;
+  });
+  return id == 0 ? nullptr : std::make_shared<TrafficLight>(_episode, id);
+}
+
+void Walker::ApplyControl(const Control &control) {
+  WithData([&](mock::ActorData &a) { a.walker_control = control; return 0; });
+}
+
+Walker::Control Walker::GetWalkerControl() const {
+  return WithData([](mock::ActorData &a) { return a.walker_control; });
+}
+
+void WalkerAIController::Start() {
+  WithData([](mock::ActorData &a) {
+    if (!a.parent) throw std::runtime_error("walker AI controller must be attached to a walker");
+    a.ai_running = true;
+    return 0;
+  });
+}
+
+void WalkerAIController::Stop() {
+  WithData([&](mock::ActorData &a) {
+    a.ai_running = false;
+    if (a.parent) {
+      auto w = _episode->actors.find(*a.parent);
+      if (w != _episode->actors.end()) w->second.walker_control.speed = 0.0f;
+    }
+    return 0;
+  });
+}
+
+void WalkerAIController::GoToLocation(const geom::Location &destination) {
+  WithData([&](mock::ActorData &a) { a.ai_target = destination; return 0; });
+}
+
+void WalkerAIController::SetMaxSpeed(float max_speed) {
+  WithData([&](mock::ActorData &a) { a.ai_max_speed = max_speed; return 0; });
+}
+
+void TrafficLight::SetState(rpc::TrafficLightState state) {
+  WithData([&](mock::ActorData &a) { a.set_light(state); return 0; });
+}
+
+rpc::TrafficLightState TrafficLight::GetState() const {
+  return WithData([](mock::ActorData &a) { return a.light; });
+}
+
+void TrafficLight::SetGreenTime(float t) { WithData([&](mock::ActorData &a) { a.green_time = t; return 0; }); }
+float TrafficLight::GetGreenTime() const { return WithData([](mock::ActorData &a) { return a.green_time; }); }
+void TrafficLight::SetYellowTime(float t) { WithData([&](mock::ActorData &a) { a.yellow_time = t; return 0; }); }
+float TrafficLight::GetYellowTime() const { return WithData([](mock::ActorData &a) { return a.yellow_time; }); }
+void TrafficLight::SetRedTime(float t) { WithData([&](mock::ActorData &a) { a.red_time = t; return 0; }); }
+float TrafficLight::GetRedTime() const { return WithData([](mock::ActorData &a) { return a.red_time; }); }
+float TrafficLight::GetElapsedTime() const { return WithData([](mock::ActorData &a) { return a.elapsed; }); }
+void TrafficLight::Freeze(bool freeze) { WithData([&](mock::ActorData &a) { a.frozen = freeze; return 0; }); }
+bool TrafficLight::IsFrozen() const { return WithData([](mock::ActorData &a) { return a.frozen; }); }
+void TrafficLight::ResetGroup() {
+  WithData([](mock::ActorData &a) { a.set_light(rpc::TrafficLightState::Green); return 0; });
+}
+
+std::optional<geom::Location> World::GetRandomLocationFromNavigation() const {
+  // The mock's "sidewalk": along the road edge at y = -2.5.
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  const float x = static_cast<float>((_episode->frame * 37 + 11) % 200);
+  return geom::Location(x, -2.5f, 0.5f);
+}
+
+rpc::WeatherParameters World::GetWeather() const {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  return _episode->weather;
+}
+
+void World::SetWeather(const rpc::WeatherParameters &weather) {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  _episode->weather = weather;
+}
+
+namespace {
+void CountShape(const std::shared_ptr<mock::Episode> &e) {
+  std::lock_guard<std::mutex> lock(e->mutex);
+  ++e->debug_shapes;
+}
+}  // namespace
+
+void DebugHelper::DrawPoint(const geom::Location &, float, sensor::data::Color, float, bool) { CountShape(_episode); }
+void DebugHelper::DrawLine(const geom::Location &, const geom::Location &, float, sensor::data::Color, float, bool) { CountShape(_episode); }
+void DebugHelper::DrawArrow(const geom::Location &, const geom::Location &, float, float, sensor::data::Color, float, bool) { CountShape(_episode); }
+void DebugHelper::DrawBox(const geom::BoundingBox &, const geom::Rotation &, float, sensor::data::Color, float, bool) { CountShape(_episode); }
+void DebugHelper::DrawString(const geom::Location &, const std::string &, bool, sensor::data::Color, float, bool) { CountShape(_episode); }
+
+std::vector<std::pair<SharedPtr<Waypoint>, SharedPtr<Waypoint>>> Map::GetTopology() const {
+  std::vector<std::pair<SharedPtr<Waypoint>, SharedPtr<Waypoint>>> topology;
+  for (int32_t lane : kLanes) topology.emplace_back(MakeWaypoint(lane, 0.0), MakeWaypoint(lane, kRoadLength));
+  return topology;
+}
+
+std::vector<geom::Location> Map::GetAllCrosswalkZones() const {
+  // One crosswalk across both lanes at x = 50 (a closed polygon, like CARLA's).
+  return {geom::Location(49.0f, -1.75f, 0.0f), geom::Location(51.0f, -1.75f, 0.0f),
+          geom::Location(51.0f, 5.25f, 0.0f), geom::Location(49.0f, 5.25f, 0.0f),
+          geom::Location(49.0f, -1.75f, 0.0f)};
+}
+
+std::vector<SharedPtr<Landmark>> Map::GetAllLandmarks() const {
+  return {std::make_shared<Landmark>("1000", "Stop", "206", 100.0,
+                                     geom::Transform(geom::Location(100.0f, -3.0f, 1.0f)))};
+}
+
+std::vector<SharedPtr<Landmark>> Map::GetAllLandmarksOfType(std::string type) const {
+  std::vector<SharedPtr<Landmark>> result;
+  for (auto &l : GetAllLandmarks())
+    if (l->GetType() == type) result.push_back(l);
+  return result;
+}
+
+traffic_manager::TrafficManager Client::GetInstanceTM(uint16_t port) const {
+  return traffic_manager::TrafficManager(mock::Connect(_endpoint, _timeout), port);
+}
+
+std::string Client::StartRecorder(std::string name, bool) {
+  auto e = mock::Connect(_endpoint, _timeout);
+  std::lock_guard<std::mutex> lock(e->mutex);
+  e->recording = name;
+  e->recordings[name] = e->frame;
+  return "Recording on file: " + name;
+}
+
+void Client::StopRecorder() {
+  auto e = mock::Connect(_endpoint, _timeout);
+  std::lock_guard<std::mutex> lock(e->mutex);
+  if (!e->recording.empty()) e->recordings[e->recording] = e->frame - e->recordings[e->recording];
+  e->recording.clear();
+}
+
+namespace {
+uint64_t RecordedFrames(const std::shared_ptr<mock::Episode> &e, const std::string &name) {
+  std::lock_guard<std::mutex> lock(e->mutex);
+  auto it = e->recordings.find(name);
+  if (it == e->recordings.end()) throw std::runtime_error("file " + name + " not found");
+  return it->second;
+}
+}  // namespace
+
+std::string Client::ShowRecorderFileInfo(std::string name, bool) {
+  return "File: " + name + "\nFrames: " + std::to_string(RecordedFrames(mock::Connect(_endpoint, _timeout), name)) + "\n";
+}
+
+std::string Client::ShowRecorderCollisions(std::string name, char, char) {
+  RecordedFrames(mock::Connect(_endpoint, _timeout), name);
+  return "Collisions in " + name + ": 0\n";
+}
+
+std::string Client::ShowRecorderActorsBlocked(std::string name, double, double) {
+  RecordedFrames(mock::Connect(_endpoint, _timeout), name);
+  return "Blocked actors in " + name + ": 0\n";
+}
+
+std::string Client::ReplayFile(std::string name, double, double, uint32_t, bool) {
+  return "Replaying " + std::to_string(RecordedFrames(mock::Connect(_endpoint, _timeout), name)) +
+         " frames of " + name;
+}
+
+void Client::StopReplayer(bool) {}
+
+void Client::SetReplayerTimeFactor(double) {}
+
+World Client::GenerateOpenDriveWorld(std::string opendrive, const rpc::OpendriveGenerationParameters &,
+                                     bool reset_settings) const {
+  if (opendrive.find("<OpenDRIVE") == std::string::npos) {
+    throw std::runtime_error("not an OpenDRIVE document");
+  }
+  auto episode = mock::Connect(_endpoint, _timeout);
+  {
+    std::lock_guard<std::mutex> lock(episode->mutex);
+    episode->ResetLocked(reset_settings, false);
+  }
+  return World(episode);
+}
+
 }  // namespace client
+
+namespace traffic_manager {
+
+void TrafficManager::SetSynchronousMode(bool) {}
+void TrafficManager::SetRandomDeviceSeed(uint64_t) {}
+void TrafficManager::SetHybridPhysicsMode(bool) {}
+void TrafficManager::SetGlobalPercentageSpeedDifference(float percentage) {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  _episode->tm_global_speed_difference = percentage;
+}
+void TrafficManager::SetGlobalDistanceToLeadingVehicle(float) {}
+void TrafficManager::SetPercentageSpeedDifference(const ActorPtr &, float) {}
+void TrafficManager::SetDistanceToLeadingVehicle(const ActorPtr &, float) {}
+void TrafficManager::SetRandomLeftLaneChangePercentage(const ActorPtr &, float) {}
+void TrafficManager::SetRandomRightLaneChangePercentage(const ActorPtr &, float) {}
+void TrafficManager::SetPercentageRunningLight(const ActorPtr &, float) {}
+void TrafficManager::SetPercentageRunningSign(const ActorPtr &, float) {}
+void TrafficManager::SetPercentageIgnoreVehicles(const ActorPtr &, float) {}
+void TrafficManager::SetPercentageIgnoreWalkers(const ActorPtr &, float) {}
+void TrafficManager::SetKeepRightPercentage(const ActorPtr &, float) {}
+void TrafficManager::SetDesiredSpeed(const ActorPtr &, float) {}
+void TrafficManager::SetLaneOffset(const ActorPtr &, float) {}
+void TrafficManager::SetAutoLaneChange(const ActorPtr &, bool) {}
+void TrafficManager::SetForceLaneChange(const ActorPtr &, bool) {}
+void TrafficManager::SetUpdateVehicleLights(const ActorPtr &, bool) {}
+
+}  // namespace traffic_manager
 }  // namespace carla

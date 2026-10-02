@@ -1,0 +1,212 @@
+# Milestone 4 on the mock backend.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+assert ffi.CCommand.__elemsize__ == 152 and ffi.CWalkerControl.__elemsize__ == 40
+assert ffi.CTrafficLightInfo.__elemsize__ == 48 and ffi.CWeather.__elemsize__ == 112
+assert ffi.CColor.__elemsize__ == 4 and ffi.COpendriveParameters.__elemsize__ == 48
+assert ffi.CLandmark.__elemsize__ == 224
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+actors = world.get_actors()
+vehicle = actors[0].as_vehicle()
+light = actors[2].as_traffic_light()
+assert light.is_traffic_light() and not vehicle.is_traffic_light() and not vehicle.is_walker()
+raised = False
+try:
+    vehicle.as_walker()
+except carla.ActorTypeError:
+    raised = True
+assert raised
+
+# Weather
+assert world.is_weather_enabled()
+rain = carla.WeatherParameters.preset("HardRainNoon")
+assert rain.precipitation == 100.0 and rain.sun_altitude_angle == 45.0
+world.set_weather(rain)
+assert world.get_weather() == rain
+raised = False
+try:
+    carla.WeatherParameters.preset("Snow")
+except IndexError:
+    raised = True
+assert raised
+
+# Traffic lights: cycle Green (10 s) -> Yellow (3 s) at 0.05 s per tick, unless frozen.
+assert light.get_state() == carla.TrafficLightState.Green and light.get_green_time() == 10.0
+light.set_green_time(0.5)
+for _ in range(11):
+    world.tick()
+assert light.get_state() == carla.TrafficLightState.Yellow
+light.set_state(carla.TrafficLightState.Red)
+light.freeze(True)
+for _ in range(100):
+    world.tick()
+assert light.get_state() == carla.TrafficLightState.Red and light.is_frozen()
+# Out-of-range states are rejected before narrowing to the C ABI's int32.
+for bad in (-1, 5, 1 << 32):
+    raised = False
+    try:
+        light.set_state(bad)
+    except carla.CarlaError:
+        raised = True
+    assert raised
+    raised = False
+    try:
+        carla.command.SetTrafficLightState(light.id, bad)
+    except carla.CarlaError:
+        raised = True
+    assert raised
+assert light.get_state() == carla.TrafficLightState.Red
+
+# A vehicle within 15 m of the light sees it.
+assert not vehicle.is_at_traffic_light() and vehicle.get_traffic_light() is None
+vehicle.set_location(carla.Location(92.0, 0.0, 0.5))
+assert vehicle.is_at_traffic_light()
+assert vehicle.get_traffic_light_state() == carla.TrafficLightState.Red
+seen = vehicle.get_traffic_light()
+assert seen is not None and seen.id == light.id
+assert vehicle.get_speed_limit() == 30.0
+
+# Lights
+vehicle.set_light_state(carla.VehicleLightState.LowBeam | carla.VehicleLightState.Fog)
+assert vehicle.get_light_state() == (carla.VehicleLightState.LowBeam | carla.VehicleLightState.Fog)
+
+# Physics: impulse / mass
+vehicle.add_impulse(carla.Vector3D(3000.0, 0.0, 0.0))
+assert vehicle.get_velocity().x == 2.0
+vehicle.set_target_velocity(carla.Vector3D())
+vehicle.set_simulate_physics(True)
+vehicle.set_enable_gravity(True)
+
+# Walker + AI controller
+lib = world.get_blueprint_library()
+nav = world.get_random_location_from_navigation()
+assert nav is not None
+walker = world.spawn_actor(lib.find("walker.pedestrian.0001"), carla.Transform(nav)).as_walker()
+ai = world.spawn_actor(lib.find("controller.ai.walker"), carla.Transform(),
+                       attach_to=walker).as_walker_ai_controller()
+assert walker.is_walker()
+ai.start()
+ai.go_to_location(carla.Location(nav.x + 2.0, nav.y, nav.z))
+ai.set_max_speed(2.0)
+for _ in range(40):
+    world.tick()
+assert abs(walker.get_location().x - (nav.x + 2.0)) < 1e-3
+ai.stop()
+walker.apply_control(carla.WalkerControl(carla.Vector3D(0.0, 1.0, 0.0), 1.0))
+assert walker.get_control().speed == 1.0
+raised = False
+try:
+    walker.apply_control(carla.WalkerControl(carla.Vector3D(), -1.0))
+except carla.CarlaError:
+    raised = True
+assert raised
+
+# Traffic Manager
+tm = client.get_trafficmanager(8123)
+assert tm.get_port() == 8123
+tm.set_synchronous_mode(True)
+tm.set_random_device_seed(42)
+tm.set_hybrid_physics_mode(False)
+tm.set_global_distance_to_leading_vehicle(2.5)
+tm.vehicle_percentage_speed_difference(vehicle, 10.0)
+tm.distance_to_leading_vehicle(vehicle, 3.0)
+tm.random_left_lanechange_percentage(vehicle, 0.0)
+tm.random_right_lanechange_percentage(vehicle, 0.0)
+tm.ignore_lights_percentage(vehicle, 100.0)
+tm.ignore_signs_percentage(vehicle, 100.0)
+tm.ignore_vehicles_percentage(vehicle, 0.0)
+tm.ignore_walkers_percentage(vehicle, 0.0)
+tm.keep_right_rule_percentage(vehicle, 0.0)
+tm.set_desired_speed(vehicle, 40.0)
+tm.vehicle_lane_offset(vehicle, 0.0)
+tm.auto_lane_change(vehicle, False)
+tm.force_lane_change(vehicle, True)
+tm.update_vehicle_lights(vehicle, True)
+raised = False
+try:
+    tm.ignore_walkers_percentage(vehicle, -5.0)
+except carla.CarlaError:
+    raised = True
+assert raised
+raised = False
+try:
+    client.get_trafficmanager(70000)
+except carla.CarlaError:
+    raised = True
+assert raised
+
+# Debug drawing (validated; the mock draws nothing)
+world.debug.draw_point(nav)
+world.debug.draw_line(nav, carla.Location(0.0, 0.0, 0.0), 0.1, carla.Color(0, 0, 255), 1.0)
+world.debug.draw_arrow(nav, carla.Location(1.0, 0.0, 0.0))
+world.debug.draw_box(vehicle.bounding_box, carla.Rotation())
+world.debug.draw_string(nav, "typesafe_carla")
+raised = False
+try:
+    world.debug.draw_point(nav, color=carla.Color(300, 0, 0))
+except carla.CarlaError:
+    raised = True
+assert raised
+
+# Recorder
+assert "rec.log" in client.start_recorder("rec.log", True)
+for _ in range(3):
+    world.tick()
+client.stop_recorder()
+assert "Frames: 3" in client.show_recorder_file_info("rec.log")
+assert "Collisions" in client.show_recorder_collisions("rec.log", "v", "a")
+assert "Blocked" in client.show_recorder_actors_blocked("rec.log", 1.0, 1.0)
+assert "3 frames" in client.replay_file("rec.log", 0.0, 0.0, 0)
+client.set_replayer_time_factor(2.0)
+client.stop_replayer(False)
+raised = False
+try:
+    client.show_recorder_collisions("rec.log", "x", "a")
+except carla.CarlaError:
+    raised = True
+assert raised
+
+# Map queries
+m = world.get_map()
+topology = m.get_topology()
+assert len(topology) == 2 and topology[0][0].s == 0.0 and topology[0][1].s == 200.0
+assert len(m.get_crosswalks()) == 5
+stops = m.get_all_landmarks_of_type("206")
+assert len(stops) == 1 and stops[0].name == "Stop" and stops[0].s == 100.0
+assert len(m.get_all_landmarks_of_type("1000001")) == 0
+assert m.generate_waypoints(50.0)[0].get_junction() is None
+
+# Batch: the new commands
+responses = client.apply_batch_sync([
+    carla.command.ApplyWalkerControl(walker.id, carla.WalkerControl(carla.Vector3D(1.0, 0.0, 0.0), 0.7)),
+    carla.command.SetTrafficLightState(light.id, carla.TrafficLightState.Green),
+    carla.command.SetVehicleLightState(vehicle.id, carla.VehicleLightState.All),
+    carla.command.ApplyLocation(vehicle.id, carla.Location(10.0, 0.0, 0.5)),
+    carla.command.ApplyImpulse(vehicle.id, carla.Vector3D(1500.0, 0.0, 0.0)),
+    carla.command.ApplyForce(vehicle.id, carla.Vector3D(0.0, 0.0, 1.0)),
+    carla.command.ApplyTargetAngularVelocity(vehicle.id, carla.Vector3D(0.0, 0.0, 5.0)),
+    carla.command.ApplyAngularImpulse(vehicle.id, carla.Vector3D(0.0, 0.0, 1.0)),
+    carla.command.ApplyTorque(vehicle.id, carla.Vector3D(0.0, 0.0, 1.0)),
+    carla.command.SetEnableGravity(vehicle.id, True),
+    carla.command.SetTrafficLightState(vehicle.id, carla.TrafficLightState.Red)])
+assert all(not r.has_error() for r in responses[:10]), responses
+assert responses[10].has_error()  # a vehicle is not a traffic light
+assert abs(walker.get_control().speed - 0.7) < 1e-6
+assert light.get_state() == carla.TrafficLightState.Green
+assert vehicle.get_light_state() == carla.VehicleLightState.All
+assert vehicle.get_location().x == 10.0
+
+# OpenDRIVE worlds need an OpenDRIVE document.
+raised = False
+try:
+    client.generate_opendrive_world("<html/>")
+except carla.CarlaError:
+    raised = True
+assert raised
+world2 = client.generate_opendrive_world("<?xml version='1.0'?><OpenDRIVE></OpenDRIVE>",
+                                         carla.OpendriveGenerationParameters(vertex_distance=1.0))
+assert len(world2.get_actors()) == 2  # a fresh episode: spectator and traffic light
+print("OK")

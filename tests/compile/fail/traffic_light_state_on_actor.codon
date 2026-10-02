@@ -1,0 +1,10 @@
+# Traffic-light operations need a checked as_traffic_light() conversion.
+# expect-error: 'Actor' object has no attribute 'set_state'
+import typesafe_carla as carla
+
+def turn_green(world: carla.World):
+    for actor in world.get_actors():
+        actor.set_state(carla.TrafficLightState.Green)
+
+# Compile-only: Codon type-checks a function only when it is called.
+turn_green(carla.Client("localhost", 2000).get_world())

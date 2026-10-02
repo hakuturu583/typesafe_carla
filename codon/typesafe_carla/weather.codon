@@ -1,0 +1,97 @@
+# Weather.
+
+from ._ffi import (CWeather, tsc_world_get_weather, tsc_world_set_weather, tsc_weather_preset,
+                   tsc_world_is_weather_enabled)
+from .errors import _check
+from .world import World
+
+class WeatherParameters:
+    """Weather of the simulation. Presets: WeatherParameters.preset("ClearNoon"),
+    or the named class attributes (WeatherParameters.ClearNoon, ...)."""
+    cloudiness: float
+    precipitation: float
+    precipitation_deposits: float
+    wind_intensity: float
+    sun_azimuth_angle: float
+    sun_altitude_angle: float
+    fog_density: float
+    fog_distance: float
+    fog_falloff: float
+    wetness: float
+    scattering_intensity: float
+    mie_scattering_scale: float
+    rayleigh_scattering_scale: float
+    dust_storm: float
+
+    def __init__(self, cloudiness: float = 0.0, precipitation: float = 0.0,
+                 precipitation_deposits: float = 0.0, wind_intensity: float = 0.0,
+                 sun_azimuth_angle: float = 0.0, sun_altitude_angle: float = 0.0,
+                 fog_density: float = 0.0, fog_distance: float = 0.0, fog_falloff: float = 0.0,
+                 wetness: float = 0.0, scattering_intensity: float = 0.0,
+                 mie_scattering_scale: float = 0.0, rayleigh_scattering_scale: float = 0.0331,
+                 dust_storm: float = 0.0):
+        self.cloudiness = cloudiness
+        self.precipitation = precipitation
+        self.precipitation_deposits = precipitation_deposits
+        self.wind_intensity = wind_intensity
+        self.sun_azimuth_angle = sun_azimuth_angle
+        self.sun_altitude_angle = sun_altitude_angle
+        self.fog_density = fog_density
+        self.fog_distance = fog_distance
+        self.fog_falloff = fog_falloff
+        self.wetness = wetness
+        self.scattering_intensity = scattering_intensity
+        self.mie_scattering_scale = mie_scattering_scale
+        self.rayleigh_scattering_scale = rayleigh_scattering_scale
+        self.dust_storm = dust_storm
+
+    @staticmethod
+    def preset(name: str) -> WeatherParameters:
+        """LibCarla's named preset, e.g. "HardRainNoon". Raises IndexError if unknown."""
+        out = Ptr[CWeather](1)
+        _check(tsc_weather_preset(name.ptr, name.len, out))
+        return WeatherParameters._from_c(out[0])
+
+    def __eq__(self, other: WeatherParameters) -> bool:
+        return self._to_c() == other._to_c()
+
+    def __ne__(self, other: WeatherParameters) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return (f"WeatherParameters(cloudiness={self.cloudiness}, precipitation={self.precipitation}, "
+                f"sun_altitude_angle={self.sun_altitude_angle}, fog_density={self.fog_density}, "
+                f"wetness={self.wetness})")
+
+    def _to_c(self) -> CWeather:
+        return CWeather(self.cloudiness, self.precipitation, self.precipitation_deposits,
+                        self.wind_intensity, self.sun_azimuth_angle, self.sun_altitude_angle,
+                        self.fog_density, self.fog_distance, self.fog_falloff, self.wetness,
+                        self.scattering_intensity, self.mie_scattering_scale,
+                        self.rayleigh_scattering_scale, self.dust_storm)
+
+    @staticmethod
+    def _from_c(c: CWeather) -> WeatherParameters:
+        return WeatherParameters(c.cloudiness, c.precipitation, c.precipitation_deposits,
+                                 c.wind_intensity, c.sun_azimuth_angle, c.sun_altitude_angle,
+                                 c.fog_density, c.fog_distance, c.fog_falloff, c.wetness,
+                                 c.scattering_intensity, c.mie_scattering_scale,
+                                 c.rayleigh_scattering_scale, c.dust_storm)
+
+@extend
+class World:
+    def get_weather(self) -> WeatherParameters:
+        out = Ptr[CWeather](1)
+        _check(tsc_world_get_weather(self._h.ptr, out))
+        return WeatherParameters._from_c(out[0])
+
+    def is_weather_enabled(self) -> bool:
+        """False when the server does not simulate weather (set_weather is then ignored)."""
+        out = Ptr[i32](1)
+        _check(tsc_world_is_weather_enabled(self._h.ptr, out))
+        return int(out[0]) != 0
+
+    def set_weather(self, weather: WeatherParameters):
+        w = Ptr[CWeather](1)
+        w[0] = weather._to_c()
+        _check(tsc_world_set_weather(self._h.ptr, w))

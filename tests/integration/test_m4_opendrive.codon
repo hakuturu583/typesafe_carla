@@ -1,0 +1,54 @@
+# Milestone 4 against a real CARLA server: a world generated from an
+# OpenDRIVE document, then Town10HD_Opt restored for the other tests.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+here = os.getenv("TSC_TEST_DIR", "tests/integration")
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(120.0)
+original_map = client.get_world().get_map().name
+xodr = open(here + "/data/straight_road.xodr").read()
+try:
+    world = client.generate_opendrive_world(
+        xodr, carla.OpendriveGenerationParameters(vertex_distance=2.0, max_road_length=50.0))
+    m = world.get_map()
+    print("generated", m.name, "spawn points", len(m.get_spawn_points()))
+    assert "OpenDriveMap" in m.name
+    assert "tsc_straight_road" in m.to_opendrive()
+    wps = m.generate_waypoints(20.0)
+    print("waypoints", len(wps))
+    assert len(wps) >= 10 and all(wp.road_id == 0 for wp in wps)
+    # Drive along the generated road.
+    # Mid-road, away from the mesh edge at s = 0.
+    mid = m.get_waypoint(carla.Location(100.0, 1.75, 0.0))
+    assert mid is not None and mid.road_id == 0
+    start = mid.transform
+    start.location.z += 0.5
+    vehicle = world.spawn_actor(world.get_blueprint_library().find("vehicle.lincoln.mkz"),
+                                start).as_vehicle()
+    settings = world.get_settings()
+    settings.synchronous_mode = True
+    settings.fixed_delta_seconds = 0.05
+    world.apply_settings(settings)
+    try:
+        vehicle.apply_control(carla.VehicleControl(throttle=0.6))
+        for _ in range(100):  # 5 simulated seconds
+            world.tick()
+        on_road = m.get_waypoint(vehicle.get_location())
+        print("vehicle at", vehicle.get_location(), "lane", on_road.lane_id if on_road is not None else None)
+        assert vehicle.get_location().distance(start.location) > 3.0
+        assert on_road is not None and on_road.road_id == 0
+    finally:
+        settings.synchronous_mode = False
+        settings.fixed_delta_seconds = None
+        world.apply_settings(settings)
+        vehicle.destroy()
+finally:
+    restored = client.load_world(original_map.split("/")[-1])
+    print("restored", restored.get_map().name)
+    assert restored.get_map().name == original_map
+print("OK")

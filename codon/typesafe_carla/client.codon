@@ -5,9 +5,50 @@ from ._ffi import (Handle, CString, take_string, tsc_client_create, tsc_client_s
                    tsc_client_get_server_version, tsc_client_get_world, tsc_client_load_world,
                    tsc_client_reload_world, tsc_client_apply_batch, tsc_client_apply_batch_sync,
                    CCommandResponse)
-from .errors import _check, _check_port
+from ._ffi import (COpendriveParameters, tsc_client_start_recorder, tsc_client_stop_recorder,
+                   tsc_client_show_recorder_file_info, tsc_client_show_recorder_collisions,
+                   tsc_client_show_recorder_actors_blocked, tsc_client_replay_file,
+                   tsc_client_stop_replayer, tsc_client_set_replayer_time_factor,
+                   tsc_client_generate_opendrive_world, TSC_INVALID_ARGUMENT)
+from .errors import _check, _check_port, CarlaError, _is_actor_id
 from .world import World
 from .command import Command, CommandResponse, _flatten, _responses
+
+class OpendriveGenerationParameters:
+    """Mesh generation settings for Client.generate_opendrive_world()."""
+    vertex_distance: float
+    max_road_length: float
+    wall_height: float
+    additional_width: float
+    smooth_junctions: bool
+    enable_mesh_visibility: bool
+    enable_pedestrian_navigation: bool
+
+    def __init__(self, vertex_distance: float = 2.0, max_road_length: float = 50.0,
+                 wall_height: float = 1.0, additional_width: float = 0.6,
+                 smooth_junctions: bool = True, enable_mesh_visibility: bool = True,
+                 enable_pedestrian_navigation: bool = True):
+        self.vertex_distance = vertex_distance
+        self.max_road_length = max_road_length
+        self.wall_height = wall_height
+        self.additional_width = additional_width
+        self.smooth_junctions = smooth_junctions
+        self.enable_mesh_visibility = enable_mesh_visibility
+        self.enable_pedestrian_navigation = enable_pedestrian_navigation
+
+    def _to_c(self) -> COpendriveParameters:
+        return COpendriveParameters(self.vertex_distance, self.max_road_length, self.wall_height,
+                                    self.additional_width, i32(int(self.smooth_junctions)),
+                                    i32(int(self.enable_mesh_visibility)),
+                                    i32(int(self.enable_pedestrian_navigation)), i32(0))
+
+def _category(c: str) -> byte:
+    """Recorder actor categories: 'h' hero, 'v' vehicle, 'w' walker, 't' traffic light,
+    'o' other, 'a' any."""
+    if len(c) != 1 or c not in "hvwtoa":
+        raise CarlaError(f"recorder category must be one of h, v, w, t, o, a (got '{c}')",
+                         TSC_INVALID_ARGUMENT)
+    return c.ptr[0]
 
 class Client:
     _h: Handle
@@ -72,3 +113,60 @@ class Client:
         _check(tsc_client_apply_batch_sync(self._h.ptr, records, n, i32(int(do_tick)), buf, top,
                                            count))
         return _responses(buf, count[0])
+
+    def generate_opendrive_world(self, opendrive: str,
+                                 parameters: Optional[OpendriveGenerationParameters] = None,
+                                 reset_settings: bool = True) -> World:
+        """Loads a world built from an OpenDRIVE (.xodr) document."""
+        p = Ptr[COpendriveParameters](1)
+        p[0] = (parameters if parameters is not None else OpendriveGenerationParameters())._to_c()
+        out = Ptr[cobj](1)
+        _check(tsc_client_generate_opendrive_world(self._h.ptr, opendrive.ptr, opendrive.len, p,
+                                                   i32(int(reset_settings)), out))
+        return World(Handle(out[0]))
+
+    # --- Recorder (files are written on the server) -----------------------------
+
+    def start_recorder(self, filename: str, additional_data: bool = False) -> str:
+        out = Ptr[CString](1)
+        _check(tsc_client_start_recorder(self._h.ptr, filename.ptr, filename.len,
+                                         i32(int(additional_data)), out))
+        return take_string(out)
+
+    def stop_recorder(self):
+        _check(tsc_client_stop_recorder(self._h.ptr))
+
+    def show_recorder_file_info(self, filename: str, show_all: bool = False) -> str:
+        out = Ptr[CString](1)
+        _check(tsc_client_show_recorder_file_info(self._h.ptr, filename.ptr, filename.len,
+                                                  i32(int(show_all)), out))
+        return take_string(out)
+
+    def show_recorder_collisions(self, filename: str, category1: str, category2: str) -> str:
+        out = Ptr[CString](1)
+        _check(tsc_client_show_recorder_collisions(self._h.ptr, filename.ptr, filename.len,
+                                                   _category(category1), _category(category2),
+                                                   out))
+        return take_string(out)
+
+    def show_recorder_actors_blocked(self, filename: str, min_time: float = 60.0,
+                                     min_distance: float = 100.0) -> str:
+        out = Ptr[CString](1)
+        _check(tsc_client_show_recorder_actors_blocked(self._h.ptr, filename.ptr, filename.len,
+                                                       min_time, min_distance, out))
+        return take_string(out)
+
+    def replay_file(self, filename: str, start: float = 0.0, duration: float = 0.0,
+                    follow_id: int = 0, replay_sensors: bool = False) -> str:
+        if not _is_actor_id(follow_id):
+            raise CarlaError(f"follow_id {follow_id} is out of range", TSC_INVALID_ARGUMENT)
+        out = Ptr[CString](1)
+        _check(tsc_client_replay_file(self._h.ptr, filename.ptr, filename.len, start, duration,
+                                      u32(follow_id), i32(int(replay_sensors)), out))
+        return take_string(out)
+
+    def stop_replayer(self, keep_actors: bool = False):
+        _check(tsc_client_stop_replayer(self._h.ptr, i32(int(keep_actors))))
+
+    def set_replayer_time_factor(self, time_factor: float = 1.0):
+        _check(tsc_client_set_replayer_time_factor(self._h.ptr, time_factor))

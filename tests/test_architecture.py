@@ -32,6 +32,20 @@ def test_ffi_declarations_match_header():
     assert not missing, f"imported but not in ffi.h: {sorted(missing)}"
 
 
+def test_ffi_structs_cross_by_pointer():
+    """Codon passes an @tuple argument as separate scalars, which does not match
+    the C calling convention for a struct passed by value. Structs cross as Ptr."""
+    ffi = (ROOT / "codon" / "typesafe_carla" / "_ffi.codon").read_text()
+    structs = set(re.findall(r"^@tuple\s*\nclass (\w+)", ffi, re.MULTILINE))
+    assert "CColor" in structs
+    offenders = []
+    for name, args in re.findall(r"^from C import LIB\.(tsc_\w+)\(([^)]*)\)", ffi, re.MULTILINE):
+        by_value = [a.strip() for a in args.split(",") if a.strip() in structs]
+        if by_value:
+            offenders.append((name, by_value))
+    assert not offenders, f"structs passed by value across the C ABI: {offenders}"
+
+
 def test_abi_version_matches_header():
     header = (ROOT / "native" / "include" / "typesafe_carla" / "ffi.h").read_text()
     ffi = (ROOT / "codon" / "typesafe_carla" / "_ffi.codon").read_text()

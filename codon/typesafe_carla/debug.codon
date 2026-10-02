@@ -1,0 +1,64 @@
+# Debug drawing in the simulator (world.debug), as carla.DebugHelper.
+
+from ._ffi import (CColor, CVector3D, CBoundingBox, CRotation, tsc_debug_draw_point,
+                   tsc_debug_draw_line, tsc_debug_draw_arrow, tsc_debug_draw_box,
+                   tsc_debug_draw_string, TSC_INVALID_ARGUMENT)
+from .errors import _check, CarlaError
+from .geometry import Location, Rotation, BoundingBox
+from .blueprint import Color
+from .world import World
+
+def _color(c: Color) -> Ptr[CColor]:
+    for v in (c.r, c.g, c.b, c.a):
+        if v < 0 or v > 255:
+            raise CarlaError(f"color component {v} is out of [0, 255]", TSC_INVALID_ARGUMENT)
+    p = Ptr[CColor](1)
+    p[0] = CColor(u8(c.r), u8(c.g), u8(c.b), u8(c.a))
+    return p
+
+def _loc(l: Location) -> Ptr[CVector3D]:
+    p = Ptr[CVector3D](1)
+    p[0] = l._to_c()
+    return p
+
+class DebugHelper:
+    """Shapes drawn in the simulator. life_time < 0 means "until the end"."""
+    _world: World
+
+    def __init__(self, world: World):
+        self._world = world
+
+    def draw_point(self, location: Location, size: float = 0.1,
+                   color: Color = Color(255, 0, 0), life_time: float = -1.0):
+        _check(tsc_debug_draw_point(self._world._h.ptr, _loc(location), size, _color(color),
+                                    life_time))
+
+    def draw_line(self, begin: Location, end: Location, thickness: float = 0.1,
+                  color: Color = Color(255, 0, 0), life_time: float = -1.0):
+        _check(tsc_debug_draw_line(self._world._h.ptr, _loc(begin), _loc(end), thickness,
+                                   _color(color), life_time))
+
+    def draw_arrow(self, begin: Location, end: Location, thickness: float = 0.1,
+                   arrow_size: float = 0.1, color: Color = Color(255, 0, 0),
+                   life_time: float = -1.0):
+        _check(tsc_debug_draw_arrow(self._world._h.ptr, _loc(begin), _loc(end), thickness,
+                                    arrow_size, _color(color), life_time))
+
+    def draw_box(self, box: BoundingBox, rotation: Rotation, thickness: float = 0.1,
+                 color: Color = Color(255, 0, 0), life_time: float = -1.0):
+        b = Ptr[CBoundingBox](1)
+        b[0] = box._to_c()
+        r = Ptr[CRotation](1)
+        r[0] = rotation._to_c()
+        _check(tsc_debug_draw_box(self._world._h.ptr, b, r, thickness, _color(color), life_time))
+
+    def draw_string(self, location: Location, text: str, draw_shadow: bool = False,
+                    color: Color = Color(255, 0, 0), life_time: float = -1.0):
+        _check(tsc_debug_draw_string(self._world._h.ptr, _loc(location), text.ptr, text.len,
+                                     i32(int(draw_shadow)), _color(color), life_time))
+
+@extend
+class World:
+    @property
+    def debug(self) -> DebugHelper:
+        return DebugHelper(self)
