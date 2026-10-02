@@ -4,6 +4,7 @@
 
 #include "typesafe_carla/ffi.h"
 #include "carla_compat.hpp"
+#include "item_queue.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -142,7 +143,7 @@ struct tsc_vehicle : tsc_actor {
 };
 
 namespace tsc {
-class SensorQueue;  // sensor.cpp
+using SensorQueue = ItemQueue<carla::SharedPtr<carla::sensor::SensorData>>;
 }  // namespace tsc
 
 // A sensor handle is an actor handle whose `actor` is a carla::client::Sensor.
@@ -279,6 +280,33 @@ struct tsc_waypoint_list : tsc_handle {
   std::vector<carla::SharedPtr<carla::client::Waypoint>> waypoints;
   explicit tsc_waypoint_list(std::vector<carla::SharedPtr<carla::client::Waypoint>> w)
       : tsc_handle(TSC_KIND_WAYPOINT_LIST), waypoints(std::move(w)) {}
+};
+
+// The episode's light manager (issue #21). Lights cross the ABI as ids.
+struct tsc_light_manager : tsc_handle {
+  carla::SharedPtr<carla::client::LightManager> manager;
+  explicit tsc_light_manager(carla::SharedPtr<carla::client::LightManager> m)
+      : tsc_handle(TSC_KIND_LIGHT_MANAGER), manager(std::move(m)) {}
+};
+
+
+// A World::OnTick registration (issue #21): LibCarla's thread only queues the
+// snapshots; the Codon side delivers them on the program's thread. Releasing
+// the handle removes the registration.
+struct tsc_tick_listener : tsc_handle {
+  carla::client::World world;
+  size_t callback_id = 0;
+  bool registered = false;
+  using Queue = tsc::ItemQueue<std::shared_ptr<carla::client::WorldSnapshot>>;
+  std::shared_ptr<Queue> queue;
+  std::shared_ptr<tsc::FrameWatch> frames;  // the newest frame queued
+  explicit tsc_tick_listener(carla::client::World w)
+      : tsc_handle(TSC_KIND_TICK_LISTENER), world(std::move(w)) {}
+  ~tsc_tick_listener() override;  // world_queries.cpp
+  void unregister() {
+    if (registered) world.RemoveOnTick(callback_id);
+    registered = false;
+  }
 };
 
 namespace tsc {
@@ -490,6 +518,11 @@ inline carla::geom::BoundingBox to_carla(const tsc_bounding_box_t &b) {
                                   to_carla(b.rotation));
 }
 
+// Issue #21.
+inline tsc_labelled_point_t from_carla(const carla::rpc::LabelledPoint &p) {
+  return tsc_labelled_point_t{from_carla(p._location), static_cast<int32_t>(p._label), 0};
+}
+
 // Shared body of the "fill a caller buffer" entry points: reports the full
 // count and converts up to `capacity` elements (out may be NULL to query size).
 template <typename Out, typename Vec>
@@ -526,6 +559,14 @@ inline float check_non_negative(double v, const char *name) {
     fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite and non-negative");
   }
   return check_float(v, name);
+}
+
+inline uint8_t check_u8(int32_t v, const char *name) {
+  if (v < 0 || v > 255) {
+    fail(TSC_INVALID_ARGUMENT,
+         std::string(name) + " must be in [0, 255], got " + std::to_string(v));
+  }
+  return static_cast<uint8_t>(v);
 }
 
 // A C enumeration value as LibCarla's enum E; values outside [first, last] fail.
@@ -635,4 +676,36 @@ void list_assign(List *out, const Vec &values, Convert &&convert) {
   *out = list;
 }
 
+// Issue #21: the identity of the client connection (LibCarla's Simulator) a
+// World belongs to. OnTick callback ids are per Simulator, which keeps its
+// callbacks across load_world.
+inline uint64_t client_token(const carla::client::World &w) {
+  return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(w.GetEpisode().Lock().get()));
+}
+
+// Issue #21: conversions named in bindings/types.yaml (world_queries.cpp).
+tsc_traffic_light *make_traffic_light_handle(const carla::SharedPtr<carla::client::Actor> &actor);
+tsc_light_manager *make_light_manager_handle(carla::SharedPtr<carla::client::LightManager> m);
+// The traffic lights among `actors` (World returns them as plain actors).
+std::vector<carla::SharedPtr<carla::client::TrafficLight>> traffic_lights_of(
+    const std::vector<carla::SharedPtr<carla::client::Actor>> &actors);
+std::vector<std::string> to_names(const tsc_string_t *names, size_t count, const char *name);
+std::vector<uint64_t> to_vector(const uint64_t *values, size_t count, const char *name);
+// The `via` helper of World.get_traffic_lights_in_junction: empty for an id
+// that names no junction (LibCarla would dereference NULL).
+std::vector<carla::SharedPtr<carla::client::Actor>> traffic_lights_in_junction(
+    const carla::client::World &world, int32_t junction_id);
+void vehicle_light_state_list_assign(tsc_vehicle_light_state_list_t *out,
+                                     const carla::rpc::VehicleLightStateList &states);
+void bounding_box_list_assign(tsc_bounding_box_list_t *out,
+                              const std::vector<carla::geom::BoundingBox> &boxes);
+void labelled_point_list_assign(tsc_labelled_point_list_t *out,
+                                const std::vector<carla::rpc::LabelledPoint> &points);
+void environment_object_list_assign(tsc_environment_object_list_t *out,
+                                    const std::vector<carla::rpc::EnvironmentObject> &objects);
+void light_list_assign(tsc_light_list_t *out, const std::vector<carla::client::Light> &lights);
+
+inline carla::client::LightManager &light_manager_of(tsc_light_manager_t *m) {
+  return *check_handle(m, "light_manager", TSC_KIND_LIGHT_MANAGER)->manager;
+}
 }  // namespace tsc

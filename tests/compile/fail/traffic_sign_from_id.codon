@@ -1,0 +1,9 @@
+# get_traffic_sign takes a Landmark, not its id string.
+# expect-error: 'str' does not match expected type 'Landmark'
+import typesafe_carla as carla
+
+def sign(world: carla.World):
+    print(world.get_traffic_sign("1000"))
+
+# Compile-only: Codon type-checks a function only when it is called.
+sign(carla.Client("localhost", 2000).get_world())

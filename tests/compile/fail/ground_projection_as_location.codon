@@ -1,0 +1,9 @@
+# ground_projection returns a LabelledPoint (or None), not a Location: use .location.
+# expect-error: 'Location' does not match expected type 'LabelledPoint'
+import typesafe_carla as carla
+
+def ground(world: carla.World) -> carla.Location:
+    return world.ground_projection(carla.Location(0.0, 0.0, 10.0))
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(ground(carla.Client("localhost", 2000).get_world()))

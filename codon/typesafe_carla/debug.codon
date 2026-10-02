@@ -1,27 +1,15 @@
 # Debug drawing in the simulator (world.debug), as carla.DebugHelper.
 
-from ._ffi import (CColor, CVector3D, CBoundingBox, CRotation, tsc_debug_draw_point,
+from ._ffi import (CColor, CBoundingBox, CRotation, ref, tsc_debug_draw_point,
                    tsc_debug_draw_line, tsc_debug_draw_arrow, tsc_debug_draw_box,
-                   tsc_debug_draw_string, TSC_INVALID_ARGUMENT, tsc_debug_clear_shapes,
-                   tsc_debug_clear_strings)
-from .errors import _check, CarlaError
-from .geometry import Location, Rotation, BoundingBox, _location_arg
+                   tsc_debug_draw_string, tsc_debug_clear_shapes, tsc_debug_clear_strings)
+from .errors import _check
+from .geometry import Location, Rotation, BoundingBox, _loc
 from .blueprint import Color
 from .world import World
 
 def _color(c: Color) -> Ptr[CColor]:
-    for v in (c.r, c.g, c.b, c.a):
-        if v < 0 or v > 255:
-            raise CarlaError(f"color component {v} is out of [0, 255]", TSC_INVALID_ARGUMENT)
-    p = Ptr[CColor](1)
-    p[0] = CColor(u8(c.r), u8(c.g), u8(c.b), u8(c.a))
-    return p
-
-def _loc(l, what: Literal[str]) -> Ptr[CVector3D]:
-    """l: Location (a Vector3D is accepted as in the Python API)."""
-    p = Ptr[CVector3D](1)
-    p[0] = _location_arg(l, what)._to_c()
-    return p
+    return ref(c._to_c())
 
 class DebugHelper:
     """Shapes drawn in the simulator. life_time < 0 means "until the end"."""

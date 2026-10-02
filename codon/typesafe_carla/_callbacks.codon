@@ -1,28 +1,42 @@
-# Sensor callback registry and dispatcher (design section 15).
+# Callback registry and dispatcher (design section 15): sensor callbacks
+# (Sensor.listen) and world tick callbacks (World.on_tick, issue #21).
 #
-# LibCarla's threads only fill each sensor's native queue. Callbacks run on
-# the program's thread, at the dispatch points (World.tick(),
-# World.wait_for_tick(), Client.apply_batch(_sync)(do_tick=True)) and in
-# dispatch_sensor_callbacks().
+# LibCarla's threads only fill native queues (one per sensor, one per tick
+# callback). Callbacks run on the program's thread, at the dispatch points
+# (World.tick(), World.wait_for_tick(), Client.apply_batch(_sync)(do_tick=True))
+# and in dispatch_callbacks() / dispatch_sensor_callbacks().
 #
-# The registry is keyed by actor id, so destroying a sensor through any
-# handle (an Actor, a world.get_actor(id) handle, a batch DestroyActor)
-# drops its callback. It lives in this small module so that actor.codon can
-# reach it without importing sensor.codon. It is not thread-safe: register,
-# stop and dispatch from one thread (the program's main thread).
+# Sensor callbacks are keyed by actor id, so destroying a sensor through any
+# handle (an Actor, a world.get_actor(id) handle, a batch DestroyActor) drops
+# its callback; tick callbacks by (client, LibCarla callback id), as LibCarla
+# keeps them per client (Simulator), across load_world. This
+# small module lets actor.codon reach the registry without importing
+# sensor.codon. It is not thread-safe: register, stop and dispatch from one
+# thread (the program's main thread).
 
-from ._ffi import Handle, tsc_sensor_poll, tsc_sensor_pending_count, tsc_sensor_stop
+from ._ffi import (Handle, tsc_sensor_poll, tsc_sensor_pending_count, tsc_sensor_stop,
+                   tsc_tick_listener_poll, tsc_tick_listener_pending_count,
+                   tsc_tick_listener_stop, tsc_tick_listener_wait_for_frame,
+                   tsc_world_get_client_token)
 from .errors import _check
 
 class _Listener:
-    actor_id: int
-    handle: Handle  # the listening sensor handle; keeps the stream alive
-    # Takes ownership of one new SensorData handle (sensor.codon wraps it).
+    actor_id: int  # the sensor actor; -1 for a tick callback
+    tick: bool  # a World.on_tick callback (handle: a tick listener)
+    client_token: int  # tick callbacks: the world's episode id
+    callback_id: int  # tick callbacks: LibCarla's callback id
+    handle: Handle  # the listening sensor / tick listener; keeps the stream alive
+    # Takes ownership of one new handle: a SensorData (sensor.codon wraps it)
+    # or a WorldSnapshot (world_ext.codon).
     callback: Callable[[cobj], None]
     active: bool  # False once unregistered (the list may be iterated meanwhile)
 
-    def __init__(self, actor_id: int, handle: Handle, callback: Callable[[cobj], None]):
+    def __init__(self, actor_id: int, tick: bool, client_token: int, callback_id: int,
+                 handle: Handle, callback: Callable[[cobj], None]):
         self.actor_id = actor_id
+        self.tick = tick
+        self.client_token = client_token
+        self.callback_id = callback_id
         self.handle = handle
         self.callback = callback
         self.active = True
@@ -32,12 +46,27 @@ _dispatching = False
 
 def _find_callback(actor_id: int) -> int:
     for i in range(len(_listeners)):
-        if _listeners[i].actor_id == actor_id:
+        if not _listeners[i].tick and _listeners[i].actor_id == actor_id:
             return i
     return -1
 
+def _find_tick_callback(client_token: int, callback_id: int) -> int:
+    for i in range(len(_listeners)):
+        l = _listeners[i]
+        if l.tick and l.client_token == client_token and l.callback_id == callback_id:
+            return i
+    return -1
+
+def _pop_item(listener: _Listener) -> cobj:
+    """The oldest queued item (a new handle), or a null pointer."""
+    if not listener.tick:
+        return _pop(listener.handle)
+    out = Ptr[cobj](1)
+    _check(tsc_tick_listener_poll(listener.handle.ptr, out))
+    return out[0]
+
 def _pop(h: Handle) -> cobj:
-    """The oldest queued measurement (a new handle), or a null pointer."""
+    """The oldest queued measurement of a sensor (a new handle), or a null pointer."""
     out = Ptr[cobj](1)
     _check(tsc_sensor_poll(h.ptr, out))
     return out[0]
@@ -49,6 +78,18 @@ def _discard_pending(h: Handle):
             break
         Handle(p).release()  # now, not at GC: it may own a large buffer
 
+def _remove(i: int):
+    """Unregisters _listeners[i]: stops its stream and discards what it has
+    not received (best effort: the stream may already be gone)."""
+    listener = _listeners.pop(i)
+    listener.active = False
+    if listener.tick:
+        tsc_tick_listener_stop(listener.handle.ptr)  # also drops the queued snapshots
+        listener.handle.release()
+    else:
+        tsc_sensor_stop(listener.handle.ptr)
+        _discard_pending(listener.handle)
+
 def _unregister_callback(actor_id: int) -> bool:
     """Drops the callback of this sensor actor, if any: stops its stream and
     discards what it has not received. Returns whether there was one."""
@@ -57,40 +98,72 @@ def _unregister_callback(actor_id: int) -> bool:
     i = _find_callback(actor_id)
     if i < 0:
         return False
-    listener = _listeners.pop(i)
-    listener.active = False
-    # Best effort: the stream may already be gone (e.g. the actor was destroyed).
-    tsc_sensor_stop(listener.handle.ptr)
-    _discard_pending(listener.handle)
+    _remove(i)
     return True
 
 def _register_callback(actor_id: int, handle: Handle, callback: Callable[[cobj], None]):
     _unregister_callback(actor_id)
-    _listeners.append(_Listener(actor_id, handle, callback))
+    _listeners.append(_Listener(actor_id, False, 0, 0, handle, callback))
+
+def _register_tick_callback(client_token: int, callback_id: int, handle: Handle,
+                            callback: Callable[[cobj], None]):
+    _listeners.append(_Listener(-1, True, client_token, callback_id, handle, callback))
+
+def _unregister_tick_callback(client_token: int, callback_id: int) -> bool:
+    """Removes a World.on_tick callback and drops its queued snapshots.
+    Returns whether there was one."""
+    i = _find_tick_callback(client_token, callback_id)
+    if i < 0:
+        return False
+    _remove(i)
+    return True
+
+def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
+    """Waits (up to `seconds` in all) until every on_tick callback of the
+    world's client has received the snapshot of `frame`. LibCarla publishes a
+    tick before it runs the OnTick callbacks, so World.tick() can return
+    first; this makes the dispatch that follows deliver that frame. On
+    timeout the snapshot is delivered at a later dispatch point instead."""
+    import time
+    if not any(l.tick for l in _listeners):
+        return
+    token = Ptr[u64](1)
+    _check(tsc_world_get_client_token(world_ptr, token))
+    deadline = time.time() + max(seconds, 0.0)
+    reached = Ptr[i32](1)
+    for l in list(_listeners):
+        if l.tick and l.active and l.client_token == int(token[0]):
+            left = max(deadline - time.time(), 0.0)
+            _check(tsc_tick_listener_wait_for_frame(l.handle.ptr, u64(frame), left, reached))
 
 def _deliver(listener: _Listener) -> int:
-    """Delivers what was queued when the sensor's turn began, in arrival order."""
+    """Delivers what was queued when the listener's turn began, in arrival order."""
     count = 0
     pending = Ptr[int](1)
-    _check(tsc_sensor_pending_count(listener.handle.ptr, pending))
+    if listener.tick:
+        _check(tsc_tick_listener_pending_count(listener.handle.ptr, pending))
+    else:
+        _check(tsc_sensor_pending_count(listener.handle.ptr, pending))
     for _ in range(pending[0]):
         if not listener.active:
             break
-        p = _pop(listener.handle)
+        p = _pop_item(listener)
         if p == cobj():
             break
         count += 1
         listener.callback(p)
     return count
 
-def dispatch_sensor_callbacks() -> int:
-    """Runs the callbacks of every sensor in callback mode on the queued
-    measurements, and returns how many measurements were delivered.
+def dispatch_callbacks() -> int:
+    """Runs every registered callback on what has been queued for it: the
+    callbacks of every sensor in callback mode (Sensor.listen) on the
+    queued measurements, and the World.on_tick callbacks on the queued world
+    snapshots. Returns how many items were delivered.
 
-    Sensors are visited in the order their callbacks were registered; each
-    sensor's measurements are delivered in arrival order. Only measurements
-    already queued when a sensor's turn starts are delivered, so a call always
-    returns. Never blocks.
+    Callbacks are visited in the order they were registered; each one's
+    items are delivered in arrival order. Only items already queued when a
+    callback's turn starts are delivered, so a call always returns. Never
+    blocks.
 
     World.tick(), World.wait_for_tick() and Client.apply_batch_sync(...,
     do_tick=True) call this after the server has answered;
@@ -99,10 +172,10 @@ def dispatch_sensor_callbacks() -> int:
     or to deliver data that arrived after a tick returned. Call it from one
     thread only.
 
-    If a callback raises, the pass still visits every other sensor, then the
+    If a callback raises, the pass still visits every other callback, then the
     first exception propagates to the caller (e.g. out of World.tick(), after
     the simulation has advanced); later exceptions of the same pass are
-    dropped. The raising sensor's remaining measurements stay queued for the
+    dropped. The raising callback's remaining items stay queued for the
     next dispatch. A dispatch started from inside a callback (e.g. a callback
     that ticks) does nothing and returns 0.
     """
@@ -132,3 +205,8 @@ def dispatch_sensor_callbacks() -> int:
                         pass
         _dispatching = False
     return count
+
+def dispatch_sensor_callbacks() -> int:
+    """The same as dispatch_callbacks() (the name from before World.on_tick):
+    it runs the World.on_tick callbacks too."""
+    return dispatch_callbacks()

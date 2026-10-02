@@ -36,6 +36,7 @@ COVERAGE_CLASSES = [
     "carla::client::Sensor",
     "carla::client::BlueprintLibrary", "carla::client::ActorBlueprint",
     "carla::client::ActorList", "carla::client::WorldSnapshot", "carla::client::DebugHelper",
+    "carla::client::LightManager",  # issue #21
     "carla::traffic_manager::TrafficManager",
 ]
 

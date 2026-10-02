@@ -1,0 +1,66 @@
+# World queries of issue #21, in the statically checked style.
+# strict
+import typesafe_carla as carla
+
+class TickLog:
+    frames: List[int]
+
+    def __init__(self):
+        self.frames = []
+
+    def record(self, snapshot: carla.WorldSnapshot):
+        self.frames.append(snapshot.frame)
+
+def on_snapshot(snapshot: carla.WorldSnapshot):
+    print(len(snapshot))
+
+def query(world: carla.World, wp: carla.Waypoint) -> int:
+    spectator: carla.Actor = world.get_spectator()
+    spectator.set_transform(carla.Transform(carla.Location(0.0, 0.0, 50.0), carla.Rotation(-90.0, 0.0, 0.0)))
+    light: Optional[carla.TrafficLight] = world.get_traffic_light_from_opendrive_id("947")
+    mark: carla.Landmark = world.get_map().get_all_landmarks()[0]
+    sign: Optional[carla.TrafficSign] = world.get_traffic_sign(mark)
+    by_mark: Optional[carla.TrafficLight] = world.get_traffic_light(mark)
+    print(sign, by_mark)
+    ahead: List[carla.TrafficLight] = world.get_traffic_lights_from_waypoint(wp, 50.0)
+    junction: List[carla.TrafficLight] = world.get_traffic_lights_in_junction(wp.junction_id)
+    world.freeze_all_traffic_lights(True)
+    world.reset_all_traffic_lights()
+    states: Dict[int, int] = world.get_vehicles_light_states()
+    boxes: List[carla.BoundingBox] = world.get_level_bbs(carla.CityObjectLabel.TrafficLight)
+    every: List[carla.BoundingBox] = world.get_level_bbs()
+    objects: List[carla.EnvironmentObject] = world.get_environment_objects(carla.CityObjectLabel.Buildings)
+    world.enable_environment_objects([o.id for o in objects], False)
+    names: List[str] = world.get_names_of_all_objects()
+    hits: List[carla.LabelledPoint] = world.cast_ray(carla.Location(0.0, 0.0, 10.0),
+                                                     carla.Location(0.0, 0.0, -10.0))
+    down: Optional[carla.LabelledPoint] = world.project_point(carla.Location(0.0, 0.0, 10.0),
+                                                              carla.Vector3D(0.0, 0.0, -1.0), 100.0)
+    ground = world.ground_projection(carla.Location(0.0, 0.0, 10.0))
+    if ground is not None:
+        label: int = ground.label
+        where: carla.Location = ground.location
+        print(label, where)
+    world.load_map_layer(carla.MapLayer.Buildings | carla.MapLayer.ParkedVehicles)
+    world.unload_map_layer(carla.MapLayer.All)
+    world.set_pedestrians_seed(42)
+    world.set_pedestrians_cross_factor(0.25)
+    gravity: float = world.get_imu_sensor_gravity()
+    world.set_imu_sensor_gravity(gravity)
+    log = TickLog()
+    a: int = world.on_tick(log.record)
+    b: int = world.on_tick(on_snapshot)
+    c: int = world.on_tick(lambda s: print(s.timestamp.elapsed_seconds), queue_size=8)
+    world.tick()
+    delivered: int = carla.dispatch_callbacks()
+    world.remove_on_tick(a)
+    world.remove_on_tick(b)
+    world.remove_on_tick(c)
+    first: carla.EnvironmentObject = objects[0]
+    print(first.name, first.type, first.transform, first.bounding_box)
+    return (len(ahead) + len(junction) + len(states) + len(boxes) + len(every) + len(names) +
+            len(hits) + int(light is None) + int(down is None) + delivered + len(log.frames))
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+print(query(_world, unwrap(_world.get_map().get_waypoint(carla.Location()))))

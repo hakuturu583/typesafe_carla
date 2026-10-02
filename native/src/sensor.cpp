@@ -3,76 +3,8 @@
 // 15-16). Measurement buffers are exposed zero-copy.
 #include "internal.hpp"
 
-#include <chrono>
-#include <condition_variable>
-#include <deque>
-#include <mutex>
-
 using namespace tsc;
 namespace data = carla::sensor::data;
-
-namespace tsc {
-
-// Measurements from LibCarla's sensor threads, waiting to be polled by the
-// Codon side (design section 15). Bounded (when full, the oldest is dropped)
-// unless the capacity is 0, which means unbounded.
-class SensorQueue {
- public:
-  using Item = carla::SharedPtr<carla::sensor::SensorData>;
-
-  explicit SensorQueue(size_t capacity) : _capacity(capacity) {}
-
-  void push(Item item) {
-    Item evicted;  // released after unlocking: it may own a large buffer
-    {
-      std::lock_guard<std::mutex> lock(_mutex);
-      if (_capacity != 0 && _items.size() >= _capacity) {
-        evicted = take_front_locked();
-        ++_dropped;
-      }
-      _items.push_back(std::move(item));
-    }
-    _ready.notify_one();
-  }
-
-  // The oldest item, waiting up to `timeout` for one; nullptr on timeout.
-  Item wait(std::chrono::milliseconds timeout) {
-    std::unique_lock<std::mutex> lock(_mutex);
-    if (!_ready.wait_for(lock, timeout, [this] { return !_items.empty(); })) return nullptr;
-    return take_front_locked();
-  }
-
-  // The oldest item, or nullptr when empty. Never blocks.
-  Item pop() {
-    std::lock_guard<std::mutex> lock(_mutex);
-    return _items.empty() ? nullptr : take_front_locked();
-  }
-
-  uint64_t dropped() const {
-    std::lock_guard<std::mutex> lock(_mutex);
-    return _dropped;
-  }
-
-  size_t size() const {
-    std::lock_guard<std::mutex> lock(_mutex);
-    return _items.size();
-  }
-
- private:
-  Item take_front_locked() {
-    Item item = std::move(_items.front());
-    _items.pop_front();
-    return item;
-  }
-
-  mutable std::mutex _mutex;
-  std::condition_variable _ready;
-  std::deque<Item> _items;
-  const size_t _capacity;  // 0 = unbounded
-  uint64_t _dropped = 0;
-};
-
-}  // namespace tsc
 
 namespace {
 

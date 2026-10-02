@@ -1,0 +1,8 @@
+# In strict mode cast_ray takes Locations, not Location arithmetic.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def ray(world: carla.World, here: carla.Location):
+    print(world.cast_ray(here, here - carla.Location(0.0, 0.0, 100.0)))
+
+ray(carla.Client("localhost", 2000).get_world(), carla.Location(0.0, 0.0, 10.0))

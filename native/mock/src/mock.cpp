@@ -349,7 +349,9 @@ struct Episode : std::enable_shared_from_this<Episode> {
       a.angular_velocity = p->second.angular_velocity;
     }
     ++frame;
-    return SenseLocked();
+    auto deliveries = SenseLocked();
+    deliveries.push_back(TickDelivery(this, SnapshotLocked()));  // World::OnTick (issue #21)
+    return deliveries;
   }
 };
 

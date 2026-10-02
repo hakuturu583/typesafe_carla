@@ -1,0 +1,314 @@
+# World queries, the light manager, textures and on_tick (issue #21) on the
+# mock backend.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+from C import GC_gcollect() -> None
+
+client = carla.Client("localhost", 2000)
+world = client.reload_world()
+
+def raises_carla_error(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError:
+        return True
+    return False
+
+def raises_index_error(f) -> bool:
+    try:
+        f()
+    except IndexError:
+        return True
+    return False
+
+def raw_tick():
+    """Ticks without dispatching callbacks (the C ABI directly)."""
+    out = Ptr[u64](1)
+    assert int(ffi.tsc_world_tick(world._h.ptr, 1.0, out)) == ffi.TSC_OK
+
+def test_spectator_and_traffic_lights():
+    spectator = world.get_spectator()
+    assert spectator.type_id == "spectator"
+    spectator.set_location(carla.Location(1.0, 2.0, 30.0))
+    assert world.get_spectator().get_location().z == 30.0
+
+    # By landmark: the mock's landmark "1000" is its traffic light's signal.
+    mark = world.get_map().get_all_landmarks()[0]
+    by_mark = world.get_traffic_light(mark)
+    assert by_mark is not None and unwrap(by_mark).get_opendrive_id() == mark.id
+    sign = world.get_traffic_sign(mark)  # a traffic light is also a sign, as in LibCarla
+    assert sign is not None and unwrap(sign).id == unwrap(by_mark).id
+    assert world.get_traffic_light_from_opendrive_id("no such id") is None
+    light = world.get_traffic_light_from_opendrive_id("1000")
+    assert light is not None
+    tl = unwrap(light)
+    m = world.get_map()
+    before = unwrap(m.get_waypoint(carla.Location(90.0, 0.0, 0.0)))
+    ahead = world.get_traffic_lights_from_waypoint(before, 20.0)
+    assert len(ahead) == 1 and ahead[0].id == tl.id
+    assert len(world.get_traffic_lights_from_waypoint(before, 5.0)) == 0
+    assert raises_carla_error(lambda: world.get_traffic_lights_from_waypoint(before, -1.0))
+    assert len(world.get_traffic_lights_in_junction(1234)) == 0
+    assert raises_carla_error(lambda: world.get_traffic_lights_in_junction(1 << 40))
+
+    world.freeze_all_traffic_lights(True)
+    assert tl.is_frozen()
+    tl.set_state(carla.TrafficLightState.Red)
+    world.reset_all_traffic_lights()
+    assert not tl.is_frozen() and tl.get_state() == carla.TrafficLightState.Green
+
+def test_vehicle_light_states():
+    vehicle = world.spawn_actor(world.get_blueprint_library().find("vehicle.tesla.model3"),
+                                carla.Transform(carla.Location(20.0, 0.0, 0.5))).as_vehicle()
+    vehicle.set_light_state(carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam)
+    states = world.get_vehicles_light_states()
+    assert states[vehicle.id] == carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
+    vehicle.destroy()
+
+def test_environment_objects():
+    every = world.get_environment_objects()
+    assert len(every) == 3
+    buildings = world.get_environment_objects(carla.CityObjectLabel.Buildings)
+    assert len(buildings) == 1 and buildings[0].name == "SM_Building_1"
+    assert buildings[0].type == carla.CityObjectLabel.Buildings
+    assert buildings[0].bounding_box.extent.x == 10.0
+    assert len(world.get_environment_objects(carla.CityObjectLabel.Car)) == 0
+    assert len(world.get_level_bbs()) == 3
+    assert len(world.get_level_bbs(carla.CityObjectLabel.Poles)) == 1
+    assert raises_carla_error(lambda: world.get_level_bbs(256))
+    assert raises_carla_error(lambda: world.get_environment_objects(-1))
+    world.enable_environment_objects([o.id for o in every], False)
+    world.enable_environment_objects([], True)
+    assert world.get_names_of_all_objects() == ["SM_Building_1", "SM_StreetLight_1", "SM_Tree_1"]
+
+def test_ray_casts():
+    hits = world.cast_ray(carla.Location(10.0, 0.0, 5.0), carla.Location(10.0, 0.0, -5.0))
+    assert len(hits) == 1
+    assert hits[0].label == carla.CityObjectLabel.Roads and hits[0].location.z == 0.0
+    assert len(world.cast_ray(carla.Location(0.0, 0.0, 5.0), carla.Location(0.0, 0.0, 1.0))) == 0
+    off_road = world.ground_projection(carla.Location(10.0, 50.0, 5.0))
+    assert off_road is not None and unwrap(off_road).label == carla.CityObjectLabel.Terrain
+    assert world.ground_projection(carla.Location(10.0, 0.0, 5.0), 1.0) is None
+    p = world.project_point(carla.Location(0.0, 0.0, 10.0), carla.Vector3D(1.0, 0.0, -1.0))
+    assert p is not None and abs(unwrap(p).location.x - 10.0) < 1e-6
+    assert world.project_point(carla.Location(0.0, 0.0, 10.0), carla.Vector3D(0.0, 0.0, 1.0)) is None
+    assert raises_carla_error(lambda: world.ground_projection(carla.Location(), -5.0))
+
+def test_layers_pedestrians_imu():
+    world.load_map_layer(carla.MapLayer.Buildings | carla.MapLayer.Props)
+    world.unload_map_layer(carla.MapLayer.All)
+    world.load_map_layer(carla.MapLayer.NONE)
+    assert raises_carla_error(lambda: world.load_map_layer(0x10000))
+    assert raises_carla_error(lambda: world.unload_map_layer(-1))
+    world.set_pedestrians_seed(7)
+    world.set_pedestrians_cross_factor(0.5)
+    assert raises_carla_error(lambda: world.set_pedestrians_seed(-1))
+    assert raises_carla_error(lambda: world.set_pedestrians_cross_factor(float("nan")))
+    assert abs(world.get_imu_sensor_gravity() - 9.81) < 1e-5
+    world.set_imu_sensor_gravity(1.62)
+    assert abs(world.get_imu_sensor_gravity() - 1.62) < 1e-5
+    world.set_imu_sensor_gravity(9.81)
+
+def test_textures():
+    t = carla.TextureColor(3, 2)
+    assert t.width == 3 and t.height == 2
+    assert t.get(2, 1) == carla.Color(0, 0, 0, 0)
+    t.set(2, 1, carla.Color(1, 2, 3))
+    assert t.get(2, 1) == carla.Color(1, 2, 3, 255)
+    assert raises_index_error(lambda: t.get(3, 0))
+    assert raises_index_error(lambda: t.set(0, 2, carla.Color()))
+    assert raises_carla_error(lambda: t.set(0, 0, carla.Color(256, 0, 0)))
+    t.set_dimensions(2, 3)  # keeps the first pixels in row-major order
+    assert t.get(1, 2) == carla.Color(1, 2, 3, 255)
+    assert raises_carla_error(lambda: carla.TextureColor(-1, 1))
+    assert raises_carla_error(lambda: carla.TextureColor(1 << 20, 1 << 20))
+    f = carla.TextureFloatColor(2, 2)
+    assert f.get(1, 1) == carla.FloatColor(0.0, 0.0, 0.0, 1.0)
+    f.set(0, 1, carla.FloatColor(0.5, 0.25, 0.125, 0.0))
+    assert f.get(0, 1) == carla.FloatColor(0.5, 0.25, 0.125, 0.0)
+    empty = carla.TextureFloatColor()
+    assert empty.width == 0 and empty.height == 0
+
+    names = world.get_names_of_all_objects()
+    world.apply_color_texture_to_object(names[0], carla.MaterialParameter.Diffuse, t)
+    world.apply_color_texture_to_objects(names, carla.MaterialParameter.Diffuse, t)
+    world.apply_float_color_texture_to_object(names[0], carla.MaterialParameter.Normal, f)
+    world.apply_float_color_texture_to_objects(names, carla.MaterialParameter.Emissive, f)
+    world.apply_textures_to_object(names[0], t, f, empty, empty)
+    world.apply_textures_to_objects(names, t, f, f, f)
+    assert raises_carla_error(lambda: world.apply_color_texture_to_object(names[0], 4, t))
+    assert raises_carla_error(lambda: world.apply_color_texture_to_objects(
+        List[str](), carla.MaterialParameter.Diffuse, t))
+
+def test_light_manager():
+    lm = world.get_lightmanager()
+    lights = lm.get_all_lights()
+    assert len(lights) == 4
+    street = lm.get_all_lights(carla.LightGroup.Street)
+    assert len(street) == 3
+    assert len(lm.get_turned_on_lights()) == 3 and len(lm.get_turned_off_lights()) == 1
+    assert lights[0].location == carla.Location(50.0, -4.0, 6.0)
+    assert lights[0].is_on and lights[0].light_group == carla.LightGroup.Street
+
+    lm.turn_off(street)
+    assert lm.is_active(street) == [False, False, False]
+    lm.set_active(street, [True, False, True])
+    assert lm.is_active(street) == [True, False, True]
+    lm.set_color(street, carla.Color(255, 0, 0))
+    assert lm.get_color(street)[1] == carla.Color(255, 0, 0, 255)
+    lm.set_colors(street, [carla.Color(1, 1, 1), carla.Color(2, 2, 2), carla.Color(3, 3, 3)])
+    assert lm.get_color(street)[2] == carla.Color(3, 3, 3)
+    lm.set_intensity(street, 250.0)
+    assert lm.get_intensity(street) == [250.0, 250.0, 250.0]
+    lm.set_intensities(street, [1.0, 2.0, 3.0])
+    assert lm.get_intensity(street) == [1.0, 2.0, 3.0]
+    lm.set_light_group(street, carla.LightGroup.Other)
+    assert lm.get_light_group(street) == [carla.LightGroup.Other] * 3
+    lm.set_light_groups(street, [carla.LightGroup.Street] * 3)
+    state = carla.LightState(100.0, carla.Color(9, 8, 7), carla.LightGroup.Street, True)
+    lm.set_light_state(street, state)
+    got = lm.get_light_state(street)[0]
+    assert got.intensity == 100.0 and got.color == carla.Color(9, 8, 7) and got.active
+    lm.set_light_states(street, [state, state, carla.LightState()])
+    assert not street[2].is_on
+    assert street[2].light_group == carla.LightGroup.NONE
+
+    # A single light, through its manager.
+    light = lights[3]
+    light.turn_on()
+    assert light.is_on
+    light.set_color(carla.Color(0, 0, 255))
+    light.set_intensity(42.0)
+    light.set_light_group(carla.LightGroup.Building)
+    assert light.color == carla.Color(0, 0, 255) and light.intensity == 42.0
+    light.set_light_state(carla.LightState(intensity=5.0, active=False))
+    assert not light.is_on and light.intensity == 5.0
+    lm.set_day_night_cycle(False)
+
+    # Mismatched lengths and invalid values change nothing.
+    assert raises_carla_error(lambda: lm.set_active(street, [True]))
+    assert raises_carla_error(lambda: lm.set_light_group(street, 9))
+    assert raises_carla_error(lambda: lm.set_intensity(street, float("inf")))
+    assert raises_carla_error(lambda: lm.set_color(street, carla.Color(0, 0, 300)))
+    assert raises_carla_error(lambda: lm.get_all_lights(5))
+    assert lm.get_intensity(street)[0] == 100.0
+
+    # Light ids are the server's: an id the manager does not know is rejected.
+    unknown = carla.Light(lm._h, ffi.CLight(u32(999), u32(0), ffi.CVector3D(0.0, 0.0, 0.0)))
+    assert raises_index_error(lambda: lm.turn_on([street[0], unknown]))
+    assert raises_index_error(lambda: unknown.is_on)
+    assert raises_index_error(lambda: unknown.set_intensity(1.0))
+    assert lm.get_intensity(street)[0] == 100.0 and street[0].is_on  # unchanged
+
+def test_on_tick():
+    frames = List[int]()
+    ids = List[int]()
+    order = List[str]()
+
+    def on_snapshot(s: carla.WorldSnapshot):
+        frames.append(s.frame)
+        order.append("tick")
+    first = world.on_tick(on_snapshot)
+    second = world.on_tick(lambda s: ids.append(s.id))
+    assert first != second
+
+    # Nothing runs until a dispatch point.
+    raw_tick()
+    raw_tick()
+    assert len(frames) == 0
+    assert carla.dispatch_callbacks() == 4
+    assert len(frames) == 2 and frames[1] == frames[0] + 1
+    assert ids == [world.id, world.id]
+
+    frame = world.tick()
+    assert frames[-1] == frame
+    world.wait_for_tick()
+    assert len(frames) == 4
+    raw_tick()
+    assert carla.dispatch_sensor_callbacks() == 2  # the old name dispatches on_tick too
+
+    # Sensor and tick callbacks share the dispatch, in registration order.
+    vehicle = world.spawn_actor(world.get_blueprint_library().find("vehicle.tesla.model3"),
+                                carla.Transform(carla.Location(40.0, 0.0, 0.5)))
+    gnss = world.spawn_actor(world.get_blueprint_library().find("sensor.other.gnss"),
+                             carla.Transform(), attach_to=vehicle).as_sensor()
+    gnss.listen(lambda data: order.append("gnss"))
+    order.clear()
+    world.tick()
+    assert order == ["tick", "gnss"]
+    gnss.destroy()
+    vehicle.destroy()
+
+    world.remove_on_tick(first)
+    world.remove_on_tick(first)  # an unknown id is ignored
+    raw_tick()
+    world.remove_on_tick(second)  # drops what it had not received
+    count = len(frames)
+    world.tick()
+    assert len(frames) == count and carla.dispatch_callbacks() == 0
+
+def test_on_tick_queue_size():
+    frames = List[int]()
+    cid = world.on_tick(lambda s: frames.append(s.frame), queue_size=2)
+    for _ in range(5):
+        raw_tick()
+    assert carla.dispatch_callbacks() == 2  # the newest two
+    assert len(frames) == 2 and frames[1] == frames[0] + 1
+    world.remove_on_tick(cid)
+    assert raises_carla_error(lambda: world.on_tick(lambda s: None, queue_size=-1))
+
+def test_on_tick_across_load_world():
+    """As in LibCarla, callbacks belong to the client and survive load_world."""
+    frames = List[int]()
+    cid = world.on_tick(lambda s: frames.append(s.frame))
+    new_world = client.load_world("Town10HD")
+    new_world.tick()
+    assert len(frames) == 1
+    other = carla.Client("localhost", 2000).get_world()
+    other.remove_on_tick(cid)  # through any World of the same client
+    new_world.tick()
+    assert len(frames) == 1 and carla.dispatch_callbacks() == 0
+
+def test_on_tick_exception():
+    calls = List[int]()
+
+    def failing(s: carla.WorldSnapshot):
+        calls.append(1)
+        raise ValueError("boom")
+    bad = world.on_tick(failing)
+    good = world.on_tick(lambda s: calls.append(2))
+    raised = False
+    try:
+        world.tick()
+    except ValueError:
+        raised = True
+    assert raised and calls == [1, 2]
+    world.remove_on_tick(bad)
+    world.remove_on_tick(good)
+
+def test_no_handle_leak():
+    before = carla._live_handle_count()
+    for _ in range(3):
+        world.get_traffic_lights_from_waypoint(unwrap(world.get_map().get_waypoint(carla.Location(90.0, 0.0, 0.0))), 20.0)
+        world.get_spectator()
+        world.get_lightmanager().get_all_lights()
+        cid = world.on_tick(lambda s: None)
+        world.tick()
+        world.remove_on_tick(cid)
+    for _ in range(3):
+        GC_gcollect()
+    assert carla._live_handle_count() <= before + 1
+
+test_spectator_and_traffic_lights()
+test_vehicle_light_states()
+test_environment_objects()
+test_ray_casts()
+test_layers_pedestrians_imu()
+test_textures()
+test_light_manager()
+test_on_tick()
+test_on_tick_exception()
+test_on_tick_queue_size()
+test_no_handle_leak()
+test_on_tick_across_load_world()
+print("OK")

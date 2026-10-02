@@ -1,0 +1,223 @@
+# The light manager (issue #21): World.get_lightmanager(), LightManager,
+# Light, LightGroup and LightState, with the CARLA Python API's names.
+#
+# A Light is its manager plus an id and a location; every operation goes
+# through the manager by id, as LibCarla's client::Light does. Changes reach
+# the server at the next tick. The official CARLA 0.10.0 Python API does not
+# expose World.get_lightmanager (no night mode in 0.10.0); LibCarla has it.
+
+from ._ffi import (Handle, CLight, CLightList, CLightState, TSC_INVALID_ARGUMENT, take_list, array,
+                   tsc_world_get_light_manager, tsc_light_list_free, tsc_light_manager_get_all_lights,
+                   tsc_light_manager_get_turned_on_lights, tsc_light_manager_get_turned_off_lights,
+                   tsc_light_manager_get_light_states, tsc_light_manager_set_active,
+                   tsc_light_manager_set_color, tsc_light_manager_set_intensity,
+                   tsc_light_manager_set_light_group, tsc_light_manager_set_light_state,
+                   tsc_light_manager_set_day_night_cycle)
+from .errors import _check, CarlaError
+from .geometry import Location
+from .blueprint import Color
+from .world import World
+
+
+class LightGroup:
+    NONE: ClassVar[int] = 0
+    Vehicle: ClassVar[int] = 1
+    Street: ClassVar[int] = 2
+    Building: ClassVar[int] = 3
+    Other: ClassVar[int] = 4
+
+class LightState:
+    """A light's intensity (lumens), color, group (LightGroup) and on/off state."""
+    intensity: float
+    color: Color
+    group: int
+    active: bool
+
+    def __init__(self, intensity: float = 0.0, color: Color = Color(0, 0, 0, 0),
+                 group: int = LightGroup.NONE, active: bool = False):
+        self.intensity = intensity
+        self.color = color
+        self.group = group
+        self.active = active
+
+    @staticmethod
+    def _from_c(s: CLightState) -> LightState:
+        c = s.color
+        return LightState(s.intensity, Color(int(c.r), int(c.g), int(c.b), int(c.a)),
+                          int(s.group), int(s.active) != 0)
+
+    def _to_c(self) -> CLightState:
+        return CLightState(self.intensity, self.color._to_c(), _group(self.group),
+                           i32(int(self.active)), i32(0))
+
+    def __repr__(self) -> str:
+        return (f"LightState(intensity={self.intensity}, color={self.color}, "
+                f"group={self.group}, active={self.active})")
+
+def _group(group: int) -> i32:
+    if group < LightGroup.NONE or group > LightGroup.Other:
+        raise CarlaError(f"light group {group} is not a LightGroup", TSC_INVALID_ARGUMENT)
+    return i32(group)
+
+class Light:
+    """One light of the level (from LightManager.get_all_lights() & co.)."""
+    _manager: Handle
+    _id: int
+    _location: Location
+
+    def __init__(self, manager: Handle, c: CLight):
+        self._manager = manager
+        self._id = int(c.id)
+        self._location = Location._from_c(c.location)
+
+    @property
+    def id(self) -> int:
+        return self._id
+
+    @property
+    def location(self) -> Location:
+        return self._location
+
+    @property
+    def light_state(self) -> LightState:
+        return _states(self._manager, [self])[0]
+
+    @property
+    def color(self) -> Color:
+        return self.light_state.color
+
+    @property
+    def intensity(self) -> float:
+        return self.light_state.intensity
+
+    @property
+    def light_group(self) -> int:
+        return self.light_state.group
+
+    @property
+    def is_on(self) -> bool:
+        return self.light_state.active
+
+    def set_color(self, color: Color):
+        _set(self._manager, [self], [color._to_c()], tsc_light_manager_set_color)
+
+    def set_intensity(self, intensity: float):
+        _set(self._manager, [self], [intensity], tsc_light_manager_set_intensity)
+
+    def set_light_group(self, light_group: int):
+        _set(self._manager, [self], [_group(light_group)], tsc_light_manager_set_light_group)
+
+    def set_light_state(self, light_state: LightState):
+        _set(self._manager, [self], [light_state._to_c()], tsc_light_manager_set_light_state)
+
+    def turn_on(self):
+        _set(self._manager, [self], [i32(1)], tsc_light_manager_set_active)
+
+    def turn_off(self):
+        _set(self._manager, [self], [i32(0)], tsc_light_manager_set_active)
+
+    def __repr__(self) -> str:
+        return f"Light(id={self._id}, location={self._location})"
+
+def _ids(lights: List[Light]) -> Ptr[u32]:
+    return array([u32(l.id) for l in lights])
+
+def _set(manager: Handle, lights: List[Light], values, fn):
+    """fn(manager, ids, count, values): values[i] goes to lights[i]."""
+    if len(values) != len(lights):
+        raise CarlaError(f"{len(lights)} lights but {len(values)} values", TSC_INVALID_ARGUMENT)
+    _check(fn(manager.ptr, _ids(lights), len(lights), array(values)))
+
+def _states(manager: Handle, lights: List[Light]) -> List[LightState]:
+    out = Ptr[CLightState](len(lights))
+    _check(tsc_light_manager_get_light_states(manager.ptr, _ids(lights), len(lights), out))
+    return [LightState._from_c(out[i]) for i in range(len(lights))]
+
+class LightManager:
+    """The episode's lights. Bulk operations take a list of lights; the
+    set_*s variants take one value per light (same length, or CarlaError).
+    Light ids are the server's: a Light the manager does not know (e.g. one
+    from before load_world that no longer exists) raises IndexError, and
+    then nothing is changed."""
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    def _lights(self, fn, light_group: int) -> List[Light]:
+        out = Ptr[CLightList](1)
+        _check(fn(self._h.ptr, _group(light_group), out))
+        return take_list(out, lambda c: Light(self._h, c), tsc_light_list_free)
+
+    def get_all_lights(self, light_group: int = LightGroup.NONE) -> List[Light]:
+        """Every light, or those of one LightGroup."""
+        return self._lights(tsc_light_manager_get_all_lights, light_group)
+
+    def get_turned_on_lights(self, light_group: int = LightGroup.NONE) -> List[Light]:
+        return self._lights(tsc_light_manager_get_turned_on_lights, light_group)
+
+    def get_turned_off_lights(self, light_group: int = LightGroup.NONE) -> List[Light]:
+        return self._lights(tsc_light_manager_get_turned_off_lights, light_group)
+
+    def turn_on(self, lights: List[Light]):
+        _set(self._h, lights, [i32(1)] * len(lights), tsc_light_manager_set_active)
+
+    def turn_off(self, lights: List[Light]):
+        _set(self._h, lights, [i32(0)] * len(lights), tsc_light_manager_set_active)
+
+    def set_active(self, lights: List[Light], active: List[bool]):
+        _set(self._h, lights, [i32(int(a)) for a in active], tsc_light_manager_set_active)
+
+    def is_active(self, lights: List[Light]) -> List[bool]:
+        return [s.active for s in _states(self._h, lights)]
+
+    def set_color(self, lights: List[Light], color: Color):
+        _set(self._h, lights, [color._to_c()] * len(lights), tsc_light_manager_set_color)
+
+    def set_colors(self, lights: List[Light], colors: List[Color]):
+        _set(self._h, lights, [c._to_c() for c in colors], tsc_light_manager_set_color)
+
+    def get_color(self, lights: List[Light]) -> List[Color]:
+        return [s.color for s in _states(self._h, lights)]
+
+    def set_intensity(self, lights: List[Light], intensity: float):
+        _set(self._h, lights, [intensity] * len(lights), tsc_light_manager_set_intensity)
+
+    def set_intensities(self, lights: List[Light], intensities: List[float]):
+        _set(self._h, lights, intensities, tsc_light_manager_set_intensity)
+
+    def get_intensity(self, lights: List[Light]) -> List[float]:
+        return [s.intensity for s in _states(self._h, lights)]
+
+    def set_light_group(self, lights: List[Light], light_group: int):
+        _set(self._h, lights, [_group(light_group)] * len(lights),
+             tsc_light_manager_set_light_group)
+
+    def set_light_groups(self, lights: List[Light], light_groups: List[int]):
+        _set(self._h, lights, [_group(g) for g in light_groups], tsc_light_manager_set_light_group)
+
+    def get_light_group(self, lights: List[Light]) -> List[int]:
+        return [s.group for s in _states(self._h, lights)]
+
+    def set_light_state(self, lights: List[Light], light_state: LightState):
+        _set(self._h, lights, [light_state._to_c()] * len(lights),
+             tsc_light_manager_set_light_state)
+
+    def set_light_states(self, lights: List[Light], light_states: List[LightState]):
+        _set(self._h, lights, [s._to_c() for s in light_states], tsc_light_manager_set_light_state)
+
+    def get_light_state(self, lights: List[Light]) -> List[LightState]:
+        return _states(self._h, lights)
+
+    def set_day_night_cycle(self, active: bool):
+        """Whether the server switches lights with the time of day."""
+        _check(tsc_light_manager_set_day_night_cycle(self._h.ptr, i32(int(active))))
+
+@extend
+class World:
+    def get_lightmanager(self) -> LightManager:
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_light_manager(self._h.ptr, out))
+        if out[0] == cobj():
+            raise CarlaError("the episode has no light manager")
+        return LightManager(Handle(out[0]))

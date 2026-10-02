@@ -1,11 +1,11 @@
 # Blueprints: BlueprintLibrary, ActorBlueprint, ActorAttribute.
 
-from ._ffi import (Handle, CString, CActorAttribute, take_string, copy_string, tsc_actor_attribute_free,
+from ._ffi import (Handle, CString, CColor, CActorAttribute, take_string, copy_string, tsc_actor_attribute_free,
                    tsc_blueprint_library_size, tsc_blueprint_library_get,
                    tsc_blueprint_library_find, tsc_blueprint_library_filter,
                    tsc_actor_blueprint_get_id, tsc_actor_blueprint_has_tag,
                    tsc_actor_blueprint_has_attribute, tsc_actor_blueprint_get_attribute,
-                   tsc_actor_blueprint_set_attribute, TSC_TYPE_ERROR)
+                   tsc_actor_blueprint_set_attribute, TSC_TYPE_ERROR, TSC_INVALID_ARGUMENT)
 from ._ffi import (CStringList, take_string_list, tsc_actor_blueprint_get_tags,
                    tsc_actor_blueprint_match_tags, tsc_blueprint_library_filter_by_attribute)
 from .errors import _check, _normalize_index, CarlaError
@@ -44,6 +44,12 @@ class Color:
 
     def __eq__(self, other: Color) -> bool:
         return self.r == other.r and self.g == other.g and self.b == other.b and self.a == other.a
+
+    def _to_c(self) -> CColor:
+        for v in (self.r, self.g, self.b, self.a):
+            if v < 0 or v > 255:
+                raise CarlaError(f"color component {v} is out of [0, 255]", TSC_INVALID_ARGUMENT)
+        return CColor(u8(self.r), u8(self.g), u8(self.b), u8(self.a))
 
     def __repr__(self) -> str:
         return f"Color(r={self.r}, g={self.g}, b={self.b}, a={self.a})"

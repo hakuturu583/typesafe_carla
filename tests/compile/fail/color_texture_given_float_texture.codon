@@ -1,0 +1,10 @@
+# apply_color_texture_to_object takes a TextureColor (8-bit pixels).
+# expect-error: 'TextureFloatColor' does not match expected type 'TextureColor'
+import typesafe_carla as carla
+
+def paint(world: carla.World):
+    world.apply_color_texture_to_object("SM_Tree_1", carla.MaterialParameter.Diffuse,
+                                        carla.TextureFloatColor(2, 2))
+
+# Compile-only: Codon type-checks a function only when it is called.
+paint(carla.Client("localhost", 2000).get_world())

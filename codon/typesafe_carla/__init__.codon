@@ -27,6 +27,7 @@ from .snapshot import WorldSnapshot, ActorSnapshot, Timestamp
 from .command import Command, CommandResponse
 from .sensor import (Sensor, SensorData, SensorDataType, Image, LidarMeasurement, LidarDetection,
                      GnssMeasurement, IMUMeasurement, CollisionEvent, dispatch_sensor_callbacks)
+from ._callbacks import dispatch_callbacks
 from .client import Client, OpendriveGenerationParameters
 from .walker import (Walker, WalkerAIController, WalkerBoneControlIn, WalkerBoneControlOut,
                      bone_transform, bone_transform_out)
@@ -39,6 +40,8 @@ from .labels import CityObjectLabel
 from .weather import WeatherParameters
 from .debug import DebugHelper
 from .traffic_manager import TrafficManager
+from .world_queries import MapLayer, EnvironmentObject, LabelledPoint
+from .light_manager import LightManager, Light, LightGroup, LightState
 import typesafe_carla._actor_compat  # Actor gets the subclass methods (Python API compatibility)
 import typesafe_carla.command as command
 

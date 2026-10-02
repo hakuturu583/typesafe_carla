@@ -314,6 +314,33 @@ tsc_status_t tsc_landmark_get_lane_validities(
   return TSC_GUARD({ copy_out(landmark_of(landmark).GetValidities(), out, capacity, out_count); });
 }
 
+// bindings/light_manager.yaml: carla::client::LightManager
+
+tsc_status_t tsc_light_manager_get_all_lights(tsc_light_manager_t *manager, int32_t group,
+                                              tsc_light_list_t *out) {
+  return TSC_GUARD({
+    light_list_assign(out, light_manager_of(manager).GetAllLights(to_enum<carla::rpc::LightState::LightGroup>(group, TSC_LIGHT_GROUP_NONE, TSC_LIGHT_GROUP_OTHER, "light group")));
+  });
+}
+
+tsc_status_t tsc_light_manager_get_turned_on_lights(tsc_light_manager_t *manager, int32_t group,
+                                                    tsc_light_list_t *out) {
+  return TSC_GUARD({
+    light_list_assign(out, light_manager_of(manager).GetTurnedOnLights(to_enum<carla::rpc::LightState::LightGroup>(group, TSC_LIGHT_GROUP_NONE, TSC_LIGHT_GROUP_OTHER, "light group")));
+  });
+}
+
+tsc_status_t tsc_light_manager_get_turned_off_lights(tsc_light_manager_t *manager, int32_t group,
+                                                     tsc_light_list_t *out) {
+  return TSC_GUARD({
+    light_list_assign(out, light_manager_of(manager).GetTurnedOffLights(to_enum<carla::rpc::LightState::LightGroup>(group, TSC_LIGHT_GROUP_NONE, TSC_LIGHT_GROUP_OTHER, "light group")));
+  });
+}
+
+tsc_status_t tsc_light_manager_set_day_night_cycle(tsc_light_manager_t *manager, int32_t active) {
+  return TSC_GUARD({ light_manager_of(manager).SetDayNightCycle(active != 0); });
+}
+
 // bindings/map.yaml: carla::client::Map
 
 tsc_status_t tsc_map_get_georeference(const tsc_map_t *map, tsc_geo_location_t *out) {
@@ -750,6 +777,182 @@ tsc_status_t tsc_waypoint_get_landmarks_of_type(const tsc_waypoint_t *waypoint, 
                                                 tsc_landmark_list_t **out) {
   return new_handle(__func__, out, [&] {
     return new tsc_landmark_list(without_nulls(waypoint_of(waypoint).GetLandmarksOfTypeInDistance(check_search_distance(distance, "distance"), to_string(type, type_len, "type"), stop_at_junction != 0)));
+  });
+}
+
+// bindings/world.yaml: carla::client::World
+
+tsc_status_t tsc_world_get_spectator(tsc_world_t *world, tsc_actor_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_actor_handle(world_of(world).GetSpectator());
+  });
+}
+
+tsc_status_t tsc_world_get_traffic_light_from_opendrive_id(
+    tsc_world_t *world, const char *traffic_light_id, size_t traffic_light_id_len,
+    tsc_traffic_light_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_traffic_light_handle(world_of(world).GetTrafficLightFromOpenDRIVE(to_string(traffic_light_id, traffic_light_id_len, "traffic_light_id")));
+  });
+}
+
+tsc_status_t tsc_world_get_traffic_sign(tsc_world_t *world, const tsc_landmark_handle_t *landmark,
+                                        tsc_actor_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_actor_handle(world_of(world).GetTrafficSign(landmark_of(landmark, "landmark")));
+  });
+}
+
+tsc_status_t tsc_world_get_traffic_light(tsc_world_t *world, const tsc_landmark_handle_t *landmark,
+                                         tsc_traffic_light_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_traffic_light_handle(world_of(world).GetTrafficLight(landmark_of(landmark, "landmark")));
+  });
+}
+
+tsc_status_t tsc_world_get_traffic_lights_from_waypoint(tsc_world_t *world,
+                                                        const tsc_waypoint_t *waypoint,
+                                                        double distance,
+                                                        tsc_traffic_light_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_traffic_light_list(traffic_lights_of(world_of(world).GetTrafficLightsFromWaypoint(waypoint_of(waypoint), check_search_distance(distance, "distance"))));
+  });
+}
+
+tsc_status_t tsc_world_get_traffic_lights_in_junction(tsc_world_t *world, int32_t junction_id,
+                                                      tsc_traffic_light_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_traffic_light_list(traffic_lights_of([&](auto &self_) { return traffic_lights_in_junction(self_, junction_id); }(world_of(world))));
+  });
+}
+
+tsc_status_t tsc_world_freeze_all_traffic_lights(tsc_world_t *world, int32_t frozen) {
+  return TSC_GUARD({ world_of(world).FreezeAllTrafficLights(frozen != 0); });
+}
+
+tsc_status_t tsc_world_reset_all_traffic_lights(tsc_world_t *world) {
+  return TSC_GUARD({ world_of(world).ResetAllTrafficLights(); });
+}
+
+tsc_status_t tsc_world_get_vehicles_light_states(tsc_world_t *world,
+                                                 tsc_vehicle_light_state_list_t *out) {
+  return TSC_GUARD({
+    vehicle_light_state_list_assign(out, world_of(world).GetVehiclesLightStates());
+  });
+}
+
+tsc_status_t tsc_world_get_level_bbs(tsc_world_t *world, int32_t bb_type,
+                                     tsc_bounding_box_list_t *out) {
+  return TSC_GUARD({
+    bounding_box_list_assign(out, world_of(world).GetLevelBBs(check_u8(bb_type, "bb_type")));
+  });
+}
+
+tsc_status_t tsc_world_get_environment_objects(tsc_world_t *world, int32_t object_type,
+                                               tsc_environment_object_list_t *out) {
+  return TSC_GUARD({
+    environment_object_list_assign(out, world_of(world).GetEnvironmentObjects(check_u8(object_type, "object_type")));
+  });
+}
+
+tsc_status_t tsc_world_enable_environment_objects(tsc_world_t *world,
+                                                  const uint64_t *env_objects_ids, size_t count,
+                                                  int32_t enable) {
+  return TSC_GUARD({
+    world_of(world).EnableEnvironmentObjects(to_vector(env_objects_ids, count, "env_objects_ids"), enable != 0);
+  });
+}
+
+tsc_status_t tsc_world_get_names_of_all_objects(tsc_world_t *world, tsc_string_list_t *out) {
+  return TSC_GUARD({ string_list_assign(out, world_of(world).GetNamesOfAllObjects()); });
+}
+
+tsc_status_t tsc_world_cast_ray(tsc_world_t *world, const tsc_location_t *initial_location,
+                                const tsc_location_t *final_location,
+                                tsc_labelled_point_list_t *out) {
+  return TSC_GUARD({
+    labelled_point_list_assign(out, world_of(world).CastRay(to_carla(*require_ptr(initial_location, "initial_location")), to_carla(*require_ptr(final_location, "final_location"))));
+  });
+}
+
+tsc_status_t tsc_world_project_point(tsc_world_t *world, const tsc_location_t *location,
+                                     const tsc_vector3d_t *direction, double search_distance,
+                                     int32_t *has_value, tsc_labelled_point_t *out) {
+  return TSC_GUARD({
+    assign_optional(world_of(world).ProjectPoint(to_carla(*require_ptr(location, "location")), to_carla_vector(*require_ptr(direction, "direction")), check_non_negative(search_distance, "search_distance")), has_value, out);
+  });
+}
+
+tsc_status_t tsc_world_ground_projection(tsc_world_t *world, const tsc_location_t *location,
+                                         double search_distance,
+                                         int32_t *has_value, tsc_labelled_point_t *out) {
+  return TSC_GUARD({
+    assign_optional(world_of(world).GroundProjection(to_carla(*require_ptr(location, "location")), check_non_negative(search_distance, "search_distance")), has_value, out);
+  });
+}
+
+tsc_status_t tsc_world_load_map_layer(tsc_world_t *world, uint16_t map_layers) {
+  return TSC_GUARD({
+    world_of(world).LoadLevelLayer(static_cast<carla::rpc::MapLayer>(map_layers));
+  });
+}
+
+tsc_status_t tsc_world_unload_map_layer(tsc_world_t *world, uint16_t map_layers) {
+  return TSC_GUARD({
+    world_of(world).UnloadLevelLayer(static_cast<carla::rpc::MapLayer>(map_layers));
+  });
+}
+
+tsc_status_t tsc_world_set_pedestrians_seed(tsc_world_t *world, uint32_t seed) {
+  return TSC_GUARD({ world_of(world).SetPedestriansSeed(seed); });
+}
+
+tsc_status_t tsc_world_set_pedestrians_cross_factor(tsc_world_t *world, double percentage) {
+  return TSC_GUARD({
+    world_of(world).SetPedestriansCrossFactor(check_finite(percentage, "percentage"));
+  });
+}
+
+tsc_status_t tsc_world_get_imu_sensor_gravity(tsc_world_t *world, double *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = get_imu_sensor_gravity(world_of(world)); });
+}
+
+tsc_status_t tsc_world_set_imu_sensor_gravity(tsc_world_t *world, double gravity) {
+  return TSC_GUARD({
+    [&](auto &self_) { return set_imu_sensor_gravity(self_, check_finite(gravity, "gravity")); }(world_of(world));
+  });
+}
+
+tsc_status_t tsc_world_apply_color_texture_to_objects(tsc_world_t *world,
+                                                      const tsc_string_t *names, size_t count,
+                                                      int32_t material_parameter,
+                                                      const tsc_texture_color_t *texture) {
+  return TSC_GUARD({
+    world_of(world).ApplyColorTextureToObjects(to_names(names, count, "names"), to_material_parameter(material_parameter), to_carla_texture(&*require_ptr(texture, "texture"), "texture"));
+  });
+}
+
+tsc_status_t tsc_world_apply_float_color_texture_to_objects(
+    tsc_world_t *world, const tsc_string_t *names, size_t count, int32_t material_parameter,
+    const tsc_texture_float_color_t *texture) {
+  return TSC_GUARD({
+    world_of(world).ApplyFloatColorTextureToObjects(to_names(names, count, "names"), to_material_parameter(material_parameter), to_carla_texture(&*require_ptr(texture, "texture"), "texture"));
+  });
+}
+
+tsc_status_t tsc_world_apply_textures_to_objects(
+    tsc_world_t *world, const tsc_string_t *names, size_t count,
+    const tsc_texture_color_t *diffuse_texture, const tsc_texture_float_color_t *emissive_texture,
+    const tsc_texture_float_color_t *normal_texture,
+    const tsc_texture_float_color_t *ao_roughness_metallic_emissive_texture) {
+  return TSC_GUARD({
+    world_of(world).ApplyTexturesToObjects(to_names(names, count, "names"), to_carla_texture(&*require_ptr(diffuse_texture, "diffuse_texture"), "diffuse_texture"), to_carla_texture(&*require_ptr(emissive_texture, "emissive_texture"), "emissive_texture"), to_carla_texture(&*require_ptr(normal_texture, "normal_texture"), "normal_texture"), to_carla_texture(&*require_ptr(ao_roughness_metallic_emissive_texture, "ao_roughness_metallic_emissive_texture"), "ao_roughness_metallic_emissive_texture"));
+  });
+}
+
+tsc_status_t tsc_world_get_light_manager(tsc_world_t *world, tsc_light_manager_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_light_manager_handle(world_of(world).GetLightManager());
   });
 }
 

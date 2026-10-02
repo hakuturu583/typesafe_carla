@@ -1,0 +1,14 @@
+# Light manager operations (issue #21): tsc_light_manager_<name>.
+class: carla::client::LightManager
+prefix: light_manager
+self: {type: tsc_light_manager_t, name: manager, get: light_manager_of}
+blocks:
+  light_manager:
+    get_all_lights:
+      call: GetAllLights
+      args: {group: light_group}
+      out: light_list
+      doc: "group: tsc_light_group_t; TSC_LIGHT_GROUP_NONE for every group."
+    get_turned_on_lights: {call: GetTurnedOnLights, args: {group: light_group}, out: light_list}
+    get_turned_off_lights: {call: GetTurnedOffLights, args: {group: light_group}, out: light_list}
+    set_day_night_cycle: {call: SetDayNightCycle, args: {active: bool}}

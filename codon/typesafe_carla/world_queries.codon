@@ -1,0 +1,343 @@
+# World queries (issue #21), with the CARLA Python API's names: the
+# spectator, traffic light queries, vehicle light states, environment
+# objects, ray casts and projections, map layers, pedestrians, the IMU
+# gravity, textures, and on_tick callbacks.
+
+from ._ffi import (Handle, CString, CVehicleLightStateList,
+                   CBoundingBoxList, CEnvironmentObjectList, CStringList, CLabelledPoint,
+                   CLabelledPointList, TSC_INVALID_ARGUMENT, copy_string, take_list, ref, array,
+                   tsc_world_get_traffic_sign, tsc_world_get_traffic_light,
+                   tsc_vehicle_light_state_list_free, tsc_bounding_box_list_free,
+                   tsc_environment_object_list_free, tsc_string_list_free,
+                   tsc_labelled_point_list_free, tsc_world_get_spectator,
+                   tsc_world_get_traffic_light_from_opendrive_id,
+                   tsc_world_get_traffic_lights_from_waypoint,
+                   tsc_world_get_traffic_lights_in_junction, tsc_world_freeze_all_traffic_lights,
+                   tsc_world_reset_all_traffic_lights, tsc_world_get_vehicles_light_states,
+                   tsc_world_get_level_bbs, tsc_world_get_environment_objects,
+                   tsc_world_enable_environment_objects, tsc_world_get_names_of_all_objects,
+                   tsc_world_cast_ray, tsc_world_project_point, tsc_world_ground_projection,
+                   tsc_world_load_map_layer, tsc_world_unload_map_layer,
+                   tsc_world_set_pedestrians_seed, tsc_world_set_pedestrians_cross_factor,
+                   tsc_world_get_imu_sensor_gravity, tsc_world_set_imu_sensor_gravity,
+                   tsc_world_apply_color_texture_to_objects,
+                   tsc_world_apply_float_color_texture_to_objects,
+                   tsc_world_apply_textures_to_objects, tsc_world_on_tick,
+                   tsc_world_get_client_token, tsc_tick_listener_get_id)
+from .errors import _check, _i32, _u8, CarlaError
+from .geometry import Location, Vector3D, Transform, BoundingBox, _loc, _vector_arg
+from .actor import Actor
+from .traffic_light import TrafficLight, TrafficSign, _take_traffic_lights
+from .map import Landmark
+from .map import Waypoint
+from .snapshot import WorldSnapshot
+from .world import World
+from .labels import CityObjectLabel
+from .texture import TextureColor, TextureFloatColor
+from ._callbacks import _register_tick_callback, _unregister_tick_callback
+
+class MapLayer:
+    """Map layer bit flags (rpc::MapLayer); combine with |."""
+    NONE: ClassVar[int] = 0
+    Buildings: ClassVar[int] = 0x1
+    Decals: ClassVar[int] = 0x1 << 1
+    Foliage: ClassVar[int] = 0x1 << 2
+    Ground: ClassVar[int] = 0x1 << 3
+    ParkedVehicles: ClassVar[int] = 0x1 << 4
+    Particles: ClassVar[int] = 0x1 << 5
+    Props: ClassVar[int] = 0x1 << 6
+    StreetLights: ClassVar[int] = 0x1 << 7
+    Walls: ClassVar[int] = 0x1 << 8
+    All: ClassVar[int] = 0xFFFF
+
+class EnvironmentObject:
+    """A static object of the level (a plain value)."""
+    id: int  # LibCarla's uint64 id, bit-for-bit (large ids read as negative ints)
+    name: str
+    transform: Transform
+    bounding_box: BoundingBox
+    type: int  # CityObjectLabel
+
+    def __init__(self, id: int, name: str, transform: Transform, bounding_box: BoundingBox,
+                 type: int):
+        self.id = id
+        self.name = name
+        self.transform = transform
+        self.bounding_box = bounding_box
+        self.type = type
+
+    def __repr__(self) -> str:
+        return (f"EnvironmentObject(id={self.id}, name={self.name}, type={self.type}, "
+                f"transform={self.transform}, bounding_box={self.bounding_box})")
+
+class LabelledPoint:
+    """A point hit by a ray cast or projection, with its semantic label."""
+    location: Location
+    label: int  # CityObjectLabel
+
+    def __init__(self, location: Location, label: int):
+        self.location = location
+        self.label = label
+
+    @staticmethod
+    def _from_c(p: CLabelledPoint) -> LabelledPoint:
+        return LabelledPoint(Location._from_c(p.location), int(p.label))
+
+    def __repr__(self) -> str:
+        return f"LabelledPoint(location={self.location}, label={self.label})"
+
+def _map_layer(map_layers: int) -> u16:
+    if map_layers < 0 or map_layers > 0xFFFF:
+        raise CarlaError(f"map layers {map_layers} are not MapLayer flags (0..0xFFFF)",
+                         TSC_INVALID_ARGUMENT)
+    return u16(map_layers)
+
+def _optional_point(fn, *args) -> Optional[LabelledPoint]:
+    out = Ptr[CLabelledPoint](1)
+    found = Ptr[i32](1)
+    _check(fn(*args, found, out))
+    if int(found[0]) == 0:
+        return None
+    return LabelledPoint._from_c(out[0])
+
+def _names(names: List[str]) -> Ptr[CString]:
+    """The names as (pointer, length) pairs; `names` must outlive the call."""
+    p = Ptr[CString](len(names))
+    for i in range(len(names)):
+        p[i] = CString(cobj(names[i].ptr), names[i].len)
+    return p
+
+class _TickThunk[F]:
+    """Adapts any callable taking a WorldSnapshot (function, bound method,
+    lambda, closure) to one Callable type, like sensor.codon's thunk."""
+    f: F
+
+    def __init__(self, f: F):
+        self.f = f
+
+    def run(self, snapshot: cobj):
+        self.f(WorldSnapshot(Handle(snapshot)))
+
+@extend
+class World:
+    def get_spectator(self) -> Actor:
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_spectator(self._h.ptr, out))
+        if out[0] == cobj():
+            raise CarlaError("the server has no spectator")
+        return Actor(Handle(out[0]))
+
+    # --- Traffic lights ------------------------------------------------------
+
+    def get_traffic_light_from_opendrive_id(self, traffic_light_id: str) -> Optional[TrafficLight]:
+        """The traffic light with this OpenDRIVE signal id, or None."""
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_traffic_light_from_opendrive_id(
+            self._h.ptr, traffic_light_id.ptr, traffic_light_id.len, out))
+        if out[0] == cobj():
+            return None
+        return TrafficLight(Handle(out[0]))
+
+    def get_traffic_sign(self, landmark: Landmark) -> Optional[TrafficSign]:
+        """The traffic sign actor of an OpenDRIVE landmark (a traffic light is
+        a sign too, as in LibCarla), or None."""
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_traffic_sign(self._h.ptr, landmark._h.ptr, out))
+        if out[0] == cobj():
+            return None
+        return Actor(Handle(out[0])).as_traffic_sign()
+
+    def get_traffic_light(self, landmark: Landmark) -> Optional[TrafficLight]:
+        """The traffic light actor of an OpenDRIVE landmark, or None."""
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_traffic_light(self._h.ptr, landmark._h.ptr, out))
+        if out[0] == cobj():
+            return None
+        return TrafficLight(Handle(out[0]))
+
+    def get_traffic_lights_from_waypoint(self, waypoint: Waypoint,
+                                         distance: float) -> List[TrafficLight]:
+        """The traffic lights affecting the lane ahead of the waypoint, within distance."""
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_traffic_lights_from_waypoint(self._h.ptr, waypoint._h.ptr, distance,
+                                                          out))
+        return _take_traffic_lights(out[0])
+
+    def get_traffic_lights_in_junction(self, junction_id: int) -> List[TrafficLight]:
+        """The traffic lights of a junction; empty if no junction has this id."""
+        out = Ptr[cobj](1)
+        _check(tsc_world_get_traffic_lights_in_junction(self._h.ptr,
+                                                        _i32(junction_id, "junction_id"), out))
+        return _take_traffic_lights(out[0])
+
+    def freeze_all_traffic_lights(self, frozen: bool):
+        _check(tsc_world_freeze_all_traffic_lights(self._h.ptr, i32(int(frozen))))
+
+    def reset_all_traffic_lights(self):
+        _check(tsc_world_reset_all_traffic_lights(self._h.ptr))
+
+    def get_vehicles_light_states(self) -> Dict[int, int]:
+        """Vehicle actor id -> VehicleLightState flags, for every vehicle."""
+        out = Ptr[CVehicleLightStateList](1)
+        _check(tsc_world_get_vehicles_light_states(self._h.ptr, out))
+        pairs = take_list(out, lambda e: (int(e.actor_id), int(e.light_state)),
+                          tsc_vehicle_light_state_list_free)
+        return {k: v for k, v in pairs}
+
+    # --- Environment objects and level geometry -----------------------------
+
+    def get_level_bbs(self, bb_type: int = CityObjectLabel.Any) -> List[BoundingBox]:
+        """The bounding boxes of the level's objects with this CityObjectLabel."""
+        out = Ptr[CBoundingBoxList](1)
+        _check(tsc_world_get_level_bbs(self._h.ptr, _u8(bb_type, "bb_type"), out))
+        return take_list(out, BoundingBox._from_c, tsc_bounding_box_list_free)
+
+    def get_environment_objects(self,
+                                object_type: int = CityObjectLabel.Any) -> List[EnvironmentObject]:
+        out = Ptr[CEnvironmentObjectList](1)
+        _check(tsc_world_get_environment_objects(self._h.ptr, _u8(object_type, "object_type"), out))
+        return take_list(out, lambda o: EnvironmentObject(
+            int(o.id), copy_string(o.name), Transform._from_c(o.transform),
+            BoundingBox._from_c(o.bounding_box), int(o.type)), tsc_environment_object_list_free)
+
+    def enable_environment_objects(self, env_objects_ids: List[int], enable: bool):
+        """Shows or hides environment objects by id (EnvironmentObject.id)."""
+        ids = array([u64(i) for i in env_objects_ids])
+        _check(tsc_world_enable_environment_objects(self._h.ptr, ids, len(env_objects_ids),
+                                                    i32(int(enable))))
+
+    def get_names_of_all_objects(self) -> List[str]:
+        out = Ptr[CStringList](1)
+        _check(tsc_world_get_names_of_all_objects(self._h.ptr, out))
+        return take_list(out, copy_string, tsc_string_list_free)
+
+    # --- Ray casts and projections ---------------------------------------------
+
+    def cast_ray(self, initial_location, final_location) -> List[LabelledPoint]:
+        """Every hit between the two locations, nearest first."""
+        a = _loc(initial_location, "[tsc-compat] a Vector3D passed as a Location to cast_ray")
+        b = _loc(final_location, "[tsc-compat] a Vector3D passed as a Location to cast_ray")
+        out = Ptr[CLabelledPointList](1)
+        _check(tsc_world_cast_ray(self._h.ptr, a, b, out))
+        return take_list(out, LabelledPoint._from_c, tsc_labelled_point_list_free)
+
+    def project_point(self, location, direction,
+                      search_distance: float = 10000.0) -> Optional[LabelledPoint]:
+        """The first hit from location along direction (a Vector3D), or None."""
+        l = _loc(location, "[tsc-compat] a Vector3D passed as a Location to project_point")
+        d = ref(_vector_arg(
+            direction, "[tsc-compat] a Location passed as a Vector3D direction to project_point"
+        )._to_c())
+        return _optional_point(tsc_world_project_point, self._h.ptr, l, d, search_distance)
+
+    def ground_projection(self, location,
+                          search_distance: float = 10000.0) -> Optional[LabelledPoint]:
+        """The first hit straight down from location, or None."""
+        l = _loc(location, "[tsc-compat] a Vector3D passed as a Location to ground_projection")
+        return _optional_point(tsc_world_ground_projection, self._h.ptr, l, search_distance)
+
+    # --- Map layers, pedestrians, IMU ---------------------------------------------
+
+    def load_map_layer(self, map_layers: int):
+        """Loads the MapLayer flags given (for the "_Opt" maps)."""
+        _check(tsc_world_load_map_layer(self._h.ptr, _map_layer(map_layers)))
+
+    def unload_map_layer(self, map_layers: int):
+        _check(tsc_world_unload_map_layer(self._h.ptr, _map_layer(map_layers)))
+
+    def set_pedestrians_seed(self, seed: int):
+        if seed < 0 or seed > 0xFFFFFFFF:
+            raise CarlaError(f"seed {seed} does not fit in uint32", TSC_INVALID_ARGUMENT)
+        _check(tsc_world_set_pedestrians_seed(self._h.ptr, u32(seed)))
+
+    def set_pedestrians_cross_factor(self, percentage: float):
+        """The fraction (0..1) of pedestrians that may cross roads."""
+        _check(tsc_world_set_pedestrians_cross_factor(self._h.ptr, percentage))
+
+    def get_imu_sensor_gravity(self) -> float:
+        """Raises CarlaError with LibCarla 0.10.0, which lacks it (ue5-dev has it)."""
+        out = Ptr[float](1)
+        _check(tsc_world_get_imu_sensor_gravity(self._h.ptr, out))
+        return out[0]
+
+    def set_imu_sensor_gravity(self, gravity: float):
+        """Raises CarlaError with LibCarla 0.10.0, which lacks it (ue5-dev has it)."""
+        _check(tsc_world_set_imu_sensor_gravity(self._h.ptr, gravity))
+
+    # --- Textures -------------------------------------------------------------------
+
+    def apply_color_texture_to_object(self, object_name: str, material_parameter: int,
+                                      texture: TextureColor):
+        self.apply_color_texture_to_objects([object_name], material_parameter, texture)
+
+    def apply_color_texture_to_objects(self, objects_name_list: List[str],
+                                       material_parameter: int, texture: TextureColor):
+        """material_parameter: a MaterialParameter. Names: get_names_of_all_objects()."""
+        _check(tsc_world_apply_color_texture_to_objects(
+            self._h.ptr, _names(objects_name_list), len(objects_name_list),
+            _i32(material_parameter, "material_parameter"), ref(texture._to_c())))
+
+    def apply_float_color_texture_to_object(self, object_name: str, material_parameter: int,
+                                            texture: TextureFloatColor):
+        self.apply_float_color_texture_to_objects([object_name], material_parameter, texture)
+
+    def apply_float_color_texture_to_objects(self, objects_name_list: List[str],
+                                             material_parameter: int, texture: TextureFloatColor):
+        _check(tsc_world_apply_float_color_texture_to_objects(
+            self._h.ptr, _names(objects_name_list), len(objects_name_list),
+            _i32(material_parameter, "material_parameter"), ref(texture._to_c())))
+
+    def apply_textures_to_object(self, object_name: str, diffuse_texture: TextureColor,
+                                 emissive_texture: TextureFloatColor,
+                                 normal_texture: TextureFloatColor,
+                                 ao_roughness_metallic_emissive_texture: TextureFloatColor):
+        self.apply_textures_to_objects([object_name], diffuse_texture, emissive_texture,
+                                       normal_texture, ao_roughness_metallic_emissive_texture)
+
+    def apply_textures_to_objects(self, objects_name_list: List[str],
+                                  diffuse_texture: TextureColor,
+                                  emissive_texture: TextureFloatColor,
+                                  normal_texture: TextureFloatColor,
+                                  ao_roughness_metallic_emissive_texture: TextureFloatColor):
+        _check(tsc_world_apply_textures_to_objects(
+            self._h.ptr, _names(objects_name_list), len(objects_name_list),
+            ref(diffuse_texture._to_c()), ref(emissive_texture._to_c()),
+            ref(normal_texture._to_c()), ref(ao_roughness_metallic_emissive_texture._to_c())))
+
+    # --- on_tick ------------------------------------------------------------------------
+
+    def on_tick(self, callback, queue_size: Optional[int] = None) -> int:
+        """Calls callback(snapshot: WorldSnapshot) for every world tick, and
+        returns an id for remove_on_tick().
+
+        As with sensor callbacks, LibCarla's thread only queues the snapshots:
+        the callback runs on the program's thread, in World.tick() and
+        World.wait_for_tick() (which first wait, within their timeout, until
+        that frame's snapshot is queued), Client.apply_batch(_sync) with
+        do_tick=True (no wait), and dispatch_callbacks(). The queue is
+        unbounded by default; queue_size=n keeps the newest n (0 = unbounded).
+        Callbacks belong to the client: they keep running after load_world,
+        and any World of the same Client can remove them.
+        """
+        size: int = 0 if queue_size is None else unwrap(queue_size)
+        if size < 0:
+            raise CarlaError("queue_size must be 0 (unbounded) or positive", TSC_INVALID_ARGUMENT)
+        cb: Callable[[cobj], None] = _TickThunk(callback).run
+        out = Ptr[cobj](1)
+        _check(tsc_world_on_tick(self._h.ptr, size, out))
+        listener = Handle(out[0])
+        callback_id = Ptr[u64](1)
+        _check(tsc_tick_listener_get_id(listener.ptr, callback_id))
+        _register_tick_callback(self._client_token(), int(callback_id[0]), listener, cb)
+        return int(callback_id[0])
+
+    def remove_on_tick(self, callback_id: int):
+        """Removes an on_tick callback of this world's client (also one
+        registered before load_world) and drops its undelivered snapshots.
+        An unknown id is ignored, as in LibCarla."""
+        _unregister_tick_callback(self._client_token(), callback_id)
+
+    def _client_token(self) -> int:
+        token = Ptr[u64](1)
+        _check(tsc_world_get_client_token(self._h.ptr, token))
+        return int(token[0])

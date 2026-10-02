@@ -1,0 +1,89 @@
+# World operations (issue #21): tsc_world_<name>.
+class: carla::client::World
+prefix: world
+self: {type: tsc_world_t, name: world, get: world_of}
+blocks:
+  world:
+    get_spectator: {call: GetSpectator, out: actor_handle}
+    get_traffic_light_from_opendrive_id:
+      call: GetTrafficLightFromOpenDRIVE
+      args: {traffic_light_id: string_in}
+      out: traffic_light_handle
+      doc: "*out = NULL (TSC_OK) when no traffic light has this OpenDRIVE signal id."
+    get_traffic_sign:
+      call: GetTrafficSign
+      args: {landmark: landmark}
+      out: actor_handle
+      doc: "*out = NULL (TSC_OK) when no traffic sign actor has the landmark's id."
+    get_traffic_light:
+      call: GetTrafficLight
+      args: {landmark: landmark}
+      out: traffic_light_handle
+      doc: "*out = NULL (TSC_OK) when no traffic light actor has the landmark's id."
+    get_traffic_lights_from_waypoint:
+      call: GetTrafficLightsFromWaypoint
+      args: {waypoint: waypoint, distance: distance}
+      out: actor_traffic_light_list
+    get_traffic_lights_in_junction:
+      call: GetTrafficLightsInJunction
+      via: traffic_lights_in_junction
+      args: {junction_id: int32}
+      out: actor_traffic_light_list
+      doc: "An empty list for an id that names no junction (LibCarla would dereference NULL)."
+    freeze_all_traffic_lights: {call: FreezeAllTrafficLights, args: {frozen: bool}}
+    reset_all_traffic_lights: {call: ResetAllTrafficLights}
+    get_vehicles_light_states: {call: GetVehiclesLightStates, out: vehicle_light_state_list}
+    get_level_bbs:
+      call: GetLevelBBs
+      args: {bb_type: city_object_label}
+      out: bounding_box_list
+      doc: "bb_type / object_type: a CityObjectLabel in [0, 255] (255 = Any)."
+    get_environment_objects:
+      call: GetEnvironmentObjects
+      args: {object_type: city_object_label}
+      out: environment_object_list
+    enable_environment_objects:
+      call: EnableEnvironmentObjects
+      args: {env_objects_ids: uint64_array, enable: bool}
+    get_names_of_all_objects: {call: GetNamesOfAllObjects, out: string_list}
+    cast_ray:
+      call: CastRay
+      args: {initial_location: location, final_location: location}
+      out: labelled_point_list
+    project_point:
+      call: ProjectPoint
+      args: {location: location, direction: vector3d, search_distance: non_negative}
+      out: optional_labelled_point
+      doc: "*has_value = 0 when nothing is hit within search_distance."
+    ground_projection:
+      call: GroundProjection
+      args: {location: location, search_distance: non_negative}
+      out: optional_labelled_point
+    load_map_layer: {call: LoadLevelLayer, args: {map_layers: map_layer},
+                     doc: "map_layers: CARLA MapLayer bit flags."}
+    unload_map_layer: {call: UnloadLevelLayer, args: {map_layers: map_layer}}
+    set_pedestrians_seed: {call: SetPedestriansSeed, args: {seed: uint32}}
+    set_pedestrians_cross_factor: {call: SetPedestriansCrossFactor, args: {percentage: finite}}
+    get_imu_sensor_gravity:
+      call: GetIMUSensorGravity
+      via: get_imu_sensor_gravity
+      out: double
+      doc: "LibCarla ue5-dev only; TSC_ERROR with CARLA 0.10.0."
+    set_imu_sensor_gravity:
+      call: SetIMUSensorGravity
+      via: set_imu_sensor_gravity
+      args: {gravity: finite}
+    apply_color_texture_to_objects:
+      call: ApplyColorTextureToObjects
+      args: {names: name_list, material_parameter: material_parameter, texture: texture_color}
+      doc: "names: count >= 1 object names; material_parameter: tsc_material_parameter_t."
+    apply_float_color_texture_to_objects:
+      call: ApplyFloatColorTextureToObjects
+      args: {names: name_list, material_parameter: material_parameter,
+             texture: texture_float_color}
+    apply_textures_to_objects:
+      call: ApplyTexturesToObjects
+      args: {names: name_list, diffuse_texture: texture_color,
+             emissive_texture: texture_float_color, normal_texture: texture_float_color,
+             ao_roughness_metallic_emissive_texture: texture_float_color}
+    get_light_manager: {call: GetLightManager, out: light_manager_handle}

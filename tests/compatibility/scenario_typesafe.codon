@@ -416,3 +416,28 @@ r23 = q23.rotator()
 out("quaternion", fmt(q23.x) + "," + fmt(q23.y) + "," + fmt(q23.z) + "," + fmt(q23.w) + "," +
     fmt(r23.pitch) + "," + fmt(r23.yaw) + "," + fmt(r23.roll) + "," + vec(q23.get_forward_vector()) +
     "," + vec(q23.get_right_vector()) + "," + vec(q23.get_up_vector()))
+# Issue #21: world queries.
+out("i21_spectator", world.get_spectator().type_id)
+out("i21_environment", str(len(world.get_environment_objects())) + "," +
+    str(len(world.get_environment_objects(carla.CityObjectLabel.Buildings))) + "," +
+    str(len(world.get_level_bbs(carla.CityObjectLabel.TrafficLight))))
+# The object names include live actors, so the count can differ by a few.
+out("i21_object_names", str(len(world.get_names_of_all_objects())))
+tl_marks = m.get_all_landmarks_of_type("1000001")
+tl0: Optional[carla.TrafficLight] = None
+if len(tl_marks) > 0:
+    tl0 = world.get_traffic_light_from_opendrive_id(tl_marks[0].id)
+out("i21_traffic_lights", str(len(tl_marks)) + "," + str(int(tl0 is not None)) + "," +
+    str(int(world.get_traffic_light_from_opendrive_id("no-such-signal") is None)) + "," +
+    str(len(world.get_traffic_lights_in_junction(jn.id))) + "," +
+    str(len(world.get_traffic_lights_from_waypoint(junction_wp, 100.0))))
+out("i21_landmark_lookup", str(int(world.get_traffic_light(tl_marks[0]) is not None)) + "," +
+    str(int(world.get_traffic_sign(tl_marks[0]) is not None)))
+out("i21_vehicle_light_states", str(len(world.get_vehicles_light_states())))
+p0_above = carla.Location(p0.location.x, p0.location.y, p0.location.z + 5.0)
+ground = unwrap(world.ground_projection(p0_above))
+ray = world.cast_ray(p0_above, carla.Location(p0_above.x, p0_above.y, p0_above.z - 20.0))
+out("i21_ground", str(ground.label) + "," + fmt(ground.location.z) + "," + str(ray[0].label) + "," +
+    fmt(ray[0].location.z))
+sky = world.project_point(p0_above, carla.Vector3D(0.0, 0.0, 1.0), 50.0)
+out("i21_projections", str(int(sky is None)) + "," + str(int(len(ray) > 0)))

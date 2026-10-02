@@ -1,0 +1,200 @@
+# Issue #21 against a real CARLA server: spectator, traffic light queries,
+# vehicle light states, environment objects, ray casts and projections, map
+# layers, pedestrians, the IMU gravity, textures, the light manager and
+# on_tick.
+import os
+import time
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+m = world.get_map()
+lib = world.get_blueprint_library()
+points = m.get_spawn_points()
+
+# --- Spectator ----------------------------------------------------------------------------
+spectator = world.get_spectator()
+print("spectator", spectator)
+assert spectator.type_id == "spectator"
+view = carla.Transform(carla.Location(points[0].location.x, points[0].location.y, 60.0),
+                       carla.Rotation(-90.0, 0.0, 0.0))
+spectator.set_transform(view)
+for _ in range(10):  # the client sees the move a few ticks later
+    world.wait_for_tick(10.0)
+    if abs(world.get_spectator().get_location().z - 60.0) < 1.0:
+        break
+assert abs(world.get_spectator().get_location().z - 60.0) < 1.0
+
+# --- Traffic lights ---------------------------------------------------------------------------
+marks = m.get_all_landmarks_of_type("1000001")
+print("traffic light landmarks", len(marks))
+assert len(marks) > 0
+found = 0
+for mark in marks:
+    if world.get_traffic_light_from_opendrive_id(mark.id) is not None:
+        found += 1
+print("traffic lights by OpenDRIVE id", found)
+assert found > 0
+assert world.get_traffic_light_from_opendrive_id("no-such-signal") is None
+by_landmark = 0
+for mark in marks:
+    tl = world.get_traffic_light(mark)
+    if tl is not None:
+        by_landmark += 1
+        assert unwrap(tl).get_opendrive_id() == mark.id
+        assert world.get_traffic_sign(mark) is not None  # a light is a sign too
+print("traffic lights by landmark", by_landmark)
+assert by_landmark > 0
+junction_lights = 0
+junction_ids = List[int]()
+for wp in m.generate_waypoints(20.0):
+    if wp.is_junction and wp.junction_id not in junction_ids:
+        junction_ids.append(wp.junction_id)
+        junction_lights += len(world.get_traffic_lights_in_junction(wp.junction_id))
+print("junctions", len(junction_ids), "lights in them", junction_lights)
+assert junction_lights > 0
+assert len(world.get_traffic_lights_in_junction(-12345)) == 0  # no such junction: empty
+ahead = 0
+for p in points[:30]:
+    wp = m.get_waypoint(p.location)
+    if wp is not None:
+        ahead += len(world.get_traffic_lights_from_waypoint(unwrap(wp), 200.0))
+print("traffic lights ahead of 30 spawn points", ahead)
+assert ahead > 0
+
+lights = [a.as_traffic_light() for a in world.get_actors() if a.is_traffic_light()]
+world.freeze_all_traffic_lights(True)
+world.wait_for_tick(10.0)
+assert all(l.is_frozen() for l in lights)
+world.freeze_all_traffic_lights(False)
+world.reset_all_traffic_lights()
+world.wait_for_tick(10.0)
+assert not any(l.is_frozen() for l in lights)
+
+# --- Vehicle light states -----------------------------------------------------------------------
+vehicle = world.spawn_actor(lib.find("vehicle.lincoln.mkz"), points[1]).as_vehicle()
+try:
+    vehicle.set_light_state(carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam)
+    deadline = time.time() + 10.0
+    states = world.get_vehicles_light_states()
+    while states.get(vehicle.id, -1) != (carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam) and time.time() < deadline:
+        world.wait_for_tick(10.0)
+        states = world.get_vehicles_light_states()
+    print("vehicle light states", states)
+    assert states[vehicle.id] == carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
+finally:
+    vehicle.destroy()
+
+# --- Environment objects ------------------------------------------------------------------------------
+every = world.get_environment_objects()
+buildings = world.get_environment_objects(carla.CityObjectLabel.Buildings)
+print("environment objects", len(every), "buildings", len(buildings),
+      "first", every[0] if len(every) > 0 else None)
+assert len(every) > 0 and len(buildings) <= len(every)
+assert all(o.type == carla.CityObjectLabel.Buildings for o in buildings)
+light_boxes = world.get_level_bbs(carla.CityObjectLabel.TrafficLight)
+print("level bbs", len(world.get_level_bbs()), "traffic light bbs", len(light_boxes))
+assert len(light_boxes) > 0 and all(b.extent.z > 0.0 for b in light_boxes)
+if len(buildings) > 0:
+    ids = [o.id for o in buildings[:3]]
+    world.enable_environment_objects(ids, False)
+    world.wait_for_tick(10.0)
+    world.enable_environment_objects(ids, True)
+names = world.get_names_of_all_objects()
+print("object names", len(names), names[:3])
+assert len(names) > 0
+
+# --- Ray casts and projections -------------------------------------------------------------------------
+above = carla.Location(points[0].location.x, points[0].location.y, points[0].location.z + 5.0)
+ground = world.ground_projection(above)
+print("ground projection", ground)
+assert ground is not None and unwrap(ground).location.z < above.z
+assert world.ground_projection(above, 0.5) is None  # nothing within half a meter
+hits = world.cast_ray(above, carla.Location(above.x, above.y, above.z - 20.0))
+print("cast ray hits", len(hits), hits[0] if len(hits) > 0 else None)
+assert len(hits) > 0
+assert all(hits[i].location.z >= hits[i + 1].location.z - 1e-3 for i in range(len(hits) - 1))
+down = world.project_point(above, carla.Vector3D(0.0, 0.0, -1.0), 50.0)
+assert down is not None and abs(unwrap(down).location.z - unwrap(ground).location.z) < 0.01
+assert world.project_point(above, carla.Vector3D(0.0, 0.0, 1.0), 50.0) is None  # the sky
+
+# --- Map layers and pedestrians ---------------------------------------------------------------------------
+world.unload_map_layer(carla.MapLayer.ParkedVehicles)
+world.wait_for_tick(10.0)
+world.load_map_layer(carla.MapLayer.ParkedVehicles)
+world.wait_for_tick(10.0)
+world.set_pedestrians_seed(42)
+world.set_pedestrians_cross_factor(0.3)
+
+# --- IMU gravity (LibCarla ue5-dev only) ---------------------------------------------------------------------
+try:
+    g = world.get_imu_sensor_gravity()
+    print("imu gravity", g)
+    world.set_imu_sensor_gravity(g)
+except carla.CarlaError as e:
+    print("imu gravity unavailable:", e.message)
+
+# --- Light manager ---------------------------------------------------------------------------------------------
+lm = world.get_lightmanager()
+all_lights = lm.get_all_lights()
+print("lights", len(all_lights), "on", len(lm.get_turned_on_lights()),
+      "street", len(lm.get_all_lights(carla.LightGroup.Street)))
+if len(all_lights) > 0:
+    some = all_lights[:3]
+    before = lm.get_light_state(some)
+    lm.set_intensity(some, 1234.0)
+    assert lm.get_intensity(some) == [1234.0] * len(some)
+    lm.set_light_states(some, before)
+    world.wait_for_tick(10.0)
+    assert lm.get_intensity(some) == [s.intensity for s in before]
+
+# --- Textures --------------------------------------------------------------------------------------------------
+texture = carla.TextureColor(4, 4)
+for x in range(4):
+    for y in range(4):
+        texture.set(x, y, carla.Color(255, 0, 0))
+try:
+    world.apply_color_texture_to_object(names[0], carla.MaterialParameter.Diffuse, texture)
+    print("texture applied to", names[0])
+except carla.CarlaError as e:
+    print("apply_color_texture_to_object failed:", e.message)
+
+# --- on_tick (asynchronous and synchronous mode) -------------------------------------------------------------
+frames = List[int]()
+ids = List[int]()
+cid = world.on_tick(lambda s: frames.append(s.frame))
+other = world.on_tick(lambda s: ids.append(s.id))
+for _ in range(5):
+    world.wait_for_tick(10.0)
+print("on_tick frames (async)", frames)
+assert len(frames) >= 4 and all(frames[i] < frames[i + 1] for i in range(len(frames) - 1))
+assert all(i == world.id for i in ids)
+world.remove_on_tick(other)
+
+original = world.get_settings()
+settings = world.get_settings()
+settings.synchronous_mode = True
+settings.fixed_delta_seconds = 0.05
+world.apply_settings(settings)
+try:
+    frames.clear()
+    ticked = [world.tick() for _ in range(5)]
+    deadline = time.time() + 10.0
+    while (len(frames) == 0 or frames[-1] < ticked[-1]) and time.time() < deadline:
+        time.sleep(0.01)
+        carla.dispatch_callbacks()  # a snapshot can arrive after its tick returned
+    print("on_tick frames (sync)", frames, "ticked", ticked)
+    assert ticked[-1] in frames
+finally:
+    world.apply_settings(original)
+    world.remove_on_tick(cid)
+count = len(frames)
+world.wait_for_tick(10.0)
+world.wait_for_tick(10.0)
+assert len(frames) == count  # removed
+print("OK")

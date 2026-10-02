@@ -1,0 +1,10 @@
+# LightManager bulk operations take a list of Light, not of LightState.
+# expect-error: 'List[LightState]' does not match expected type 'List[Light]'
+import typesafe_carla as carla
+
+def switch(world: carla.World):
+    lm = world.get_lightmanager()
+    lm.turn_on(lm.get_light_state(lm.get_all_lights()))
+
+# Compile-only: Codon type-checks a function only when it is called.
+switch(carla.Client("localhost", 2000).get_world())

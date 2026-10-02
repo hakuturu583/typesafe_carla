@@ -1,0 +1,64 @@
+# The light manager and textures of issue #21.
+# strict
+import typesafe_carla as carla
+
+def lights(world: carla.World) -> int:
+    lm: carla.LightManager = world.get_lightmanager()
+    street: List[carla.Light] = lm.get_all_lights(carla.LightGroup.Street)
+    every = lm.get_all_lights()
+    lm.turn_on(street)
+    lm.turn_off(lm.get_turned_on_lights(carla.LightGroup.Building))
+    lm.set_active(street, [True] * len(street))
+    on: List[bool] = lm.is_active(street)
+    lm.set_color(street, carla.Color(255, 0, 0))
+    lm.set_colors(street, [carla.Color(0, 255, 0) for _ in street])
+    colors: List[carla.Color] = lm.get_color(street)
+    lm.set_intensity(street, 500.0)
+    lm.set_intensities(street, [100.0 * i for i in range(len(street))])
+    intensities: List[float] = lm.get_intensity(street)
+    lm.set_light_group(every, carla.LightGroup.Other)
+    lm.set_light_groups(every, [carla.LightGroup.Street for _ in every])
+    groups: List[int] = lm.get_light_group(every)
+    state = carla.LightState(intensity=200.0, color=carla.Color(10, 20, 30),
+                             group=carla.LightGroup.Street, active=True)
+    lm.set_light_state(street, state)
+    lm.set_light_states(street, [state for _ in street])
+    states: List[carla.LightState] = lm.get_light_state(street)
+    lm.set_day_night_cycle(False)
+    light: carla.Light = every[0]
+    light.turn_on()
+    light.turn_off()
+    light.set_color(carla.Color(1, 2, 3))
+    light.set_intensity(10.0)
+    light.set_light_group(carla.LightGroup.Vehicle)
+    light.set_light_state(state)
+    where: carla.Location = light.location
+    s: carla.LightState = light.light_state
+    print(light.id, light.color, light.intensity, light.light_group, light.is_on, where, s)
+    off = lm.get_turned_off_lights()
+    return len(on) + len(colors) + len(intensities) + len(groups) + len(states) + len(off)
+
+def textures(world: carla.World):
+    t = carla.TextureColor(4, 2)
+    t.set(3, 1, carla.Color(255, 0, 0))
+    pixel: carla.Color = t.get(0, 0)
+    w: int = t.width
+    h: int = t.height
+    t.set_dimensions(2, 2)
+    f = carla.TextureFloatColor(2, 2)
+    f.set(0, 0, carla.FloatColor(1.0, 0.5, 0.25))
+    fp: carla.FloatColor = f.get(1, 1)
+    print(pixel, w, h, fp, carla.FloatColor().a)
+    names = world.get_names_of_all_objects()
+    world.apply_color_texture_to_object(names[0], carla.MaterialParameter.Diffuse, t)
+    world.apply_color_texture_to_objects(names, carla.MaterialParameter.Diffuse, t)
+    world.apply_float_color_texture_to_object(names[0], carla.MaterialParameter.Normal, f)
+    world.apply_float_color_texture_to_objects(names, carla.MaterialParameter.Emissive, f)
+    world.apply_textures_to_object(names[0], t, f, f, f)
+    world.apply_textures_to_objects(names, t, carla.TextureFloatColor(), f,
+                                    carla.TextureFloatColor(0, 0))
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+print(lights(_world))
+textures(_world)

@@ -84,6 +84,8 @@ add_library(typesafe_carla_ffi SHARED
   native/src/world.cpp
   native/src/world_ext.cpp
   native/src/geometry.cpp
+  native/src/world_queries.cpp
+  native/src/light_manager.cpp
   native/src/shared_types.cpp
   native/src/generated/bindings.cpp
 )
@@ -108,7 +110,8 @@ set_target_properties(typesafe_carla_ffi PROPERTIES
 if(TSC_BACKEND STREQUAL "mock")
   set(TSC_CARLA_RESOLVED_REF "mock")
   set(TSC_CARLA_COMMIT "mock")
-  add_library(carla_mock STATIC native/mock/src/mock.cpp native/mock/src/weather.cpp)
+  add_library(carla_mock STATIC native/mock/src/mock.cpp native/mock/src/weather.cpp
+              native/mock/src/world_extras.cpp)
   target_include_directories(carla_mock PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/native/mock/include")
   target_link_libraries(typesafe_carla_ffi PRIVATE carla_mock)
 else()

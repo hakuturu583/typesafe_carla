@@ -16,7 +16,7 @@ from ._ffi import (CStringList, take_string_list, tsc_client_get_available_maps,
                    tsc_client_set_replayer_ignore_hero, tsc_client_set_replayer_ignore_spectator)
 from .errors import _check, _check_port, CarlaError, _is_actor_id
 from .world import World
-from ._callbacks import dispatch_sensor_callbacks, _unregister_callback
+from ._callbacks import dispatch_callbacks, _unregister_callback
 from .command import Command, CommandResponse, _flatten, _responses, _DESTROY_ACTOR
 
 class OpendriveGenerationParameters:
@@ -145,7 +145,7 @@ class Client:
             if c._type == _DESTROY_ACTOR:
                 _unregister_callback(c._actor_id)
         if do_tick:
-            dispatch_sensor_callbacks()  # after sending; this call does not wait for the server
+            dispatch_callbacks()  # after sending; this call does not wait for the server
 
     def apply_batch_sync(self, commands: List[Command],
                          do_tick: bool = False) -> List[CommandResponse]:
@@ -165,7 +165,7 @@ class Client:
             if commands[i]._type == _DESTROY_ACTOR and not responses[i].has_error():
                 _unregister_callback(commands[i]._actor_id)
         if do_tick:
-            dispatch_sensor_callbacks()
+            dispatch_callbacks()
         return responses
 
     def generate_opendrive_world(self, opendrive: str,

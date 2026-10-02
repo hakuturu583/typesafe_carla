@@ -43,9 +43,11 @@ extern "C" {
  * 3.3: client map list/files/replayer flags, Traffic Manager actions and settings,
  *      blueprint tags, debug clear, extended WorldSettings, transform matrices (#23).
  * 3.4: actor state/attributes/parent/tags, physics at a location, skeleton queries,
- *      textures, TrafficSign (#19). */
+ *      textures, TrafficSign (#19).
+ * 3.5: world spectator, traffic light/sign queries, environment objects, ray casts,
+ *      map layers, IMU gravity, textures, on_tick, light manager (#21). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 4
+#define TSC_ABI_VERSION_MINOR 5
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -136,7 +138,9 @@ typedef enum {
   TSC_KIND_LANDMARK = 21,           /* issue #22 */
   TSC_KIND_TRAFFIC_LIGHT_LIST = 22, /* issue #22 */
   TSC_KIND_BONE_LIST = 23,          /* ABI 3.2 (#20): Walker.get_bones() result */
-  TSC_KIND_TRAFFIC_SIGN = 24        /* ABI 3.4 (#19); also an actor (a traffic light is also a sign) */
+  TSC_KIND_TRAFFIC_SIGN = 24,       /* ABI 3.4 (#19); also an actor (a traffic light is also a sign) */
+  TSC_KIND_LIGHT_MANAGER = 25,      /* ABI 3.5 (#21) */
+  TSC_KIND_TICK_LISTENER = 26       /* ABI 3.5 (#21): a World.on_tick registration */
 } tsc_handle_kind_t;
 
 typedef struct tsc_handle tsc_handle_t;
@@ -1581,6 +1585,223 @@ TSC_API tsc_status_t tsc_actor_as_traffic_sign(tsc_actor_t *actor, tsc_traffic_s
 TSC_API tsc_status_t tsc_traffic_sign_get_trigger_volume(tsc_traffic_sign_t *sign,
                                                          tsc_bounding_box_t *out);
 /* END GENERATED traffic_sign */
+
+/* ------------------------------------------------------------------------ */
+/* World queries, environment objects, lights, textures, on_tick (#21)      */
+/* ------------------------------------------------------------------------ */
+
+typedef struct tsc_light_manager tsc_light_manager_t;
+typedef struct tsc_tick_listener tsc_tick_listener_t;
+
+/* Lists the library allocates for the caller; free with the matching *_free
+ * (a no-op on a zeroed or already freed list). */
+
+typedef struct {
+  uint32_t actor_id;
+  uint32_t light_state; /* VehicleLightState bit flags */
+} tsc_vehicle_light_state_t;
+
+typedef struct {
+  tsc_vehicle_light_state_t *items;
+  size_t size;
+} tsc_vehicle_light_state_list_t;
+TSC_API void tsc_vehicle_light_state_list_free(tsc_vehicle_light_state_list_t *list);
+
+typedef struct {
+  tsc_bounding_box_t *items;
+  size_t size;
+} tsc_bounding_box_list_t;
+TSC_API void tsc_bounding_box_list_free(tsc_bounding_box_list_t *list);
+
+typedef struct {
+  uint64_t id;
+  tsc_string_t name;
+  tsc_transform_t transform;
+  tsc_bounding_box_t bounding_box;
+  int32_t type; /* CityObjectLabel */
+  int32_t reserved0;
+} tsc_environment_object_t;
+
+typedef struct {
+  tsc_environment_object_t *items;
+  size_t size;
+} tsc_environment_object_list_t;
+/* Also frees every name. */
+TSC_API void tsc_environment_object_list_free(tsc_environment_object_list_t *list);
+
+typedef struct {
+  tsc_location_t location;
+  int32_t label; /* CityObjectLabel */
+  int32_t reserved0;
+} tsc_labelled_point_t;
+
+typedef struct {
+  tsc_labelled_point_t *items;
+  size_t size;
+} tsc_labelled_point_list_t;
+TSC_API void tsc_labelled_point_list_free(tsc_labelled_point_list_t *list);
+
+/* BEGIN GENERATED world from bindings/world.yaml, do not edit */
+TSC_API tsc_status_t tsc_world_get_spectator(tsc_world_t *world, tsc_actor_t **out);
+/* *out = NULL (TSC_OK) when no traffic light has this OpenDRIVE signal id. */
+TSC_API tsc_status_t tsc_world_get_traffic_light_from_opendrive_id(
+    tsc_world_t *world, const char *traffic_light_id, size_t traffic_light_id_len,
+    tsc_traffic_light_t **out);
+/* *out = NULL (TSC_OK) when no traffic sign actor has the landmark's id. */
+TSC_API tsc_status_t tsc_world_get_traffic_sign(tsc_world_t *world,
+                                                const tsc_landmark_handle_t *landmark,
+                                                tsc_actor_t **out);
+/* *out = NULL (TSC_OK) when no traffic light actor has the landmark's id. */
+TSC_API tsc_status_t tsc_world_get_traffic_light(tsc_world_t *world,
+                                                 const tsc_landmark_handle_t *landmark,
+                                                 tsc_traffic_light_t **out);
+TSC_API tsc_status_t tsc_world_get_traffic_lights_from_waypoint(tsc_world_t *world,
+                                                                const tsc_waypoint_t *waypoint,
+                                                                double distance,
+                                                                tsc_traffic_light_list_t **out);
+/* An empty list for an id that names no junction (LibCarla would dereference NULL). */
+TSC_API tsc_status_t tsc_world_get_traffic_lights_in_junction(tsc_world_t *world,
+                                                              int32_t junction_id,
+                                                              tsc_traffic_light_list_t **out);
+TSC_API tsc_status_t tsc_world_freeze_all_traffic_lights(tsc_world_t *world, int32_t frozen);
+TSC_API tsc_status_t tsc_world_reset_all_traffic_lights(tsc_world_t *world);
+TSC_API tsc_status_t tsc_world_get_vehicles_light_states(tsc_world_t *world,
+                                                         tsc_vehicle_light_state_list_t *out);
+/* bb_type / object_type: a CityObjectLabel in [0, 255] (255 = Any). */
+TSC_API tsc_status_t tsc_world_get_level_bbs(tsc_world_t *world, int32_t bb_type,
+                                             tsc_bounding_box_list_t *out);
+TSC_API tsc_status_t tsc_world_get_environment_objects(tsc_world_t *world, int32_t object_type,
+                                                       tsc_environment_object_list_t *out);
+TSC_API tsc_status_t tsc_world_enable_environment_objects(
+    tsc_world_t *world, const uint64_t *env_objects_ids, size_t count, int32_t enable);
+TSC_API tsc_status_t tsc_world_get_names_of_all_objects(tsc_world_t *world, tsc_string_list_t *out);
+TSC_API tsc_status_t tsc_world_cast_ray(tsc_world_t *world, const tsc_location_t *initial_location,
+                                        const tsc_location_t *final_location,
+                                        tsc_labelled_point_list_t *out);
+/* *has_value = 0 when nothing is hit within search_distance. */
+TSC_API tsc_status_t tsc_world_project_point(tsc_world_t *world, const tsc_location_t *location,
+                                             const tsc_vector3d_t *direction,
+                                             double search_distance,
+                                             int32_t *has_value, tsc_labelled_point_t *out);
+TSC_API tsc_status_t tsc_world_ground_projection(tsc_world_t *world, const tsc_location_t *location,
+                                                 double search_distance,
+                                                 int32_t *has_value, tsc_labelled_point_t *out);
+/* map_layers: CARLA MapLayer bit flags. */
+TSC_API tsc_status_t tsc_world_load_map_layer(tsc_world_t *world, uint16_t map_layers);
+TSC_API tsc_status_t tsc_world_unload_map_layer(tsc_world_t *world, uint16_t map_layers);
+TSC_API tsc_status_t tsc_world_set_pedestrians_seed(tsc_world_t *world, uint32_t seed);
+TSC_API tsc_status_t tsc_world_set_pedestrians_cross_factor(tsc_world_t *world, double percentage);
+/* LibCarla ue5-dev only; TSC_ERROR with CARLA 0.10.0. */
+TSC_API tsc_status_t tsc_world_get_imu_sensor_gravity(tsc_world_t *world, double *out);
+TSC_API tsc_status_t tsc_world_set_imu_sensor_gravity(tsc_world_t *world, double gravity);
+/* names: count >= 1 object names; material_parameter: tsc_material_parameter_t. */
+TSC_API tsc_status_t tsc_world_apply_color_texture_to_objects(
+    tsc_world_t *world, const tsc_string_t *names, size_t count, int32_t material_parameter,
+    const tsc_texture_color_t *texture);
+TSC_API tsc_status_t tsc_world_apply_float_color_texture_to_objects(
+    tsc_world_t *world, const tsc_string_t *names, size_t count, int32_t material_parameter,
+    const tsc_texture_float_color_t *texture);
+TSC_API tsc_status_t tsc_world_apply_textures_to_objects(
+    tsc_world_t *world, const tsc_string_t *names, size_t count,
+    const tsc_texture_color_t *diffuse_texture, const tsc_texture_float_color_t *emissive_texture,
+    const tsc_texture_float_color_t *normal_texture,
+    const tsc_texture_float_color_t *ao_roughness_metallic_emissive_texture);
+TSC_API tsc_status_t tsc_world_get_light_manager(tsc_world_t *world, tsc_light_manager_t **out);
+/* END GENERATED world */
+
+/* --- Light manager (World::GetLightManager) ------------------------------------------ */
+
+typedef enum {
+  TSC_LIGHT_GROUP_NONE = 0,
+  TSC_LIGHT_GROUP_VEHICLE = 1,
+  TSC_LIGHT_GROUP_STREET = 2,
+  TSC_LIGHT_GROUP_BUILDING = 3,
+  TSC_LIGHT_GROUP_OTHER = 4
+} tsc_light_group_t;
+
+typedef struct {
+  uint32_t id;
+  uint32_t reserved0;
+  tsc_location_t location;
+} tsc_light_t;
+
+typedef struct {
+  tsc_light_t *items;
+  size_t size;
+} tsc_light_list_t;
+TSC_API void tsc_light_list_free(tsc_light_list_t *list);
+
+/* client::LightState. The server keeps no alpha: colors read back with 255. */
+typedef struct {
+  double intensity;
+  tsc_color_t color;
+  int32_t group; /* tsc_light_group_t */
+  int32_t active;
+  int32_t reserved0;
+} tsc_light_state_t;
+
+/* Bulk operations on `count` lights given by id; the value arrays have
+ * `count` entries. TSC_NOT_FOUND if an id is not a light of this manager.
+ * Every id and value is checked first: a failing call changes nothing.
+ * Changes reach the server at the next tick. */
+TSC_API tsc_status_t tsc_light_manager_get_light_states(tsc_light_manager_t *manager,
+                                                        const uint32_t *ids, size_t count,
+                                                        tsc_light_state_t *out);
+TSC_API tsc_status_t tsc_light_manager_set_active(tsc_light_manager_t *manager,
+                                                  const uint32_t *ids, size_t count,
+                                                  const int32_t *active);
+TSC_API tsc_status_t tsc_light_manager_set_color(tsc_light_manager_t *manager, const uint32_t *ids,
+                                                 size_t count, const tsc_color_t *colors);
+TSC_API tsc_status_t tsc_light_manager_set_intensity(tsc_light_manager_t *manager,
+                                                     const uint32_t *ids, size_t count,
+                                                     const double *intensities);
+TSC_API tsc_status_t tsc_light_manager_set_light_group(tsc_light_manager_t *manager,
+                                                       const uint32_t *ids, size_t count,
+                                                       const int32_t *groups);
+TSC_API tsc_status_t tsc_light_manager_set_light_state(tsc_light_manager_t *manager,
+                                                       const uint32_t *ids, size_t count,
+                                                       const tsc_light_state_t *states);
+/* BEGIN GENERATED light_manager from bindings/light_manager.yaml, do not edit */
+/* group: tsc_light_group_t; TSC_LIGHT_GROUP_NONE for every group. */
+TSC_API tsc_status_t tsc_light_manager_get_all_lights(tsc_light_manager_t *manager, int32_t group,
+                                                      tsc_light_list_t *out);
+TSC_API tsc_status_t tsc_light_manager_get_turned_on_lights(tsc_light_manager_t *manager,
+                                                            int32_t group, tsc_light_list_t *out);
+TSC_API tsc_status_t tsc_light_manager_get_turned_off_lights(tsc_light_manager_t *manager,
+                                                             int32_t group, tsc_light_list_t *out);
+TSC_API tsc_status_t tsc_light_manager_set_day_night_cycle(tsc_light_manager_t *manager,
+                                                           int32_t active);
+/* END GENERATED light_manager */
+
+/* --- on_tick ---------------------------------------------------------------------- */
+
+/* Registers a World::OnTick callback that only queues each tick's snapshot in
+ * the listener (at most queue_capacity, oldest dropped first; 0 = unbounded):
+ * no caller code runs on LibCarla's threads. Releasing the listener, or
+ * tsc_tick_listener_stop, removes the registration. */
+TSC_API tsc_status_t tsc_world_on_tick(tsc_world_t *world, size_t queue_capacity,
+                                       tsc_tick_listener_t **out);
+/* An opaque identity of the client connection (LibCarla's Simulator) the
+ * world belongs to: equal for every World of one Client, also across
+ * load_world. OnTick callback ids are unique per client, and a client's
+ * callbacks survive load_world. */
+TSC_API tsc_status_t tsc_world_get_client_token(tsc_world_t *world, uint64_t *out);
+/* LibCarla publishes a tick's state before it runs the OnTick callbacks, so
+ * World::Tick can return before the listener has queued that frame. Waits up
+ * to timeout_seconds until the listener has received a snapshot of frame
+ * >= `frame`; *out_reached = 0 on timeout (not an error). */
+TSC_API tsc_status_t tsc_tick_listener_wait_for_frame(const tsc_tick_listener_t *listener,
+                                                      uint64_t frame, double timeout_seconds,
+                                                      int32_t *out_reached);
+/* LibCarla's callback id (what World::RemoveOnTick takes). */
+TSC_API tsc_status_t tsc_tick_listener_get_id(const tsc_tick_listener_t *listener, uint64_t *out);
+TSC_API tsc_status_t tsc_tick_listener_pending_count(const tsc_tick_listener_t *listener,
+                                                     size_t *out);
+/* *out = NULL (TSC_OK) when the queue is empty. */
+TSC_API tsc_status_t tsc_tick_listener_poll(tsc_tick_listener_t *listener,
+                                            tsc_world_snapshot_t **out);
+/* Removes the registration and drops the queued snapshots. Idempotent. */
+TSC_API tsc_status_t tsc_tick_listener_stop(tsc_tick_listener_t *listener);
 
 #ifdef __cplusplus
 } /* extern "C" */
