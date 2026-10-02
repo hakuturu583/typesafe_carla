@@ -1035,7 +1035,7 @@ build-backend = "scikit_build_core.build"
 name = "typesafe-carla"
 version = "0.1.0"
 description = "A statically typed native CARLA client for Codon"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = ["typesafe-carla-toolchain==0.1.*"]
 
 [project.scripts]

@@ -7,7 +7,7 @@
 [project]
 name = "my-carla-project"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = ["typesafe-carla==0.1.*"]
 ```
 

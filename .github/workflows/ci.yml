@@ -16,9 +16,16 @@ on:
 jobs:
   test:
     # Mock backend: compile-pass/fail, runtime and launcher tests, no CARLA needed.
+    # Python only runs the launcher, build hook and dev tools: test the oldest
+    # and newest supported versions (requires-python >= 3.10).
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.14"]
     env:
       TSC_BACKEND: mock
+      UV_PYTHON: ${{ matrix.python }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -85,7 +92,7 @@ jobs:
         run: |
           mkdir "$RUNNER_TEMP/clean" && cp examples/connect.py "$RUNNER_TEMP/clean/"
           cd "$RUNNER_TEMP/clean"
-          uv venv
+          uv venv --python 3.10  # the oldest supported version is the riskiest
           uv pip install --find-links "$GITHUB_WORKSPACE/dist" typesafe-carla
           .venv/bin/typesafe-codon info
           .venv/bin/typesafe-codon run connect.py
