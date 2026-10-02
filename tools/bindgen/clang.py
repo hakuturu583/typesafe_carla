@@ -25,6 +25,7 @@ from clang import cindex
 from .spec import ROOT, Function, Spec
 
 SHIM_SOURCES = ROOT / "native" / "src"
+COMPAT_HEADER = (SHIM_SOURCES / "carla_compat.hpp").resolve()
 # LibCarla classes whose public methods the coverage report lists.
 COVERAGE_CLASSES = [
     "carla::client::Client", "carla::client::World", "carla::client::Map",
@@ -251,9 +252,21 @@ def _calls(tu: cindex.TranslationUnit, classes: set[str]) -> set[str]:
     """"Class::Method" for every method of `classes` the translation unit calls."""
     called = set()
     for node in tu.cursor.walk_preorder():
-        if node.kind != cindex.CursorKind.CALL_EXPR or node.referenced is None:
+        if node.kind != cindex.CursorKind.CALL_EXPR:
             continue
         ref = node.referenced
+        if ref is None:
+            # A dependent call in carla_compat.hpp, which picks between
+            # methods renamed across CARLA versions: only the name is known,
+            # and libclang leaves it unspelled (it is the member's last token).
+            f = node.location.file
+            if f and Path(f.name).resolve() == COMPAT_HEADER:
+                member = next((c for c in node.get_children()
+                               if c.kind == cindex.CursorKind.MEMBER_REF_EXPR), None)
+                tokens = list(member.get_tokens()) if member else []
+                if tokens and tokens[-1].kind == cindex.TokenKind.IDENTIFIER:
+                    called.add(f"*::{tokens[-1].spelling}")
+            continue
         if ref.kind == cindex.CursorKind.CXX_METHOD:
             cls = _qualified(ref.semantic_parent)
             if cls in classes:
@@ -304,7 +317,8 @@ def coverage(spec: Spec, build_dir: Path, output: Path | None) -> int:
         for name in names:
             key = f"{cls}::{name}"
             deprecated = all(m.deprecated for m in methods[name])
-            is_called = any(f"{m.cls}::{name}" in called for m in methods[name])
+            is_called = f"*::{name}" in called or any(f"{m.cls}::{name}" in called
+                                                       for m in methods[name])
             status = "generated" if key in generated else "hand-written" if is_called else "—"
             if status != "—":
                 cls_bound += 1
