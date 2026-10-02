@@ -28,7 +28,7 @@ Milestones (design section 43):
 | 0: proof of concept | ✅ verified against a CARLA 0.10.0 server |
 | 1: usable vehicle API | ✅ verified against a CARLA 0.10.0 server |
 | 2: sensors | ✅ verified against a CARLA 0.10.0 server |
-| 3: distribution | packaging and release workflows done; not yet published |
+| 3: distribution | ✅ release pipeline verified end to end (manylinux wheels from CI, clean-container `uv sync` → `build` → `./main` against a CARLA server); publishing to PyPI needs the one-time setup in [docs/releasing.md](docs/releasing.md) |
 | 4: broader compatibility | not started |
 | 5: binding generation | not started |
 
@@ -100,7 +100,10 @@ resolved commit are compiled in: `typesafe-codon info`,
 `typesafe-codon info` and `typesafe_carla.backend()` report which one you
 have.
 
-## Installation (once published)
+## Installation
+
+See [docs/usage.md](docs/usage.md) for using typesafe_carla from your own
+project. Once it is published:
 
 ```sh
 uv add typesafe-carla        # or: pip install typesafe-carla
@@ -108,11 +111,9 @@ uv run typesafe-codon run main.py
 ```
 
 `typesafe-carla` depends on `typesafe-carla-toolchain`, which bundles a
-pinned Codon, so no separate Codon install and no `CODON_PATH` setup is
-needed. To use a different CARLA ref than the published wheel's, build from
-the sdist: `CARLA_GIT_REF=<ref> pip install --no-binary typesafe-carla
-typesafe-carla`. See [docs/releasing.md](docs/releasing.md) for the release
-process.
+pinned Codon. Requirements and building for another CARLA ref are in
+[docs/usage.md](docs/usage.md); the release process is in
+[docs/releasing.md](docs/releasing.md).
 
 ## Testing against a real CARLA server
 

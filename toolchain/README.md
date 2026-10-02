@@ -9,8 +9,9 @@ automatically.
 |---|---|---|
 | 0.19.3 | [v0.19.3](https://github.com/exaloop/codon/releases/tag/v0.19.3) | Linux x86_64 (glibc ≥ 2.28) |
 
-`codon build` links executables with the system C compiler (`cc`), so one
-must be installed to produce executables; `codon run` does not need it.
+`codon build` links executables with the system C++ compiler (`g++`) and
+zlib (`-lz`), so they must be installed to produce executables; `codon run`
+does not need them.
 
 Codon is licensed under the Apache License 2.0 (bundled as
 `typesafe_carla_toolchain/codon/LICENSE`); its LLVM components under the

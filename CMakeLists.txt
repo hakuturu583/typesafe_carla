@@ -133,22 +133,18 @@ else()
     file(WRITE "${_tsc_sqlite_stub}/shell.c" "int main(void) { return 1; }\n")
     set(FETCHCONTENT_SOURCE_DIR_SQLITE3 "${_tsc_sqlite_stub}")
   endif()
-  # CARLA's Boost.Python handling with BUILD_PYTHON_API=OFF differs by ref.
-  # CARLA requires CMake >= 3.27 (CMP0126 NEW), so the normal variables set
-  # here shadow the cache entries CARLA's Dependencies.cmake writes.
+  # Boost.Python. CARLA requests it from Boost even with BUILD_PYTHON_API=OFF,
+  # which Boost rejects ("library 'python' has been explicitly requested, but
+  # BOOST_ENABLE_PYTHON is OFF"), and some refs (0.10.0) link carla-client
+  # against Boost::python unconditionally. The client sources only use
+  # Boost.Python under LIBCARLA_WITH_PYTHON_SUPPORT, which is never defined
+  # here, so: build Boost without it, and satisfy any such link with an empty
+  # target (unused on refs that do not link it). No Python headers or
+  # libpython are needed (manylinux has no libpython). CARLA requires
+  # CMake >= 3.27 (CMP0126 NEW), so the normal variable shadows the cache
+  # entry CARLA's Dependencies.cmake writes.
   file(READ "${TSC_CARLA_DIR}/CMake/Dependencies.cmake" _tsc_deps)
-  file(READ "${TSC_CARLA_DIR}/LibCarla/CMakeLists.txt" _tsc_libcarla_cmake)
-  if(_tsc_libcarla_cmake MATCHES "Boost::python")
-    # 0.10.0: carla-client links Boost::python unconditionally, so it must
-    # exist. Only Python headers are needed: the client sources never use
-    # Boost.Python, so no libpython symbols end up in our library.
-    set(BOOST_ENABLE_PYTHON ON)
-    message(STATUS "typesafe_carla: this CARLA ref links Boost::python into carla-client; "
-                   "enabling Boost.Python (needs Python development headers)")
-  elseif(_tsc_deps MATCHES "set \\([ \t\r\n]*BOOST_INCLUDED_PROJECTS([^)]*)\\)")
-    # ue5-dev: Boost.Python is requested but disabled, which Boost rejects
-    # ("library 'python' has been explicitly requested, but
-    # BOOST_ENABLE_PYTHON is OFF"). Pass CARLA's own list without "python".
+  if(_tsc_deps MATCHES "set \\([ \t\r\n]*BOOST_INCLUDED_PROJECTS([^)]*)\\)")
     string(REGEX REPLACE "[ \t\r\n]+" ";" _tsc_boost_libs "${CMAKE_MATCH_1}")
     list(FILTER _tsc_boost_libs EXCLUDE REGEX "^(python|)$")
     set(BOOST_INCLUDE_LIBRARIES "${_tsc_boost_libs}")
@@ -156,6 +152,26 @@ else()
   else()
     message(WARNING "typesafe_carla: could not read CARLA's Boost library list; "
                     "configuring Boost may fail on BOOST_ENABLE_PYTHON")
+  endif()
+  if(NOT TARGET Boost::python)
+    add_library(Boost::python INTERFACE IMPORTED)
+  endif()
+
+  # CARLA 0.10.0's carla/client/FileTransfer.h uses uint8_t without including
+  # <cstdint>; newer GCC (14, in the manylinux release image) no longer
+  # provides it transitively. Force-include it for CARLA and for the shim
+  # (which includes that header through Client.h). Harmless for other refs.
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(_tsc_include_cstdint "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>")
+    add_compile_options("${_tsc_include_cstdint}")
+    target_compile_options(typesafe_carla_ffi PRIVATE "${_tsc_include_cstdint}")
+  endif()
+
+  # CMake 4 removed compatibility with cmake_minimum_required < 3.5, which some
+  # of CARLA's dependencies (e.g. libpng in 0.10.0) still declare. ue5-dev sets
+  # this itself; older refs need it from us.
+  if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0" AND NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM)
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
   endif()
 
   add_subdirectory("${TSC_CARLA_DIR}" "${CMAKE_BINARY_DIR}/carla" EXCLUDE_FROM_ALL SYSTEM)
