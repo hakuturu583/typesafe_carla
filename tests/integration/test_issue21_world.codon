@@ -68,6 +68,7 @@ print("traffic lights ahead of 30 spawn points", ahead)
 assert ahead > 0
 
 lights = [a.as_traffic_light() for a in world.get_actors() if a.is_traffic_light()]
+assert len(lights) > 0  # otherwise the freeze checks pass vacuously
 world.freeze_all_traffic_lights(True)
 deadline = time.time() + 10.0  # is_frozen() reads the snapshot: the client sees it a few ticks later
 while not all(l.is_frozen() for l in lights) and time.time() < deadline:

@@ -111,11 +111,17 @@ try:
     off = client.apply_batch_sync([carla.command.SetAutopilot(ids[0], False, tm_port)])
     assert not off[0].has_error()
     world.wait_for_tick(10.0)
-    brake = client.apply_batch_sync(
-        [carla.command.ApplyVehicleControl(ids[0], carla.VehicleControl(brake=1.0))])
-    assert not brake[0].has_error()
-    for _ in range(10):
+    # A Traffic Manager cycle computed before the unregistration can still
+    # deliver its control after the brake (and control persists), so re-apply
+    # the brake until the snapshot shows it, bounded by wall-clock time.
+    deadline = time.time() + 10.0
+    while True:
+        brake = client.apply_batch_sync(
+            [carla.command.ApplyVehicleControl(ids[0], carla.VehicleControl(brake=1.0))])
+        assert not brake[0].has_error()
         world.wait_for_tick(10.0)
+        if abs(vehicle.get_control().brake - 1.0) < 1e-3 or time.time() > deadline:
+            break
     assert abs(vehicle.get_control().brake - 1.0) < 1e-3
 finally:
     cleanup = client.apply_batch_sync([carla.command.DestroyActor(i) for i in ids])
