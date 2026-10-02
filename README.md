@@ -70,7 +70,7 @@ Notes on Milestone 5:
   LibCarla client classes and whether the shim calls them (generated, hand-written or not yet).
 
 Notes on Milestone 2:
-- **No callbacks on LibCarla threads (design §15).** LibCarla's threads only fill a per-sensor queue. `listen(callback)` runs the callback on the program's own thread, at `World.tick()`, `World.wait_for_tick()`, `Client.apply_batch(_sync)(do_tick=True)` and `carla.dispatch_sensor_callbacks()`; its queue is unbounded by default. `listen()` / `listen(queue_size)` is polling mode: the program reads a bounded queue (64 by default) with `poll()` / `wait_for_data()`, and the oldest measurement is dropped when it is full (`dropped_count`). `queue_size=0` means unbounded in both modes. Call `stop()` (or destroy the sensor) when done.
+- **No callbacks on LibCarla threads (design §15).** LibCarla's threads only fill a per-sensor queue. `listen(callback)` runs the callback on the program's own thread, at `World.tick()`, `World.wait_for_tick()`, `Client.apply_batch(_sync)(do_tick=True)` and `carla.dispatch_sensor_callbacks()`; its queue is unbounded by default. `stop()`, `destroy()` (through any handle) and batch `DestroyActor` unregister it. `listen()` / `listen(queue_size)` is polling mode: the program reads a bounded queue (64 by default) with `poll()` / `wait_for_data()`, and the oldest measurement is dropped when it is full (`dropped_count`). `queue_size=0` means unbounded in both modes. Call `stop()` (or destroy the sensor) when done.
 - **Zero copy (design §16).** `Image.raw_data()` (BGRA) and `LidarMeasurement.raw_points()` point into LibCarla's buffer and stay valid while the measurement object is alive.
 - `World.spawn_actor(..., attach_to=...)` accepts any actor subclass (e.g. a `Vehicle`) or an `Optional` of one, and rejects non-actors at compile time.
 
@@ -236,14 +236,19 @@ Deliberate differences, all in favour of static checking:
   `SensorData` (convert it with `as_image()` etc.; a callback typed
   `(image: carla.Image)` does not compile) and runs on the program's own
   thread: inside `World.tick()`, `World.wait_for_tick()`,
-  `Client.apply_batch(_sync)(do_tick=True)` (after the server has answered),
-  or when the program calls `carla.dispatch_sensor_callbacks()`. A blocking
+  `Client.apply_batch_sync(..., do_tick=True)` (after the server has
+  answered), `Client.apply_batch(..., do_tick=True)` (right after sending: it
+  does not wait), or when the program calls
+  `carla.dispatch_sensor_callbacks()` (from one thread only). A blocking
   loop that never reaches one of these never sees its callbacks run. In
   synchronous mode a measurement of frame N may reach the client just after
   `tick()` returned N; it is then delivered at the next dispatch point, so
   call `dispatch_sensor_callbacks()` (in a short wait loop if needed) when a
   frame's data is required right after its tick. An exception raised by a
-  callback propagates out of the call that dispatched it. Callback mode
+  callback propagates out of the call that dispatched it, after the other
+  sensors' callbacks have run. `stop()`, `destroy()` through any handle, or a
+  batch `DestroyActor` unregisters the callback; stop or destroy callback
+  sensors before the program exits. Callback mode
   queues without bound by default (`listen(cb, queue_size=n)` bounds it);
   `poll()` / `wait_for_data()` are for polling mode only.
 * **Float precision.** Values cross into LibCarla as float32, as they do in

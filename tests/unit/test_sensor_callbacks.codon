@@ -200,9 +200,113 @@ def test_listen_modes():
     assert len(count) == 1
     camera.destroy()
 
+def test_raising_callback_does_not_starve_others():
+    a = spawn(lib.find("sensor.other.gnss"))
+    b = spawn(lib.find("sensor.other.imu"))
+    c = spawn(cam_bp)
+    got_b = List[int]()
+    got_c = List[int]()
+
+    def bad(data: carla.SensorData):
+        raise Boom(str(data.frame))
+
+    def also_bad(data: carla.SensorData):
+        got_c.append(data.frame)
+        raise Boom("second")
+    a.listen(bad)
+    b.listen(lambda data: got_b.append(data.frame))
+    c.listen(also_bad)
+    errors = 0
+    first = Optional[str]()
+    for i in range(10):
+        try:
+            f = world.tick()
+        except Boom as e:
+            errors += 1
+            if i == 0:
+                first = e.message
+    # Every tick raised the FIRST failing callback's exception; the other
+    # sensors were still drained on every pass, and nothing piles up.
+    assert errors == 10 and first is not None and first != "second"
+    assert len(got_b) == 10 and len(got_c) == 10
+    assert b.pending_count == 0 and c.pending_count == 0 and a.pending_count <= 1
+    for s in (a, b, c):
+        assert s.destroy()
+
+def test_destroy_through_any_handle():
+    # Through an Actor wrapper of the same handle.
+    frames = List[int]()
+    actor = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform(), attach_to=vehicle)
+    gnss = actor.as_sensor()
+    gnss.listen(lambda data: frames.append(data.frame))
+    raw_tick()
+    cleanup = List[carla.Actor]()
+    cleanup.append(actor)
+    for x in cleanup:
+        assert x.destroy()
+    assert not gnss.has_callback and gnss.pending_count == 0
+    carla.dispatch_sensor_callbacks()
+    assert len(frames) == 0
+
+    # Through another handle (world.get_actor), and a Sensor typed as Actor.
+    for how in range(2):
+        s = spawn(cam_bp)
+        s.listen(lambda data: frames.append(data.frame))
+        raw_tick()
+        if how == 0:
+            other = world.get_actor(s.id)
+            assert other is not None
+            assert other.destroy()
+        else:
+            as_actor: carla.Actor = s
+            assert as_actor.destroy()
+        assert not s.has_callback
+        world.tick()
+        assert len(frames) == 0
+
+    # Through batch DestroyActor, synchronous (on success) and asynchronous.
+    s1 = spawn(cam_bp)
+    s2 = spawn(cam_bp)
+    s1.listen(lambda data: frames.append(data.frame))
+    s2.listen(lambda data: frames.append(data.frame))
+    raw_tick()
+    responses = client.apply_batch_sync([carla.command.DestroyActor(s1.id)], True)
+    assert not responses[0].has_error()
+    assert not s1.has_callback and s2.has_callback
+    assert len(frames) == 2  # s2 only: the tick's frame and the raw one
+    client.apply_batch([carla.command.DestroyActor(s2.id)])
+    assert not s2.has_callback
+    world.tick()
+    assert len(frames) == 2
+
+    # A failing DestroyActor keeps the callback.
+    s3 = spawn(cam_bp)
+    s3.listen(lambda data: frames.append(data.frame))
+    responses = client.apply_batch_sync([carla.command.DestroyActor(s1.id),
+                                         carla.command.DestroyActor(s3.id)])
+    assert responses[0].has_error() and not responses[1].has_error()
+    assert not s3.has_callback
+
+    # One callback per sensor actor: listening through another handle replaces it.
+    s4 = spawn(cam_bp)
+    s4.listen(lambda data: frames.append(-1))
+    twin_actor = world.get_actor(s4.id)
+    assert twin_actor is not None
+    twin = twin_actor.as_sensor()
+    twin.listen(lambda data: frames.append(data.frame))
+    assert not s4.is_listening and twin.has_callback and s4.has_callback
+    n = len(frames)
+    world.tick()
+    assert len(frames) == n + 1 and frames[-1] != -1
+    s4.stop()  # stopping through any handle unregisters the callback
+    assert not twin.has_callback and not twin.is_listening
+    assert s4.destroy()
+
 test_callbacks_run_at_tick()
 test_unbounded_queue_and_order()
 test_bounded_callback_queue()
 test_exception_propagates()
 test_listen_modes()
+test_raising_callback_does_not_starve_others()
+test_destroy_through_any_handle()
 print("OK")

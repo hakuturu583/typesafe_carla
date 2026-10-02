@@ -22,6 +22,7 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_vehicle_get_speed_limit, tsc_vehicle_get_traffic_light_state,
                    tsc_vehicle_is_at_traffic_light)
 from .errors import _check, _check_light_state, _check_port, _normalize_index
+from ._callbacks import _unregister_callback
 from .geometry import BoundingBox, Location, Transform, Vector3D
 from .control import VehicleControl, VehiclePhysicsControl
 
@@ -126,9 +127,15 @@ class Actor:
         return Vector3D._from_c(out[0])
 
     def destroy(self) -> bool:
-        """Destroys the actor in the simulation. Returns False if it was already gone."""
+        """Destroys the actor in the simulation. Returns False if it was already gone.
+
+        For a sensor in callback mode, through any handle of it, this also
+        unregisters the callback and discards what it has not received.
+        """
+        actor_id = self.id
         out = Ptr[i32](1)
         _check(tsc_actor_destroy(self._h.ptr, out))
+        _unregister_callback(actor_id)
         return int(out[0]) != 0
 
     def is_vehicle(self) -> bool:

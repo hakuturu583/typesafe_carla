@@ -558,31 +558,48 @@ carla.dispatch_sensor_callbacks()     # e.g. in an asynchronous main loop
 ```
 
 - **Registry.** A Codon-side, process-wide list of the sensors in callback
-  mode, in registration order. A World handle does not know its sensors, so
-  every dispatch point drains every registered sensor. The registry holds a
-  reference to the Sensor, so the stream lives on without one in user code
-  (as in the Python API) until `stop()` or `destroy()` through that Sensor
-  unregisters it.
+  mode, in registration order, keyed by actor id (`_callbacks.codon`, which
+  `actor.codon` imports without depending on `sensor.codon`). A World handle
+  does not know its sensors, so every dispatch point drains every registered
+  sensor. The registry holds the listening sensor handle, so the stream lives
+  on without a reference in user code (as in the Python API) until it is
+  unregistered. There is one callback per sensor actor: listening through
+  another handle of the same actor replaces it. The registry is not
+  thread-safe; register, stop and dispatch from one thread.
 - **Order.** Per sensor, measurements are delivered in arrival order. Sensors
   are visited in registration order. One dispatch delivers only what was
   queued when the sensor's turn began (`tsc_sensor_pending_count`), so it
   returns even when a sensor produces data faster than its callback runs.
-- **When.** Tick-like calls dispatch after the server has answered. In
+- **When.** `World.tick()`, `World.wait_for_tick()` and
+  `Client.apply_batch_sync(..., do_tick=True)` dispatch after the server has
+  answered; `Client.apply_batch(..., do_tick=True)` is fire-and-forget and
+  dispatches right after sending, so it only delivers what had already
+  arrived. In
   synchronous mode a measurement of frame N can reach the client just after
   `tick()` returned N; it is delivered at the next dispatch point, or by an
   explicit `dispatch_sensor_callbacks()`.
 - **Queue.** Callback mode uses an unbounded queue by default (capacity 0 at
   the C ABI) so no measurement is lost; `listen(cb, queue_size=n)` bounds it
   and drops the oldest. Polling mode keeps its bounded default (64).
-- **Errors.** An exception raised by a callback propagates to the caller of
-  the dispatching call (after the simulation has advanced, for `tick()`). The
-  measurements not yet delivered stay queued. A dispatch started from inside
+- **Errors.** If a callback raises, the pass still visits every other
+  sensor (so one failing callback cannot starve the rest or let their
+  unbounded queues grow), then the first exception propagates to the caller
+  of the dispatching call (after the simulation has advanced, for `tick()`);
+  later exceptions of the same pass are dropped. The raising sensor's
+  undelivered measurements stay queued. A dispatch started from inside
   a callback (e.g. a callback that ticks) does nothing, so callbacks never
   nest.
-- **Lifetime.** `stop()` and `destroy()` unregister the callback and discard
-  what it has not received; later measurements are never delivered.
-  Destroying the actor through another handle (e.g. a batch `DestroyActor`)
-  does not unregister it; the entry then just stays empty.
+- **Lifetime.** `stop()` or `destroy()` through any handle of the sensor
+  actor (a `Sensor`, an `Actor`, a `world.get_actor(id)` handle), and a batch
+  `DestroyActor` of its id (`apply_batch_sync`: when its response succeeds;
+  `apply_batch`: always, as there is no response), unregister the callback,
+  stop its stream and discard what it has not received; later measurements
+  are never delivered. Native calls come first, so a failing `stop()` or
+  `destroy()` leaves the callback registered and its queue drained. If
+  `listen()` fails in LibCarla, the previous callback is gone and none is
+  registered. Callbacks still registered at program exit are not released
+  explicitly (Codon has no `atexit`); stop or destroy sensors before exiting,
+  as with polling sensors.
 - **Exclusive modes.** `poll()` / `wait_for_data()` raise `CarlaError` on a
   sensor in callback mode, so the two consumers never compete for the queue.
 

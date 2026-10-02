@@ -14,8 +14,10 @@
 #     world.tick()                          # runs the queued callbacks
 #
 # Callbacks run only inside World.tick(), World.wait_for_tick(),
-# Client.apply_batch(_sync)(do_tick=True) (after the call has returned from
-# the server) and dispatch_sensor_callbacks().
+# Client.apply_batch_sync(do_tick=True) (after the server has answered),
+# Client.apply_batch(do_tick=True) (after sending; it does not wait) and
+# dispatch_sensor_callbacks(). The registry and dispatcher live in
+# _callbacks.codon.
 #
 # Typed measurements keep their SensorData (and so the native buffer) alive.
 
@@ -32,6 +34,8 @@ from .errors import _check, CarlaError, _normalize_index
 from .geometry import Location, Transform, Vector3D
 from .blueprint import Color
 from .actor import Actor
+from ._callbacks import (_register_callback, _unregister_callback, _find_callback, _pop,
+                         dispatch_sensor_callbacks)
 
 class SensorDataType:
     Other: ClassVar[int] = 0
@@ -266,8 +270,8 @@ class _CallbackThunk[F]:
     def __init__(self, f: F):
         self.f = f
 
-    def run(self, data: SensorData):
-        self.f(data)
+    def run(self, data: cobj):
+        self.f(SensorData(Handle(data)))
 
 class Sensor(Actor):
     def __init__(self, h: Handle):
@@ -285,11 +289,14 @@ class Sensor(Actor):
         ignored. It runs on the program's thread, never on a LibCarla thread:
         in World.tick(), World.wait_for_tick(), Client.apply_batch(_sync) with
         do_tick=True, and dispatch_sensor_callbacks(). The queue is unbounded
-        by default; pass queue_size to drop the oldest beyond that.
+        by default; pass queue_size to drop the oldest beyond that. stop(),
+        destroy() through any handle of the actor, or a batch DestroyActor
+        unregisters the callback.
 
         queue_size 0 means unbounded in both modes. Listening again replaces
         the previous stream, callback and queue (pending measurements are
-        discarded).
+        discarded). One callback per sensor actor: listening through another
+        handle of the same actor replaces it too.
         """
         if isinstance(callback, int):
             if queue_size is not None:
@@ -298,47 +305,30 @@ class Sensor(Actor):
         elif callback is None:
             self._start(queue_size if queue_size is not None else 64)
         else:
-            cb: Callable[[SensorData], None] = _CallbackThunk(callback).run
+            cb: Callable[[cobj], None] = _CallbackThunk(callback).run
             self._start(queue_size if queue_size is not None else 0)
-            _listeners.append(_Listener(self, cb))
+            _register_callback(self.id, self._h, cb)
 
     def _start(self, queue_size: int):
-        """Replaces the stream and drops any previous callback (the caller
-        registers the new one)."""
+        """Drops any previous callback, then replaces the stream (the caller
+        registers the new callback). If LibCarla fails, no callback is left."""
         if queue_size < 0:
             raise CarlaError("queue_size must be 0 (unbounded) or positive",
                              TSC_INVALID_ARGUMENT)
+        _unregister_callback(self.id)
         _check(tsc_sensor_listen(self._h.ptr, queue_size))
-        _unregister_callback(self)
 
     def stop(self):
-        """Stops the stream. In callback mode, unregisters the callback and
-        discards the measurements it has not received yet."""
-        had_callback = _unregister_callback(self)
+        """Stops the stream. In callback mode, also unregisters the callback
+        and discards the measurements it has not received yet."""
         _check(tsc_sensor_stop(self._h.ptr))
-        if had_callback:
-            self._discard_pending()
-
-    def destroy(self) -> bool:
-        """Unregisters the callback (if any), then destroys the actor."""
-        if _unregister_callback(self):
-            self._discard_pending()
-        return super().destroy()
-
-    def _discard_pending(self):
-        while True:
-            data = self._pop()
-            if data is None:
-                break
-            data._h.release()  # now, not at GC: it may own a large buffer
+        _unregister_callback(self.id)
 
     def _pop(self) -> Optional[SensorData]:
-        """The oldest queued measurement, or None, in either mode."""
-        out = Ptr[cobj](1)
-        _check(tsc_sensor_poll(self._h.ptr, out))
-        if out[0] == cobj():
+        p = _pop(self._h)
+        if p == cobj():
             return None
-        return SensorData(Handle(out[0]))
+        return SensorData(Handle(p))
 
     @property
     def is_listening(self) -> bool:
@@ -348,8 +338,8 @@ class Sensor(Actor):
 
     @property
     def has_callback(self) -> bool:
-        """True in callback mode (listen(callback) and not stopped since)."""
-        return _find_callback(self) >= 0
+        """True in callback mode (listen(callback), not stopped or destroyed since)."""
+        return _find_callback(self.id) >= 0
 
     @property
     def dropped_count(self) -> int:
@@ -384,76 +374,6 @@ class Sensor(Actor):
 
     def __repr__(self) -> str:
         return f"Sensor(id={self.id}, type={self.type_id})"
-
-# Callback registry. Codon-side and process-wide: a World handle does not know
-# its sensors, so every dispatch point drains every registered sensor. The
-# registry holds a reference to the Sensor, so a callback keeps the stream
-# alive (as in the Python API) until stop() or destroy().
-class _Listener:
-    sensor: Sensor
-    callback: Callable[[SensorData], None]
-    active: bool  # False once unregistered (the list may be iterated meanwhile)
-
-    def __init__(self, sensor: Sensor, callback: Callable[[SensorData], None]):
-        self.sensor = sensor
-        self.callback = callback
-        self.active = True
-
-_listeners = List[_Listener]()  # in registration order
-_dispatching = False
-
-def _find_callback(sensor: Sensor) -> int:
-    for i in range(len(_listeners)):
-        if _listeners[i].sensor._h.ptr == sensor._h.ptr:
-            return i
-    return -1
-
-def _unregister_callback(sensor: Sensor) -> bool:
-    i = _find_callback(sensor)
-    if i < 0:
-        return False
-    _listeners[i].active = False
-    _listeners.pop(i)
-    return True
-
-def dispatch_sensor_callbacks() -> int:
-    """Runs the callbacks of every sensor in callback mode on the queued
-    measurements, and returns how many callbacks ran.
-
-    Sensors are visited in the order their callbacks were registered; each
-    sensor's measurements are delivered in arrival order. Only measurements
-    already queued when a sensor's turn starts are delivered, so a call always
-    returns. Never blocks.
-
-    World.tick(), World.wait_for_tick() and Client.apply_batch(_sync) with
-    do_tick=True call this after the server answers. Call it yourself in
-    asynchronous mode, or to deliver data that arrived after a tick returned.
-
-    An exception raised by a callback propagates to the caller (e.g. out of
-    World.tick(), after the simulation has advanced); the measurements not yet
-    delivered stay queued for the next dispatch. A dispatch started from
-    inside a callback (e.g. a callback that ticks) does nothing and returns 0.
-    """
-    global _dispatching
-    if _dispatching or len(_listeners) == 0:
-        return 0
-    _dispatching = True
-    count = 0
-    try:
-        for listener in list(_listeners):  # callbacks may stop or listen
-            if not listener.active:
-                continue
-            for _ in range(listener.sensor.pending_count):
-                if not listener.active:
-                    break
-                data = listener.sensor._pop()
-                if data is None:
-                    break
-                listener.callback(data.__val__())
-                count += 1
-    finally:
-        _dispatching = False
-    return count
 
 @extend
 class Actor:

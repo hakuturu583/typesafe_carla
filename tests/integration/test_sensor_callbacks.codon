@@ -133,10 +133,20 @@ try:
     print("async images", len(async_frames))
     assert all(async_frames[i] < async_frames[i + 1] for i in range(len(async_frames) - 1))
 
-    # destroy() unregisters too.
-    for s in (camera, gnss, imu):
-        assert s.destroy()
-        assert not s.has_callback
+    # Destroying through any handle unregisters: the Sensor itself, another
+    # handle of the actor, and a batch DestroyActor.
+    assert camera.destroy()
+    assert not camera.has_callback
+    other = world.get_actor(gnss.id)
+    assert other is not None and other.destroy()
+    assert not gnss.has_callback
+    responses = client.apply_batch_sync([carla.command.DestroyActor(imu.id)])
+    assert not responses[0].has_error() and not imu.has_callback
+    n_alt = len(counter.altitudes)
+    n_g = len(counter.gravity)
+    for _ in range(3):
+        world.wait_for_tick()
+    assert len(counter.altitudes) == n_alt and len(counter.gravity) == n_g
     spawned = [ego.id]
 finally:
     world.apply_settings(original)

@@ -11,7 +11,7 @@ from .actor import Actor, ActorList, _make_actor
 from .blueprint import ActorBlueprint, BlueprintLibrary
 from .map import Map
 from .snapshot import WorldSnapshot
-from .sensor import dispatch_sensor_callbacks
+from ._callbacks import dispatch_sensor_callbacks
 
 class WorldSettings:
     synchronous_mode: bool
