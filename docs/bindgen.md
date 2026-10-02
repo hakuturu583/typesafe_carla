@@ -106,7 +106,7 @@ Two kinds of types in `types.yaml` go beyond a single value (issue #22):
 - **Handle outputs.** An output type with `handle: true` creates a new handle
   from the LibCarla result: its `from_carla` is the expression, e.g.
   `"new tsc_landmark_list(without_nulls({}))"` for a list, or
-  `"waypoint_or_null({})"` for an optional object (NULL means "none"). The C
+  `"new_or_null<tsc_waypoint>({})"` for an optional object (NULL means "none"). The C
   function returns it through `T **out`, and the body runs inside
   `new_handle`, so `*out` is NULL whenever the call fails:
 
@@ -120,7 +120,8 @@ Two kinds of types in `types.yaml` go beyond a single value (issue #22):
   tsc_status_t tsc_map_get_waypoint_xodr(const tsc_map_t *map, uint32_t road_id, int32_t lane_id,
                                          double s, tsc_waypoint_t **out) {
     return new_handle(__func__, out, [&] {
-      return waypoint_or_null(map_of(map).GetWaypointXODR(road_id, lane_id, check_finite(s, "s")));
+      return new_or_null<tsc_waypoint>(
+          map_of(map).GetWaypointXODR(road_id, lane_id, check_finite(s, "s")));
     });
   }
   ```
@@ -155,8 +156,32 @@ Two kinds of types in `types.yaml` go beyond a single value (issue #22):
   `{name}`), so a function can have at most one buffer or optional output:
   two would declare the same C parameter twice.
 
-A handle *input* (`handle: true` without `from_carla`, e.g. `vehicle`,
-`landmark`) converts with `to_carla` as before.
+A handle *input* (`handle: true` with `to_carla`, e.g. `vehicle`, `landmark`)
+converts with `to_carla` as before. A handle type's `codon` defaults to `cobj`,
+and an output's `from_carla` to a new handle of the result (`c: tsc_world_t`:
+`new tsc_world({})`).
+
+### List accessors
+
+`bindings/lists.yaml` gives one line per list handle. Each entry generates
+`size_t tsc_<list>_size` (0 for NULL or another kind of handle) and one element
+getter per output type, which fails with TSC_NOT_FOUND past the end
+(`list_at` in `internal.hpp`):
+
+```yaml
+waypoint_list: {items: "{}->waypoints", what: waypoint list, get: waypoint_handle}
+```
+```cpp
+tsc_status_t tsc_waypoint_list_get(const tsc_waypoint_list_t *list, size_t index,
+                                   tsc_waypoint_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint(non_null(list_at(check_handle(list, "list", TSC_KIND_WAYPOINT_LIST)
+                                                 ->waypoints, index, "waypoint list"), "waypoint"));
+  });
+}
+```
+
+They call no LibCarla method, so `validate` and `coverage` skip them.
 
 A call that differs between LibCarla versions names a `carla_compat.hpp`
 helper with `via`; the function then calls `via(self, args...)`, and
@@ -241,7 +266,7 @@ If the new C function is a handle check, conversions and a single LibCarla call:
 Validation and conversions belong in the type, not in a hand-written
 function: a struct input converts and validates in its `to_carla` overload
 (`vehicle_control`, `walker_control`, `opendrive_parameters`), a checked
-scalar names a `check_*` helper (`positive`, `step_distance`, `timeout`), and
+scalar names a `check_*` helper (`positive`, `timeout`), and
 an output the caller may omit is `nullable_bool` (`store_if`).
 
 Anything more involved stays hand-written in `native/src/*.cpp` (issue #31
@@ -254,8 +279,6 @@ reviewed every remaining function):
   Traffic Manager actions, geo projections);
 - all-or-nothing validation of many values (batches, light manager setters,
   physics control);
-- handle conversions and list accessors, which call no LibCarla method
-  (`tsc_actor_as_*`, `tsc_*_list_size` / `_get`), handle lifetime, errors and
-  versions;
+- handle conversions (`tsc_actor_as_*`), handle lifetime, errors and versions;
 - lookups whose not-found error names the argument (`tsc_world_get_actor`,
   `tsc_blueprint_library_find`, `tsc_world_snapshot_find`).

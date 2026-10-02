@@ -25,21 +25,6 @@ tsc_world_snapshot::tsc_world_snapshot(carla::client::WorldSnapshot s)
 
 extern "C" {
 
-size_t tsc_world_snapshot_size(const tsc_world_snapshot_t *s) {
-  if (s == nullptr || s->kind != TSC_KIND_WORLD_SNAPSHOT) return 0;
-  return s->actors.size();
-}
-
-tsc_status_t tsc_world_snapshot_get(const tsc_world_snapshot_t *s, size_t index,
-                                    tsc_actor_snapshot_t *out) {
-  return TSC_GUARD({
-    require_ptr(out, "out");
-    const auto &actors = check_handle(s, "snapshot", TSC_KIND_WORLD_SNAPSHOT)->actors;
-    check_index(index, actors.size(), "snapshot");
-    *out = actors[index];
-  });
-}
-
 tsc_status_t tsc_world_snapshot_find(const tsc_world_snapshot_t *s, uint32_t actor_id,
                                      tsc_actor_snapshot_t *out) {
   return TSC_GUARD({

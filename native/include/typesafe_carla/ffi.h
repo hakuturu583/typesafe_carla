@@ -277,9 +277,11 @@ TSC_API tsc_status_t tsc_world_apply_settings(tsc_world_t *world,
 /* Actor list                                                               */
 /* ------------------------------------------------------------------------ */
 
+/* BEGIN GENERATED actor_list_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_actor_list_size(const tsc_actor_list_t *list);
 TSC_API tsc_status_t tsc_actor_list_get(const tsc_actor_list_t *list, size_t index,
                                         tsc_actor_t **out_actor);
+/* END GENERATED actor_list_items */
 /* BEGIN GENERATED actor_list from bindings/actor_list.yaml, do not edit */
 TSC_API tsc_status_t tsc_actor_list_filter(const tsc_actor_list_t *list,
                                            const char *pattern, size_t pattern_len,
@@ -329,9 +331,11 @@ TSC_API tsc_status_t tsc_vehicle_set_autopilot(tsc_vehicle_t *vehicle, int32_t e
 /* Blueprints                                                               */
 /* ------------------------------------------------------------------------ */
 
+/* BEGIN GENERATED blueprint_library_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_blueprint_library_size(const tsc_blueprint_library_t *library);
-TSC_API tsc_status_t tsc_blueprint_library_get(const tsc_blueprint_library_t *library,
-                                               size_t index, tsc_actor_blueprint_t **out);
+TSC_API tsc_status_t tsc_blueprint_library_get(const tsc_blueprint_library_t *library, size_t index,
+                                               tsc_actor_blueprint_t **out);
+/* END GENERATED blueprint_library_items */
 /* TSC_NOT_FOUND if no blueprint has this id. */
 TSC_API tsc_status_t tsc_blueprint_library_find(const tsc_blueprint_library_t *library,
                                                 const char *id, size_t id_len,
@@ -407,10 +411,11 @@ TSC_API tsc_status_t tsc_world_snapshot_get_id(const tsc_world_snapshot_t *snaps
 TSC_API tsc_status_t tsc_world_snapshot_get_timestamp(const tsc_world_snapshot_t *snapshot,
                                                       tsc_timestamp_t *out);
 /* END GENERATED world_snapshot */
-TSC_API size_t tsc_world_snapshot_size(const tsc_world_snapshot_t *s);
-/* By position, 0 <= index < size. */
-TSC_API tsc_status_t tsc_world_snapshot_get(const tsc_world_snapshot_t *s, size_t index,
+/* BEGIN GENERATED world_snapshot_items from bindings/lists.yaml, do not edit */
+TSC_API size_t tsc_world_snapshot_size(const tsc_world_snapshot_t *snapshot);
+TSC_API tsc_status_t tsc_world_snapshot_get(const tsc_world_snapshot_t *snapshot, size_t index,
                                             tsc_actor_snapshot_t *out);
+/* END GENERATED world_snapshot_items */
 /* TSC_NOT_FOUND if the actor is not in the snapshot. */
 TSC_API tsc_status_t tsc_world_snapshot_find(const tsc_world_snapshot_t *s, uint32_t actor_id,
                                              tsc_actor_snapshot_t *out);
@@ -463,9 +468,11 @@ TSC_API tsc_status_t tsc_waypoint_previous_until_lane_start(const tsc_waypoint_t
                                                             double distance,
                                                             tsc_waypoint_list_t **out);
 /* END GENERATED waypoint_navigation */
+/* BEGIN GENERATED waypoint_list_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_waypoint_list_size(const tsc_waypoint_list_t *list);
 TSC_API tsc_status_t tsc_waypoint_list_get(const tsc_waypoint_list_t *list, size_t index,
                                            tsc_waypoint_t **out);
+/* END GENERATED waypoint_list_items */
 
 /* --- Physics control ------------------------------------------------------ */
 
@@ -877,6 +884,7 @@ typedef struct tsc_walker_ai_controller tsc_walker_ai_controller_t; /* also an a
 typedef struct tsc_traffic_light tsc_traffic_light_t;     /* also an actor */
 typedef struct tsc_traffic_manager tsc_traffic_manager_t;
 typedef struct tsc_landmark_list tsc_landmark_list_t;
+typedef struct tsc_landmark_handle tsc_landmark_handle_t; /* one landmark */
 typedef struct tsc_junction tsc_junction_t;
 
 /* --- More actor operations ----------------------------------------------- */
@@ -1110,9 +1118,13 @@ TSC_API tsc_status_t tsc_map_get_landmarks_of_type(const tsc_map_t *map,
                                                    const char *type, size_t type_len,
                                                    tsc_landmark_list_t **out);
 /* END GENERATED map_landmarks */
+/* BEGIN GENERATED landmark_list_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_landmark_list_size(const tsc_landmark_list_t *list);
 TSC_API tsc_status_t tsc_landmark_list_get(const tsc_landmark_list_t *list, size_t index,
                                            tsc_landmark_t *out);
+TSC_API tsc_status_t tsc_landmark_list_get_landmark(const tsc_landmark_list_t *list, size_t index,
+                                                    tsc_landmark_handle_t **out);
+/* END GENERATED landmark_list_items */
 
 /* BEGIN GENERATED waypoint_junction from bindings/waypoint.yaml, do not edit */
 /* *out = NULL (TSC_OK) when the waypoint is not in a junction. */
@@ -1151,7 +1163,6 @@ TSC_API tsc_status_t tsc_lane_invasion_event_get_crossed_lane_markings(
 
 /* --- Issue #22: geo-reference, XODR waypoints, landmarks, traffic light geometry --- */
 
-typedef struct tsc_landmark_handle tsc_landmark_handle_t; /* one landmark */
 typedef struct tsc_traffic_light_list tsc_traffic_light_list_t;
 
 typedef struct {
@@ -1216,10 +1227,6 @@ TSC_API tsc_status_t tsc_map_geolocation_to_transform(const tsc_map_t *map,
  * TSC_ERROR when the file cannot be written. */
 TSC_API tsc_status_t tsc_map_save_to_disk(const tsc_map_t *map, const char *path, size_t path_len);
 
-/* One landmark of a list as a handle (waypoint, lane validities, groups). */
-TSC_API tsc_status_t tsc_landmark_list_get_landmark(const tsc_landmark_list_t *list, size_t index,
-                                                    tsc_landmark_handle_t **out);
-
 typedef struct {
   int32_t from_lane;
   int32_t to_lane;
@@ -1267,9 +1274,11 @@ TSC_API tsc_status_t tsc_waypoint_get_landmarks_of_type(const tsc_waypoint_t *wa
 
 /* Traffic light geometry. The waypoint and light lists skip null entries
  * (LibCarla returns them for lanes or actors that do not exist). */
+/* BEGIN GENERATED traffic_light_list_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_traffic_light_list_size(const tsc_traffic_light_list_t *list);
 TSC_API tsc_status_t tsc_traffic_light_list_get(const tsc_traffic_light_list_t *list, size_t index,
                                                 tsc_traffic_light_t **out);
+/* END GENERATED traffic_light_list_items */
 /* BEGIN GENERATED traffic_light_geometry from bindings/traffic_light.yaml, do not edit */
 TSC_API tsc_status_t tsc_traffic_light_get_opendrive_id(tsc_traffic_light_t *light,
                                                         tsc_string_t *out);
@@ -1531,10 +1540,11 @@ typedef struct tsc_bone_list tsc_bone_list_t;
 /* BEGIN GENERATED walker_bone_list from bindings/walker.yaml, do not edit */
 TSC_API tsc_status_t tsc_walker_get_bones(tsc_walker_t *walker, tsc_bone_list_t **out);
 /* END GENERATED walker_bone_list */
+/* BEGIN GENERATED bone_list_items from bindings/lists.yaml, do not edit */
 TSC_API size_t tsc_bone_list_size(const tsc_bone_list_t *list);
-/* TSC_NOT_FOUND when index >= size. */
 TSC_API tsc_status_t tsc_bone_list_get(const tsc_bone_list_t *list, size_t index,
                                        tsc_bone_transform_out_t *out);
+/* END GENERATED bone_list_items */
 
 /* ------------------------------------------------------------------------ */
 /* Issue #23: Client, Traffic Manager, blueprint, debug and value-type gaps  */

@@ -4,15 +4,15 @@ prefix: waypoint
 self: {type: const tsc_waypoint_t, name: waypoint, get: waypoint_of}
 blocks:
   waypoint_navigation:
-    next: {call: GetNext, args: {distance: step_distance}, out: waypoint_list}
-    previous: {call: GetPrevious, args: {distance: step_distance}, out: waypoint_list}
+    next: {call: GetNext, args: {distance: positive}, out: waypoint_list}
+    previous: {call: GetPrevious, args: {distance: positive}, out: waypoint_list}
     next_until_lane_end:
       call: GetNextUntilLaneEnd
-      args: {distance: step_distance}
+      args: {distance: positive}
       out: waypoint_list
     previous_until_lane_start:
       call: GetPreviousUntilLaneStart
-      args: {distance: step_distance}
+      args: {distance: positive}
       out: waypoint_list
   waypoint_junction:
     get_junction:

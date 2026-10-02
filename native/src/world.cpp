@@ -1,5 +1,5 @@
 // World: the hand-written part (not-found errors naming the id, settings
-// read-modify-write, actor list accessors, weather presets). The rest is
+// read-modify-write, weather presets). The rest is
 // generated (bindings/world.yaml, debug.yaml).
 #include "internal.hpp"
 
@@ -89,26 +89,6 @@ tsc_status_t tsc_world_apply_settings_ext(tsc_world_t *world, const tsc_world_se
       s.spectator_as_ego = ext->spectator_as_ego != 0;
     }
     *out_frame = w.ApplySettings(s, seconds_to_duration(timeout_seconds));
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Actor list
-// ---------------------------------------------------------------------------
-
-size_t tsc_actor_list_size(const tsc_actor_list_t *list) {
-  if (list == nullptr || list->kind != TSC_KIND_ACTOR_LIST) return 0;
-  return list->list->size();
-}
-
-tsc_status_t tsc_actor_list_get(const tsc_actor_list_t *list, size_t index,
-                                tsc_actor_t **out_actor) {
-  return TSC_GUARD({
-    require_ptr(out_actor, "out_actor");
-    *out_actor = nullptr;
-    const auto &l = check_handle(list, "list", TSC_KIND_ACTOR_LIST)->list;
-    check_index(index, l->size(), "actor list");
-    *out_actor = make_actor_handle(l->at(index));
   });
 }
 

@@ -260,7 +260,22 @@ int main(void) {
   expect_null_rejected(tsc_world_get_light_manager(NULL, (tsc_light_manager_t *[1]){NULL}), "tsc_world_get_light_manager");
   expect_null_rejected(tsc_world_snapshot_get_id(NULL, NULL), "tsc_world_snapshot_get_id");
   expect_null_rejected(tsc_world_snapshot_get_timestamp(NULL, NULL), "tsc_world_snapshot_get_timestamp");
+  if (tsc_actor_list_size(NULL) != 0) { fputs("tsc_actor_list_size(NULL)\n", stderr); ++g_failures; }
+  expect_null_rejected(tsc_actor_list_get(NULL, 0, (tsc_actor_t *[1]){NULL}), "tsc_actor_list_get");
+  if (tsc_blueprint_library_size(NULL) != 0) { fputs("tsc_blueprint_library_size(NULL)\n", stderr); ++g_failures; }
+  expect_null_rejected(tsc_blueprint_library_get(NULL, 0, (tsc_actor_blueprint_t *[1]){NULL}), "tsc_blueprint_library_get");
+  if (tsc_bone_list_size(NULL) != 0) { fputs("tsc_bone_list_size(NULL)\n", stderr); ++g_failures; }
+  expect_null_rejected(tsc_bone_list_get(NULL, 0, NULL), "tsc_bone_list_get");
+  if (tsc_landmark_list_size(NULL) != 0) { fputs("tsc_landmark_list_size(NULL)\n", stderr); ++g_failures; }
+  expect_null_rejected(tsc_landmark_list_get(NULL, 0, NULL), "tsc_landmark_list_get");
+  expect_null_rejected(tsc_landmark_list_get_landmark(NULL, 0, (tsc_landmark_handle_t *[1]){NULL}), "tsc_landmark_list_get_landmark");
+  if (tsc_traffic_light_list_size(NULL) != 0) { fputs("tsc_traffic_light_list_size(NULL)\n", stderr); ++g_failures; }
+  expect_null_rejected(tsc_traffic_light_list_get(NULL, 0, (tsc_traffic_light_t *[1]){NULL}), "tsc_traffic_light_list_get");
+  if (tsc_waypoint_list_size(NULL) != 0) { fputs("tsc_waypoint_list_size(NULL)\n", stderr); ++g_failures; }
+  expect_null_rejected(tsc_waypoint_list_get(NULL, 0, (tsc_waypoint_t *[1]){NULL}), "tsc_waypoint_list_get");
+  if (tsc_world_snapshot_size(NULL) != 0) { fputs("tsc_world_snapshot_size(NULL)\n", stderr); ++g_failures; }
+  expect_null_rejected(tsc_world_snapshot_get(NULL, 0, NULL), "tsc_world_snapshot_get");
   if (g_failures != 0) return 1;
-  printf("test_generated: 240 generated functions reject NULL handles\n");
+  printf("test_generated: 255 generated functions reject NULL handles\n");
   return 0;
 }

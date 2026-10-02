@@ -26,7 +26,7 @@ def generate(check: bool) -> int:
         print(f"\n{len(stale)} generated file(s) out of date; run: {emit.REGENERATE}", file=sys.stderr)
         return 1
     verb = "up to date" if check else f"wrote {len(stale)} file(s)"
-    print(f"bindgen: {len(spec.functions)} functions, {verb}")
+    print(f"bindgen: {len(spec.generated())} functions, {verb}")
     return 0
 
 

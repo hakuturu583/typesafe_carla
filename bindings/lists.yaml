@@ -1,0 +1,18 @@
+# List handles (issue #31). Each entry <list> generates
+#   size_t tsc_<list>_size(const tsc_<list>_t *<self>);  0 for NULL or another kind of handle
+# and, for each other key <getter>, an element accessor
+#   tsc_status_t tsc_<list>_<getter>(const tsc_<list>_t *<self>, size_t index, <out>);
+# that fails with TSC_NOT_FOUND unless index < size. `self` is the handle's name (default
+# `list`), `items` the C++ container of the handle `{}`, `what` names it in that error, and
+# a getter's value is the element's output type, as `out` in the other files.
+actor_list: {items: "(*{}->list)", what: actor list, get: {type: actor_handle, name: out_actor}}
+blueprint_library: {self: library, items: "(*{}->library)", what: blueprint library, get: blueprint_handle}
+bone_list: {items: "{}->bones", what: bone list, get: bone_transform}
+landmark_list:
+  items: "{}->landmarks"
+  what: landmark list
+  get: landmark_info
+  get_landmark: landmark_handle
+traffic_light_list: {items: "{}->lights", what: traffic light list, get: traffic_light_handle}
+waypoint_list: {items: "{}->waypoints", what: waypoint list, get: waypoint_handle}
+world_snapshot: {self: snapshot, items: "{}->actors", what: snapshot, get: actor_snapshot}

@@ -119,3 +119,16 @@ def test_missing_method_rule():
         assert _missing_allowed(via, "mock", "unknown") is not None
     plain = next(f for f in s.functions if not f.via and not f.optional)
     assert _missing_allowed(plain, "libcarla", "0.10.0") == "no such method"
+
+
+def test_list_accessors():
+    """bindings/lists.yaml: a size function and one getter per output type."""
+    s = spec.load()
+    by_name = {f.name: f for f in s.lists}
+    size, get = by_name["tsc_world_snapshot_size"], by_name["tsc_world_snapshot_get"]
+    assert size.ret == "size_t" and size.c_params() == ["const tsc_world_snapshot_t *snapshot"]
+    assert get.c_params() == ["const tsc_world_snapshot_t *snapshot", "size_t index",
+                              "tsc_actor_snapshot_t *out"]
+    assert 'list_at(check_handle(snapshot, "snapshot", TSC_KIND_WORLD_SNAPSHOT)->actors' in get.body()
+    assert {"tsc_landmark_list_get", "tsc_landmark_list_get_landmark"} <= set(by_name)
+    assert not set(by_name) & {f.name for f in s.functions}  # validate skips them

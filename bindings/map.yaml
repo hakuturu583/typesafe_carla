@@ -17,7 +17,7 @@ blocks:
       doc: "*out = NULL (TSC_OK) when no waypoint matches. lane_type: CARLA LaneType bits."
     generate_waypoints:
       call: GenerateWaypoints
-      args: {distance: step_distance}
+      args: {distance: positive}
       out: waypoint_list
   map_topology:
     get_topology:

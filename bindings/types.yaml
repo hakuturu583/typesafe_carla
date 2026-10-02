@@ -78,6 +78,7 @@ bounding_box:
   c: tsc_bounding_box_t
   struct: true
   codon: CBoundingBox
+  to_carla: "to_carla({})"
   from_carla: "from_carla({})"
   cpp: ["carla::geom::BoundingBox"]
 string:
@@ -106,7 +107,6 @@ traffic_light_state:
 vehicle:
   c: tsc_vehicle_t
   handle: true
-  codon: cobj
   to_carla: 'vehicle_ptr({}, "{name}")'
   cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]
 # --- #22 ---
@@ -145,32 +145,27 @@ lane_change:
 landmark:
   c: const tsc_landmark_handle_t
   handle: true
-  codon: cobj
   to_carla: 'landmark_of({}, "{name}")'
   cpp: ["carla::client::Landmark"]
 # Handle outputs: from_carla makes the new handle (NULL: no such object).
 waypoint_or_null:
   c: tsc_waypoint_t
   handle: true
-  codon: cobj
-  from_carla: "waypoint_or_null({})"
+  from_carla: "new_or_null<tsc_waypoint>({})"
   cpp: ["(boost|std)::shared_ptr<carla::client::Waypoint>"]
 waypoint_list:
   c: tsc_waypoint_list_t
   handle: true
-  codon: cobj
   from_carla: "new tsc_waypoint_list(without_nulls({}))"
   cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Waypoint>.*>"]
 landmark_list:
   c: tsc_landmark_list_t
   handle: true
-  codon: cobj
   from_carla: "new tsc_landmark_list(without_nulls({}))"
   cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Landmark>.*>"]
 traffic_light_list:
   c: tsc_traffic_light_list_t
   handle: true
-  codon: cobj
   from_carla: "new tsc_traffic_light_list(without_nulls({}))"
   cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::TrafficLight>.*>"]
 # Output buffers, two-call pattern: fills up to `capacity` values and reports
@@ -244,7 +239,6 @@ transform_buffer:
 actor:
   c: tsc_actor_t
   handle: true
-  codon: cobj
   to_carla: 'check_actor({}, "{name}")->actor'
   cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]
 # Arrays: (pointer, count). NULL is accepted for count 0.
@@ -289,7 +283,6 @@ actor_state:
 actor_handle:
   c: tsc_actor_t
   handle: true
-  codon: cobj
   from_carla: "make_actor_handle({})"
   cpp: ["std::shared_ptr<carla::client::Actor>"]
 # tsc_material_parameter_t; out-of-range values are rejected.
@@ -353,7 +346,6 @@ light_group:
 waypoint:
   c: const tsc_waypoint_t
   handle: true
-  codon: cobj
   to_carla: "waypoint_of({})"
   cpp: ["carla::client::Waypoint"]
 # Arrays: (pointer, count). NULL is accepted for count 0.
@@ -376,21 +368,18 @@ name_list:
 traffic_light_handle:
   c: tsc_traffic_light_t
   handle: true
-  codon: cobj
   from_carla: "make_traffic_light_handle({})"
   cpp: ["(boost|std)::shared_ptr<carla::client::(Actor|TrafficLight)>"]
 light_manager_handle:
   c: tsc_light_manager_t
   handle: true
-  codon: cobj
-  from_carla: "make_light_manager_handle({})"
+  from_carla: "new_or_null<tsc_light_manager>({})"
   cpp: ["(boost|std)::shared_ptr<carla::client::LightManager>"]
 # World returns traffic lights as plain actors: a tsc_traffic_light_list of
 # those that are traffic lights.
 actor_traffic_light_list:
   c: tsc_traffic_light_list_t
   handle: true
-  codon: cobj
   from_carla: "new tsc_traffic_light_list(traffic_lights_of({}))"
   cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Actor>.*>"]
 # Lists the caller frees with tsc_<type>_free.
@@ -447,26 +436,14 @@ timeout:
   c: double
   codon: float
   to_carla: "seconds_to_duration({})"
-  invalid: NAN
-  cpp: ["carla::time_duration"]
-# A LibCarla time_duration as seconds (output only).
-timeout_seconds:
-  c: double
-  codon: float
   from_carla: "duration_seconds({})"
+  invalid: NAN
   cpp: ["carla::time_duration"]
 # A finite float > 0.
 positive:
   c: double
   codon: float
   to_carla: 'check_positive({}, "{name}")'
-  invalid: NAN
-  cpp: ["double"]
-# A step between waypoints in meters: finite and > 0.
-step_distance:
-  c: double
-  codon: float
-  to_carla: 'check_step_distance({}, "{name}")'
   invalid: NAN
   cpp: ["double"]
 # A C char (recorder actor types: 'a', 'h', 'v', ...).
@@ -495,13 +472,6 @@ rotation:
   to_carla: "to_carla({})"
   from_carla: "from_carla({})"
   cpp: ["carla::geom::Rotation"]
-# A box LibCarla takes as an input (bounding_box is output only).
-bounding_box_in:
-  c: tsc_bounding_box_t
-  struct: true
-  codon: CBoundingBox
-  to_carla: "to_carla({})"
-  cpp: ["carla::geom::BoundingBox"]
 color:
   c: tsc_color_t
   struct: true
@@ -547,14 +517,12 @@ lane_type:
 blueprint:
   c: const tsc_actor_blueprint_t
   handle: true
-  codon: cobj
   to_carla: "blueprint_of({})"
   cpp: ["carla::client::ActorBlueprint"]
 # An actor handle, or NULL for none (a spawn's parent).
 nullable_actor:
   c: tsc_actor_t
   handle: true
-  codon: cobj
   to_carla: 'actor_or_null({}, "{name}")'
   cpp: ["carla::client::Actor \\*"]
 # Bones to set: (pointer, count) of named transforms, all finite.
@@ -599,68 +567,62 @@ matrix4x4:
 world_handle:
   c: tsc_world_t
   handle: true
-  codon: cobj
-  from_carla: "new tsc_world({})"
   cpp: ["carla::client::World"]
 map_handle:
   c: tsc_map_t
   handle: true
-  codon: cobj
-  from_carla: "new tsc_map({})"
   cpp: ["(boost|std)::shared_ptr<carla::client::Map>"]
 world_snapshot_handle:
   c: tsc_world_snapshot_t
   handle: true
-  codon: cobj
-  from_carla: "new tsc_world_snapshot({})"
   cpp: ["carla::client::WorldSnapshot"]
 actor_list_handle:
   c: tsc_actor_list_t
   handle: true
-  codon: cobj
-  from_carla: "new tsc_actor_list({})"
   cpp: ["(boost|std)::shared_ptr<carla::client::ActorList>"]
 blueprint_library_handle:
   c: tsc_blueprint_library_t
   handle: true
-  codon: cobj
-  from_carla: "new tsc_blueprint_library({})"
   cpp: ["(boost|std)::shared_ptr<carla::client::BlueprintLibrary>"]
 traffic_manager_handle:
   c: tsc_traffic_manager_t
   handle: true
-  codon: cobj
-  from_carla: "new tsc_traffic_manager({})"
   cpp: ["carla::traffic_manager::TrafficManager"]
 physics_control_handle:
   c: tsc_physics_control_t
   handle: true
-  codon: cobj
-  from_carla: "new tsc_physics_control({})"
   cpp: ["carla::rpc::VehiclePhysicsControl"]
 bone_list_handle:
   c: tsc_bone_list_t
   handle: true
-  codon: cobj
   from_carla: "new tsc_bone_list({}.bone_transforms)"
   cpp: ["carla::rpc::WalkerBoneControlOut"]
 # The spawned actor; LibCarla never returns NULL here (TSC_ERROR if it did).
 spawned_actor:
   c: tsc_actor_t
   handle: true
-  codon: cobj
   from_carla: "make_actor_handle(spawned({}))"
   cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]
 junction_or_null:
   c: tsc_junction_t
   handle: true
-  codon: cobj
-  from_carla: "junction_or_null({})"
+  from_carla: "new_or_null<tsc_junction>({})"
   cpp: ["(boost|std)::shared_ptr<carla::client::Junction>"]
 # Pairs (begin, end) as one list [b0, e0, b1, e1, ...].
 waypoint_pair_list:
   c: tsc_waypoint_list_t
   handle: true
-  codon: cobj
   from_carla: "new tsc_waypoint_list(flatten({}))"
   cpp: ["std::vector<std::pair<(boost|std)::shared_ptr<carla::client::Waypoint>.*"]
+# List elements (bindings/lists.yaml).
+index: {c: size_t, codon: int, cpp: ["unsigned long", "size_t"]}
+blueprint_handle: {c: tsc_actor_blueprint_t, handle: true}
+# A list element LibCarla should never have left NULL (TSC_ERROR if it did).
+waypoint_handle: {c: tsc_waypoint_t, handle: true, from_carla: 'new tsc_waypoint(non_null({}, "waypoint"))'}
+landmark_handle:
+  c: tsc_landmark_handle_t
+  handle: true
+  from_carla: 'new tsc_landmark_handle(non_null({}, "landmark"))'
+landmark_info: {c: tsc_landmark_t, struct: true, codon: CLandmark, from_carla: "from_carla(*{})"}
+bone_transform: {c: tsc_bone_transform_out_t, struct: true, codon: CBoneTransformOut, from_carla: "from_carla({})"}
+actor_snapshot: {c: tsc_actor_snapshot_t, struct: true, codon: CActorSnapshot}

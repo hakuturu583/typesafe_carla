@@ -91,10 +91,11 @@ def test_generated_functions_are_not_hand_written():
     """A generated function has exactly one definition: the generated one."""
     from tools.bindgen import spec
 
-    names = {f.name for f in spec.load().functions}
+    names = {f.name for f in spec.load().generated()}
     hand_written = ROOT / "native" / "src"
     duplicates = [f"{p.name}: {name}" for p in hand_written.glob("*.cpp")
-                  for name in re.findall(r"^tsc_status_t (tsc_\w+)\(", p.read_text(), re.MULTILINE)
+                  for name in re.findall(r"^(?:tsc_status_t|size_t) (tsc_\w+)\(", p.read_text(),
+                                         re.MULTILINE)
                   if name in names]
     assert not duplicates, duplicates
 
@@ -113,10 +114,10 @@ def test_bindgen_handle_outputs_and_multi_parameter_inputs(tmp_path):
     assert f.codon_params() == ["cobj", "cobj, int", "Ptr[cobj]"]
     shim = emit.shim(s)
     assert "return new_handle(__func__, out, [&] {" in shim
-    assert "return waypoint_or_null(map_of(map).GetWaypointXODR(" in shim
-    # A handle output type must say how to make the handle.
+    assert "return new_or_null<tsc_waypoint>(map_of(map).GetWaypointXODR(" in shim
+    # A handle input type (to_carla only) cannot make an output handle.
     (tmp_path / "types.yaml").write_text(
-        "bad:\n  c: tsc_waypoint_t\n  handle: true\n  codon: cobj\n")
+        "bad:\n  c: tsc_waypoint_t\n  handle: true\n  to_carla: \"waypoint_of({})\"\n")
     (tmp_path / "x.yaml").write_text(
         "class: carla::client::Map\nprefix: map\nself: {type: tsc_map_t, name: map, get: map_of}\n"
         "blocks:\n  x:\n    f: {call: F, out: bad}\n")

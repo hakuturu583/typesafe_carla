@@ -636,8 +636,10 @@ from C import LIB.tsc_world_get_actor(cobj, u32, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_settings(cobj, Ptr[CWorldSettings]) -> i32
 from C import LIB.tsc_world_apply_settings(cobj, Ptr[CWorldSettings], float, Ptr[u64]) -> i32
 
+# BEGIN GENERATED actor_list_items from bindings/lists.yaml, do not edit
 from C import LIB.tsc_actor_list_size(cobj) -> int
 from C import LIB.tsc_actor_list_get(cobj, int, Ptr[cobj]) -> i32
+# END GENERATED actor_list_items
 # BEGIN GENERATED actor_list from bindings/actor_list.yaml, do not edit
 from C import LIB.tsc_actor_list_filter(cobj, cobj, int, Ptr[cobj]) -> i32
 # END GENERATED actor_list
@@ -668,8 +670,10 @@ from C import LIB.tsc_vehicle_get_control(cobj, Ptr[CVehicleControl]) -> i32
 from C import LIB.tsc_vehicle_set_autopilot(cobj, i32, u16) -> i32
 # END GENERATED vehicle
 
+# BEGIN GENERATED blueprint_library_items from bindings/lists.yaml, do not edit
 from C import LIB.tsc_blueprint_library_size(cobj) -> int
 from C import LIB.tsc_blueprint_library_get(cobj, int, Ptr[cobj]) -> i32
+# END GENERATED blueprint_library_items
 from C import LIB.tsc_blueprint_library_find(cobj, cobj, int, Ptr[cobj]) -> i32
 # BEGIN GENERATED blueprint_library from bindings/blueprint_library.yaml, do not edit
 from C import LIB.tsc_blueprint_library_filter(cobj, cobj, int, Ptr[cobj]) -> i32
@@ -694,8 +698,10 @@ from C import LIB.tsc_world_wait_for_tick(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_snapshot_get_id(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_world_snapshot_get_timestamp(cobj, Ptr[CTimestamp]) -> i32
 # END GENERATED world_snapshot
+# BEGIN GENERATED world_snapshot_items from bindings/lists.yaml, do not edit
 from C import LIB.tsc_world_snapshot_size(cobj) -> int
 from C import LIB.tsc_world_snapshot_get(cobj, int, Ptr[CActorSnapshot]) -> i32
+# END GENERATED world_snapshot_items
 from C import LIB.tsc_world_snapshot_find(cobj, u32, Ptr[CActorSnapshot]) -> i32
 # BEGIN GENERATED world_map from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_map(cobj, Ptr[cobj]) -> i32
@@ -714,8 +720,10 @@ from C import LIB.tsc_waypoint_previous(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_next_until_lane_end(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_previous_until_lane_start(cobj, float, Ptr[cobj]) -> i32
 # END GENERATED waypoint_navigation
+# BEGIN GENERATED waypoint_list_items from bindings/lists.yaml, do not edit
 from C import LIB.tsc_waypoint_list_size(cobj) -> int
 from C import LIB.tsc_waypoint_list_get(cobj, int, Ptr[cobj]) -> i32
+# END GENERATED waypoint_list_items
 # BEGIN GENERATED vehicle_physics from bindings/vehicle.yaml, do not edit
 from C import LIB.tsc_vehicle_get_physics_control(cobj, Ptr[cobj]) -> i32
 # END GENERATED vehicle_physics
@@ -845,8 +853,11 @@ from C import LIB.tsc_landmark_free(Ptr[CLandmark]) -> None
 from C import LIB.tsc_map_get_all_landmarks(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_map_get_landmarks_of_type(cobj, cobj, int, Ptr[cobj]) -> i32
 # END GENERATED map_landmarks
+# BEGIN GENERATED landmark_list_items from bindings/lists.yaml, do not edit
 from C import LIB.tsc_landmark_list_size(cobj) -> int
 from C import LIB.tsc_landmark_list_get(cobj, int, Ptr[CLandmark]) -> i32
+from C import LIB.tsc_landmark_list_get_landmark(cobj, int, Ptr[cobj]) -> i32
+# END GENERATED landmark_list_items
 # BEGIN GENERATED waypoint_junction from bindings/waypoint.yaml, do not edit
 from C import LIB.tsc_waypoint_get_junction(cobj, Ptr[cobj]) -> i32
 # END GENERATED waypoint_junction
@@ -867,7 +878,6 @@ from C import LIB.tsc_map_get_geoprojection(cobj, Ptr[CGeoProjection]) -> i32
 from C import LIB.tsc_map_transform_to_geolocation(cobj, Ptr[CVector3D], Ptr[CGeoProjection], Ptr[CGeoLocation]) -> i32
 from C import LIB.tsc_map_geolocation_to_transform(cobj, Ptr[CGeoLocation], Ptr[CGeoProjection], Ptr[CVector3D]) -> i32
 from C import LIB.tsc_map_save_to_disk(cobj, cobj, int) -> i32
-from C import LIB.tsc_landmark_list_get_landmark(cobj, int, Ptr[cobj]) -> i32
 # BEGIN GENERATED landmark from bindings/landmark.yaml, do not edit
 from C import LIB.tsc_landmark_get_h_offset(cobj, Ptr[float]) -> i32
 from C import LIB.tsc_landmark_get_pitch(cobj, Ptr[float]) -> i32
@@ -886,8 +896,10 @@ from C import LIB.tsc_waypoint_get_lane_change(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_waypoint_get_landmarks(cobj, float, i32, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_get_landmarks_of_type(cobj, float, cobj, int, i32, Ptr[cobj]) -> i32
 # END GENERATED waypoint
+# BEGIN GENERATED traffic_light_list_items from bindings/lists.yaml, do not edit
 from C import LIB.tsc_traffic_light_list_size(cobj) -> int
 from C import LIB.tsc_traffic_light_list_get(cobj, int, Ptr[cobj]) -> i32
+# END GENERATED traffic_light_list_items
 # BEGIN GENERATED traffic_light_geometry from bindings/traffic_light.yaml, do not edit
 from C import LIB.tsc_traffic_light_get_opendrive_id(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_traffic_light_get_trigger_volume(cobj, Ptr[CBoundingBox]) -> i32
@@ -947,8 +959,10 @@ from C import LIB.tsc_walker_set_bones(cobj, Ptr[CBoneTransform], int) -> i32
 # BEGIN GENERATED walker_bone_list from bindings/walker.yaml, do not edit
 from C import LIB.tsc_walker_get_bones(cobj, Ptr[cobj]) -> i32
 # END GENERATED walker_bone_list
+# BEGIN GENERATED bone_list_items from bindings/lists.yaml, do not edit
 from C import LIB.tsc_bone_list_size(cobj) -> int
 from C import LIB.tsc_bone_list_get(cobj, int, Ptr[CBoneTransformOut]) -> i32
+# END GENERATED bone_list_items
 
 # Issue #23: Client, Traffic Manager, blueprint, debug and value-type gaps
 from C import LIB.tsc_string_list_free(Ptr[CStringList]) -> None

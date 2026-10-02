@@ -1,5 +1,5 @@
-// Walkers: the bone conversion and the bone list accessors (issue #20). The
-// rest is generated (bindings/walker.yaml, walker_ai_controller.yaml).
+// Walkers: the bone conversions (issue #20). The rest is generated
+// (bindings/walker.yaml, walker_ai_controller.yaml, lists.yaml).
 #include "internal.hpp"
 
 using namespace tsc;
@@ -23,29 +23,10 @@ carla::rpc::WalkerBoneControlIn to_bone_control(const tsc_bone_transform_t *bone
   return control;
 }
 
+tsc_bone_transform_out_t from_carla(const carla::rpc::BoneTransformDataOut &b) {
+  tsc_bone_transform_out_t r{{}, from_carla(b.world), from_carla(b.component), from_carla(b.relative)};
+  string_assign(&r.name, b.bone_name);
+  return r;
+}
+
 }  // namespace tsc
-
-extern "C" {
-
-size_t tsc_bone_list_size(const tsc_bone_list_t *list) {
-  if (list == nullptr || list->kind != TSC_KIND_BONE_LIST) return 0;
-  return list->bones.size();
-}
-
-tsc_status_t tsc_bone_list_get(const tsc_bone_list_t *list, size_t index,
-                               tsc_bone_transform_out_t *out) {
-  return TSC_GUARD({
-    const auto &bones = check_handle(list, "list", TSC_KIND_BONE_LIST)->bones;
-    require_ptr(out, "out");
-    check_index(index, bones.size(), "bone list");
-    const auto &b = bones[index];
-    tsc_bone_transform_out_t r{};
-    r.world = from_carla(b.world);
-    r.component = from_carla(b.component);
-    r.relative = from_carla(b.relative);
-    string_assign(&r.name, b.bone_name);
-    *out = r;
-  });
-}
-
-}  // extern "C"

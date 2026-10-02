@@ -15,29 +15,13 @@ void require_attribute(const carla::client::ActorBlueprint &bp, const std::strin
 
 extern "C" {
 
-size_t tsc_blueprint_library_size(const tsc_blueprint_library_t *library) {
-  if (library == nullptr || library->kind != TSC_KIND_BLUEPRINT_LIBRARY) return 0;
-  return library->library->size();
-}
-
-tsc_status_t tsc_blueprint_library_get(const tsc_blueprint_library_t *library, size_t index,
-                                       tsc_actor_blueprint_t **out) {
-  return TSC_GUARD({
-    require_ptr(out, "out");
-    *out = nullptr;
-    const auto &l = library_of(library);
-    check_index(index, l->size(), "blueprint library");
-    *out = new tsc_actor_blueprint(l->at(index));
-  });
-}
-
 tsc_status_t tsc_blueprint_library_find(const tsc_blueprint_library_t *library, const char *id,
                                         size_t id_len, tsc_actor_blueprint_t **out) {
   return TSC_GUARD({
     require_ptr(out, "out");
     *out = nullptr;
     const std::string key = to_string(id, id_len, "id");
-    const carla::client::ActorBlueprint *bp = library_of(library)->Find(key);
+    const carla::client::ActorBlueprint *bp = blueprint_library_of(library).Find(key);
     if (bp == nullptr) fail(TSC_NOT_FOUND, "no blueprint with id '" + key + "'");
     *out = new tsc_actor_blueprint(*bp);
   });

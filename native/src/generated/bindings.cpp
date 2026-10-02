@@ -252,7 +252,7 @@ tsc_status_t tsc_actor_list_filter(const tsc_actor_list_t *list,
                                    tsc_actor_list_t **out_list) {
   return new_handle(__func__, out_list, [&] {
     return new tsc_actor_list(actor_list_of(list).Filter(to_string(pattern, pattern_len, "pattern")));
-  });
+  }, "out_list");
 }
 
 // bindings/blueprint.yaml: carla::client::ActorBlueprint
@@ -311,21 +311,21 @@ tsc_status_t tsc_client_get_server_version(tsc_client_t *client, tsc_string_t *o
 tsc_status_t tsc_client_get_world(tsc_client_t *client, tsc_world_t **out_world) {
   return new_handle(__func__, out_world, [&] {
     return new tsc_world(client_of(client).GetWorld());
-  });
+  }, "out_world");
 }
 
 tsc_status_t tsc_client_load_world(tsc_client_t *client, const char *map_name, size_t map_name_len,
                                    int32_t reset_settings, tsc_world_t **out_world) {
   return new_handle(__func__, out_world, [&] {
     return new tsc_world(client_of(client).LoadWorld(to_string(map_name, map_name_len, "map_name"), reset_settings != 0));
-  });
+  }, "out_world");
 }
 
 tsc_status_t tsc_client_reload_world(tsc_client_t *client, int32_t reset_settings,
                                      tsc_world_t **out_world) {
   return new_handle(__func__, out_world, [&] {
     return new tsc_world(client_of(client).ReloadWorld(reset_settings != 0));
-  });
+  }, "out_world");
 }
 
 tsc_status_t tsc_client_start_recorder(tsc_client_t *client, const char *name, size_t name_len,
@@ -536,7 +536,7 @@ tsc_status_t tsc_landmark_is_dynamic(const tsc_landmark_handle_t *landmark, int3
 tsc_status_t tsc_landmark_get_waypoint(const tsc_landmark_handle_t *landmark,
                                        tsc_waypoint_t **out) {
   return new_handle(__func__, out, [&] {
-    return waypoint_or_null(landmark_of(landmark).GetWaypoint());
+    return new_or_null<tsc_waypoint>(landmark_of(landmark).GetWaypoint());
   });
 }
 
@@ -609,14 +609,14 @@ tsc_status_t tsc_map_get_waypoint(const tsc_map_t *map, const tsc_location_t *lo
                                   int32_t project_to_road, int32_t lane_type,
                                   tsc_waypoint_t **out) {
   return new_handle(__func__, out, [&] {
-    return waypoint_or_null(map_of(map).GetWaypoint(to_carla(*require_ptr(location, "location")), project_to_road != 0, lane_type));
+    return new_or_null<tsc_waypoint>(map_of(map).GetWaypoint(to_carla(*require_ptr(location, "location")), project_to_road != 0, lane_type));
   });
 }
 
 tsc_status_t tsc_map_generate_waypoints(const tsc_map_t *map, double distance,
                                         tsc_waypoint_list_t **out) {
   return new_handle(__func__, out, [&] {
-    return new tsc_waypoint_list(without_nulls(map_of(map).GenerateWaypoints(check_step_distance(distance, "distance"))));
+    return new tsc_waypoint_list(without_nulls(map_of(map).GenerateWaypoints(check_positive(distance, "distance"))));
   });
 }
 
@@ -651,7 +651,7 @@ tsc_status_t tsc_map_get_georeference(const tsc_map_t *map, tsc_geo_location_t *
 tsc_status_t tsc_map_get_waypoint_xodr(const tsc_map_t *map, uint32_t road_id, int32_t lane_id,
                                        double s, tsc_waypoint_t **out) {
   return new_handle(__func__, out, [&] {
-    return waypoint_or_null(map_of(map).GetWaypointXODR(road_id, lane_id, check_finite(s, "s")));
+    return new_or_null<tsc_waypoint>(map_of(map).GetWaypointXODR(road_id, lane_id, check_finite(s, "s")));
   });
 }
 
@@ -1113,46 +1113,46 @@ tsc_status_t tsc_walker_ai_controller_set_max_speed(tsc_walker_ai_controller_t *
 tsc_status_t tsc_waypoint_next(const tsc_waypoint_t *waypoint, double distance,
                                tsc_waypoint_list_t **out) {
   return new_handle(__func__, out, [&] {
-    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetNext(check_step_distance(distance, "distance"))));
+    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetNext(check_positive(distance, "distance"))));
   });
 }
 
 tsc_status_t tsc_waypoint_previous(const tsc_waypoint_t *waypoint, double distance,
                                    tsc_waypoint_list_t **out) {
   return new_handle(__func__, out, [&] {
-    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetPrevious(check_step_distance(distance, "distance"))));
+    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetPrevious(check_positive(distance, "distance"))));
   });
 }
 
 tsc_status_t tsc_waypoint_next_until_lane_end(const tsc_waypoint_t *waypoint, double distance,
                                               tsc_waypoint_list_t **out) {
   return new_handle(__func__, out, [&] {
-    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetNextUntilLaneEnd(check_step_distance(distance, "distance"))));
+    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetNextUntilLaneEnd(check_positive(distance, "distance"))));
   });
 }
 
 tsc_status_t tsc_waypoint_previous_until_lane_start(const tsc_waypoint_t *waypoint, double distance,
                                                     tsc_waypoint_list_t **out) {
   return new_handle(__func__, out, [&] {
-    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetPreviousUntilLaneStart(check_step_distance(distance, "distance"))));
+    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetPreviousUntilLaneStart(check_positive(distance, "distance"))));
   });
 }
 
 tsc_status_t tsc_waypoint_get_junction(const tsc_waypoint_t *waypoint, tsc_junction_t **out) {
   return new_handle(__func__, out, [&] {
-    return junction_or_null(waypoint_of(waypoint).GetJunction());
+    return new_or_null<tsc_junction>(waypoint_of(waypoint).GetJunction());
   });
 }
 
 tsc_status_t tsc_waypoint_get_left_lane(const tsc_waypoint_t *waypoint, tsc_waypoint_t **out) {
   return new_handle(__func__, out, [&] {
-    return waypoint_or_null(waypoint_of(waypoint).GetLeft());
+    return new_or_null<tsc_waypoint>(waypoint_of(waypoint).GetLeft());
   });
 }
 
 tsc_status_t tsc_waypoint_get_right_lane(const tsc_waypoint_t *waypoint, tsc_waypoint_t **out) {
   return new_handle(__func__, out, [&] {
-    return waypoint_or_null(waypoint_of(waypoint).GetRight());
+    return new_or_null<tsc_waypoint>(waypoint_of(waypoint).GetRight());
   });
 }
 
@@ -1205,14 +1205,14 @@ tsc_status_t tsc_world_get_id(tsc_world_t *world, uint64_t *out_id) {
 tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_list) {
   return new_handle(__func__, out_list, [&] {
     return new tsc_actor_list(world_of(world).GetActors());
-  });
+  }, "out_list");
 }
 
 tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
                                              tsc_blueprint_library_t **out_library) {
   return new_handle(__func__, out_library, [&] {
     return new tsc_blueprint_library(world_of(world).GetBlueprintLibrary());
-  });
+  }, "out_library");
 }
 
 tsc_status_t tsc_world_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
@@ -1220,7 +1220,7 @@ tsc_status_t tsc_world_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint
                                    tsc_actor_t **out_actor) {
   return new_handle(__func__, out_actor, [&] {
     return make_actor_handle(spawned(world_of(world).SpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent"))));
-  });
+  }, "out_actor");
 }
 
 tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
@@ -1228,7 +1228,7 @@ tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world, const tsc_actor_bluep
                                        tsc_actor_t **out_actor) {
   return new_handle(__func__, out_actor, [&] {
     return make_actor_handle(world_of(world).TrySpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent")));
-  });
+  }, "out_actor");
 }
 
 tsc_status_t tsc_world_tick(tsc_world_t *world, double timeout_seconds, uint64_t *out_frame) {
@@ -1443,7 +1443,7 @@ tsc_status_t tsc_world_apply_textures_to_objects(
 
 tsc_status_t tsc_world_get_light_manager(tsc_world_t *world, tsc_light_manager_t **out) {
   return new_handle(__func__, out, [&] {
-    return make_light_manager_handle(world_of(world).GetLightManager());
+    return new_or_null<tsc_light_manager>(world_of(world).GetLightManager());
   });
 }
 
@@ -1457,6 +1457,99 @@ tsc_status_t tsc_world_snapshot_get_timestamp(const tsc_world_snapshot_t *snapsh
                                               tsc_timestamp_t *out) {
   return TSC_GUARD({
     *require_ptr(out, "out") = from_carla(snapshot_of(snapshot).GetTimestamp());
+  });
+}
+
+// bindings/lists.yaml
+
+size_t tsc_actor_list_size(const tsc_actor_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_ACTOR_LIST) return 0;
+  return (*list->list).size();
+}
+
+tsc_status_t tsc_actor_list_get(const tsc_actor_list_t *list, size_t index,
+                                tsc_actor_t **out_actor) {
+  return new_handle(__func__, out_actor, [&] {
+    return make_actor_handle(list_at((*check_handle(list, "list", TSC_KIND_ACTOR_LIST)->list), index, "actor list"));
+  }, "out_actor");
+}
+
+size_t tsc_blueprint_library_size(const tsc_blueprint_library_t *library) {
+  if (library == nullptr || library->kind != TSC_KIND_BLUEPRINT_LIBRARY) return 0;
+  return (*library->library).size();
+}
+
+tsc_status_t tsc_blueprint_library_get(const tsc_blueprint_library_t *library, size_t index,
+                                       tsc_actor_blueprint_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_actor_blueprint(list_at((*check_handle(library, "library", TSC_KIND_BLUEPRINT_LIBRARY)->library), index, "blueprint library"));
+  });
+}
+
+size_t tsc_bone_list_size(const tsc_bone_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_BONE_LIST) return 0;
+  return list->bones.size();
+}
+
+tsc_status_t tsc_bone_list_get(const tsc_bone_list_t *list, size_t index,
+                               tsc_bone_transform_out_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = from_carla(list_at(check_handle(list, "list", TSC_KIND_BONE_LIST)->bones, index, "bone list"));
+  });
+}
+
+size_t tsc_landmark_list_size(const tsc_landmark_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_LANDMARK_LIST) return 0;
+  return list->landmarks.size();
+}
+
+tsc_status_t tsc_landmark_list_get(const tsc_landmark_list_t *list, size_t index,
+                                   tsc_landmark_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = from_carla(*list_at(check_handle(list, "list", TSC_KIND_LANDMARK_LIST)->landmarks, index, "landmark list"));
+  });
+}
+
+tsc_status_t tsc_landmark_list_get_landmark(const tsc_landmark_list_t *list, size_t index,
+                                            tsc_landmark_handle_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_landmark_handle(non_null(list_at(check_handle(list, "list", TSC_KIND_LANDMARK_LIST)->landmarks, index, "landmark list"), "landmark"));
+  });
+}
+
+size_t tsc_traffic_light_list_size(const tsc_traffic_light_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_TRAFFIC_LIGHT_LIST) return 0;
+  return list->lights.size();
+}
+
+tsc_status_t tsc_traffic_light_list_get(const tsc_traffic_light_list_t *list, size_t index,
+                                        tsc_traffic_light_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_traffic_light_handle(list_at(check_handle(list, "list", TSC_KIND_TRAFFIC_LIGHT_LIST)->lights, index, "traffic light list"));
+  });
+}
+
+size_t tsc_waypoint_list_size(const tsc_waypoint_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_WAYPOINT_LIST) return 0;
+  return list->waypoints.size();
+}
+
+tsc_status_t tsc_waypoint_list_get(const tsc_waypoint_list_t *list, size_t index,
+                                   tsc_waypoint_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint(non_null(list_at(check_handle(list, "list", TSC_KIND_WAYPOINT_LIST)->waypoints, index, "waypoint list"), "waypoint"));
+  });
+}
+
+size_t tsc_world_snapshot_size(const tsc_world_snapshot_t *snapshot) {
+  if (snapshot == nullptr || snapshot->kind != TSC_KIND_WORLD_SNAPSHOT) return 0;
+  return snapshot->actors.size();
+}
+
+tsc_status_t tsc_world_snapshot_get(const tsc_world_snapshot_t *snapshot, size_t index,
+                                    tsc_actor_snapshot_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = list_at(check_handle(snapshot, "snapshot", TSC_KIND_WORLD_SNAPSHOT)->actors, index, "snapshot");
   });
 }
 

@@ -9,11 +9,9 @@ using namespace tsc;
 extern "C" {
 
 tsc_status_t tsc_actor_as_vehicle(tsc_actor_t *actor, tsc_vehicle_t **out_vehicle) {
-  return TSC_GUARD({
-    require_ptr(out_vehicle, "out_vehicle");
-    *out_vehicle = nullptr;
-    *out_vehicle = retain_as<tsc_vehicle>(actor, TSC_KIND_VEHICLE, "a vehicle");
-  });
+  return new_handle(__func__, out_vehicle, [&] {
+    return retain_as<tsc_vehicle>(actor, TSC_KIND_VEHICLE, "a vehicle");
+  }, "out_vehicle");
 }
 
 tsc_status_t tsc_actor_as_walker(tsc_actor_t *actor, tsc_walker_t **out) {

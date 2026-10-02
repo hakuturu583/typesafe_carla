@@ -6,7 +6,7 @@ self: {type: tsc_client_t, name: client, get: client_of}
 blocks:
   client:
     set_timeout: {call: SetTimeout, args: {seconds: timeout}}
-    get_timeout: {call: GetTimeout, out: {type: timeout_seconds, name: out_seconds}}
+    get_timeout: {call: GetTimeout, out: {type: timeout, name: out_seconds}}
     get_client_version: {call: GetClientVersion, out: string}
     get_server_version: {call: GetServerVersion, out: string}
     get_world: {call: GetWorld, out: {type: world_handle, name: out_world}}

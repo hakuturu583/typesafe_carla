@@ -16,7 +16,7 @@ blocks:
              life_time: finite}
     draw_box:
       call: DrawBox
-      args: {box: bounding_box_in, rotation: rotation, thickness: double, color: color,
+      args: {box: bounding_box, rotation: rotation, thickness: double, color: color,
              life_time: finite}
     draw_string:
       call: DrawString
