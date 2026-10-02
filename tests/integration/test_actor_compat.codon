@@ -69,7 +69,11 @@ try:
     light = world.get_actor(light_id)
     light.freeze(True)
     light.set_state(carla.TrafficLightState.Green)
-    world.tick()
+    # The client sees the new state a few ticks later (as in test_m4_world).
+    for _ in range(10):
+        world.tick()
+        if light.get_state() == carla.TrafficLightState.Green:
+            break
     assert light.get_state() == carla.TrafficLightState.Green and light.is_frozen()
     green = light.get_green_time()
     light.set_green_time(green + 1.0)
