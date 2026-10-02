@@ -1,6 +1,6 @@
 # Geometry value types. Plain Codon classes; copied across the C ABI.
 
-from ._ffi import CVector3D, CRotation, CTransform, CBoundingBox
+from ._ffi import CVector2D, CVector3D, CRotation, CTransform, CBoundingBox
 
 class Vector3D:
     x: float
@@ -59,6 +59,13 @@ class Vector2D:
 
     def __repr__(self) -> str:
         return f"Vector2D(x={self.x}, y={self.y})"
+
+    def _to_c(self) -> CVector2D:
+        return CVector2D(self.x, self.y)
+
+    @staticmethod
+    def _from_c(v: CVector2D) -> Vector2D:
+        return Vector2D(v.x, v.y)
 
 class Location:
     """A point in world space, in meters.

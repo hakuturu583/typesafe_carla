@@ -7,8 +7,6 @@ import typesafe_carla._ffi as ffi
 assert ffi.CCommand.__elemsize__ == 152 and ffi.CCommandResponse.__elemsize__ == 24
 assert ffi.CWaypointInfo.__elemsize__ == 96 and ffi.CActorSnapshot.__elemsize__ == 128
 assert ffi.CTimestamp.__elemsize__ == 32 and ffi.CBoundingBox.__elemsize__ == 72
-assert ffi.CWheelPhysicsControl.__elemsize__ == 360 and ffi.CVector2D.__elemsize__ == 16
-assert ffi.CVehiclePhysicsControl.__elemsize__ == 304
 
 client = carla.Client("localhost", 2000)
 world = client.get_world()

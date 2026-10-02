@@ -4,8 +4,8 @@ using namespace tsc;
 
 namespace {
 
-// The scalar fields shared by tsc_*_physics_control_t and rpc::*PhysicsControl,
-// so reading and writing cannot drift apart.
+// The fields shared by tsc_*_physics_control_t and rpc::*PhysicsControl, by
+// how they convert, so reading and writing cannot drift apart.
 #define TSC_VEHICLE_FLOAT_FIELDS(X)                                                        \
   X(max_torque) X(max_rpm) X(idle_rpm) X(brake_effect) X(rev_up_moi) X(rev_down_rate)     \
   X(front_rear_split) X(gear_change_time) X(final_ratio) X(change_up_rpm)                 \
@@ -13,6 +13,11 @@ namespace {
   X(chassis_width) X(chassis_height) X(downforce_coefficient) X(drag_area)                \
   X(sleep_threshold) X(sleep_slope_limit)
 #define TSC_VEHICLE_BOOL_FIELDS(X) X(use_automatic_gears) X(use_sweep_wheel_collision)
+#define TSC_VEHICLE_U8_FIELDS(X) X(differential_type)
+#define TSC_VEHICLE_VECTOR_FIELDS(X) X(center_of_mass) X(inertia_tensor_scale)
+// (pointer, size) in C, a std::vector in LibCarla and the snapshot.
+#define TSC_VEHICLE_ARRAY_FIELDS(X) \
+  X(torque_curve) X(steering_curve) X(forward_gear_ratios) X(reverse_gear_ratios)
 #define TSC_WHEEL_FLOAT_FIELDS(X)                                                          \
   X(wheel_radius) X(wheel_width) X(wheel_mass) X(cornering_stiffness)                     \
   X(friction_force_multiplier) X(side_slip_modifier) X(slip_threshold) X(skid_threshold)  \
@@ -25,38 +30,33 @@ namespace {
 #define TSC_WHEEL_U8_FIELDS(X) \
   X(axle_type) X(external_torque_combine_method) X(sweep_shape) X(sweep_type)
 #define TSC_WHEEL_INT_FIELDS(X) X(suspension_smoothing) X(wheel_index)
-#define TSC_WHEEL_VECTOR_FIELDS(X) X(offset) X(suspension_axis) X(suspension_force_offset)
-#define TSC_WHEEL_LOCATION_FIELDS(X) X(location) X(old_location) X(velocity)
+#define TSC_WHEEL_VECTOR_FIELDS(X)                                                         \
+  X(offset) X(suspension_axis) X(suspension_force_offset) X(location) X(old_location)     \
+  X(velocity)
 
-std::vector<tsc_vector2d_t> from_carla(const std::vector<carla::geom::Vector2D> &curve) {
-  std::vector<tsc_vector2d_t> out;
-  out.reserve(curve.size());
-  for (const auto &p : curve) out.push_back(tsc_vector2d_t{p.x, p.y});
-  return out;
+// Element conversions for the variable-length arrays, both directions.
+double to_c(float v) { return v; }
+tsc_vector2d_t to_c(const carla::geom::Vector2D &p) { return from_carla(p); }
+float check_element(double v, const char *name) { return check_finite(v, name); }
+carla::geom::Vector2D check_element(const tsc_vector2d_t &p, const char *name) {
+  return carla::geom::Vector2D(check_finite(p.x, name), check_finite(p.y, name));
 }
 
 template <typename T>
-const T *require_array(const T *data, size_t size, const char *name) {
-  if (data == nullptr && size != 0) fail(TSC_INVALID_ARGUMENT, std::string(name) + " is NULL");
-  return data;
-}
-
-std::vector<carla::geom::Vector2D> to_curve(const tsc_vector2d_t *data, size_t size,
-                                            const char *name) {
-  require_array(data, size, name);
-  std::vector<carla::geom::Vector2D> out;
-  out.reserve(size);
-  for (size_t i = 0; i < size; ++i) {
-    out.emplace_back(check_finite(data[i].x, name), check_finite(data[i].y, name));
-  }
+auto to_c_vector(const std::vector<T> &values) {
+  std::vector<decltype(to_c(values[0]))> out;
+  out.reserve(values.size());
+  for (const T &v : values) out.push_back(to_c(v));
   return out;
 }
 
-std::vector<float> to_ratios(const double *data, size_t size, const char *name) {
+// Copies caller memory (NULL only for size 0), rejecting non-finite values.
+template <typename T>
+auto checked_vector(const T *data, size_t size, const char *name) {
   require_array(data, size, name);
-  std::vector<float> out;
+  std::vector<decltype(check_element(*data, name))> out;
   out.reserve(size);
-  for (size_t i = 0; i < size; ++i) out.push_back(check_finite(data[i], name));
+  for (size_t i = 0; i < size; ++i) out.push_back(check_element(data[i], name));
   return out;
 }
 
@@ -68,102 +68,80 @@ uint8_t check_u8(int32_t v, const char *name) {
   return static_cast<uint8_t>(v);
 }
 
+// geom::Location converts from geom::Vector3D, so this serves both.
 carla::geom::Vector3D check_vector(const tsc_vector3d_t &v, const char *name) {
   return carla::geom::Vector3D(check_finite(v.x, name), check_finite(v.y, name),
                                check_finite(v.z, name));
 }
 
-carla::geom::Location check_location(const tsc_location_t &v, const char *name) {
-  return carla::geom::Location(check_finite(v.x, name), check_finite(v.y, name),
-                               check_finite(v.z, name));
-}
-
-#define TSC_READ(f) r.f = src.f;
-#define TSC_READ_BOOL(f) r.f = src.f ? 1 : 0;
-#define TSC_READ_VECTOR(f) r.f = tsc::from_carla(src.f);
+// Plain fields (bools become 0/1), LibCarla -> C.
+#define TSC_READ(f) dst.f = src.f;
+#define TSC_READ_VECTOR(f) dst.f = from_carla(src.f);
+// C -> LibCarla, validated.
 #define TSC_WRITE_FLOAT(f) dst.f = check_finite(src.f, #f);
 #define TSC_WRITE_BOOL(f) dst.f = src.f != 0;
 #define TSC_WRITE_U8(f) dst.f = check_u8(src.f, #f);
 #define TSC_WRITE_INT(f) dst.f = src.f;
 #define TSC_WRITE_VECTOR(f) dst.f = check_vector(src.f, #f);
-#define TSC_WRITE_LOCATION(f) dst.f = check_location(src.f, #f);
+#define TSC_WRITE_ARRAY(f) dst.f = checked_vector(src.f, src.f##_size, #f);
 
-// Overwrites every field the C ABI carries. Wheels are matched by index.
-void write_physics(const tsc_vehicle_physics_control_t &c,
-                   carla::rpc::VehiclePhysicsControl &pc) {
-  {
-    const auto &src = c;
-    auto &dst = pc;
-    TSC_VEHICLE_FLOAT_FIELDS(TSC_WRITE_FLOAT)
-    TSC_VEHICLE_BOOL_FIELDS(TSC_WRITE_BOOL)
-    dst.differential_type = check_u8(src.differential_type, "differential_type");
-    dst.center_of_mass = check_location(src.center_of_mass, "center_of_mass");
-    dst.inertia_tensor_scale = check_vector(src.inertia_tensor_scale, "inertia_tensor_scale");
-  }
-  pc.torque_curve = to_curve(c.torque_curve, c.torque_curve_size, "torque_curve");
-  pc.steering_curve = to_curve(c.steering_curve, c.steering_curve_size, "steering_curve");
-  pc.forward_gear_ratios =
-      to_ratios(c.forward_gear_ratios, c.forward_gear_ratios_size, "forward_gear_ratios");
-  pc.reverse_gear_ratios =
-      to_ratios(c.reverse_gear_ratios, c.reverse_gear_ratios_size, "reverse_gear_ratios");
-  require_array(c.wheels, c.wheel_count, "wheels");
-  for (size_t i = 0; i < c.wheel_count; ++i) {
-    const tsc_wheel_physics_control_t &src = c.wheels[i];
-    carla::rpc::WheelPhysicsControl &dst = pc.wheels[i];
-    TSC_WHEEL_FLOAT_FIELDS(TSC_WRITE_FLOAT)
-    TSC_WHEEL_BOOL_FIELDS(TSC_WRITE_BOOL)
-    TSC_WHEEL_U8_FIELDS(TSC_WRITE_U8)
-    TSC_WHEEL_INT_FIELDS(TSC_WRITE_INT)
-    TSC_WHEEL_VECTOR_FIELDS(TSC_WRITE_VECTOR)
-    TSC_WHEEL_LOCATION_FIELDS(TSC_WRITE_LOCATION)
-    dst.lateral_slip_graph =
-        to_curve(src.lateral_slip_graph, src.lateral_slip_graph_size, "lateral_slip_graph");
-  }
+// Every field except lateral_slip_graph, whose storage the caller owns.
+void read_wheel(const carla::rpc::WheelPhysicsControl &src, tsc_wheel_physics_control_t &dst) {
+  TSC_WHEEL_FLOAT_FIELDS(TSC_READ)
+  TSC_WHEEL_BOOL_FIELDS(TSC_READ)
+  TSC_WHEEL_U8_FIELDS(TSC_READ)
+  TSC_WHEEL_INT_FIELDS(TSC_READ)
+  TSC_WHEEL_VECTOR_FIELDS(TSC_READ_VECTOR)
+}
+
+void write_wheel(const tsc_wheel_physics_control_t &src, carla::rpc::WheelPhysicsControl &dst) {
+  TSC_WHEEL_FLOAT_FIELDS(TSC_WRITE_FLOAT)
+  TSC_WHEEL_BOOL_FIELDS(TSC_WRITE_BOOL)
+  TSC_WHEEL_U8_FIELDS(TSC_WRITE_U8)
+  TSC_WHEEL_INT_FIELDS(TSC_WRITE_INT)
+  TSC_WHEEL_VECTOR_FIELDS(TSC_WRITE_VECTOR)
+  dst.lateral_slip_graph =
+      checked_vector(src.lateral_slip_graph, src.lateral_slip_graph_size, "lateral_slip_graph");
+}
+
+// Overwrites every field the C ABI carries. Wheels are matched by index; the
+// caller has checked that the counts agree.
+void write_physics(const tsc_vehicle_physics_control_t &src,
+                   carla::rpc::VehiclePhysicsControl &dst) {
+  TSC_VEHICLE_FLOAT_FIELDS(TSC_WRITE_FLOAT)
+  TSC_VEHICLE_BOOL_FIELDS(TSC_WRITE_BOOL)
+  TSC_VEHICLE_U8_FIELDS(TSC_WRITE_U8)
+  TSC_VEHICLE_VECTOR_FIELDS(TSC_WRITE_VECTOR)
+  TSC_VEHICLE_ARRAY_FIELDS(TSC_WRITE_ARRAY)
+  require_array(src.wheels, src.wheel_count, "wheels");
+  for (size_t i = 0; i < src.wheel_count; ++i) write_wheel(src.wheels[i], dst.wheels[i]);
 }
 
 }  // namespace
 
 tsc_physics_control::tsc_physics_control(const carla::rpc::VehiclePhysicsControl &src)
-    : tsc_handle(TSC_KIND_PHYSICS_CONTROL),
-      torque_curve(from_carla(src.torque_curve)),
-      steering_curve(from_carla(src.steering_curve)),
-      forward_gear_ratios(src.forward_gear_ratios.begin(), src.forward_gear_ratios.end()),
-      reverse_gear_ratios(src.reverse_gear_ratios.begin(), src.reverse_gear_ratios.end()) {
-  for (const carla::rpc::WheelPhysicsControl &w : src.wheels) {
-    lateral_slip_graphs.push_back(from_carla(w.lateral_slip_graph));
-  }
+    : tsc_handle(TSC_KIND_PHYSICS_CONTROL) {
+  tsc_vehicle_physics_control_t &dst = view;
+  TSC_VEHICLE_FLOAT_FIELDS(TSC_READ)
+  TSC_VEHICLE_BOOL_FIELDS(TSC_READ)
+  TSC_VEHICLE_U8_FIELDS(TSC_READ)
+  TSC_VEHICLE_VECTOR_FIELDS(TSC_READ_VECTOR)
+#define TSC_READ_ARRAY(f) \
+  f = to_c_vector(src.f); \
+  dst.f = f.data();       \
+  dst.f##_size = f.size();
+  TSC_VEHICLE_ARRAY_FIELDS(TSC_READ_ARRAY)
+#undef TSC_READ_ARRAY
+  lateral_slip_graphs.resize(src.wheels.size());
   wheels.resize(src.wheels.size());
   for (size_t i = 0; i < src.wheels.size(); ++i) {
-    const carla::rpc::WheelPhysicsControl &src_wheel = src.wheels[i];
-    tsc_wheel_physics_control_t &r = wheels[i];
-    {
-      const auto &src = src_wheel;
-      TSC_WHEEL_FLOAT_FIELDS(TSC_READ)
-      TSC_WHEEL_BOOL_FIELDS(TSC_READ_BOOL)
-      TSC_WHEEL_U8_FIELDS(TSC_READ)
-      TSC_WHEEL_INT_FIELDS(TSC_READ)
-      TSC_WHEEL_VECTOR_FIELDS(TSC_READ_VECTOR)
-      TSC_WHEEL_LOCATION_FIELDS(TSC_READ_VECTOR)
-    }
-    r.lateral_slip_graph = lateral_slip_graphs[i].data();
-    r.lateral_slip_graph_size = lateral_slip_graphs[i].size();
+    read_wheel(src.wheels[i], wheels[i]);
+    lateral_slip_graphs[i] = to_c_vector(src.wheels[i].lateral_slip_graph);
+    wheels[i].lateral_slip_graph = lateral_slip_graphs[i].data();
+    wheels[i].lateral_slip_graph_size = lateral_slip_graphs[i].size();
   }
-  tsc_vehicle_physics_control_t &r = view;
-  TSC_VEHICLE_FLOAT_FIELDS(TSC_READ)
-  TSC_VEHICLE_BOOL_FIELDS(TSC_READ_BOOL)
-  r.differential_type = src.differential_type;
-  r.center_of_mass = tsc::from_carla(src.center_of_mass);
-  r.inertia_tensor_scale = tsc::from_carla(src.inertia_tensor_scale);
-  r.torque_curve = torque_curve.data();
-  r.torque_curve_size = torque_curve.size();
-  r.steering_curve = steering_curve.data();
-  r.steering_curve_size = steering_curve.size();
-  r.forward_gear_ratios = forward_gear_ratios.data();
-  r.forward_gear_ratios_size = forward_gear_ratios.size();
-  r.reverse_gear_ratios = reverse_gear_ratios.data();
-  r.reverse_gear_ratios_size = reverse_gear_ratios.size();
-  r.wheels = wheels.data();
-  r.wheel_count = wheels.size();
+  dst.wheels = wheels.data();
+  dst.wheel_count = wheels.size();
 }
 
 extern "C" {

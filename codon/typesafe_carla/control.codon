@@ -53,11 +53,11 @@ class VehicleControl:
 def _curve_to_c(curve: List[Vector2D]) -> Ptr[CVector2D]:
     out = Ptr[CVector2D](len(curve))
     for i in range(len(curve)):
-        out[i] = CVector2D(curve[i].x, curve[i].y)
+        out[i] = curve[i]._to_c()
     return out
 
 def _curve_from_c(data: Ptr[CVector2D], size: int) -> List[Vector2D]:
-    return [Vector2D(data[i].x, data[i].y) for i in range(size)]
+    return [Vector2D._from_c(data[i]) for i in range(size)]
 
 def _ratios_from_c(data: Ptr[float], size: int) -> List[float]:
     return [data[i] for i in range(size)]
@@ -67,6 +67,20 @@ def _ratios_to_c(ratios: List[float]) -> Ptr[float]:
     for i in range(len(ratios)):
         out[i] = ratios[i]
     return out
+
+# Field-by-field __eq__ / __repr__ in declaration order, for the classes whose
+# field lists are too long to keep a hand-written copy of in sync.
+def _fields_eq(a, b) -> bool:
+    for k, v in static.vars(a):
+        if not (v == getattr(b, k)):
+            return False
+    return True
+
+def _fields_repr(name: str, obj) -> str:
+    parts = List[str]()
+    for k, v in static.vars(obj):
+        parts.append(f"{k}={v}")
+    return name + "(" + ", ".join(parts) + ")"
 
 class WheelPhysicsControl:
     """Per-wheel physics: every field of CARLA's WheelPhysicsControl, with the
@@ -194,81 +208,13 @@ class WheelPhysicsControl:
         self.velocity = velocity if velocity is not None else Vector3D()
 
     def __eq__(self, other: WheelPhysicsControl) -> bool:
-        return (self.axle_type == other.axle_type and
-                self.offset == other.offset and
-                self.wheel_radius == other.wheel_radius and
-                self.wheel_width == other.wheel_width and
-                self.wheel_mass == other.wheel_mass and
-                self.cornering_stiffness == other.cornering_stiffness and
-                self.friction_force_multiplier == other.friction_force_multiplier and
-                self.side_slip_modifier == other.side_slip_modifier and
-                self.slip_threshold == other.slip_threshold and
-                self.skid_threshold == other.skid_threshold and
-                self.max_steer_angle == other.max_steer_angle and
-                self.affected_by_steering == other.affected_by_steering and
-                self.affected_by_brake == other.affected_by_brake and
-                self.affected_by_handbrake == other.affected_by_handbrake and
-                self.affected_by_engine == other.affected_by_engine and
-                self.abs_enabled == other.abs_enabled and
-                self.traction_control_enabled == other.traction_control_enabled and
-                self.max_wheelspin_rotation == other.max_wheelspin_rotation and
-                self.external_torque_combine_method == other.external_torque_combine_method and
-                self.lateral_slip_graph == other.lateral_slip_graph and
-                self.suspension_axis == other.suspension_axis and
-                self.suspension_force_offset == other.suspension_force_offset and
-                self.suspension_max_raise == other.suspension_max_raise and
-                self.suspension_max_drop == other.suspension_max_drop and
-                self.suspension_damping_ratio == other.suspension_damping_ratio and
-                self.wheel_load_ratio == other.wheel_load_ratio and
-                self.spring_rate == other.spring_rate and
-                self.spring_preload == other.spring_preload and
-                self.suspension_smoothing == other.suspension_smoothing and
-                self.rollbar_scaling == other.rollbar_scaling and
-                self.sweep_shape == other.sweep_shape and
-                self.sweep_type == other.sweep_type and
-                self.max_brake_torque == other.max_brake_torque and
-                self.max_hand_brake_torque == other.max_hand_brake_torque and
-                self.wheel_index == other.wheel_index and
-                self.location == other.location and
-                self.old_location == other.old_location and
-                self.velocity == other.velocity)
+        return _fields_eq(self, other)
 
     def __ne__(self, other: WheelPhysicsControl) -> bool:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return (f"WheelPhysicsControl(axle_type={self.axle_type}, offset={self.offset}, "
-                f"wheel_radius={self.wheel_radius}, wheel_width={self.wheel_width}, "
-                f"wheel_mass={self.wheel_mass}, "
-                f"cornering_stiffness={self.cornering_stiffness}, "
-                f"friction_force_multiplier={self.friction_force_multiplier}, "
-                f"side_slip_modifier={self.side_slip_modifier}, "
-                f"slip_threshold={self.slip_threshold}, "
-                f"skid_threshold={self.skid_threshold}, "
-                f"max_steer_angle={self.max_steer_angle}, "
-                f"affected_by_steering={self.affected_by_steering}, "
-                f"affected_by_brake={self.affected_by_brake}, "
-                f"affected_by_handbrake={self.affected_by_handbrake}, "
-                f"affected_by_engine={self.affected_by_engine}, "
-                f"abs_enabled={self.abs_enabled}, "
-                f"traction_control_enabled={self.traction_control_enabled}, "
-                f"max_wheelspin_rotation={self.max_wheelspin_rotation}, "
-                f"external_torque_combine_method={self.external_torque_combine_method}, "
-                f"lateral_slip_graph={self.lateral_slip_graph}, "
-                f"suspension_axis={self.suspension_axis}, "
-                f"suspension_force_offset={self.suspension_force_offset}, "
-                f"suspension_max_raise={self.suspension_max_raise}, "
-                f"suspension_max_drop={self.suspension_max_drop}, "
-                f"suspension_damping_ratio={self.suspension_damping_ratio}, "
-                f"wheel_load_ratio={self.wheel_load_ratio}, "
-                f"spring_rate={self.spring_rate}, spring_preload={self.spring_preload}, "
-                f"suspension_smoothing={self.suspension_smoothing}, "
-                f"rollbar_scaling={self.rollbar_scaling}, "
-                f"sweep_shape={self.sweep_shape}, sweep_type={self.sweep_type}, "
-                f"max_brake_torque={self.max_brake_torque}, "
-                f"max_hand_brake_torque={self.max_hand_brake_torque}, "
-                f"wheel_index={self.wheel_index}, location={self.location}, "
-                f"old_location={self.old_location}, velocity={self.velocity})")
+        return _fields_repr("WheelPhysicsControl", self)
 
     def _to_c(self, slip: Ptr[CVector2D]) -> CWheelPhysicsControl:
         """slip: lateral_slip_graph in C layout; it must outlive the C call."""
@@ -437,67 +383,13 @@ class VehiclePhysicsControl:
         self.use_sweep_wheel_collision = use_sweep_wheel_collision
 
     def __eq__(self, other: VehiclePhysicsControl) -> bool:
-        return (self.torque_curve == other.torque_curve and
-                self.max_torque == other.max_torque and
-                self.max_rpm == other.max_rpm and
-                self.idle_rpm == other.idle_rpm and
-                self.brake_effect == other.brake_effect and
-                self.rev_up_moi == other.rev_up_moi and
-                self.rev_down_rate == other.rev_down_rate and
-                self.differential_type == other.differential_type and
-                self.front_rear_split == other.front_rear_split and
-                self.use_automatic_gears == other.use_automatic_gears and
-                self.gear_change_time == other.gear_change_time and
-                self.final_ratio == other.final_ratio and
-                self.forward_gear_ratios == other.forward_gear_ratios and
-                self.reverse_gear_ratios == other.reverse_gear_ratios and
-                self.change_up_rpm == other.change_up_rpm and
-                self.change_down_rpm == other.change_down_rpm and
-                self.transmission_efficiency == other.transmission_efficiency and
-                self.mass == other.mass and
-                self.drag_coefficient == other.drag_coefficient and
-                self.center_of_mass == other.center_of_mass and
-                self.chassis_width == other.chassis_width and
-                self.chassis_height == other.chassis_height and
-                self.downforce_coefficient == other.downforce_coefficient and
-                self.drag_area == other.drag_area and
-                self.inertia_tensor_scale == other.inertia_tensor_scale and
-                self.sleep_threshold == other.sleep_threshold and
-                self.sleep_slope_limit == other.sleep_slope_limit and
-                self.steering_curve == other.steering_curve and
-                self.wheels == other.wheels and
-                self.use_sweep_wheel_collision == other.use_sweep_wheel_collision)
+        return _fields_eq(self, other)
 
     def __ne__(self, other: VehiclePhysicsControl) -> bool:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return (f"VehiclePhysicsControl(torque_curve={self.torque_curve}, "
-                f"max_torque={self.max_torque}, "
-                f"max_rpm={self.max_rpm}, idle_rpm={self.idle_rpm}, "
-                f"brake_effect={self.brake_effect}, rev_up_moi={self.rev_up_moi}, "
-                f"rev_down_rate={self.rev_down_rate}, "
-                f"differential_type={self.differential_type}, "
-                f"front_rear_split={self.front_rear_split}, "
-                f"use_automatic_gears={self.use_automatic_gears}, "
-                f"gear_change_time={self.gear_change_time}, "
-                f"final_ratio={self.final_ratio}, "
-                f"forward_gear_ratios={self.forward_gear_ratios}, "
-                f"reverse_gear_ratios={self.reverse_gear_ratios}, "
-                f"change_up_rpm={self.change_up_rpm}, "
-                f"change_down_rpm={self.change_down_rpm}, "
-                f"transmission_efficiency={self.transmission_efficiency}, "
-                f"mass={self.mass}, drag_coefficient={self.drag_coefficient}, "
-                f"center_of_mass={self.center_of_mass}, "
-                f"chassis_width={self.chassis_width}, "
-                f"chassis_height={self.chassis_height}, "
-                f"downforce_coefficient={self.downforce_coefficient}, "
-                f"drag_area={self.drag_area}, "
-                f"inertia_tensor_scale={self.inertia_tensor_scale}, "
-                f"sleep_threshold={self.sleep_threshold}, "
-                f"sleep_slope_limit={self.sleep_slope_limit}, "
-                f"steering_curve={self.steering_curve}, wheels={self.wheels}, "
-                f"use_sweep_wheel_collision={self.use_sweep_wheel_collision})")
+        return _fields_repr("VehiclePhysicsControl", self)
 
     @staticmethod
     def _get(vehicle: cobj) -> VehiclePhysicsControl:

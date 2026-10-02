@@ -5,7 +5,7 @@ import typesafe_carla as carla
 import typesafe_carla._ffi as ffi
 
 assert ffi.CVehiclePhysicsControl.__elemsize__ == 304
-assert ffi.CWheelPhysicsControl.__elemsize__ == 360
+assert ffi.CWheelPhysicsControl.__elemsize__ == 360 and ffi.CVector2D.__elemsize__ == 16
 
 client = carla.Client("localhost", 2000)
 world = client.get_world()

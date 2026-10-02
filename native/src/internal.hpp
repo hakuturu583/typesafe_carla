@@ -68,8 +68,14 @@ T *require_ptr(T *p, const char *name) {
   return p;
 }
 
+// Caller arrays and strings: NULL is allowed only for size 0.
+template <typename T>
+void require_array(const T *data, size_t size, const char *name) {
+  if (data == nullptr && size != 0) fail(TSC_INVALID_ARGUMENT, std::string(name) + " is NULL");
+}
+
 inline std::string to_string(const char *data, size_t len, const char *name) {
-  if (data == nullptr && len != 0) fail(TSC_INVALID_ARGUMENT, std::string(name) + " is NULL");
+  require_array(data, len, name);
   return data == nullptr ? std::string() : std::string(data, len);
 }
 
@@ -355,6 +361,9 @@ inline carla::geom::Transform to_carla(const tsc_transform_t &t) {
 }
 inline tsc_vector3d_t from_carla(const carla::geom::Vector3D &v) {
   return tsc_vector3d_t{v.x, v.y, v.z};
+}
+inline tsc_vector2d_t from_carla(const carla::geom::Vector2D &v) {
+  return tsc_vector2d_t{v.x, v.y};
 }
 inline tsc_rotation_t from_carla(const carla::geom::Rotation &r) {
   return tsc_rotation_t{r.pitch, r.yaw, r.roll};
