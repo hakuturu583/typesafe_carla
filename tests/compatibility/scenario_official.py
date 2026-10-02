@@ -75,7 +75,12 @@ def lane_walk(w, left):
     return "/".join(ids)
 
 
-out("lane_walk", lane_walk(wp, True) + ";" + lane_walk(wp, False))
+# Start from a waypoint that has a lane to its left, so the walk visits real
+# lanes before reaching None. generate_waypoints' order depends on the LibCarla
+# build (it iterates an unordered_map), so pick the smallest (road, lane, s).
+multi = min((w for w in m.generate_waypoints(10.0) if w.get_left_lane() is not None),
+            key=lambda w: (w.road_id, w.lane_id, w.s))
+out("lane_walk", f"{multi.lane_id}:" + lane_walk(multi, True) + ";" + lane_walk(multi, False))
 
 spawn = carla.Transform(carla.Location(-64.644844, 24.471010, 0.6), carla.Rotation(0.0, 0.159198, 0.0))
 original = world.get_settings()

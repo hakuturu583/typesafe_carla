@@ -77,8 +77,9 @@ out("none_lookups", str(int(world.get_actor(999999) is None)) + "," +
     str(int(world.get_actors().find(999999) is None)) + "," + str(int(offroad is None)) + "," +
     str(int(wp.get_junction() is None)) + "," + str(int(jn is None)))
 
-def lane_walk(w, left: bool) -> str:
+def lane_walk(start: carla.Waypoint, left: bool) -> str:
     ids = List[str]()
+    w: Optional[carla.Waypoint] = start  # Codon does not widen on reassignment
     for _ in range(20):
         w = w.get_left_lane() if left else w.get_right_lane()
         if w is None:
@@ -86,7 +87,15 @@ def lane_walk(w, left: bool) -> str:
         ids.append(str(w.lane_id))
     return "/".join(ids)
 
-out("lane_walk", lane_walk(wp, True) + ";" + lane_walk(wp, False))
+# Start from a waypoint that has a lane to its left, so the walk visits real
+# lanes before reaching None. generate_waypoints' order depends on the LibCarla
+# build (it iterates an unordered_map), so pick the smallest (road, lane, s).
+candidates = [w for w in m.generate_waypoints(10.0) if w.get_left_lane() is not None]
+multi = candidates[0]
+for w in candidates:
+    if (w.road_id, w.lane_id, w.s) < (multi.road_id, multi.lane_id, multi.s):
+        multi = w
+out("lane_walk", str(multi.lane_id) + ":" + lane_walk(multi, True) + ";" + lane_walk(multi, False))
 
 spawn = carla.Transform(carla.Location(-64.644844, 24.471010, 0.6), carla.Rotation(0.0, 0.159198, 0.0))
 original = world.get_settings()

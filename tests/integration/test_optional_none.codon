@@ -33,8 +33,10 @@ points = m.get_spawn_points()
 wp = m.get_waypoint(points[0].location)
 assert wp
 assert len(m.get_waypoint(points[0].location).next(2.0)) >= 1  # chained, no check
+# A waypoint with a lane to its left, so the walks visit lanes before None.
+multi = [x for x in m.generate_waypoints(10.0) if x.get_left_lane() is not None][0]
 for left in (True, False):
-    w = wp
+    w: Optional[carla.Waypoint] = multi
     steps = 0
     while True:
         w = w.get_left_lane() if left else w.get_right_lane()
@@ -50,14 +52,17 @@ assert junction.get_junction() is not None
 
 # try_spawn_actor: None at an occupied spot; spawn_actor raises there.
 bp = lib.find("vehicle.lincoln.mkz")
-vehicle = world.try_spawn_actor(bp, points[0])
+spot = points[0]
+vehicle = world.try_spawn_actor(bp, spot)
 i = 1
 while vehicle is None and i < len(points):
-    vehicle = world.try_spawn_actor(bp, points[i])
+    spot = points[i]
+    vehicle = world.try_spawn_actor(bp, spot)
     i += 1
 assert vehicle is not None
 try:
-    spot = vehicle.get_transform()
+    # The spawn transform, not get_transform(): before the next tick the
+    # client may not have the vehicle's position yet.
     blocked = world.try_spawn_actor(bp, spot)
     if blocked is not None:
         blocked.destroy()
