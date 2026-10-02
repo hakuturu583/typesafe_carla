@@ -280,8 +280,10 @@ try:
             out(key, "error")
     r20 = client.apply_batch_sync(
         [carla.command.ApplyVehicleAckermannControl(vehicle.id,
-                                                    carla.VehicleAckermannControl(speed=0.0)),
-         carla.command.ShowDebugTelemetry(vehicle.id, False)], True)
+                                                    carla.VehicleAckermannControl(speed=0.0))],
+        True)
+    # (command.ShowDebugTelemetry is not batched here: the official 0.10.0 module
+    # has no converter for it in apply_batch_sync; test_issue20 covers ours.)
     out("ackermann_batch", ",".join(str(int(x.has_error())) for x in r20))
     nav = world.get_random_location_from_navigation()
     walker = None if nav is None else world.try_spawn_actor(

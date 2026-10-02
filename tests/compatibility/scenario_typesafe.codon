@@ -302,8 +302,7 @@ try:
         out("vehicle_bones", "skip" if "is not available in LibCarla" in str(e) else "error")
     r20 = client.apply_batch_sync(
         [carla.command.ApplyVehicleAckermannControl(car.id,
-                                                    carla.VehicleAckermannControl(speed=0.0)),
-         carla.command.ShowDebugTelemetry(car.id, False)], True)
+                                                    carla.VehicleAckermannControl(speed=0.0))], True)
     out("ackermann_batch", ",".join([str(int(x.has_error())) for x in r20]))
     nav = world.get_random_location_from_navigation()
     spawned: Optional[carla.Actor] = None
