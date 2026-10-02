@@ -404,6 +404,7 @@ from C import LIB.tsc_sensor_listen(cobj, int) -> i32
 from C import LIB.tsc_sensor_stop(cobj) -> i32
 from C import LIB.tsc_sensor_is_listening(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_sensor_dropped_count(cobj, Ptr[u64]) -> i32
+from C import LIB.tsc_sensor_pending_count(cobj, Ptr[int]) -> i32  # ABI 2.1
 from C import LIB.tsc_sensor_poll(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_wait_for_data(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_data_get_info(cobj, Ptr[CSensorDataInfo]) -> i32

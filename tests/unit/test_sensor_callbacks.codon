@@ -1,0 +1,208 @@
+# Sensor.listen(callback) on the mock backend (issue #11): callbacks run on the
+# program's thread at tick / wait_for_tick / apply_batch_sync(do_tick) /
+# dispatch_sensor_callbacks(), in arrival order, with an unbounded queue.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+vehicle = world.get_actors()[0].as_vehicle()
+lib = world.get_blueprint_library()
+
+cam_bp = lib.find("sensor.camera.rgb")
+cam_bp.set_attribute("image_size_x", "8")
+cam_bp.set_attribute("image_size_y", "4")
+
+def raw_tick() -> int:
+    """Ticks without dispatching callbacks (the C ABI directly)."""
+    out = Ptr[u64](1)
+    assert int(ffi.tsc_world_tick(world._h.ptr, 1.0, out)) == ffi.TSC_OK
+    return int(out[0])
+
+def spawn(bp: carla.ActorBlueprint) -> carla.Sensor:
+    return world.spawn_actor(bp, carla.Transform(), attach_to=vehicle).as_sensor()
+
+class Recorder:
+    frames: List[int]
+
+    def __init__(self):
+        self.frames = []
+
+    def on_data(self, data: carla.SensorData):
+        self.frames.append(data.frame)
+
+# Module-level function callback.
+GNSS_ALTITUDES = List[float]()
+
+def on_gnss(data: carla.SensorData):
+    GNSS_ALTITUDES.append(data.as_gnss().altitude)
+
+def test_callbacks_run_at_tick():
+    camera = spawn(cam_bp)
+    gnss = spawn(lib.find("sensor.other.gnss"))
+    imu = spawn(lib.find("sensor.other.imu"))
+    images = List[int]()
+    order = List[str]()
+    accel = List[float]()
+    # A lambda capturing locals, a function, and a closure.
+    camera.listen(lambda data: images.append(data.as_image().width))
+    gnss.listen(on_gnss)
+
+    def on_imu(data: carla.SensorData):
+        accel.append(data.as_imu().accelerometer.z)
+        order.append("imu")
+    imu.listen(on_imu)
+    assert camera.has_callback and gnss.has_callback and imu.has_callback
+    assert camera.is_listening
+
+    # Nothing runs until a dispatch point.
+    assert carla.dispatch_sensor_callbacks() == 0
+    world.tick()
+    assert images == [8] and len(GNSS_ALTITUDES) == 1 and len(accel) == 1
+    assert abs(accel[0] - 9.81) < 1e-4
+    assert camera.pending_count == 0
+
+    # Callback mode is exclusive: polling raises.
+    raised = False
+    try:
+        camera.poll()
+    except carla.CarlaError as e:
+        raised = True
+        assert "callback" in e.message
+    assert raised
+    raised = False
+    try:
+        camera.wait_for_data(0.01)
+    except carla.CarlaError:
+        raised = True
+    assert raised
+
+    for s in (camera, gnss, imu):
+        s.stop()
+        assert not s.has_callback and not s.is_listening
+    world.tick()
+    assert len(images) == 1 and len(GNSS_ALTITUDES) == 1
+    for s in (camera, gnss, imu):
+        assert s.destroy()
+
+def test_unbounded_queue_and_order():
+    camera = spawn(cam_bp)
+    rec = Recorder()
+    camera.listen(rec.on_data)  # bound method; unbounded queue by default
+    first = raw_tick()
+    for _ in range(199):
+        raw_tick()
+    assert camera.pending_count == 200 and len(rec.frames) == 0
+    assert carla.dispatch_sensor_callbacks() == 200
+    assert rec.frames == list(range(first, first + 200))
+    assert camera.dropped_count == 0 and camera.pending_count == 0
+
+    # The other dispatch points.
+    assert not world.get_settings().synchronous_mode
+    world.wait_for_tick()
+    assert len(rec.frames) == 201
+    client.apply_batch_sync(List[carla.Command](), True)
+    assert len(rec.frames) == 202
+    client.apply_batch(List[carla.Command](), True)
+    assert len(rec.frames) == 203
+    client.apply_batch_sync(List[carla.Command](), False)
+    assert len(rec.frames) == 203
+    assert rec.frames[-1] == world.get_snapshot().frame
+    assert camera.destroy()
+    assert not camera.has_callback
+
+def test_bounded_callback_queue():
+    camera = spawn(cam_bp)
+    rec = Recorder()
+    nested = List[int]()
+
+    def on_data(data: carla.SensorData):
+        rec.on_data(data)
+        # A dispatch inside a callback (also via tick) is a no-op.
+        nested.append(carla.dispatch_sensor_callbacks())
+    camera.listen(on_data, queue_size=2)
+    for _ in range(5):
+        last = raw_tick()
+    assert camera.dropped_count == 3
+    assert carla.dispatch_sensor_callbacks() == 2
+    assert rec.frames == [last - 1, last] and nested == [0, 0]
+    camera.stop()
+    assert camera.destroy()
+
+class Boom(Static[Exception]):
+    def __init__(self, message: str = ""):
+        super().__init__("Boom", message)
+
+def test_exception_propagates():
+    camera = spawn(cam_bp)
+    calls = List[int]()
+
+    def explode(data: carla.SensorData):
+        calls.append(data.frame)
+        if len(calls) == 1:
+            raise Boom("first")
+    camera.listen(explode)
+    f1 = raw_tick()
+    raised = False
+    try:
+        world.tick()  # the simulation advances, then the first callback raises
+    except Boom:
+        raised = True
+    assert raised and calls == [f1]
+    assert camera.pending_count == 1  # the tick's own frame stays queued
+    # The dispatcher is usable again after the exception.
+    assert carla.dispatch_sensor_callbacks() == 1
+    assert calls == [f1, f1 + 1]
+
+    # Measurements arriving after stop() are discarded.
+    raw_tick()
+    camera.stop()
+    assert camera.pending_count == 0
+    raw_tick()
+    world.tick()
+    assert len(calls) == 2
+    assert camera.destroy()
+
+def test_listen_modes():
+    camera = spawn(cam_bp)
+    count = List[int]()
+    camera.listen(lambda data: count.append(1))
+    # Listening again in polling mode unregisters the callback.
+    camera.listen(4)
+    assert not camera.has_callback
+    world.tick()
+    assert len(count) == 0
+    assert camera.wait_for_data(1.0).frame == world.get_snapshot().frame
+    # Polling mode with an unbounded queue.
+    camera.listen(queue_size=0)
+    for _ in range(100):
+        world.tick()
+    assert camera.pending_count == 100 and camera.dropped_count == 0
+    # Invalid sizes.
+    raised = False
+    try:
+        camera.listen(lambda data: count.append(1), -1)
+    except carla.CarlaError:
+        raised = True
+    assert raised and not camera.has_callback
+    raised = False
+    try:
+        camera.listen(4, queue_size=4)
+    except carla.CarlaError:
+        raised = True
+    assert raised
+    # A callback keeps the sensor alive without a user reference.
+    def start():
+        s = spawn(cam_bp)
+        s.listen(lambda data: count.append(data.frame))
+    start()
+    world.tick()
+    assert len(count) == 1
+    camera.destroy()
+
+test_callbacks_run_at_tick()
+test_unbounded_queue_and_order()
+test_bounded_callback_queue()
+test_exception_propagates()
+test_listen_modes()
+print("OK")

@@ -514,8 +514,9 @@ TSC_API tsc_status_t tsc_client_apply_batch_sync(tsc_client_t *client,
 /* Milestone 2: sensors (ABI 1.3)                                           */
 /*                                                                          */
 /* LibCarla delivers measurements on its own worker threads. They are put   */
-/* into a bounded per-handle queue; the Codon side polls it (design §15).   */
-/* Codon code never runs on a LibCarla thread.                              */
+/* into a per-handle queue; the Codon side polls it, or drains it into      */
+/* callbacks on the program's own thread (design §15). Codon code never     */
+/* runs on a LibCarla thread.                                               */
 /* ------------------------------------------------------------------------ */
 
 typedef struct tsc_sensor tsc_sensor_t; /* also a valid actor handle */
@@ -534,7 +535,8 @@ typedef enum {
 TSC_API tsc_status_t tsc_actor_as_sensor(tsc_actor_t *actor, tsc_sensor_t **out_sensor);
 
 /* Starts delivering measurements into this handle's queue, which keeps at
- * most queue_capacity items (oldest dropped first). Listening again stops the
+ * most queue_capacity items (oldest dropped first); queue_capacity 0 means
+ * unbounded (ABI 2.1; earlier versions reject 0). Listening again stops the
  * previous stream and replaces the queue. Listening state belongs to this
  * handle's client-side sensor object; releasing it stops the stream. */
 TSC_API tsc_status_t tsc_sensor_listen(tsc_sensor_t *sensor, size_t queue_capacity);
@@ -543,6 +545,10 @@ TSC_API tsc_status_t tsc_sensor_stop(tsc_sensor_t *sensor);
 TSC_API tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out);
 /* Number of measurements dropped because the queue was full. */
 TSC_API tsc_status_t tsc_sensor_dropped_count(tsc_sensor_t *sensor, uint64_t *out);
+/* Number of measurements currently queued (ABI 2.1). More may arrive at any
+ * time; items leave only through poll / wait_for_data, a bounded queue's
+ * overflow, or listen (which replaces the queue). */
+TSC_API tsc_status_t tsc_sensor_pending_count(tsc_sensor_t *sensor, size_t *out);
 /* *out = NULL (TSC_OK) when the queue is empty. */
 TSC_API tsc_status_t tsc_sensor_poll(tsc_sensor_t *sensor, tsc_sensor_data_t **out);
 /* TSC_TIMEOUT when nothing arrives within timeout_seconds. */

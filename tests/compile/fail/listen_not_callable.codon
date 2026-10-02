@@ -1,0 +1,9 @@
+# listen() takes a queue size (int) or a callback, not e.g. a float.
+# expect-error: 'float' object has no attribute '__call__'
+import typesafe_carla as carla
+
+def start(camera: carla.Sensor):
+    camera.listen(0.5)
+
+# Compile-only: Codon type-checks a function only when it is called.
+start(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor())

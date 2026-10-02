@@ -1,0 +1,49 @@
+import typesafe_carla as carla
+
+class FrameLog:
+    frames: List[int]
+
+    def __init__(self):
+        self.frames = []
+
+    def record(self, data: carla.SensorData):
+        self.frames.append(data.frame)
+
+def on_gnss(data: carla.SensorData):
+    fix: carla.GnssMeasurement = data.as_gnss()
+    print(fix.latitude)
+
+def perceive(world: carla.World, vehicle: carla.Vehicle) -> int:
+    lib = world.get_blueprint_library()
+    camera = world.spawn_actor(lib.find("sensor.camera.rgb"), carla.Transform(),
+                               attach_to=vehicle).as_sensor()
+    gnss = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform(),
+                             attach_to=vehicle).as_sensor()
+    imu = world.spawn_actor(lib.find("sensor.other.imu"), carla.Transform(),
+                            attach_to=vehicle).as_sensor()
+    lidar = world.spawn_actor(lib.find("sensor.lidar.ray_cast"), carla.Transform(),
+                              attach_to=vehicle).as_sensor()
+    widths = List[int]()
+    log = FrameLog()
+    # A lambda (capturing locals), a function, a bound method and a closure.
+    camera.listen(lambda data: widths.append(data.as_image().width))
+    gnss.listen(on_gnss)
+    imu.listen(log.record, queue_size=16)  # bounded: oldest dropped beyond 16
+
+    def on_sweep(data: carla.SensorData):
+        widths.append(len(data.as_lidar()))
+    lidar.listen(on_sweep)
+    world.tick()
+    world.wait_for_tick()
+    ran: int = carla.dispatch_sensor_callbacks()
+    has: bool = camera.has_callback
+    queued: int = camera.pending_count
+    camera.stop()
+    gnss.destroy()
+    # Back to polling with an unbounded queue.
+    lidar.listen(queue_size=0)
+    return ran + len(widths) + len(log.frames) + int(has) + queued
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+print(perceive(_world, _world.get_actors()[0].as_vehicle()))

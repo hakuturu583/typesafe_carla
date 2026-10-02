@@ -72,7 +72,14 @@ camera = world.spawn_actor(world.get_blueprint_library().find("sensor.camera.rgb
                            carla.Transform(carla.Location(1.5, 0.0, 2.0)),
                            attach_to=vehicle).as_sensor()
 camera.listen()
-image = camera.wait_for_data(5.0).as_image()   # polling; no callbacks on CARLA threads
+image = camera.wait_for_data(5.0).as_image()   # polling mode
+
+# Or a callback, as in the Python API. It runs on this program's thread, never
+# on a CARLA thread: inside world.tick() / world.wait_for_tick(), or when the
+# program calls carla.dispatch_sensor_callbacks().
+frames = List[int]()
+camera.listen(lambda data: frames.append(data.as_image().frame))
+world.wait_for_tick()   # runs the callbacks queued so far
 ```
 
 A mistake such as `vehicle.apply_control(carla.Transform())` is a compile

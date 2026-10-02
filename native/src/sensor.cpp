@@ -1,5 +1,6 @@
-// Sensors: LibCarla callbacks feed a bounded queue that Codon polls (design
-// sections 15-16). Measurement buffers are exposed zero-copy.
+// Sensors: LibCarla callbacks feed a per-handle queue that the Codon side
+// polls or dispatches to callbacks on the program's thread (design sections
+// 15-16). Measurement buffers are exposed zero-copy.
 #include "internal.hpp"
 
 #include <chrono>
@@ -13,7 +14,8 @@ namespace data = carla::sensor::data;
 namespace tsc {
 
 // Measurements from LibCarla's sensor threads, waiting to be polled by the
-// Codon side (design section 15). Bounded: when full, the oldest is dropped.
+// Codon side (design section 15). Bounded (when full, the oldest is dropped)
+// unless the capacity is 0, which means unbounded.
 class SensorQueue {
  public:
   using Item = carla::SharedPtr<carla::sensor::SensorData>;
@@ -24,7 +26,7 @@ class SensorQueue {
     Item evicted;  // released after unlocking: it may own a large buffer
     {
       std::lock_guard<std::mutex> lock(_mutex);
-      if (_items.size() >= _capacity) {
+      if (_capacity != 0 && _items.size() >= _capacity) {
         evicted = take_front_locked();
         ++_dropped;
       }
@@ -51,6 +53,11 @@ class SensorQueue {
     return _dropped;
   }
 
+  size_t size() const {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _items.size();
+  }
+
  private:
   Item take_front_locked() {
     Item item = std::move(_items.front());
@@ -61,7 +68,7 @@ class SensorQueue {
   mutable std::mutex _mutex;
   std::condition_variable _ready;
   std::deque<Item> _items;
-  const size_t _capacity;  // at least 1 (checked by tsc_sensor_listen)
+  const size_t _capacity;  // 0 = unbounded
   uint64_t _dropped = 0;
 };
 
@@ -126,7 +133,6 @@ tsc_status_t tsc_actor_as_sensor(tsc_actor_t *actor, tsc_sensor_t **out_sensor) 
 
 tsc_status_t tsc_sensor_listen(tsc_sensor_t *sensor, size_t queue_capacity) {
   return TSC_GUARD({
-    if (queue_capacity == 0) fail(TSC_INVALID_ARGUMENT, "queue_capacity must be at least 1");
     auto &h = sensor_handle(sensor);
     auto &s = sensor_of(sensor);
     // LibCarla does not replace an existing subscription: a second Listen()
@@ -155,6 +161,10 @@ tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out) {
 
 tsc_status_t tsc_sensor_dropped_count(tsc_sensor_t *sensor, uint64_t *out) {
   return TSC_GUARD({ *require_ptr(out, "out") = queue_of(sensor).dropped(); });
+}
+
+tsc_status_t tsc_sensor_pending_count(tsc_sensor_t *sensor, size_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = queue_of(sensor).size(); });
 }
 
 tsc_status_t tsc_sensor_poll(tsc_sensor_t *sensor, tsc_sensor_data_t **out) {

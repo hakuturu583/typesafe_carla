@@ -6,6 +6,7 @@ the same keys. compare.py runs both against one server and compares them.
 
 import os
 import sys
+import time
 
 import carla
 
@@ -128,6 +129,18 @@ try:
     for s in sensors:
         s.stop()
         s.destroy()
+    # Issue #11: Sensor.listen(callback); one image per synchronous tick.
+    cb_frames = []
+    cam = world.spawn_actor(cam_bp, carla.Transform(carla.Location(0.0, 0.0, 2.0)),
+                            attach_to=vehicle)
+    cam.listen(lambda image: cb_frames.append(image.frame))
+    ticked = [world.tick() for _ in range(5)]
+    deadline = time.time() + 20.0
+    while len(cb_frames) < 5 and time.time() < deadline:
+        time.sleep(0.01)
+    cam.stop()
+    cam.destroy()
+    out("callback_frames", f"{len(cb_frames[:5])},{int(cb_frames[:5] == ticked)}")
     vehicle.apply_control(carla.VehicleControl(throttle=0.6, steer=0.0))
     for _ in range(40):
         world.tick()

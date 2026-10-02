@@ -1,23 +1,33 @@
 # Sensors (design sections 15-16).
 #
-# LibCarla delivers measurements on its own threads into a bounded queue; the
-# program polls it, so Codon code never runs on a LibCarla thread:
+# LibCarla delivers measurements on its own threads into a per-sensor queue.
+# Codon code never runs on a LibCarla thread: the program either polls the
+# queue, or registers a callback that runs on the program's own thread.
 #
 #     camera = world.spawn_actor(bp, transform, attach_to=vehicle).as_sensor()
-#     camera.listen()                       # start queueing measurements
+#
+#     camera.listen()                       # polling: bounded queue (64)
 #     image = camera.wait_for_data(2.0).as_image()
 #     pixels: Ptr[u8] = image.raw_data()    # zero copy, BGRA
+#
+#     camera.listen(lambda data: frames.append(data.frame))   # callback
+#     world.tick()                          # runs the queued callbacks
+#
+# Callbacks run only inside World.tick(), World.wait_for_tick(),
+# Client.apply_batch(_sync)(do_tick=True) (after the call has returned from
+# the server) and dispatch_sensor_callbacks().
 #
 # Typed measurements keep their SensorData (and so the native buffer) alive.
 
 from ._ffi import (Handle, CSensorDataInfo, CImage, CLidar, CLidarPoint, CGnss, CImu, CCollision,
                    TSC_KIND_SENSOR, tsc_handle_kind, tsc_actor_as_sensor, tsc_sensor_listen,
                    tsc_sensor_stop, tsc_sensor_is_listening, tsc_sensor_dropped_count,
+                   tsc_sensor_pending_count,
                    tsc_sensor_poll, tsc_sensor_wait_for_data, tsc_sensor_data_get_info,
                    tsc_sensor_data_as_image, tsc_sensor_data_as_lidar,
                    tsc_lidar_channel_point_count, tsc_sensor_data_as_gnss,
                    tsc_sensor_data_as_imu, tsc_sensor_data_as_collision,
-                   TSC_INVALID_ARGUMENT)
+                   TSC_INVALID_ARGUMENT, TSC_ERROR)
 from .errors import _check, CarlaError, _normalize_index
 from .geometry import Location, Transform, Vector3D
 from .blueprint import Color
@@ -247,18 +257,80 @@ class SensorData:
         _check(tsc_sensor_data_as_collision(self._h.ptr, out))
         return CollisionEvent(self, out[0])
 
+class _CallbackThunk[F]:
+    """Adapts any callable taking a SensorData (function, bound method, lambda,
+    closure) to one Callable type. Codon 0.19 cannot convert a closure with
+    captures to a Callable directly, but it can convert a bound method."""
+    f: F
+
+    def __init__(self, f: F):
+        self.f = f
+
+    def run(self, data: SensorData):
+        self.f(data)
+
 class Sensor(Actor):
     def __init__(self, h: Handle):
         super().__init__(h)
 
-    def listen(self, queue_size: int = 64):
-        """Starts queueing measurements; the oldest is dropped when queue_size is reached."""
-        if queue_size < 1:
-            raise CarlaError("queue_size must be at least 1", TSC_INVALID_ARGUMENT)
+    def listen(self, callback = None, queue_size: Optional[int] = None):
+        """Starts receiving measurements.
+
+        listen() / listen(queue_size): polling mode. Measurements are queued
+        for poll() / wait_for_data(); the queue keeps at most queue_size items
+        (default 64) and drops the oldest when full.
+
+        listen(callback) / listen(callback, queue_size): callback mode, like
+        the Python API. callback takes one SensorData; any return value is
+        ignored. It runs on the program's thread, never on a LibCarla thread:
+        in World.tick(), World.wait_for_tick(), Client.apply_batch(_sync) with
+        do_tick=True, and dispatch_sensor_callbacks(). The queue is unbounded
+        by default; pass queue_size to drop the oldest beyond that.
+
+        queue_size 0 means unbounded in both modes. Listening again replaces
+        the previous stream, callback and queue (pending measurements are
+        discarded).
+        """
+        if isinstance(callback, int):
+            if queue_size is not None:
+                raise CarlaError("listen(): queue size given twice", TSC_INVALID_ARGUMENT)
+            self._start(callback)
+            _unregister_callback(self)
+        elif callback is None:
+            self._start(queue_size if queue_size is not None else 64)
+            _unregister_callback(self)
+        else:
+            cb: Callable[[SensorData], None] = _CallbackThunk(callback).run
+            self._start(queue_size if queue_size is not None else 0)
+            _register_callback(self, cb)
+
+    def _start(self, queue_size: int):
+        if queue_size < 0:
+            raise CarlaError("queue_size must be 0 (unbounded) or positive",
+                             TSC_INVALID_ARGUMENT)
         _check(tsc_sensor_listen(self._h.ptr, queue_size))
 
     def stop(self):
+        """Stops the stream. In callback mode, unregisters the callback and
+        discards the measurements it has not received yet."""
+        had_callback = _unregister_callback(self)
         _check(tsc_sensor_stop(self._h.ptr))
+        if had_callback:
+            self._discard_pending()
+
+    def destroy(self) -> bool:
+        """Unregisters the callback (if any), then destroys the actor."""
+        if _unregister_callback(self):
+            self._discard_pending()
+        return super().destroy()
+
+    def _discard_pending(self):
+        out = Ptr[cobj](1)
+        while True:
+            _check(tsc_sensor_poll(self._h.ptr, out))
+            if out[0] == cobj():
+                break
+            Handle(out[0]).release()
 
     @property
     def is_listening(self) -> bool:
@@ -267,14 +339,32 @@ class Sensor(Actor):
         return int(out[0]) != 0
 
     @property
+    def has_callback(self) -> bool:
+        """True in callback mode (listen(callback) and not stopped since)."""
+        return _find_callback(self) >= 0
+
+    @property
     def dropped_count(self) -> int:
-        """Measurements dropped because the queue was full."""
+        """Measurements dropped because a bounded queue was full."""
         out = Ptr[u64](1)
         _check(tsc_sensor_dropped_count(self._h.ptr, out))
         return int(out[0])
 
+    @property
+    def pending_count(self) -> int:
+        """Measurements queued and not yet polled or dispatched."""
+        out = Ptr[int](1)
+        _check(tsc_sensor_pending_count(self._h.ptr, out))
+        return out[0]
+
+    def _check_polling(self, what: str):
+        if self.has_callback:
+            raise CarlaError(f"{what}: this sensor delivers to a callback; call listen() "
+                             "without one to poll", TSC_ERROR)
+
     def poll(self) -> Optional[SensorData]:
-        """The oldest queued measurement, or None. Never blocks."""
+        """The oldest queued measurement, or None. Never blocks. Polling mode only."""
+        self._check_polling("poll()")
         out = Ptr[cobj](1)
         _check(tsc_sensor_poll(self._h.ptr, out))
         if out[0] == cobj():
@@ -282,13 +372,91 @@ class Sensor(Actor):
         return SensorData(Handle(out[0]))
 
     def wait_for_data(self, seconds: float = 10.0) -> SensorData:
-        """Blocks until a measurement arrives. Raises TimeoutError."""
+        """Blocks until a measurement arrives. Raises TimeoutError. Polling mode only."""
+        self._check_polling("wait_for_data()")
         out = Ptr[cobj](1)
         _check(tsc_sensor_wait_for_data(self._h.ptr, seconds, out))
         return SensorData(Handle(out[0]))
 
     def __repr__(self) -> str:
         return f"Sensor(id={self.id}, type={self.type_id})"
+
+# Callback registry. Codon-side and process-wide: a World handle does not know
+# its sensors, so every dispatch point drains every registered sensor. The
+# registry holds a reference to the Sensor, so a callback keeps the stream
+# alive (as in the Python API) until stop() or destroy().
+class _Listener:
+    sensor: Sensor
+    callback: Callable[[SensorData], None]
+    active: bool  # False once unregistered (the list may be iterated meanwhile)
+
+    def __init__(self, sensor: Sensor, callback: Callable[[SensorData], None]):
+        self.sensor = sensor
+        self.callback = callback
+        self.active = True
+
+_listeners = List[_Listener]()  # in registration order
+_dispatching = False
+
+def _find_callback(sensor: Sensor) -> int:
+    for i in range(len(_listeners)):
+        if _listeners[i].sensor._h.ptr == sensor._h.ptr:
+            return i
+    return -1
+
+def _unregister_callback(sensor: Sensor) -> bool:
+    i = _find_callback(sensor)
+    if i < 0:
+        return False
+    _listeners[i].active = False
+    _listeners.pop(i)
+    return True
+
+def _register_callback(sensor: Sensor, callback: Callable[[SensorData], None]):
+    _unregister_callback(sensor)
+    _listeners.append(_Listener(sensor, callback))
+
+def dispatch_sensor_callbacks() -> int:
+    """Runs the callbacks of every sensor in callback mode on the queued
+    measurements, and returns how many callbacks ran.
+
+    Sensors are visited in the order their callbacks were registered; each
+    sensor's measurements are delivered in arrival order. Only measurements
+    already queued when a sensor's turn starts are delivered, so a call always
+    returns. Never blocks.
+
+    World.tick(), World.wait_for_tick() and Client.apply_batch(_sync) with
+    do_tick=True call this after the server answers. Call it yourself in
+    asynchronous mode, or to deliver data that arrived after a tick returned.
+
+    An exception raised by a callback propagates to the caller (e.g. out of
+    World.tick(), after the simulation has advanced); the measurements not yet
+    delivered stay queued for the next dispatch. A dispatch started from
+    inside a callback (e.g. a callback that ticks) does nothing and returns 0.
+    """
+    global _dispatching
+    if _dispatching or len(_listeners) == 0:
+        return 0
+    _dispatching = True
+    count = 0
+    try:
+        for listener in list(_listeners):  # callbacks may stop or listen
+            if not listener.active:
+                continue
+            ptr = listener.sensor._h.ptr
+            pending = listener.sensor.pending_count
+            out = Ptr[cobj](1)
+            for _ in range(pending):
+                if not listener.active:
+                    break
+                _check(tsc_sensor_poll(ptr, out))
+                if out[0] == cobj():
+                    break
+                listener.callback(SensorData(Handle(out[0])))
+                count += 1
+    finally:
+        _dispatching = False
+    return count
 
 @extend
 class Actor:

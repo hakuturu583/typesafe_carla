@@ -45,7 +45,7 @@ Milestones (design section 43):
 | Map | `name`, `get_spawn_points`, `get_waypoint` (→ `Optional[Waypoint]`), `generate_waypoints`, `to_opendrive`, `get_topology`, `get_crosswalks`, `get_all_landmarks`, `get_all_landmarks_of_type`; `LaneType`, `Landmark`, `Junction` (`id`, `bounding_box`, `get_waypoints`) |
 | Waypoint | `id`, `transform`, `road_id`, `section_id`, `lane_id`, `s`, `is_junction`, `junction_id`, `lane_width`, `lane_type`, `next`, `previous`, `next_until_lane_end`, `previous_until_lane_start`, `get_left_lane` / `get_right_lane` / `get_junction` (→ `Optional`) |
 | Snapshots | `WorldSnapshot` (`id`, `frame`, `timestamp`, `find` → `Optional`, `has_actor`, indexing, iteration), `ActorSnapshot`, `Timestamp` |
-| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(queue_size)` / `stop` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `dropped_count`; `SensorData.as_image()` / `as_lidar()` / `as_gnss()` / `as_imu()` / `as_collision()` (checked); `Image` (zero-copy `raw_data()`, `pixel`), `LidarMeasurement` (zero-copy `raw_points()`, iteration, `get_point_count`), `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` |
+| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`; `SensorData.as_image()` / `as_lidar()` / `as_gnss()` / `as_imu()` / `as_collision()` (checked); `Image` (zero-copy `raw_data()`, `pixel`), `LidarMeasurement` (zero-copy `raw_points()`, iteration, `get_point_count`), `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` |
 | Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyWalkerControl`, `ApplyTransform`, `ApplyLocation`, `ApplyTargetVelocity`, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, `SetAutopilot`, `SetSimulatePhysics`, `SetEnableGravity`, `SetVehicleLightState`, `SetTrafficLightState`; `CommandResponse` |
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, indexing, iteration), `ActorBlueprint` (`id`, `has_tag`, `has_attribute`, `get_attribute`, `set_attribute`), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`) |
 | Values | `Location`, `Rotation`, `Transform`, `Vector2D`, `Vector3D`, `BoundingBox`, `VehicleControl`, `VehiclePhysicsControl`, `WheelPhysicsControl`, `WorldSettings`, `Color` |
@@ -70,7 +70,7 @@ Notes on Milestone 5:
   LibCarla client classes and whether the shim calls them (generated, hand-written or not yet).
 
 Notes on Milestone 2:
-- **No callbacks on LibCarla threads (design §15).** `listen()` starts a bounded per-sensor queue; the program reads it with `poll()` / `wait_for_data()`. When the queue is full, the oldest measurement is dropped (`dropped_count`). Call `stop()` (or destroy the sensor) when done.
+- **No callbacks on LibCarla threads (design §15).** LibCarla's threads only fill a per-sensor queue. `listen(callback)` runs the callback on the program's own thread, at `World.tick()`, `World.wait_for_tick()`, `Client.apply_batch(_sync)(do_tick=True)` and `carla.dispatch_sensor_callbacks()`; its queue is unbounded by default. `listen()` / `listen(queue_size)` is polling mode: the program reads a bounded queue (64 by default) with `poll()` / `wait_for_data()`, and the oldest measurement is dropped when it is full (`dropped_count`). `queue_size=0` means unbounded in both modes. Call `stop()` (or destroy the sensor) when done.
 - **Zero copy (design §16).** `Image.raw_data()` (BGRA) and `LidarMeasurement.raw_points()` point into LibCarla's buffer and stay valid while the measurement object is alive.
 - `World.spawn_actor(..., attach_to=...)` accepts any actor subclass (e.g. a `Vehicle`) or an `Optional` of one, and rejects non-actors at compile time.
 
@@ -231,6 +231,21 @@ Deliberate differences, all in favour of static checking:
   compile). Convert explicitly with `as_vector()` / `Location.from_vector()`.
 * **Attribute values are typed.** `ActorAttribute.as_int()` raises when the
   attribute is not an int; `str(attribute)` gives the raw value.
+* **Sensor callbacks run at dispatch points, not on CARLA's threads.**
+  `sensor.listen(lambda data: ...)` works, but the callback receives a
+  `SensorData` (convert it with `as_image()` etc.; a callback typed
+  `(image: carla.Image)` does not compile) and runs on the program's own
+  thread: inside `World.tick()`, `World.wait_for_tick()`,
+  `Client.apply_batch(_sync)(do_tick=True)` (after the server has answered),
+  or when the program calls `carla.dispatch_sensor_callbacks()`. A blocking
+  loop that never reaches one of these never sees its callbacks run. In
+  synchronous mode a measurement of frame N may reach the client just after
+  `tick()` returned N; it is then delivered at the next dispatch point, so
+  call `dispatch_sensor_callbacks()` (in a short wait loop if needed) when a
+  frame's data is required right after its tick. An exception raised by a
+  callback propagates out of the call that dispatched it. Callback mode
+  queues without bound by default (`listen(cb, queue_size=n)` bounds it);
+  `poll()` / `wait_for_data()` are for polling mode only.
 * **Float precision.** Values cross into LibCarla as float32, as they do in
   the Python API, so `get_control().throttle` after setting `0.2` is
   `0.2000000029802322`.

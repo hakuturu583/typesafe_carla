@@ -12,6 +12,7 @@ from ._ffi import (COpendriveParameters, tsc_client_start_recorder, tsc_client_s
                    tsc_client_generate_opendrive_world, TSC_INVALID_ARGUMENT)
 from .errors import _check, _check_port, CarlaError, _is_actor_id
 from .world import World
+from .sensor import dispatch_sensor_callbacks
 from .command import Command, CommandResponse, _flatten, _responses
 
 class OpendriveGenerationParameters:
@@ -98,6 +99,8 @@ class Client:
         """Sends all commands in one RPC without waiting for their results."""
         records, n = _flatten(commands)
         _check(tsc_client_apply_batch(self._h.ptr, records, n, i32(int(do_tick))))
+        if do_tick:
+            dispatch_sensor_callbacks()
 
     def apply_batch_sync(self, commands: List[Command],
                          do_tick: bool = False) -> List[CommandResponse]:
@@ -112,7 +115,10 @@ class Client:
         count = Ptr[int](1)
         _check(tsc_client_apply_batch_sync(self._h.ptr, records, n, i32(int(do_tick)), buf, top,
                                            count))
-        return _responses(buf, count[0])
+        responses = _responses(buf, count[0])
+        if do_tick:
+            dispatch_sensor_callbacks()
+        return responses
 
     def generate_opendrive_world(self, opendrive: str,
                                  parameters: Optional[OpendriveGenerationParameters] = None,
