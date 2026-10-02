@@ -5,7 +5,9 @@
 #include "typesafe_carla/ffi.h"
 #include "carla_compat.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <initializer_list>
 #include <cmath>
 #include <cstring>
 #include <optional>
@@ -128,6 +130,27 @@ struct tsc_vehicle : tsc_actor {
       : tsc_actor(std::move(v), TSC_KIND_VEHICLE) {}
 };
 
+namespace tsc {
+class SensorQueue;  // sensor.cpp
+}  // namespace tsc
+
+// A sensor handle is an actor handle whose `actor` is a carla::client::Sensor.
+// Listening state belongs to that client-side object (as in LibCarla): another
+// handle for the same actor (e.g. from World.get_actor) is not listening, and
+// releasing the last reference stops the stream (LibCarla's destructor calls
+// Stop()). The queue is shared with the callback, so late measurements are safe.
+struct tsc_sensor : tsc_actor {
+  std::shared_ptr<tsc::SensorQueue> queue;
+  explicit tsc_sensor(carla::SharedPtr<carla::client::Sensor> s)
+      : tsc_actor(std::move(s), TSC_KIND_SENSOR) {}
+};
+
+struct tsc_sensor_data : tsc_handle {
+  carla::SharedPtr<carla::sensor::SensorData> data;
+  explicit tsc_sensor_data(carla::SharedPtr<carla::sensor::SensorData> d)
+      : tsc_handle(TSC_KIND_SENSOR_DATA), data(std::move(d)) {}
+};
+
 struct tsc_actor_list : tsc_handle {
   carla::SharedPtr<carla::client::ActorList> list;
   explicit tsc_actor_list(carla::SharedPtr<carla::client::ActorList> l)
@@ -175,25 +198,37 @@ struct tsc_waypoint_list : tsc_handle {
 
 namespace tsc {
 
-// Validates a handle argument: non-NULL and of an accepted kind.
+// Validates a handle argument: non-NULL and of one of the accepted kinds.
 template <typename T>
-T *check_handle(T *h, const char *name, tsc_handle_kind_t kind,
-                tsc_handle_kind_t alt = TSC_KIND_INVALID) {
+T *check_handle(T *h, const char *name, std::initializer_list<tsc_handle_kind_t> kinds) {
   if (h == nullptr) fail(TSC_INVALID_ARGUMENT, std::string(name) + " must not be NULL");
-  if (h->kind != kind && (alt == TSC_KIND_INVALID || h->kind != alt)) {
+  if (std::find(kinds.begin(), kinds.end(), h->kind) == kinds.end()) {
     fail(TSC_INVALID_ARGUMENT, std::string(name) + " has the wrong handle kind");
   }
   return h;
 }
 
 template <typename T>
-const T *check_handle(const T *h, const char *name, tsc_handle_kind_t kind,
-                      tsc_handle_kind_t alt = TSC_KIND_INVALID) {
-  return check_handle(const_cast<T *>(h), name, kind, alt);
+T *check_handle(T *h, const char *name, tsc_handle_kind_t kind) {
+  return check_handle(h, name, {kind});
 }
 
+// Any actor handle: plain actors, vehicles and sensors.
 inline tsc_actor *check_actor(tsc_actor *a, const char *name = "actor") {
-  return check_handle(a, name, TSC_KIND_ACTOR, TSC_KIND_VEHICLE);
+  return check_handle(a, name, {TSC_KIND_ACTOR, TSC_KIND_VEHICLE, TSC_KIND_SENSOR});
+}
+
+// Shared body of tsc_actor_as_<kind>: a new reference to `actor` as the
+// derived handle H, or TSC_TYPE_ERROR naming `what` ("a vehicle").
+template <typename H>
+H *retain_as(tsc_actor_t *actor, tsc_handle_kind_t kind, const char *what) {
+  tsc_actor *a = check_actor(actor);
+  if (a->kind != kind) {
+    fail(TSC_TYPE_ERROR, "actor " + std::to_string(a->actor->GetId()) + " (" +
+                             a->actor->GetTypeId() + ") is not " + what);
+  }
+  tsc_handle_retain(a);
+  return static_cast<H *>(a);
 }
 
 inline carla::client::World &world_of(tsc_world_t *w) {

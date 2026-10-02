@@ -61,6 +61,29 @@ try:
         world.tick()
     t = vehicle.get_transform()
     out("settled", f"{t.location.x:.3f},{t.location.y:.3f},{t.rotation.yaw:.3f}")
+    # Milestone 2: sensors on the settled vehicle.
+    import queue
+    sensor_bps = []
+    cam_bp = lib.find("sensor.camera.rgb")
+    cam_bp.set_attribute("image_size_x", "320")
+    cam_bp.set_attribute("image_size_y", "240")
+    cam_bp.set_attribute("fov", "100")
+    lidar_bp = lib.find("sensor.lidar.ray_cast")
+    lidar_bp.set_attribute("channels", "16")
+    sensors = [world.spawn_actor(b, carla.Transform(carla.Location(0.0, 0.0, 2.0)), attach_to=vehicle)
+               for b in (cam_bp, lidar_bp, lib.find("sensor.other.gnss"), lib.find("sensor.other.imu"))]
+    queues = [queue.Queue() for _ in sensors]
+    for s, q in zip(sensors, queues):
+        s.listen(q.put)
+    world.tick()
+    image, sweep, fix, imu = (q.get(timeout=20.0) for q in queues)
+    out("camera", f"{image.width},{image.height},{image.fov:.3f},{len(image.raw_data)}")
+    out("lidar_channels", sweep.channels)
+    out("gnss", f"{fix.latitude:.7f},{fix.longitude:.7f},{fix.altitude:.3f}")
+    out("imu_compass", f"{imu.compass:.3f}")
+    for s in sensors:
+        s.stop()
+        s.destroy()
     vehicle.apply_control(carla.VehicleControl(throttle=0.6, steer=0.0))
     for _ in range(40):
         world.tick()

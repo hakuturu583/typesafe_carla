@@ -1,0 +1,151 @@
+# Milestone 2 against a real CARLA server: camera, LiDAR, GNSS, IMU and
+# collision sensors with queue/poll semantics and zero-copy buffers.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+m = world.get_map()
+lib = world.get_blueprint_library()
+points = m.get_spawn_points()
+
+original = world.get_settings()
+settings = world.get_settings()
+settings.synchronous_mode = True
+settings.fixed_delta_seconds = 0.05
+world.apply_settings(settings)
+
+spawned = List[int]()
+try:
+    ego = world.spawn_actor(lib.find("vehicle.lincoln.mkz"), points[0]).as_vehicle()
+    spawned.append(ego.id)
+    # A parked car 15 m ahead of the ego vehicle, to drive into.
+    fwd = points[0].get_forward_vector()
+    obstacle_at = carla.Transform(points[0].location + carla.Location(fwd.x * 15.0, fwd.y * 15.0, 0.0),
+                                  points[0].rotation)
+    obstacle = world.spawn_actor(lib.find("vehicle.lincoln.mkz"), obstacle_at)
+    spawned.append(obstacle.id)
+
+    cam_bp = lib.find("sensor.camera.rgb")
+    cam_bp.set_attribute("image_size_x", "320")
+    cam_bp.set_attribute("image_size_y", "240")
+    cam_bp.set_attribute("fov", "100")
+    camera = world.spawn_actor(cam_bp, carla.Transform(carla.Location(1.5, 0.0, 2.0)),
+                               attach_to=ego).as_sensor()
+    lidar_bp = lib.find("sensor.lidar.ray_cast")
+    lidar_bp.set_attribute("channels", "16")
+    lidar_bp.set_attribute("rotation_frequency", "20")
+    lidar = world.spawn_actor(lidar_bp, carla.Transform(carla.Location(0.0, 0.0, 2.4)),
+                              attach_to=ego).as_sensor()
+    gnss = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform(), attach_to=ego).as_sensor()
+    imu = world.spawn_actor(lib.find("sensor.other.imu"), carla.Transform(), attach_to=ego).as_sensor()
+    collision = world.spawn_actor(lib.find("sensor.other.collision"), carla.Transform(),
+                                  attach_to=ego).as_sensor()
+    sensors = [camera, lidar, gnss, imu, collision]
+    for s in sensors:
+        spawned.append(s.id)
+        assert s.is_sensor() and not s.is_vehicle()
+        s.listen(16)
+        assert s.is_listening
+    assert camera.poll() is None or True  # may or may not have data yet
+
+    frame = world.tick()
+    image = camera.wait_for_data(10.0).as_image()
+    print("camera", image)
+    assert image.width == 320 and image.height == 240 and abs(image.fov - 100.0) < 1e-3
+    assert image.raw_size() == 320 * 240 * 4
+    # Zero-copy buffer: the picture is not uniform (it shows a street).
+    lo = 255
+    hi = 0
+    raw = image.raw_data()
+    for i in range(0, image.raw_size(), 4 * 97):
+        v = int(raw[i + 1])
+        lo = min(lo, v)
+        hi = max(hi, v)
+    print("camera green channel range", lo, hi)
+    assert hi - lo > 20
+
+    sweep = lidar.wait_for_data(10.0).as_lidar()
+    print("lidar", sweep, "channel 0 points", sweep.get_point_count(0))
+    assert sweep.channels == 16 and len(sweep) > 100
+    total = 0
+    for c in range(sweep.channels):
+        total += sweep.get_point_count(c)
+    assert total == len(sweep)
+    near = 0
+    for p in sweep:
+        if p.point.distance(carla.Location()) < 60.0:
+            near += 1
+    assert near > 0
+
+    fix = gnss.wait_for_data(10.0).as_gnss()
+    print("gnss", fix)
+    assert -90.0 <= fix.latitude <= 90.0 and -180.0 <= fix.longitude <= 180.0
+    reading = imu.wait_for_data(10.0).as_imu()
+    print("imu", reading)
+    assert 0.0 <= reading.compass <= 7.0
+    # At rest the accelerometer measures gravity.
+    assert 7.0 < reading.accelerometer.length() < 12.5, reading.accelerometer
+
+    # Drive into the parked car until the collision sensor reports it.
+    ego.apply_control(carla.VehicleControl(throttle=1.0))
+    hit: Optional[carla.CollisionEvent] = None
+    for _ in range(200):
+        world.tick()
+        data = collision.poll()
+        if data is not None:
+            hit = data.as_collision()
+            break
+    assert hit is not None, "no collision reported"
+    print("collision", hit)
+    assert hit.actor_id == ego.id and hit.other_actor_id == obstacle.id
+    assert hit.normal_impulse.length() > 0.0
+
+    # The queue is bounded: without polling it fills up and drops the oldest.
+    for _ in range(30):
+        world.tick()
+    print("camera dropped", camera.dropped_count)
+    assert camera.dropped_count > 0
+    newest = Optional[carla.SensorData]()
+    while True:
+        d = camera.poll()
+        if d is None:
+            break
+        newest = d
+    assert newest is not None and newest.frame > image.frame
+
+    # A typed conversion of the wrong kind is rejected.
+    raised = False
+    try:
+        newest.as_lidar()
+    except carla.ActorTypeError as e:
+        raised = True
+        print("type check:", e.message)
+    assert raised
+
+    # Listening again replaces the stream; stop() then stops it for real
+    # (LibCarla would otherwise keep an orphaned subscription streaming).
+    camera.listen(4)
+    world.tick()
+    camera.wait_for_data(10.0)
+    camera.stop()
+    assert not camera.is_listening
+    while camera.poll() is not None:
+        pass
+    for _ in range(5):
+        world.tick()
+    assert camera.poll() is None, "data kept arriving after stop()"
+    assert not world.get_actor(lidar.id).as_sensor().is_listening  # state is per handle
+
+    for s in sensors:
+        s.stop()
+        assert not s.is_listening
+finally:
+    world.apply_settings(original)
+    client.apply_batch_sync([carla.command.DestroyActor(i) for i in reversed(spawned)])
+print("OK")

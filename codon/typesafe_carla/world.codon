@@ -54,6 +54,21 @@ class WorldSettings:
                              int(s.substepping) != 0, s.max_substep_delta_time,
                              int(s.max_substeps))
 
+def _parent_ptr(attach_to) -> cobj:
+    """Handle of `attach_to`: None, any Actor subclass, or an Optional of one.
+
+    (A typed `Optional[Actor]` parameter would reject a Vehicle or Sensor:
+    Codon does not upcast inside Optional.)
+    """
+    if attach_to is None:
+        return cobj()
+    elif isinstance(attach_to, Optional):
+        return _parent_ptr(attach_to.__val__())  # None was handled above
+    elif hasattr(attach_to, "as_vehicle"):  # Actor and its subclasses
+        return attach_to._h.ptr
+    else:
+        compile_error("attach_to must be an Actor (or an Optional actor)")
+
 class World:
     _h: Handle
 
@@ -88,21 +103,21 @@ class World:
         return BlueprintLibrary(Handle(out[0]))
 
     def spawn_actor(self, blueprint: ActorBlueprint, transform: Transform,
-                    attach_to: Optional[Actor] = None) -> Actor:
+                    attach_to = None) -> Actor:
         """Raises CarlaError if the actor cannot be spawned (e.g. collision)."""
         t = Ptr[CTransform](1)
         t[0] = transform._to_c()
-        parent = attach_to._h.ptr if attach_to is not None else cobj()
+        parent = _parent_ptr(attach_to)
         out = Ptr[cobj](1)
         _check(tsc_world_spawn_actor(self._h.ptr, blueprint._h.ptr, t, parent, out))
         return _make_actor(out[0])
 
     def try_spawn_actor(self, blueprint: ActorBlueprint, transform: Transform,
-                        attach_to: Optional[Actor] = None) -> Optional[Actor]:
+                        attach_to = None) -> Optional[Actor]:
         """Returns None if the actor cannot be spawned."""
         t = Ptr[CTransform](1)
         t[0] = transform._to_c()
-        parent = attach_to._h.ptr if attach_to is not None else cobj()
+        parent = _parent_ptr(attach_to)
         out = Ptr[cobj](1)
         _check(tsc_world_try_spawn_actor(self._h.ptr, blueprint._h.ptr, t, parent, out))
         if out[0] == cobj():

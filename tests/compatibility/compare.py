@@ -18,9 +18,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 EXACT = ("server_version", "vehicle_blueprints", "color_type", "wheels", "type_id", "control",
          "destroyed", "map_name", "spawn_points", "waypoint", "generated", "batch_error",
-         "physics_wheels")
+         "physics_wheels", "camera", "lidar_channels")
 NUMERIC = {"settled": 0.05, "driven": 0.5, "speed": 0.3, "spawn0": 0.001, "waypoint_s": 0.001,
-           "next10": 0.001, "bbox": 0.001, "physics": 0.001}
+           "next10": 0.001, "bbox": 0.001, "physics": 0.001,
+           "gnss": 0.0000005, "imu_compass": 0.01}
 
 
 def parse(text: str) -> dict[str, str]:

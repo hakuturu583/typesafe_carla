@@ -1,0 +1,32 @@
+import typesafe_carla as carla
+
+def perceive(world: carla.World, vehicle: carla.Vehicle) -> float:
+    lib = world.get_blueprint_library()
+    # attach_to accepts any actor subclass (Vehicle here) or an Optional one.
+    camera = world.spawn_actor(lib.find("sensor.camera.rgb"), carla.Transform(),
+                               attach_to=vehicle).as_sensor()
+    lidar = world.spawn_actor(lib.find("sensor.lidar.ray_cast"), carla.Transform(),
+                              attach_to=vehicle).as_sensor()
+    maybe_parent: Optional[carla.Vehicle] = vehicle
+    imu = world.try_spawn_actor(lib.find("sensor.other.imu"), carla.Transform(),
+                                attach_to=maybe_parent)
+    camera.listen(8)
+    lidar.listen()
+    image: carla.Image = camera.wait_for_data(1.0).as_image()
+    pixels: Ptr[u8] = image.raw_data()
+    sweep: carla.LidarMeasurement = lidar.wait_for_data(1.0).as_lidar()
+    nearest = 1e9
+    for p in sweep:
+        nearest = min(nearest, p.point.distance(carla.Location()))
+    data: Optional[carla.SensorData] = camera.poll()
+    if data is not None and data.type == carla.SensorDataType.Image:
+        nearest += float(int(pixels[0]))
+    if imu is not None:
+        reading: carla.IMUMeasurement = imu.as_sensor().wait_for_data(1.0).as_imu()
+        nearest += reading.compass
+    camera.stop()
+    return nearest
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+print(perceive(_world, _world.get_actors()[0].as_vehicle()))

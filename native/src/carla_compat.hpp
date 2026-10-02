@@ -11,6 +11,7 @@
 #include <carla/client/BlueprintLibrary.h>
 #include <carla/client/Client.h>
 #include <carla/client/Map.h>
+#include <carla/client/Sensor.h>
 #include <carla/client/Timestamp.h>
 #include <carla/client/TimeoutException.h>
 #include <carla/client/Vehicle.h>
@@ -24,6 +25,12 @@
 #include <carla/rpc/CommandResponse.h>
 #include <carla/rpc/EpisodeSettings.h>
 #include <carla/rpc/VehiclePhysicsControl.h>
+#include <carla/sensor/SensorData.h>
+#include <carla/sensor/data/CollisionEvent.h>
+#include <carla/sensor/data/GnssMeasurement.h>
+#include <carla/sensor/data/IMUMeasurement.h>
+#include <carla/sensor/data/Image.h>
+#include <carla/sensor/data/LidarMeasurement.h>
 #include <carla/rpc/VehicleControl.h>
 
 namespace tsc {

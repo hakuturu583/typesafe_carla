@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 1
-TSC_ABI_VERSION_MINOR = 2
+TSC_ABI_VERSION_MINOR = 3
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -25,6 +25,7 @@ TSC_TYPE_ERROR = 5
 TSC_VERSION_ERROR = 6
 
 TSC_KIND_VEHICLE = 4
+TSC_KIND_SENSOR = 12
 
 # --- POD mirrors (layouts checked by tests/native/test_ffi.c) ---------------
 
@@ -166,6 +167,55 @@ class CCommandResponse:
     has_error: i32
     error: CString
 
+@tuple
+class CSensorDataInfo:
+    frame: u64
+    timestamp: float
+    sensor_transform: CTransform
+    type: i32
+    reserved0: i32
+
+@tuple
+class CImage:
+    width: u32
+    height: u32
+    fov: float
+    data: Ptr[u8]
+    size: int
+
+@tuple
+class CLidarPoint:
+    x: float32
+    y: float32
+    z: float32
+    intensity: float32
+
+@tuple
+class CLidar:
+    channels: u32
+    reserved0: u32
+    horizontal_angle: float
+    points: Ptr[CLidarPoint]
+    point_count: int
+
+@tuple
+class CGnss:
+    latitude: float
+    longitude: float
+    altitude: float
+
+@tuple
+class CImu:
+    accelerometer: CVector3D
+    gyroscope: CVector3D
+    compass: float
+
+@tuple
+class CCollision:
+    actor_id: u32
+    other_actor_id: u32
+    normal_impulse: CVector3D
+
 # --- Functions ----------------------------------------------------------------
 
 from C import LIB.tsc_last_error_message() -> cobj
@@ -264,6 +314,22 @@ from C import LIB.tsc_vehicle_get_physics_control(cobj, cobj) -> i32
 from C import LIB.tsc_vehicle_apply_physics_control(cobj, cobj) -> i32
 from C import LIB.tsc_client_apply_batch(cobj, Ptr[CCommand], int, i32) -> i32
 from C import LIB.tsc_client_apply_batch_sync(cobj, Ptr[CCommand], int, i32, Ptr[CCommandResponse], int, Ptr[int]) -> i32
+
+# ABI 1.3 (Milestone 2: sensors)
+from C import LIB.tsc_actor_as_sensor(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_sensor_listen(cobj, int) -> i32
+from C import LIB.tsc_sensor_stop(cobj) -> i32
+from C import LIB.tsc_sensor_is_listening(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_sensor_dropped_count(cobj, Ptr[u64]) -> i32
+from C import LIB.tsc_sensor_poll(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_sensor_wait_for_data(cobj, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_sensor_data_get_info(cobj, Ptr[CSensorDataInfo]) -> i32
+from C import LIB.tsc_sensor_data_as_image(cobj, Ptr[CImage]) -> i32
+from C import LIB.tsc_sensor_data_as_lidar(cobj, Ptr[CLidar]) -> i32
+from C import LIB.tsc_lidar_channel_point_count(cobj, u32, Ptr[u32]) -> i32
+from C import LIB.tsc_sensor_data_as_gnss(cobj, Ptr[CGnss]) -> i32
+from C import LIB.tsc_sensor_data_as_imu(cobj, Ptr[CImu]) -> i32
+from C import LIB.tsc_sensor_data_as_collision(cobj, Ptr[CCollision]) -> i32
 
 # --- Helpers --------------------------------------------------------------------
 

@@ -1,0 +1,12 @@
+# No callbacks from LibCarla threads (design section 15): listen() takes a queue size.
+# expect-error: does not match expected type 'int'
+import typesafe_carla as carla
+
+def on_image(data: carla.SensorData):
+    print(data)
+
+def start(camera: carla.Sensor):
+    camera.listen(on_image)
+
+# Compile-only: Codon type-checks a function only when it is called.
+start(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor())

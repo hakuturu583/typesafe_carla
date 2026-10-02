@@ -75,13 +75,7 @@ tsc_status_t tsc_actor_as_vehicle(tsc_actor_t *actor, tsc_vehicle_t **out_vehicl
   return TSC_GUARD({
     require_ptr(out_vehicle, "out_vehicle");
     *out_vehicle = nullptr;
-    tsc_actor *a = check_actor(actor);
-    if (a->kind != TSC_KIND_VEHICLE) {
-      fail(TSC_TYPE_ERROR, "actor " + std::to_string(a->actor->GetId()) + " (" +
-                               a->actor->GetTypeId() + ") is not a vehicle");
-    }
-    tsc_handle_retain(a);
-    *out_vehicle = static_cast<tsc_vehicle *>(a);
+    *out_vehicle = retain_as<tsc_vehicle>(actor, TSC_KIND_VEHICLE, "a vehicle");
   });
 }
 

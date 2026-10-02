@@ -33,7 +33,7 @@ extern "C" {
 
 /* ABI version. Bump MAJOR on any incompatible change to this header. */
 #define TSC_ABI_VERSION_MAJOR 1
-#define TSC_ABI_VERSION_MINOR 2
+#define TSC_ABI_VERSION_MINOR 3
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -101,7 +101,9 @@ typedef enum {
   TSC_KIND_WORLD_SNAPSHOT = 8, /* ABI 1.2 */
   TSC_KIND_MAP = 9,            /* ABI 1.2 */
   TSC_KIND_WAYPOINT = 10,      /* ABI 1.2 */
-  TSC_KIND_WAYPOINT_LIST = 11  /* ABI 1.2 */
+  TSC_KIND_WAYPOINT_LIST = 11, /* ABI 1.2 */
+  TSC_KIND_SENSOR = 12,        /* ABI 1.3; also an actor */
+  TSC_KIND_SENSOR_DATA = 13    /* ABI 1.3 */
 } tsc_handle_kind_t;
 
 typedef struct tsc_handle tsc_handle_t;
@@ -482,6 +484,102 @@ TSC_API tsc_status_t tsc_client_apply_batch_sync(tsc_client_t *client,
                                                  const tsc_command_t *commands, size_t count,
                                                  int32_t do_tick, tsc_command_response_t *out,
                                                  size_t out_capacity, size_t *out_count);
+
+/* ------------------------------------------------------------------------ */
+/* Milestone 2: sensors (ABI 1.3)                                           */
+/*                                                                          */
+/* LibCarla delivers measurements on its own worker threads. They are put   */
+/* into a bounded per-handle queue; the Codon side polls it (design §15).   */
+/* Codon code never runs on a LibCarla thread.                              */
+/* ------------------------------------------------------------------------ */
+
+typedef struct tsc_sensor tsc_sensor_t; /* also a valid actor handle */
+typedef struct tsc_sensor_data tsc_sensor_data_t;
+
+typedef enum {
+  TSC_SENSOR_DATA_OTHER = 0,
+  TSC_SENSOR_DATA_IMAGE = 1,
+  TSC_SENSOR_DATA_LIDAR = 2,
+  TSC_SENSOR_DATA_GNSS = 3,
+  TSC_SENSOR_DATA_IMU = 4,
+  TSC_SENSOR_DATA_COLLISION = 5
+} tsc_sensor_data_type_t;
+
+/* Checked downcast. TSC_TYPE_ERROR if the actor is not a sensor. */
+TSC_API tsc_status_t tsc_actor_as_sensor(tsc_actor_t *actor, tsc_sensor_t **out_sensor);
+
+/* Starts delivering measurements into this handle's queue, which keeps at
+ * most queue_capacity items (oldest dropped first). Listening again stops the
+ * previous stream and replaces the queue. Listening state belongs to this
+ * handle's client-side sensor object; releasing it stops the stream. */
+TSC_API tsc_status_t tsc_sensor_listen(tsc_sensor_t *sensor, size_t queue_capacity);
+/* Idempotent. */
+TSC_API tsc_status_t tsc_sensor_stop(tsc_sensor_t *sensor);
+TSC_API tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out);
+/* Number of measurements dropped because the queue was full. */
+TSC_API tsc_status_t tsc_sensor_dropped_count(tsc_sensor_t *sensor, uint64_t *out);
+/* *out = NULL (TSC_OK) when the queue is empty. */
+TSC_API tsc_status_t tsc_sensor_poll(tsc_sensor_t *sensor, tsc_sensor_data_t **out);
+/* TSC_TIMEOUT when nothing arrives within timeout_seconds. */
+TSC_API tsc_status_t tsc_sensor_wait_for_data(tsc_sensor_t *sensor, double timeout_seconds,
+                                              tsc_sensor_data_t **out);
+
+typedef struct {
+  uint64_t frame;
+  double timestamp;
+  tsc_transform_t sensor_transform;
+  int32_t type; /* tsc_sensor_data_type_t */
+  int32_t reserved0;
+} tsc_sensor_data_info_t;
+
+TSC_API tsc_status_t tsc_sensor_data_get_info(const tsc_sensor_data_t *data,
+                                              tsc_sensor_data_info_t *out);
+
+/* Image: BGRA, 4 bytes per pixel, row-major. The pointer stays valid while
+ * the data handle is alive (zero copy, design §16). */
+typedef struct {
+  uint32_t width;
+  uint32_t height;
+  double fov;
+  const uint8_t *data;
+  size_t size; /* bytes = width * height * 4 */
+} tsc_image_t;
+TSC_API tsc_status_t tsc_sensor_data_as_image(const tsc_sensor_data_t *data, tsc_image_t *out);
+
+/* LiDAR: points are {float x, y, z, intensity} (16 bytes each). */
+typedef struct {
+  uint32_t channels;
+  uint32_t reserved0;
+  double horizontal_angle; /* radians */
+  const float *points;
+  size_t point_count;
+} tsc_lidar_t;
+TSC_API tsc_status_t tsc_sensor_data_as_lidar(const tsc_sensor_data_t *data, tsc_lidar_t *out);
+/* Points produced by one channel. */
+TSC_API tsc_status_t tsc_lidar_channel_point_count(const tsc_sensor_data_t *data, uint32_t channel,
+                                                   uint32_t *out);
+
+typedef struct {
+  double latitude;
+  double longitude;
+  double altitude;
+} tsc_gnss_t;
+TSC_API tsc_status_t tsc_sensor_data_as_gnss(const tsc_sensor_data_t *data, tsc_gnss_t *out);
+
+typedef struct {
+  tsc_vector3d_t accelerometer; /* m/s^2 */
+  tsc_vector3d_t gyroscope;     /* rad/s */
+  double compass;               /* radians, 0 = north */
+} tsc_imu_t;
+TSC_API tsc_status_t tsc_sensor_data_as_imu(const tsc_sensor_data_t *data, tsc_imu_t *out);
+
+typedef struct {
+  uint32_t actor_id;
+  uint32_t other_actor_id; /* 0 if the other actor is unknown (e.g. static geometry) */
+  tsc_vector3d_t normal_impulse;
+} tsc_collision_t;
+TSC_API tsc_status_t tsc_sensor_data_as_collision(const tsc_sensor_data_t *data,
+                                                  tsc_collision_t *out);
 
 #ifdef __cplusplus
 } /* extern "C" */

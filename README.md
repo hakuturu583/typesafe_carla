@@ -27,7 +27,7 @@ Milestones (design section 43):
 |---|---|
 | 0: proof of concept | ✅ verified against a CARLA 0.10.0 server |
 | 1: usable vehicle API | ✅ verified against a CARLA 0.10.0 server |
-| 2: sensors | not started |
+| 2: sensors | ✅ verified against a CARLA 0.10.0 server |
 | 3: distribution | packaging and release workflows done; not yet published |
 | 4: broader compatibility | not started |
 | 5: binding generation | not started |
@@ -41,11 +41,17 @@ Milestones (design section 43):
 | Map | `name`, `get_spawn_points`, `get_waypoint` (→ `Optional[Waypoint]`), `generate_waypoints`, `to_opendrive`; `LaneType` |
 | Waypoint | `id`, `transform`, `road_id`, `section_id`, `lane_id`, `s`, `is_junction`, `junction_id`, `lane_width`, `lane_type`, `next`, `previous`, `next_until_lane_end`, `previous_until_lane_start`, `get_left_lane` / `get_right_lane` (→ `Optional`) |
 | Snapshots | `WorldSnapshot` (`id`, `frame`, `timestamp`, `find` → `Optional`, `has_actor`, indexing, iteration), `ActorSnapshot`, `Timestamp` |
+| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(queue_size)` / `stop` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `dropped_count`; `SensorData.as_image()` / `as_lidar()` / `as_gnss()` / `as_imu()` / `as_collision()` (checked); `Image` (zero-copy `raw_data()`, `pixel`), `LidarMeasurement` (zero-copy `raw_points()`, iteration, `get_point_count`), `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` |
 | Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyTransform`, `ApplyTargetVelocity`, `SetAutopilot`, `SetSimulatePhysics`; `CommandResponse` |
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, indexing, iteration), `ActorBlueprint` (`id`, `has_tag`, `has_attribute`, `get_attribute`, `set_attribute`), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`) |
 | Values | `Location`, `Rotation`, `Transform`, `Vector2D`, `Vector3D`, `BoundingBox`, `VehicleControl`, `VehiclePhysicsControl`, `WheelPhysicsControl`, `WorldSettings`, `Color` |
 | Errors | `CarlaError`, `TimeoutError`, `ActorTypeError`, `VersionError` (plus `IndexError` for lookups by key or index) |
 | Tooling | `typesafe-codon` launcher, `typesafe-carla-toolchain` (bundled Codon), uv workspace + `uv.lock`, CI, PyPI release workflow |
+
+Notes on Milestone 2:
+- **No callbacks on LibCarla threads (design §15).** `listen()` starts a bounded per-sensor queue; the program reads it with `poll()` / `wait_for_data()`. When the queue is full, the oldest measurement is dropped (`dropped_count`). Call `stop()` (or destroy the sensor) when done.
+- **Zero copy (design §16).** `Image.raw_data()` (BGRA) and `LidarMeasurement.raw_points()` point into LibCarla's buffer and stay valid while the measurement object is alive.
+- `World.spawn_actor(..., attach_to=...)` accepts any actor subclass (e.g. a `Vehicle`) or an `Optional` of one, and rejects non-actors at compile time.
 
 Notes on Milestone 1:
 - **Physics control.** `VehiclePhysicsControl` is a typed subset (mass, drag, torque, rpm, gearing, center of mass, and per-wheel radius/width/mass/steer/brake/friction). `apply_physics_control` overwrites only these fields and keeps the vehicle's other settings. CARLA 0.10.0 applies changes a few frames later, and it ignores some per-wheel fields (e.g. `max_brake_torque`), exactly as the official Python API does.
