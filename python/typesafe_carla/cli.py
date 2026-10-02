@@ -40,7 +40,7 @@ _LINKER_FLAGS = ("-linker-flags", "--linker-flags")
 ENV_STRICT = "TYPESAFE_CARLA_STRICT"
 ENV_COMPAT_WARNINGS = "TYPESAFE_CARLA_COMPAT_WARNINGS"
 STRICT_FLAG = "--strict"
-# The `what` literals of compat_warning("[tsc-compat] ...", ...) (codon/typesafe_carla/_strict.codon).
+# The `what` literals of compat_shortcut(name, "[tsc-compat] ...", ...) (codon/typesafe_carla/_strict.codon).
 # String constants only (`[N x i8] c"...\00"`): Literal[str] arguments also end up in
 # mangled function names, which must not count.
 _COMPAT_RE = re.compile(rb'c"\[tsc-compat\] ([^"]*)\\00"')
@@ -157,6 +157,14 @@ def print_compat_warnings(ir: bytes) -> None:
               file=sys.stderr)
 
 
+def _print_compat_warnings_from(ir: str) -> None:
+    try:
+        with open(ir, "rb") as f:
+            print_compat_warnings(f.read())
+    except OSError:
+        pass
+
+
 def _compile_with_scan(codon: str, build_args: list[str], scan_args: list[str] | None,
                        ir: str, env: dict[str, str]) -> int:
     """Runs `codon <build_args>` while an IR pass (`scan_args`, writing `ir`) runs in
@@ -170,17 +178,13 @@ def _compile_with_scan(codon: str, build_args: list[str], scan_args: list[str] |
             scan = subprocess.Popen([codon] + scan_args, env=env, stdout=subprocess.DEVNULL,
                                     stderr=subprocess.DEVNULL)
         except OSError:
-            scan = None
+            pass
     rc = subprocess.run([codon] + build_args, env=env).returncode
     if scan is not None:
         if rc != 0:
             scan.kill()
         if scan.wait() == 0 and rc == 0:
-            try:
-                with open(ir, "rb") as f:
-                    print_compat_warnings(f.read())
-            except OSError:
-                pass
+            _print_compat_warnings_from(ir)
     return rc
 
 
@@ -204,21 +208,13 @@ def _build_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> in
     """
     ll = _llvm_output(args)
     if ll is not None:
-        return _scan_own_output(codon, args, ll, env)
+        rc = subprocess.run([codon] + args, env=env).returncode
+        if rc == 0:
+            _print_compat_warnings_from(ll)
+        return rc
     with tempfile.TemporaryDirectory(prefix="typesafe-codon-") as tmp:
         ir = os.path.join(tmp, "program.ll")
         return _compile_with_scan(codon, args, llvm_args(args, ir), ir, env)
-
-
-def _scan_own_output(codon: str, args: list[str], ll: str, env: dict[str, str]) -> int:
-    rc = subprocess.run([codon] + args, env=env).returncode
-    if rc == 0:
-        try:
-            with open(ll, "rb") as f:
-                print_compat_warnings(f.read())
-        except OSError:
-            pass
-    return rc
 
 
 def _run_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> int | None:
@@ -246,6 +242,7 @@ def _run_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> int 
         finally:
             signal.signal(signal.SIGINT, previous)
         return 128 - rc if rc < 0 else rc
+
 
 def _info(tc: toolchain.Toolchain | None, error: str | None, strict: bool) -> int:
     print(f"typesafe_carla     {__version__}")

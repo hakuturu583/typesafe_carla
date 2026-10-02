@@ -35,10 +35,9 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   line must also compile in strict mode; `tests/compile/strict_fail` programs
   must compile normally and fail in strict mode with their `# expect-error:`.
 - Python-API compatibility shortcuts (not statically checked) start with
-  `if STRICT: compile_error("strict mode: ...")` and call
-  `compat_warning("[tsc-compat] <what>", "<instead>")` with literal strings
-  (`_strict.codon`); the launcher finds the marker in the LLVM IR to warn at
-  compile time.
+  `compat_shortcut("<name>", "[tsc-compat] <what>", "<instead>")` with literal
+  strings (`_strict.codon`): a compile error in strict mode, else a warning;
+  the launcher finds the marker in the LLVM IR to warn at compile time.
 - A C function that only checks a handle, converts arguments and calls one
   LibCarla method belongs in `bindings/*.yaml` (generated), not hand-written.
   Never edit generated code (`native/src/generated/`, marked blocks in
