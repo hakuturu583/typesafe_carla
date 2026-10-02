@@ -1,6 +1,14 @@
 # Milestone 1 on the mock backend: map, waypoints, snapshots, batch commands,
 # physics control and bounding boxes.
 import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+# Codon mirrors must match the C layouts checked in tests/native/test_ffi.c.
+assert ffi.PHYSICS_WHEELS_OFFSET == 80 and ffi.PHYSICS_SIZE == 720
+assert ffi.CCommand.__elemsize__ == 144 and ffi.CCommandResponse.__elemsize__ == 24
+assert ffi.CWaypointInfo.__elemsize__ == 96 and ffi.CActorSnapshot.__elemsize__ == 128
+assert ffi.CTimestamp.__elemsize__ == 32 and ffi.CBoundingBox.__elemsize__ == 72
+assert ffi.CWheelPhysicsControl.__elemsize__ == 80
 
 client = carla.Client("localhost", 2000)
 world = client.get_world()
@@ -89,6 +97,28 @@ try:
 except carla.CarlaError:
     raised = True
 assert raised
+raised = False
+try:  # then() commands act on the spawned actor
+    batch[1].then(carla.command.DestroyActor(b))
+except carla.CarlaError:
+    raised = True
+assert raised
+
+# Batch control is validated like Vehicle.apply_control.
+raised = False
+try:
+    client.apply_batch_sync([carla.command.ApplyVehicleControl(b, carla.VehicleControl(throttle=5.0))])
+except carla.CarlaError as e:
+    raised = True
+    assert "throttle" in e.message
+assert raised
+
+# A failing then() does not fail the spawn (as on the server).
+walker = world.get_blueprint_library().find("walker.pedestrian.0001")
+spawned = client.apply_batch_sync([carla.command.SpawnActor(walker, points[4]).then(
+    carla.command.SetAutopilot(carla.command.FutureActor, True))])
+assert not spawned[0].has_error() and world.get_actor(spawned[0].actor_id) is not None
+client.apply_batch_sync([carla.command.DestroyActor(spawned[0].actor_id)])
 
 # Physics control and bounding box
 pc = vb.get_physics_control()

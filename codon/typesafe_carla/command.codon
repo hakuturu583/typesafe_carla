@@ -58,12 +58,19 @@ class Command:
         self._then = List[Command]()
 
     def then(self, command: Command) -> Command:
-        """Runs `command` after this SpawnActor succeeds; use FutureActor as its actor id."""
+        """Runs `command` after this SpawnActor succeeds.
+
+        As on the CARLA server, `command` always acts on the spawned actor
+        (pass FutureActor as its id) and its failure does not fail the spawn.
+        """
         if self._type != _SPAWN_ACTOR:
             raise CarlaError("then() is only available on SpawnActor commands",
                              TSC_INVALID_ARGUMENT)
         if command._type == _SPAWN_ACTOR:
             raise CarlaError("SpawnActor cannot run after another SpawnActor", TSC_INVALID_ARGUMENT)
+        if command._actor_id != FutureActor:
+            raise CarlaError("a then() command acts on the spawned actor; use FutureActor as its id",
+                             TSC_INVALID_ARGUMENT)
         self._then.append(command)
         return self
 
@@ -81,14 +88,16 @@ class Command:
 
 class CommandResponse:
     actor_id: int  # the spawned actor, or the actor the command applied to
-    error: str  # empty unless has_error()
+    error: str  # the server's message when has_error() (may be empty)
+    _failed: bool
 
-    def __init__(self, actor_id: int, error: str):
+    def __init__(self, actor_id: int, error: str, failed: bool):
         self.actor_id = actor_id
         self.error = error
+        self._failed = failed
 
     def has_error(self) -> bool:
-        return self.error != ""
+        return self._failed
 
     def __repr__(self) -> str:
         return (f"CommandResponse(error={self.error})" if self.has_error()
@@ -158,5 +167,6 @@ def _responses(buf: Ptr[CCommandResponse], n: int) -> List[CommandResponse]:
     for i in range(n):
         r = buf[i]
         error[0] = r.error  # tsc_string_free only needs the data pointer
-        result.append(CommandResponse(int(r.actor_id), take_string(error)))
+        result.append(CommandResponse(int(r.actor_id), take_string(error),
+                                      int(r.has_error) != 0))
     return result

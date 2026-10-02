@@ -650,14 +650,21 @@ using Command = rpc::Command;
 // Executes one command; `future` replaces actor id 0 in do_after commands.
 rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) {
   auto target = [&](rpc::ActorId id) -> mock::ActorData & {
-    return e.LiveLocked(id == 0 ? future : id);
+    // Like the server: a then-command always acts on the spawned actor.
+    return e.LiveLocked(future != 0 ? future : id);
   };
   return std::visit(
       [&](const auto &c) -> rpc::ActorId {
         using T = std::decay_t<decltype(c)>;
         if constexpr (std::is_same_v<T, Command::SpawnActor>) {
           const rpc::ActorId id = e.SpawnLocked(c.description.id, c.transform, c.parent);
-          for (const auto &after : c.do_after) Execute(e, after, id);
+          // Like the server: a failing then-command does not fail the spawn.
+          for (const auto &after : c.do_after) {
+            try {
+              Execute(e, after, id);
+            } catch (const std::exception &) {
+            }
+          }
           return id;
         } else if constexpr (std::is_same_v<T, Command::DestroyActor>) {
           const rpc::ActorId id = target(c.actor).id;

@@ -452,8 +452,9 @@ typedef enum {
 
 /* Flat tagged record; only the fields the type uses are read.
  * then_of: -1 for a top-level command, otherwise the index of an earlier
- * SPAWN_ACTOR command this one runs after (its actor_id 0 = the spawned actor,
- * like carla.command.FutureActor). */
+ * SPAWN_ACTOR command this one runs after. As on the CARLA server, such a
+ * command always acts on the spawned actor (its actor_id is ignored; pass 0,
+ * carla.command.FutureActor), and its failure does not fail the spawn. */
 typedef struct {
   int32_t type;
   int32_t then_of;

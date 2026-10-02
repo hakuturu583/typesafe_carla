@@ -236,8 +236,11 @@ inline tsc_rotation_t from_carla(const carla::geom::Rotation &r) {
 inline tsc_transform_t from_carla(const carla::geom::Transform &t) {
   return tsc_transform_t{from_carla(t.location), from_carla(t.rotation)};
 }
-// No range checks: callers validate where the API requires it.
+// Validates ranges (NaN fails too): direct and batch control go through here.
 inline carla::rpc::VehicleControl to_carla(const tsc_vehicle_control_t &c) {
+  if (!(c.throttle >= 0.0 && c.throttle <= 1.0)) fail(TSC_INVALID_ARGUMENT, "throttle must be in [0, 1]");
+  if (!(c.steer >= -1.0 && c.steer <= 1.0)) fail(TSC_INVALID_ARGUMENT, "steer must be in [-1, 1]");
+  if (!(c.brake >= 0.0 && c.brake <= 1.0)) fail(TSC_INVALID_ARGUMENT, "brake must be in [0, 1]");
   carla::rpc::VehicleControl rc;
   rc.throttle = static_cast<float>(c.throttle);
   rc.steer = static_cast<float>(c.steer);

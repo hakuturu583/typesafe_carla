@@ -15,11 +15,7 @@ extern "C" {
 tsc_status_t tsc_vehicle_apply_control(tsc_vehicle_t *vehicle,
                                        const tsc_vehicle_control_t *control) {
   return TSC_GUARD({
-    const tsc_vehicle_control_t &c = *require_ptr(control, "control");
-    if (!(c.throttle >= 0.0 && c.throttle <= 1.0)) fail(TSC_INVALID_ARGUMENT, "throttle must be in [0, 1]");
-    if (!(c.steer >= -1.0 && c.steer <= 1.0)) fail(TSC_INVALID_ARGUMENT, "steer must be in [-1, 1]");
-    if (!(c.brake >= 0.0 && c.brake <= 1.0)) fail(TSC_INVALID_ARGUMENT, "brake must be in [0, 1]");
-    vehicle_of(vehicle).ApplyControl(to_carla(c));
+    vehicle_of(vehicle).ApplyControl(to_carla(*require_ptr(control, "control")));
   });
 }
 
