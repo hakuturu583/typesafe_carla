@@ -129,13 +129,22 @@ else()
     file(WRITE "${_tsc_sqlite_stub}/shell.c" "int main(void) { return 1; }\n")
     set(FETCHCONTENT_SOURCE_DIR_SQLITE3 "${_tsc_sqlite_stub}")
   endif()
-  # CARLA requests Boost.Python even with BUILD_PYTHON_API=OFF, which Boost
-  # rejects ("library 'python' has been explicitly requested, but
-  # BOOST_ENABLE_PYTHON is OFF"). Pass CARLA's own library list without
-  # "python". CARLA requires CMake >= 3.27 (CMP0126 NEW), so this normal
-  # variable shadows the cache entry CARLA's Dependencies.cmake writes.
+  # CARLA's Boost.Python handling with BUILD_PYTHON_API=OFF differs by ref.
+  # CARLA requires CMake >= 3.27 (CMP0126 NEW), so the normal variables set
+  # here shadow the cache entries CARLA's Dependencies.cmake writes.
   file(READ "${TSC_CARLA_DIR}/CMake/Dependencies.cmake" _tsc_deps)
-  if(_tsc_deps MATCHES "set \\([ \t\r\n]*BOOST_INCLUDED_PROJECTS([^)]*)\\)")
+  file(READ "${TSC_CARLA_DIR}/LibCarla/CMakeLists.txt" _tsc_libcarla_cmake)
+  if(_tsc_libcarla_cmake MATCHES "Boost::python")
+    # 0.10.0: carla-client links Boost::python unconditionally, so it must
+    # exist. Only Python headers are needed: the client sources never use
+    # Boost.Python, so no libpython symbols end up in our library.
+    set(BOOST_ENABLE_PYTHON ON)
+    message(STATUS "typesafe_carla: this CARLA ref links Boost::python into carla-client; "
+                   "enabling Boost.Python (needs Python development headers)")
+  elseif(_tsc_deps MATCHES "set \\([ \t\r\n]*BOOST_INCLUDED_PROJECTS([^)]*)\\)")
+    # ue5-dev: Boost.Python is requested but disabled, which Boost rejects
+    # ("library 'python' has been explicitly requested, but
+    # BOOST_ENABLE_PYTHON is OFF"). Pass CARLA's own list without "python".
     string(REGEX REPLACE "[ \t\r\n]+" ";" _tsc_boost_libs "${CMAKE_MATCH_1}")
     list(FILTER _tsc_boost_libs EXCLUDE REGEX "^(python|)$")
     set(BOOST_INCLUDE_LIBRARIES "${_tsc_boost_libs}")

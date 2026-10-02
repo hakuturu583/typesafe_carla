@@ -62,7 +62,7 @@ resolved commit are compiled in: `typesafe-codon info`,
 
 | typesafe_carla | ABI | Codon | CARLA | Platform | Tested |
 |---|---|---|---|---|---|
-| 0.1.0 | 1.1 | 0.19.x | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | Builds and links against `ue5-dev` @ 1360bb9a; C ABI tests pass. Not yet run against a CARLA server |
+| 0.1.0 | 1.1 | 0.19.x | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
 
 ### Backends
 
@@ -93,6 +93,20 @@ needed. To use a different CARLA ref than the published wheel's, build from
 the sdist: `CARLA_GIT_REF=<ref> pip install --no-binary typesafe-carla
 typesafe-carla`. See [docs/releasing.md](docs/releasing.md) for the release
 process.
+
+## Testing against a real CARLA server
+
+`tests/integration/*.codon` and `tests/compatibility/` need a running CARLA
+UE5 server and the `libcarla` backend built from the matching ref (a
+`0.10.0` server needs `-DTSC_CARLA_GIT_REF=0.10.0`):
+
+```sh
+cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=0.10.0 && cmake --build build-carla -j
+export TSC_CARLA_HOST=localhost TSC_CARLA_PORT=2000 TYPESAFE_CARLA_BUILD_DIR=build-carla
+uv run pytest tests/test_integration.py -s
+# Same scenario through the official Python API and typesafe_carla, compared:
+CARLA_PYTHON=/path/to/venv-with-carla/bin/python uv run python tests/compatibility/compare.py
+```
 
 ## Quick start (development)
 
