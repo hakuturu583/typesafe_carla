@@ -26,7 +26,7 @@ jobs:
       - name: C++ build (mock backend)
         run: |
           cmake -S . -B build -DTSC_BACKEND=mock
-          cmake --build build -j
+          cmake --build build -j "$(nproc)"
       - name: Native ABI tests
         run: ctest --test-dir build --output-on-failure
 
@@ -51,7 +51,8 @@ jobs:
       - name: Configure (CARLA ${{ matrix.carla_ref }})
         run: cmake -S . -B build -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF=${{ matrix.carla_ref }}
       - name: Build
-        run: cmake --build build -j --target typesafe_carla_ffi test_ffi
+        # A bare -j means unlimited jobs; LibCarla/Boost TUs need ~1-2 GB each.
+        run: cmake --build build -j "$(nproc)" --target typesafe_carla_ffi test_ffi
       - name: Native ABI tests
         run: ctest --test-dir build --output-on-failure
 
