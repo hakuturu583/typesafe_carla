@@ -80,6 +80,29 @@ A function has:
   mirrors ue5-dev and must have it, so a misspelt `call` still fails. Not
   allowed with `out`.
 
+A constructor has `new: true` instead of `call` (issue #39): the C function
+has no self parameter, makes the class's object from the arguments
+(`std::make_shared<class>(args...)`) and returns it through a handle output,
+which it requires. `validate` checks the arguments against the class's public
+constructors (`call` is set to the class's own name), and `test_generated`
+checks that the invalid arguments are rejected and leave `*out` NULL:
+
+```yaml
+new_from_opendrive:
+  new: true
+  args: {name: string_in, xodr_content: string_in}
+  out: map_handle
+```
+```cpp
+tsc_status_t tsc_map_new_from_opendrive(const char *name, size_t name_len,
+                                        const char *xodr_content, size_t xodr_content_len,
+                                        tsc_map_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_map(std::make_shared<carla::client::Map>(to_string(name, name_len, "name"), ...));
+  });
+}
+```
+
 `spec.load` rejects malformed entries with a `SpecError`: unknown keys, unknown
 types, an output-only type as an argument (or the reverse), a handle output,
 and two C parameters with the same name (e.g. two arrays whose length is

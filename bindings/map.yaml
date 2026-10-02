@@ -3,6 +3,12 @@ class: carla::client::Map
 prefix: map
 self: {type: const tsc_map_t, name: map, get: map_of}
 blocks:
+  map_new:
+    new_from_opendrive:
+      new: true
+      args: {name: string_in, xodr_content: string_in}
+      out: map_handle
+      doc: "carla.Map(name, xodr_content), no server needed. TSC_ERROR if the XODR does not parse."
   map_core:
     get_name: {call: GetName, out: string}
     to_opendrive: {call: GetOpenDrive, out: string}

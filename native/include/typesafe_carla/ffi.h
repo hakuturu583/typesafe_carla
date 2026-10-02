@@ -47,9 +47,10 @@ extern "C" {
  * 3.5: world spectator, traffic light/sign queries, environment objects, ray casts,
  *      map layers, IMU gravity, textures, on_tick, light manager (#21).
  * 3.6: sensor data frame_number, image convert/save, point cloud save, collision
- *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24). */
+ *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24).
+ * 3.7: tsc_map_new_from_opendrive, a client-side Map from an OpenDRIVE string (#39). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 6
+#define TSC_ABI_VERSION_MINOR 7
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -429,6 +430,12 @@ typedef struct tsc_waypoint_list tsc_waypoint_list_t;
 /* BEGIN GENERATED world_map from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_map(tsc_world_t *world, tsc_map_t **out);
 /* END GENERATED world_map */
+/* BEGIN GENERATED map_new from bindings/map.yaml, do not edit */
+/* carla.Map(name, xodr_content), no server needed. TSC_ERROR if the XODR does not parse. */
+TSC_API tsc_status_t tsc_map_new_from_opendrive(const char *name, size_t name_len,
+                                                const char *xodr_content, size_t xodr_content_len,
+                                                tsc_map_t **out);
+/* END GENERATED map_new */
 /* BEGIN GENERATED map_core from bindings/map.yaml, do not edit */
 TSC_API tsc_status_t tsc_map_get_name(const tsc_map_t *map, tsc_string_t *out);
 TSC_API tsc_status_t tsc_map_to_opendrive(const tsc_map_t *map, tsc_string_t *out);

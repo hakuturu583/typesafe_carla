@@ -1,0 +1,10 @@
+# carla.Map takes the OpenDRIVE text, not a file object or a parsed document:
+# both arguments are str.
+# expect-error: no function 'Map.__init__' with arguments (Map, str, List[str])
+import typesafe_carla as carla
+
+def load(xodr: List[str]) -> carla.Map:
+    return carla.Map("copy", xodr)
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(load(["<OpenDRIVE/>"]).name)

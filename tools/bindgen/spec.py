@@ -116,9 +116,13 @@ class Function:
     # the whole C++ expression, and `ret` the C result (size_t for tsc_*_size).
     expr: str | None = None
     ret: str = "tsc_status_t"
+    # A constructor (`new: true`, issue #39): no self parameter; the function
+    # makes a new object of cpp_class from the arguments and returns its
+    # handle. `call` is the class's own name, as libclang spells constructors.
+    constructor: bool = False
 
     def c_params(self) -> list[str]:
-        params = [f"{self.self_type} *{self.self_name}"]
+        params = [] if self.constructor else [f"{self.self_type} *{self.self_name}"]
         params += [a.type.c_param(a.name) for a in self.args]
         if self.out:
             t = self.out.type
@@ -128,7 +132,8 @@ class Function:
         return params
 
     def codon_params(self) -> list[str]:
-        params = [self.self_codon] + [a.type.codon_param() for a in self.args]
+        params = [] if self.constructor else [self.self_codon]
+        params += [a.type.codon_param() for a in self.args]
         if self.out:
             t = self.out.type
             params.append(t.codon if t.c_param_template else f"Ptr[{t.codon}]")
@@ -143,6 +148,8 @@ class Function:
             return f'TSC_CALL_OPTIONAL({", ".join([self_, self.call, chr(34) + self.optional + chr(34)] + args)});'
         if self.expr:
             call = self.expr
+        elif self.constructor:
+            call = f"std::make_shared<{self.cpp_class}>({', '.join(args)})"
         elif self.via and args:
             # The handle is checked before the arguments are converted, as in a
             # member call (function arguments are evaluated in no fixed order).
@@ -270,9 +277,16 @@ def load(bindings: Path = BINDINGS) -> Spec:
         for block, entries in raw["blocks"].items():
             for short, entry in entries.items():
                 where = f"{path.name}: {short}"
-                unknown = set(entry) - {"call", "via", "args", "out", "doc", "optional"}
+                unknown = set(entry) - {"call", "new", "via", "args", "out", "doc", "optional"}
                 if unknown:
                     raise SpecError(f"{where}: unknown keys {sorted(unknown)}")
+                constructor = entry.get("new", False)
+                if constructor is not False and constructor is not True:
+                    raise SpecError(f"{where}: new must be true or false")
+                if constructor and set(entry) & {"call", "via", "optional"}:
+                    raise SpecError(f"{where}: a constructor (new: true) has no call, via or optional")
+                if not constructor and "call" not in entry:
+                    raise SpecError(f"{where}: missing key 'call' (or new: true for a constructor)")
                 args = tuple(Arg(n, type_of(t, where)) for n, t in (entry.get("args") or {}).items())
                 for a in args:
                     if a.type.assign:
@@ -287,6 +301,8 @@ def load(bindings: Path = BINDINGS) -> Spec:
                                         "the output handle")
                     if out.type.c_param_template and not out.type.assign:
                         raise SpecError(f"{where}: {out.type.name} is input-only")
+                if constructor and not (out and out.type.handle):
+                    raise SpecError(f"{where}: a constructor needs a handle output for the new object")
                 optional, missing_in = None, ()
                 if "optional" in entry:
                     if out:
@@ -298,7 +314,8 @@ def load(bindings: Path = BINDINGS) -> Spec:
                             not isinstance(o["missing_in"], list) or not o["missing_in"]:
                         raise SpecError(f"{where}: optional must be {{name: ..., missing_in: [refs]}}")
                     optional, missing_in = str(o["name"]), tuple(str(r) for r in o["missing_in"])
-                c_params = [self_["name"]] + [a.type.c_param(a.name) for a in args]
+                c_params = [] if constructor else [self_["name"]]
+                c_params += [a.type.c_param(a.name) for a in args]
                 if out:
                     c_params.append(out.type.c_param(out.name) if out.type.c_param_template
                                     else out.name)
@@ -312,8 +329,9 @@ def load(bindings: Path = BINDINGS) -> Spec:
                 seen[name] = path.name
                 functions.append(Function(
                     name=name, block=block, spec_file=path.name, cpp_class=raw["class"],
-                    call=entry["call"], via=entry.get("via"), self_type=self_["type"], self_name=self_["name"],
-                    self_get=self_["get"], args=args, out=out, doc=entry.get("doc"),
+                    call=raw["class"].rsplit("::", 1)[-1] if constructor else entry["call"],
+                    via=entry.get("via"), constructor=constructor, self_type=self_["type"],
+                    self_name=self_["name"], self_get=self_["get"], args=args, out=out, doc=entry.get("doc"),
                     optional=optional, missing_in=missing_in,
                     self_codon=self_.get("codon", "cobj")))
     lists = _load_lists(bindings / "lists.yaml", type_of)

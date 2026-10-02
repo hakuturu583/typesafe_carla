@@ -72,11 +72,29 @@ g: {call: G, via: g_compat, out: string_list}
      "duplicate C parameter(s) ['count']"),
     ("f: {call: F, args: {thing: bool}}", "duplicate C parameter(s) ['thing']"),
     ("f: {call: F, args: {name: string_in, name_len: bool}}", "duplicate C parameter(s) ['name_len']"),
+    ("f: {args: {flag: bool}}", "missing key 'call'"),
+    ("f: {new: \"yes\", out: map_handle}", "new must be true or false"),
+    ("f: {new: true, call: F, out: map_handle}", "a constructor (new: true) has no call"),
+    ("f: {new: true, args: {flag: bool}}", "a constructor needs a handle output"),
+    ("f: {new: true, out: string}", "a constructor needs a handle output"),
 ])
 def test_spec_errors(tmp_path, entry, message):
     with pytest.raises(spec.SpecError) as e:
         _load(tmp_path, entry)
     assert message in str(e.value)
+
+
+def test_constructor(tmp_path):
+    """`new: true` (issue #39): a constructor has no self parameter; it makes
+    the class's object from the arguments and returns a new handle. `call` is
+    the class's own name, which is how validate finds the constructors."""
+    s = _load(tmp_path, "new: {new: true, args: {name: string_in, flag: bool}, out: map_handle}")
+    (f,) = s.functions
+    assert f.constructor and f.call == "Thing" and f.name == "tsc_thing_new"
+    assert f.c_params() == ["const char *name, size_t name_len", "int32_t flag", "tsc_map_t **out"]
+    assert f.codon_params() == ["cobj, int", "i32", "Ptr[cobj]"]
+    assert f.body() == ("return new tsc_map(std::make_shared<carla::client::Thing>("
+                        'to_string(name, name_len, "name"), flag != 0));')
 
 
 def test_self_by_value(tmp_path):

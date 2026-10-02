@@ -5,7 +5,8 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CWaypointInfo, take_s
                    tsc_map_get_waypoint, tsc_map_generate_waypoints, tsc_waypoint_get_info,
                    tsc_waypoint_next, tsc_waypoint_previous, tsc_waypoint_next_until_lane_end,
                    tsc_waypoint_previous_until_lane_start, tsc_waypoint_get_left_lane,
-                   tsc_waypoint_get_right_lane, tsc_waypoint_list_size, tsc_waypoint_list_get)
+                   tsc_waypoint_get_right_lane, tsc_waypoint_list_size, tsc_waypoint_list_get,
+                   tsc_map_new_from_opendrive)
 from ._ffi import (CLandmark, CBoundingBox, tsc_map_get_topology, tsc_map_get_crosswalks,
                    tsc_landmark_free, tsc_map_get_all_landmarks, tsc_map_get_landmarks_of_type,
                    tsc_landmark_list_size, tsc_landmark_list_get, tsc_waypoint_get_junction,
@@ -217,6 +218,15 @@ class Map:
 
     def __init__(self, h: Handle):
         self._h = h
+
+    def __init__(self, name: str, xodr_content: str):
+        """carla.Map(name, xodr_content): a map built client-side from an
+        OpenDRIVE document, without a server (no recommended spawn points).
+        Raises CarlaError when the document does not parse."""
+        out = Ptr[cobj](1)
+        _check(tsc_map_new_from_opendrive(name.ptr, name.len, xodr_content.ptr,
+                                          xodr_content.len, out))
+        self._h = Handle(out[0])
 
     @property
     def name(self) -> str:

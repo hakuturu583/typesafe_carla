@@ -1,0 +1,45 @@
+# Issue #39 on the mock backend: carla.Map(name, xodr_content) builds a
+# client-side map from an OpenDRIVE string. The mock has no OpenDRIVE parser:
+# it models any document with a closed <OpenDRIVE> element as its own two-lane
+# road.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+server_map = carla.Client("localhost", 2000).get_world().get_map()
+xodr = server_map.to_opendrive()
+
+m = carla.Map("copy", xodr)
+assert m.name == "copy" and m.to_opendrive() == xodr
+assert repr(m) == "Map(name=copy)"
+# Recommended spawn points come from the server: a client-side map has none.
+assert len(m.get_spawn_points()) == 0 and len(server_map.get_spawn_points()) > 0
+
+# The same road network as the server map.
+assert len(m.get_topology()) == len(server_map.get_topology())
+assert len(m.generate_waypoints(2.0)) == len(server_map.generate_waypoints(2.0))
+loc = carla.Location(42.0, 1.0, 0.0)
+a, b = m.get_waypoint(loc), server_map.get_waypoint(loc)
+assert a is not None and b is not None
+if a is not None and b is not None:
+    assert a.road_id == b.road_id and a.lane_id == b.lane_id and a.s == b.s
+    assert a.transform.location == b.transform.location
+
+# A minimal document is accepted.
+assert carla.Map("tiny", "<OpenDRIVE/>").to_opendrive() == "<OpenDRIVE/>"
+
+# Keyword arguments, as in the Python API; an empty name is allowed.
+k = carla.Map(name="", xodr_content=xodr)
+assert k.name == "" and len(k.get_topology()) == len(server_map.get_topology())
+
+# Text that does not parse raises CarlaError (TSC_ERROR), as LibCarla's
+# "failed to generate map".
+for bad in ("", "not xml at all", "<OpenDRIVE><header", "<OpenDRIVE>"):
+    raised = False
+    try:
+        carla.Map("bad", bad)
+    except carla.CarlaError as e:
+        raised = True
+        assert e.status == ffi.TSC_ERROR and "failed to generate map" in e.message
+    assert raised
+
+print("OK")

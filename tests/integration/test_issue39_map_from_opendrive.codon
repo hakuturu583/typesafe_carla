@@ -1,0 +1,49 @@
+# Issue #39 against a real CARLA server: carla.Map(name, xodr_content) built
+# client-side from the server map's OpenDRIVE matches the server map.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+server_map = client.get_world().get_map()
+xodr = server_map.to_opendrive()
+print("map", server_map.name, "xodr", len(xodr), "bytes, LibCarla", carla.libcarla_git_ref())
+
+m = carla.Map("copy", xodr)
+assert m.name == "copy" and m.to_opendrive() == xodr
+# Recommended spawn points come from the server, not from the OpenDRIVE.
+assert len(m.get_spawn_points()) == 0
+
+topology = len(m.get_topology())
+print("topology", topology, "vs", len(server_map.get_topology()))
+assert topology > 0 and topology == len(server_map.get_topology())
+generated = len(m.generate_waypoints(2.0))
+print("generate_waypoints(2.0)", generated, "vs", len(server_map.generate_waypoints(2.0)))
+assert generated > 0 and generated == len(server_map.generate_waypoints(2.0))
+assert len(m.get_all_landmarks()) == len(server_map.get_all_landmarks())
+
+spawn = server_map.get_spawn_points()
+assert len(spawn) > 0
+for t in spawn[:5]:
+    a, b = m.get_waypoint(t.location), server_map.get_waypoint(t.location)
+    assert a is not None and b is not None
+    if a is not None and b is not None:
+        assert a.road_id == b.road_id and a.section_id == b.section_id and a.lane_id == b.lane_id
+        assert abs(a.s - b.s) < 1e-6, (a.s, b.s)
+        assert a.transform.location.distance(b.transform.location) < 1e-3
+
+# A document that does not parse raises (LibCarla: "failed to generate map").
+for bad in ("", "<OpenDRIVE><header"):
+    raised = False
+    try:
+        carla.Map("bad", bad)
+    except carla.CarlaError as e:
+        raised = True
+        print("invalid XODR:", e.message)
+    assert raised
+
+print("OK")

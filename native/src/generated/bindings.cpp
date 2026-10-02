@@ -634,6 +634,14 @@ tsc_status_t tsc_light_manager_set_day_night_cycle(tsc_light_manager_t *manager,
 
 // bindings/map.yaml: carla::client::Map
 
+tsc_status_t tsc_map_new_from_opendrive(const char *name, size_t name_len,
+                                        const char *xodr_content, size_t xodr_content_len,
+                                        tsc_map_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_map(std::make_shared<carla::client::Map>(to_string(name, name_len, "name"), to_string(xodr_content, xodr_content_len, "xodr_content")));
+  });
+}
+
 tsc_status_t tsc_map_get_name(const tsc_map_t *map, tsc_string_t *out) {
   return TSC_GUARD({ require_ptr(out, "out"); string_assign(out, map_of(map).GetName()); });
 }

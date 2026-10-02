@@ -105,24 +105,39 @@ def _valid_out(t) -> str:
 
 
 def null_handle_test(spec: Spec) -> str:
-    """A C test: every generated function rejects a NULL handle."""
+    """A C test: every generated function rejects a NULL handle; a constructor,
+    which has none, rejects its invalid arguments and leaves *out NULL."""
     lines = [f"/* {NOTICE}", " * Every generated function rejects a NULL handle with TSC_INVALID_ARGUMENT",
              " * before looking at its other arguments, which are all invalid here (NULL",
-             " * pointers, NaN, out-of-range values); the outputs are valid. */", '#include "typesafe_carla/ffi.h"', "",
+             " * pointers, NaN, out-of-range values); the outputs are valid. A constructor",
+             " * (no handle) rejects those invalid arguments and leaves *out NULL. */", '#include "typesafe_carla/ffi.h"', "",
              "#include <math.h>", "#include <stdio.h>", "#include <string.h>", "", "static int g_failures = 0;", "",
              "static void expect_null_rejected(tsc_status_t status, const char *function) {",
              "  if (status != TSC_INVALID_ARGUMENT ||",
              '      strstr(tsc_last_error_message(), "must not be NULL") == NULL) {',
              '    fprintf(stderr, "%s: NULL handle not rejected (status %d: %s)\\n", function, (int)status,',
-             "            tsc_last_error_message());", "    ++g_failures;", "  }", "}", "",
-             "int main(void) {"]
+             "            tsc_last_error_message());", "    ++g_failures;", "  }", "}", ""]
+    if any(f.constructor for f in spec.generated()):
+        lines += ["static void expect_args_rejected(tsc_status_t status, const void *out, const char *function) {",
+                  "  if (status != TSC_INVALID_ARGUMENT || out != NULL) {",
+                  '    fprintf(stderr, "%s: invalid arguments not rejected (status %d: %s)\\n", function,',
+                  "            (int)status, tsc_last_error_message());", "    ++g_failures;", "  }", "}", ""]
+    lines += ["int main(void) {"]
     for f in spec.generated():
         if f.ret != "tsc_status_t":  # a list size is 0 for a NULL handle
             lines.append(f'  if ({f.name}(NULL) != 0) {{ fputs("{f.name}(NULL)\\n", stderr); '
                          '++g_failures; }')
             continue
-        call = ["NULL"] + ["NULL" if a.type.struct or a.type.handle else a.type.invalid
-                           for a in f.args]
+        call = [] if f.constructor else ["NULL"]
+        call += ["NULL" if a.type.struct or a.type.handle else a.type.invalid for a in f.args]
+        if f.constructor:
+            out = "out"
+            # A non-NULL sentinel: the failed call must reset *out to NULL.
+            # The status is taken first: C evaluates the arguments in no fixed order.
+            lines += [f"  {{", f"    {f.out.type.c} *{out} = ({f.out.type.c} *)&g_failures;",
+                      f'    tsc_status_t status = {f.name}({", ".join(call + ["&" + out])});',
+                      f'    expect_args_rejected(status, {out}, "{f.name}");', "  }"]
+            continue
         if f.out:  # valid outputs, so the NULL handle is what fails
             call.append(_valid_out(f.out.type))
         lines.append(f'  expect_null_rejected({f.name}({", ".join(call)}), "{f.name}");')
