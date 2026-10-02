@@ -118,14 +118,10 @@ for other in (vehicle, walker, ai, light):
 for other in (vehicle, walker, light):
     assert raises_type_error(lambda: other.stop())
 
-# The inherited shortcuts reach typed subclasses too; the subclass's own
-# method still wins (Vehicle.apply_control only takes a VehicleControl).
+# Typed subclasses keep their own methods (the shortcuts of other kinds are
+# compile errors on them: tests/compile/fail/subclass_*).
 typed = vehicle.as_vehicle()
-raised = False
-try:
-    typed.listen()
-except carla.ActorTypeError:
-    raised = True
-assert raised
+typed.apply_control(carla.VehicleControl(throttle=0.3))
+assert abs(typed.get_control().throttle - 0.3) < 1e-6
 
 print("OK")

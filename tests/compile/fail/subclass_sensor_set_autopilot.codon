@@ -1,0 +1,10 @@
+# Only a plain Actor has the compatibility shortcuts: a typed Sensor has no
+# set_autopilot(), in every mode.
+# expect-error: Sensor has no method set_autopilot() (it is an Actor compatibility shortcut; call it on the right actor type)
+import typesafe_carla as carla
+
+def drive(sensor: carla.Sensor):
+    sensor.set_autopilot(True)
+
+# Compile-only: Codon type-checks a function only when it is called.
+drive(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor())

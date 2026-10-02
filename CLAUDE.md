@@ -38,6 +38,9 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   `compat_shortcut("<name>", "[tsc-compat] <what>", "<instead>")` with literal
   strings (`_strict.codon`): a compile error in strict mode, else a warning;
   the launcher finds the marker in the LLVM IR to warn at compile time.
+  An Actor shortcut (`_actor_compat.codon`) takes `self: S, S: type` and
+  first calls `_plain_actor_only(self, ...)`, so typed subclasses, which
+  inherit it, get a compile error (checked by `tests/test_architecture.py`).
 - A C function that only checks a handle, converts arguments and calls one
   LibCarla method belongs in `bindings/*.yaml` (generated), not hand-written.
   Never edit generated code (`native/src/generated/`, marked blocks in
