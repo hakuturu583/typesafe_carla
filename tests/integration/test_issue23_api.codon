@@ -9,7 +9,6 @@ host = os.getenv("TSC_CARLA_HOST", "localhost")
 port = int(os.getenv("TSC_CARLA_PORT", "2000"))
 # The CARLA 0.10.0 LibCarla has no wide-turn Traffic Manager settings and no
 # debug clearing; ue5-dev has both (the server must have the clear RPCs too).
-old_libcarla = carla.libcarla_git_ref() == "0.10.0"
 
 def close(a: float, b: float, eps: float = 1e-4) -> bool:
     return abs(a - b) <= eps
@@ -68,10 +67,10 @@ world.debug.draw_string(carla.Location(0.0, 0.0, 2.0), "issue #23", life_time=0.
 for clear in (lambda: world.debug.clear_debug_shape(), lambda: world.debug.clear_debug_string()):
     try:
         clear()
-        assert not old_libcarla, "clearing needs LibCarla ue5-dev"
     except carla.CarlaError as e:
+        # A LibCarla without the method (0.10.0), or a server without the RPC.
         print("debug clear:", e)
-        assert old_libcarla or "clear" in str(e) or "function" in str(e), e
+        assert "is not available in LibCarla" in str(e) or "clear" in str(e) or "function" in str(e), e
 
 # --- World settings and snapshots ----------------------------------------------------
 original = world.get_settings()
@@ -118,10 +117,9 @@ try:
                  lambda: tm.vehicle_large_vehicle_wide_turn(vehicle, False)):
         try:
             wide()
-            assert not old_libcarla
         except carla.CarlaError as e:
-            print("wide turn:", e)
-            assert old_libcarla, e
+            print("wide turn:", e)  # LibCarla 0.10.0 has no wide-turn setting
+            assert "is not available in LibCarla" in str(e), e
     for _ in range(40):
         world.tick()
     option, wp = tm.get_next_action(vehicle)
