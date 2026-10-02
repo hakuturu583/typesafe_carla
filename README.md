@@ -473,9 +473,14 @@ Deliberate differences, all in favour of static checking:
   precision here and in float32 in the Python API. Results can differ in the
   last digits. Near the edges they can differ outright:
   `get_vector_angle` clamps the cosine to [-1, 1], so nearly parallel vectors
-  give 0 rather than NaN; and with `make_unit_vector(epsilon=0.0)`, a vector
-  whose float32 length underflows to 0 comes back unchanged in Python, but
-  as a unit vector here. `make_unit_vector(epsilon)` otherwise behaves as
+  give 0 rather than NaN. In `make_unit_vector`, Python computes the squared
+  length in float32: with an `epsilon` below the vector's true length, a
+  vector whose squared length underflows to 0 (components below about
+  1e-23) comes back unchanged in Python but as a unit vector here, and one
+  just above that is normalized imprecisely in Python (`(1e-22, 0, 0)` gives
+  x≈1.0097 there, 1.0 here); a vector with a component above about 1.8e19
+  becomes a zero vector in Python (the squared length overflows), but a
+  unit vector here. `make_unit_vector(epsilon)` otherwise behaves as
   LibCarla's `MakeUnitVector` on `Vector2D`, `Vector3D` and `Location`: a
   vector of length <= `epsilon` (default `2.384185791015625e-07`, i.e.
   2 * FLT_EPSILON) is returned unchanged.

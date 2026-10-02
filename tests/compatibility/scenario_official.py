@@ -439,7 +439,8 @@ out("geometry_misc", f"{n23.pitch:.3f},{n23.yaw:.3f},{n23.roll:.3f},{u23.x:.3f},
 out("unit_vector", ",".join([vec(carla.Vector3D(3.0, 4.0, 0.0).make_unit_vector()),
                              vec(carla.Vector3D(0.1, 0.2, 0.0).make_unit_vector(epsilon=1.0)),
                              vec(carla.Location(3.0, 4.0, 12.0).make_unit_vector(0.5)),
-                             vec(carla.Vector3D(0.1, 0.2, 0.0).make_unit_vector(epsilon=0.0))]))
+                             vec(carla.Vector3D(0.1, 0.2, 0.0).make_unit_vector(epsilon=0.0)),
+                             vec(carla.Vector3D(1e-7, 0.0, 0.0).make_unit_vector())]))
 # carla.Quaternion exists only in a module built from ue5-dev: "skip" otherwise
 # (compare.py then skips the key on both sides).
 if not hasattr(carla, "Quaternion"):
