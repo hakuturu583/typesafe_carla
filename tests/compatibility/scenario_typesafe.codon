@@ -6,15 +6,17 @@ host = os.getenv("TSC_CARLA_HOST", "localhost")
 port = int(os.getenv("TSC_CARLA_PORT", "2000"))
 
 def fmt(x: float) -> str:
-    # Like Python's f"{x:.3f}" (Codon's format specs need a locale).
-    neg = x < 0.0
+    # Like Python's f"{x:.3f}", including "-0.000" for small or negative-zero
+    # values (Codon's format specs need a locale).
+    from math import copysign
     v = int(round(abs(x) * 1000.0))
     s = str(v // 1000) + "." + str(1000 + v % 1000)[1:]
-    return ("-" + s) if neg and v != 0 else s
+    return ("-" + s) if copysign(1.0, x) < 0.0 else s
 
 def out(key: str, value: str):
     print(key + "=" + value)
 
+assert carla.backend() == "libcarla", "compare against a real server needs the libcarla backend"
 client = carla.Client(host, port)
 client.set_timeout(20.0)
 out("server_version", client.get_server_version())
@@ -27,8 +29,8 @@ out("color_type", "RGBColor" if bp.get_attribute("color").type == carla.ActorAtt
 out("wheels", str(bp.get_attribute("number_of_wheels").as_int()))
 
 spawn = carla.Transform(carla.Location(-64.644844, 24.471010, 0.6), carla.Rotation(0.0, 0.159198, 0.0))
-vehicle = world.spawn_actor(bp, spawn).as_vehicle()
 original = world.get_settings()
+vehicle = world.spawn_actor(bp, spawn).as_vehicle()
 try:
     settings = world.get_settings()
     settings.synchronous_mode = True

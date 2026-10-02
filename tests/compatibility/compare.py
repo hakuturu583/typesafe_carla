@@ -32,6 +32,12 @@ def run(cmd: list[str]) -> dict[str, str]:
     return parse(result.stdout)
 
 
+def _short(v: str | None) -> str:
+    if v is None:
+        return "<missing>"
+    return v if len(v) <= 40 else v[:37] + "..."
+
+
 def main() -> int:
     python = os.environ.get("CARLA_PYTHON", sys.executable)
     official = run([python, str(HERE / "scenario_official.py")])
@@ -40,18 +46,20 @@ def main() -> int:
     failures = 0
     print(f"{'key':20} {'official':40} {'typesafe_carla':40} result")
     for key in EXACT + tuple(NUMERIC):
-        a, b = official.get(key, "<missing>"), typesafe.get(key, "<missing>")
-        if key in NUMERIC:
+        a, b = official.get(key), typesafe.get(key)
+        if a is None or b is None:
+            ok = False
+        elif key in NUMERIC:
+            xs, ys = a.split(","), b.split(",")
             try:
-                ok = all(abs(float(x) - float(y)) <= NUMERIC[key]
-                         for x, y in zip(a.split(","), b.split(",")))
+                ok = len(xs) == len(ys) and all(abs(float(x) - float(y)) <= NUMERIC[key]
+                                                for x, y in zip(xs, ys))
             except ValueError:
                 ok = False
         else:
             ok = a == b
         failures += not ok
-        show = lambda v: v if len(v) <= 40 else v[:37] + "..."
-        print(f"{key:20} {show(a):40} {show(b):40} {'OK' if ok else 'MISMATCH'}")
+        print(f"{key:20} {_short(a):40} {_short(b):40} {'OK' if ok else 'MISMATCH'}")
     print("compatibility:", "PASS" if failures == 0 else f"FAIL ({failures})")
     return 1 if failures else 0
 

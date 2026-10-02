@@ -79,6 +79,11 @@ static void test_wrong_handle_kind(void) {
   CHECK(tsc_actor_get_transform((tsc_actor_t *)client, &t) == TSC_INVALID_ARGUMENT);
   CHECK(strstr(tsc_last_error_message(), "wrong handle kind") != NULL);
   CHECK(tsc_client_set_timeout(client, -1.0) == TSC_INVALID_ARGUMENT);
+  /* Non-finite or absurd timeouts must not silently become 0 ms. */
+  CHECK(tsc_client_set_timeout(client, 1.0 / 0.0) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_client_set_timeout(client, 0.0 / 0.0) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_client_set_timeout(client, 1e30) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_client_set_timeout(client, 1e9) == TSC_OK);
   tsc_handle_release(H(client));
 }
 

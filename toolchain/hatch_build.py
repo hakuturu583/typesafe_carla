@@ -41,18 +41,20 @@ LLVM_LICENSE = "include/llvm/Support/LICENSE.TXT"
 
 def _fetch(url: str, sha256: str, cache: Path) -> bytes:
     cached = cache / hashlib.sha256(url.encode()).hexdigest()
-    hit = cached.is_file()
-    if hit:
+    if cached.is_file():
         data = cached.read_bytes()
-    else:
-        with urllib.request.urlopen(url) as response:  # noqa: S310 (pinned https URL)
-            data = response.read()
+        if hashlib.sha256(data).hexdigest() == sha256:
+            return data
+        cached.unlink()  # stale or truncated: download again
+    with urllib.request.urlopen(url) as response:  # noqa: S310 (pinned https URL)
+        data = response.read()
     digest = hashlib.sha256(data).hexdigest()
     if digest != sha256:
         raise RuntimeError(f"{url}: sha256 {digest} does not match pinned {sha256}")
-    if not hit:
-        cache.mkdir(parents=True, exist_ok=True)
-        cached.write_bytes(data)
+    cache.mkdir(parents=True, exist_ok=True)
+    partial = cached.with_suffix(".partial")
+    partial.write_bytes(data)
+    os.replace(partial, cached)  # atomic: no truncated cache after an interrupt
     return data
 
 

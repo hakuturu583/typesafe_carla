@@ -28,8 +28,8 @@ out("color_type", str(bp.get_attribute("color").type))
 out("wheels", bp.get_attribute("number_of_wheels").as_int())
 
 spawn = carla.Transform(carla.Location(-64.644844, 24.471010, 0.6), carla.Rotation(0.0, 0.159198, 0.0))
-vehicle = world.spawn_actor(bp, spawn)
 original = world.get_settings()
+vehicle = world.spawn_actor(bp, spawn)
 try:
     settings = world.get_settings()
     settings.synchronous_mode = True

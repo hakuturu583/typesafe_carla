@@ -57,13 +57,20 @@ jobs:
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_ENVIRONMENT_PASS_LINUX: CARLA_GIT_REF
           CIBW_CONFIG_SETTINGS: cmake.define.TSC_BACKEND=libcarla
-          # The toolchain is not needed to check the native library.
-          CIBW_BEFORE_TEST: pip install --no-deps {wheel}
-          CIBW_TEST_COMMAND: >
-            python {project}/tools/check_wheel.py --backend libcarla --carla-ref "$CARLA_GIT_REF"
-          CIBW_TEST_ENVIRONMENT_PASS_LINUX: CARLA_GIT_REF
+          # cibuildwheel's own test install would resolve typesafe-carla-toolchain
+          # from PyPI, which does not exist before the first release; the wheel
+          # is checked in the next step instead, without dependencies.
+          CIBW_TEST_SKIP: "*"
         with:
           output-dir: dist
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Check the wheel (backend, CARLA ref, exports, no libpython)
+        run: |
+          python -m venv /tmp/check
+          /tmp/check/bin/pip install --no-deps dist/*.whl
+          cd /tmp && /tmp/check/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" \
+            --backend libcarla --carla-ref "$CARLA_GIT_REF"
       - uses: actions/upload-artifact@v4
         with: { name: dist-wheel, path: dist/*.whl }
 

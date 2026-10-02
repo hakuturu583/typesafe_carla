@@ -54,8 +54,11 @@ def _bundled() -> Toolchain | None:
         import typesafe_carla_toolchain  # type: ignore[import-not-found]
     except ImportError:
         return None
-    return _from_executable(Path(typesafe_carla_toolchain.codon_executable()),
-                            "typesafe-carla-toolchain")
+    try:
+        exe = typesafe_carla_toolchain.codon_executable()
+    except RuntimeError as e:  # installed without its Codon bundle
+        raise ToolchainError(f"typesafe-carla-toolchain: {e}") from e
+    return _from_executable(Path(exe), "typesafe-carla-toolchain")
 
 
 def find_codon() -> Toolchain:

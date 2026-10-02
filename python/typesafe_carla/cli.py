@@ -18,6 +18,7 @@ directory, so it runs without the launcher.
 from __future__ import annotations
 
 import os
+import shlex
 import sys
 
 from . import __version__, paths, toolchain
@@ -117,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args[0] == "env":
         for key in ("CODON_DIR", "CODON_PATH", paths.ENV_LIB, "LD_LIBRARY_PATH"):
-            print(f"export {key}={env[key]!r}")
+            print(f"export {key}={shlex.quote(env[key])}")
         return 0
 
     if args[0] == "build":

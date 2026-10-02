@@ -40,12 +40,9 @@ void tsc_handle_retain(tsc_handle_t *handle) {
 void tsc_handle_release(tsc_handle_t *handle) {
   if (handle == nullptr) return;
   if (handle->refcount.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-    // Destructors of LibCarla objects may throw (e.g. a dropped connection);
-    // that must not escape through the C ABI.
-    try {
-      delete handle;
-    } catch (...) {
-    }
+    // Destructors are implicitly noexcept: a throwing LibCarla destructor
+    // terminates rather than unwinding through the C ABI.
+    delete handle;
   }
 }
 

@@ -80,9 +80,12 @@ def native_library() -> Path:
     # (editable) install compiled, so that rebuilding is enough to test changes.
     root = _source_root()
     if root is not None:
-        build_dir = Path(os.environ.get(ENV_BUILD_DIR, root / "build"))
+        explicit = os.environ.get(ENV_BUILD_DIR)
+        build_dir = Path(explicit).expanduser().resolve() if explicit else root / "build"
         if (build_dir / LIBRARY_NAME).is_file():
             return (build_dir / LIBRARY_NAME).resolve()
+        if explicit:
+            raise PathError(f"{ENV_BUILD_DIR}={explicit}: no {LIBRARY_NAME} in {build_dir}")
     for candidate in _installed_dirs("_native"):
         if (candidate / LIBRARY_NAME).is_file():
             return (candidate / LIBRARY_NAME).resolve()

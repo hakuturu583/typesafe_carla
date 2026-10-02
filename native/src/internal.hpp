@@ -6,6 +6,7 @@
 #include "carla_compat.hpp"
 
 #include <atomic>
+#include <cmath>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -185,8 +186,14 @@ inline tsc_transform_t from_carla(const carla::geom::Transform &t) {
   return tsc_transform_t{from_carla(t.location), from_carla(t.rotation)};
 }
 
+// Longest accepted timeout (~31 years): keeps the millisecond count far inside
+// size_t and LibCarla's signed boost::posix_time milliseconds.
+inline constexpr double kMaxTimeoutSeconds = 1e9;
+
 inline carla::time_duration seconds_to_duration(double seconds) {
-  if (!(seconds >= 0.0)) fail(TSC_INVALID_ARGUMENT, "timeout must be a non-negative number");
+  if (!std::isfinite(seconds) || seconds < 0.0 || seconds > kMaxTimeoutSeconds) {
+    fail(TSC_INVALID_ARGUMENT, "timeout must be a finite number of seconds in [0, 1e9]");
+  }
   return carla::time_duration::milliseconds(static_cast<size_t>(seconds * 1000.0 + 0.5));
 }
 

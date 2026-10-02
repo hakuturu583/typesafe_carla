@@ -71,5 +71,7 @@ try:
         print("ActorTypeError:", e.message)
     assert raised
 finally:
-    assert actor.destroy()
+    # Do not assert here: an assertion in `finally` would hide the original failure.
+    destroyed = actor.destroy()
+assert destroyed
 print("OK")
