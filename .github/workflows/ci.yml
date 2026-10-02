@@ -16,8 +16,8 @@ on:
 jobs:
   test:
     # Mock backend: compile-pass/fail, runtime and launcher tests, no CARLA needed.
-    # The launcher is the only Python code: test the oldest and newest
-    # supported versions (requires-python >= 3.10).
+    # Python only runs the launcher, build hook and dev tools: test the oldest
+    # and newest supported versions (requires-python >= 3.10).
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
