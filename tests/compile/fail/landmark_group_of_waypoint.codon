@@ -1,0 +1,11 @@
+# Map.get_landmark_group takes a Landmark.
+# expect-error: 'Waypoint' does not match expected type 'Landmark'
+import typesafe_carla as carla
+
+def group(m: carla.Map):
+    wp = m.get_waypoint(carla.Location())
+    if wp is not None:
+        print(len(m.get_landmark_group(wp)))
+
+# Compile-only: Codon type-checks a function only when it is called.
+group(carla.Client("localhost", 2000).get_world().get_map())

@@ -79,7 +79,15 @@ def test_every_shortcut_warns_and_fails_in_strict_mode(launcher, tmp_path):
     assert result.returncode == 0, result.stderr
     warnings = {line for line in result.stderr.splitlines()
                 if line.startswith("typesafe-codon: compile-time warning: ")}
-    assert len(warnings) == len(actor_shortcuts()) == 34, "\n".join(sorted(warnings))
+    assert len(warnings) == len(actor_shortcuts()) == 40, "\n".join(sorted(warnings))
     result = _compile(launcher, source, tmp_path, strict=True)
     assert result.returncode != 0
     assert "strict mode: " in result.stderr, result.stderr
+
+
+def test_compatibility_scenario_builds(launcher, tmp_path):
+    """The compatibility scenario needs a server to run, but it must build:
+    Codon can crash on constructs that type-check (see CLAUDE.md)."""
+    source = Path(__file__).resolve().parent / "compatibility" / "scenario_typesafe.codon"
+    result = launcher("build", "-o", str(tmp_path / "scenario"), str(source), timeout=900)
+    assert result.returncode == 0, f"rc {result.returncode}\n{result.stderr}"

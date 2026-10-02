@@ -179,6 +179,21 @@ struct tsc_landmark_list : tsc_handle {
       : tsc_handle(TSC_KIND_LANDMARK_LIST), landmarks(std::move(l)) {}
 };
 
+// Issue #22: one landmark (the waypoint, lane validities and landmark group
+// need LibCarla's object, not the copied tsc_landmark_t).
+struct tsc_landmark_handle : tsc_handle {
+  carla::SharedPtr<carla::client::Landmark> landmark;
+  explicit tsc_landmark_handle(carla::SharedPtr<carla::client::Landmark> l)
+      : tsc_handle(TSC_KIND_LANDMARK), landmark(std::move(l)) {}
+};
+
+// Issue #22: TrafficLight.get_group_traffic_lights.
+struct tsc_traffic_light_list : tsc_handle {
+  std::vector<carla::SharedPtr<carla::client::TrafficLight>> lights;
+  explicit tsc_traffic_light_list(std::vector<carla::SharedPtr<carla::client::TrafficLight>> l)
+      : tsc_handle(TSC_KIND_TRAFFIC_LIGHT_LIST), lights(std::move(l)) {}
+};
+
 struct tsc_junction : tsc_handle {
   carla::SharedPtr<carla::client::Junction> junction;
   explicit tsc_junction(carla::SharedPtr<carla::client::Junction> j)
@@ -333,6 +348,32 @@ inline carla::SharedPtr<carla::client::Actor> vehicle_ptr(tsc_vehicle_t *v,
   return check_handle(v, name, TSC_KIND_VEHICLE)->actor;
 }
 
+inline const carla::client::Landmark &landmark_of(const tsc_landmark_handle_t *l,
+                                                  const char *name = "landmark") {
+  return *check_handle(l, name, TSC_KIND_LANDMARK)->landmark;
+}
+
+// A new waypoint handle, or NULL for "no waypoint".
+inline tsc_waypoint *waypoint_or_null(carla::SharedPtr<carla::client::Waypoint> w) {
+  return w == nullptr ? nullptr : new tsc_waypoint(std::move(w));
+}
+
+// LibCarla can put null entries in a list (GetWaypointXODR for a lane that
+// does not exist, an actor it cannot find); a typed list has no place for them.
+template <typename T>
+std::vector<carla::SharedPtr<T>> without_nulls(std::vector<carla::SharedPtr<T>> v) {
+  v.erase(std::remove(v.begin(), v.end(), nullptr), v.end());
+  return v;
+}
+
+// A search distance in meters: finite and non-negative (NaN fails).
+inline double check_search_distance(double distance, const char *name) {
+  if (!(distance >= 0.0) || !std::isfinite(distance)) {
+    fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be a non-negative finite number of meters");
+  }
+  return distance;
+}
+
 // Fails with TSC_NOT_FOUND unless index < size; `what` names the container.
 inline void check_index(size_t index, size_t size, const char *what) {
   if (index >= size) {
@@ -375,6 +416,23 @@ inline tsc_transform_t from_carla(const carla::geom::Transform &t) {
 inline tsc_bounding_box_t from_carla(const carla::geom::BoundingBox &b) {
   return tsc_bounding_box_t{from_carla(b.location), from_carla(b.extent), from_carla(b.rotation)};
 }
+inline tsc_geo_location_t from_carla(const carla::geom::GeoLocation &g) {
+  return tsc_geo_location_t{g.latitude, g.longitude, g.altitude};
+}
+inline carla::geom::GeoLocation to_carla(const tsc_geo_location_t &g) {
+  return carla::geom::GeoLocation(g.latitude, g.longitude, g.altitude);
+}
+inline tsc_lane_marking_t from_carla(const carla::road::element::LaneMarking &m) {
+  tsc_lane_marking_t r{};
+  r.type = static_cast<int32_t>(m.type);
+  r.color = static_cast<int32_t>(m.color);
+  r.lane_change = static_cast<int32_t>(m.lane_change);
+  r.width = m.width;
+  return r;
+}
+inline tsc_lane_validity_t from_carla(const carla::road::LaneValidity &v) {
+  return tsc_lane_validity_t{v._from_lane, v._to_lane};
+}
 inline carla::geom::BoundingBox to_carla(const tsc_bounding_box_t &b) {
   return carla::geom::BoundingBox(to_carla(b.location), to_carla_vector(b.extent),
                                   to_carla(b.rotation));
@@ -388,6 +446,15 @@ void copy_out(const Vec &values, Out *out, size_t capacity, size_t *out_count) {
   *out_count = values.size();
   if (out == nullptr) return;
   for (size_t i = 0; i < values.size() && i < capacity; ++i) out[i] = from_carla(values[i]);
+}
+
+// An optional LibCarla value: *has_value = 0 and *out zeroed when it is empty.
+template <typename Out, typename Optional>
+void assign_optional(const Optional &value, int32_t *has_value, Out *out) {
+  require_ptr(has_value, "has_value");
+  require_ptr(out, "out");
+  *has_value = value.has_value() ? 1 : 0;
+  *out = value.has_value() ? from_carla(*value) : Out{};
 }
 
 // LibCarla's float parameters. A finite double above FLT_MAX would become

@@ -1,0 +1,10 @@
+# A geo projection argument must be one of the projection classes (a Union
+# parameter would accept anything and fail at run time instead).
+# expect-error: a geo projection must be a GeoProjectionTM, GeoProjectionUTM, GeoProjectionWebMerc or GeoProjectionLCC2SP
+import typesafe_carla as carla
+
+def to_geo(m: carla.Map) -> carla.GeoLocation:
+    return m.transform_to_geolocation(carla.Location(), carla.GeoEllipsoid())
+
+# Compile-only: Codon type-checks a function only when it is called.
+to_geo(carla.Client("localhost", 2000).get_world().get_map())

@@ -1,0 +1,10 @@
+# A lane marking is a LaneMarking (or None), not its type code.
+# expect-error: 'int' does not match expected type 'LaneMarking'
+import typesafe_carla as carla
+
+def marking(wp: carla.Waypoint) -> int:
+    kind: int = wp.left_lane_marking
+    return kind
+
+# Compile-only: Codon type-checks a function only when it is called.
+marking(carla.Client("localhost", 2000).get_world().get_map().get_waypoint(carla.Location()))

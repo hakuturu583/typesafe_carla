@@ -1,0 +1,9 @@
+# geolocation_to_transform takes a GeoLocation, not a Location.
+# expect-error: 'Location' does not match expected type 'GeoLocation'
+import typesafe_carla as carla
+
+def back(m: carla.Map) -> carla.Location:
+    return m.geolocation_to_transform(carla.Location(1.0, 2.0, 3.0))
+
+# Compile-only: Codon type-checks a function only when it is called.
+back(carla.Client("localhost", 2000).get_world().get_map())

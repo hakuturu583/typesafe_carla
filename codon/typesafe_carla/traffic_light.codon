@@ -1,5 +1,11 @@
 # Traffic lights.
 
+from ._ffi import (CString, CBoundingBox, take_string, tsc_traffic_light_get_opendrive_id,
+                   tsc_traffic_light_get_trigger_volume, tsc_traffic_light_get_light_boxes,
+                   tsc_traffic_light_get_affected_lane_waypoints,
+                   tsc_traffic_light_get_stop_waypoints,
+                   tsc_traffic_light_get_group_traffic_lights, tsc_traffic_light_list_size,
+                   tsc_traffic_light_list_get)
 from ._ffi import (Handle, CTrafficLightInfo, TSC_KIND_TRAFFIC_LIGHT, tsc_handle_kind,
                    tsc_actor_as_traffic_light, tsc_traffic_light_get_info,
                    tsc_traffic_light_set_state, tsc_traffic_light_set_green_time,
@@ -8,6 +14,8 @@ from ._ffi import (Handle, CTrafficLightInfo, TSC_KIND_TRAFFIC_LIGHT, tsc_handle
                    tsc_vehicle_get_traffic_light)
 from .errors import _check, _check_traffic_light_state
 from .actor import Actor, Vehicle
+from .geometry import BoundingBox
+from .map import Waypoint, _waypoints, _read_buffer
 
 class TrafficLight(Actor):
     def __init__(self, h: Handle):
@@ -58,6 +66,49 @@ class TrafficLight(Actor):
 
     def reset_group(self):
         _check(tsc_traffic_light_reset_group(self._h.ptr))
+
+    # Issue #22: OpenDRIVE geometry.
+
+    def get_opendrive_id(self) -> str:
+        """The OpenDRIVE id of the signal this light belongs to."""
+        out = Ptr[CString](1)
+        _check(tsc_traffic_light_get_opendrive_id(self._h.ptr, out))
+        return take_string(out)
+
+    @property
+    def trigger_volume(self) -> BoundingBox:
+        """The volume (in the light's local coordinates) where vehicles are
+        affected by the light."""
+        out = Ptr[CBoundingBox](1)
+        _check(tsc_traffic_light_get_trigger_volume(self._h.ptr, out))
+        return BoundingBox._from_c(out[0])
+
+    def get_affected_lane_waypoints(self) -> List[Waypoint]:
+        """A waypoint at the signal on each lane the light controls."""
+        return _waypoints(tsc_traffic_light_get_affected_lane_waypoints, self._h.ptr)
+
+    def get_stop_waypoints(self) -> List[Waypoint]:
+        """A waypoint per lane where vehicles stop for the light."""
+        return _waypoints(tsc_traffic_light_get_stop_waypoints, self._h.ptr)
+
+    def get_group_traffic_lights(self) -> List[TrafficLight]:
+        """Every traffic light in this light's group, itself included."""
+        out = Ptr[cobj](1)
+        _check(tsc_traffic_light_get_group_traffic_lights(self._h.ptr, out))
+        h = Handle(out[0])
+        n = tsc_traffic_light_list_size(h.ptr)
+        result = List[TrafficLight](n)
+        for i in range(n):
+            _check(tsc_traffic_light_list_get(h.ptr, i, out))
+            result.append(TrafficLight(Handle(out[0])))
+        h.release()
+        return result
+
+    def get_light_boxes(self) -> List[BoundingBox]:
+        """The bounding boxes of the light's lamps (world coordinates)."""
+        # One server call per attempt: guess a size, retry only if too small.
+        buf, n = _read_buffer(tsc_traffic_light_get_light_boxes, self._h.ptr, CBoundingBox, 8)
+        return [BoundingBox._from_c(buf[i]) for i in range(n)]
 
     def __repr__(self) -> str:
         return f"TrafficLight(id={self.id}, state={self.get_state()})"

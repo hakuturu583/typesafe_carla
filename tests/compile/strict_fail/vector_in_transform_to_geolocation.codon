@@ -1,0 +1,9 @@
+# In strict mode Map.transform_to_geolocation takes a Location.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def to_geo(m: carla.Map, v: carla.Vector3D) -> carla.GeoLocation:
+    return m.transform_to_geolocation(v)
+
+# Compile-only: Codon type-checks a function only when it is called.
+to_geo(carla.Client("localhost", 2000).get_world().get_map(), carla.Vector3D())

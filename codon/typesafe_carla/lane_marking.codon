@@ -1,0 +1,58 @@
+# Lane markings (road::element::LaneMarking). Shared by Waypoint
+# (left_lane_marking / right_lane_marking, issue #22) and LaneInvasionEvent (#24).
+
+from ._ffi import CLaneMarking
+
+class LaneMarkingType:
+    """carla.LaneMarkingType: LibCarla's LaneMarking::Type values."""
+    Other: ClassVar[int] = 0
+    Broken: ClassVar[int] = 1
+    Solid: ClassVar[int] = 2
+    SolidSolid: ClassVar[int] = 3
+    SolidBroken: ClassVar[int] = 4
+    BrokenSolid: ClassVar[int] = 5
+    BrokenBroken: ClassVar[int] = 6
+    BottsDots: ClassVar[int] = 7
+    Grass: ClassVar[int] = 8
+    Curb: ClassVar[int] = 9
+    NONE: ClassVar[int] = 10
+
+class LaneMarkingColor:
+    """carla.LaneMarkingColor: LibCarla's LaneMarking::Color values."""
+    Standard: ClassVar[int] = 0
+    Blue: ClassVar[int] = 1
+    Green: ClassVar[int] = 2
+    Red: ClassVar[int] = 3
+    White: ClassVar[int] = 0  # an alias of Standard, as in LibCarla
+    Yellow: ClassVar[int] = 4
+    Other: ClassVar[int] = 5
+
+class LaneChange:
+    """carla.LaneChange: the lane changes a marking allows (bit flags)."""
+    NONE: ClassVar[int] = 0
+    Right: ClassVar[int] = 1
+    Left: ClassVar[int] = 2
+    Both: ClassVar[int] = 3
+
+class LaneMarking:
+    """A lane marking (a plain value): LaneMarkingType, LaneMarkingColor and
+    LaneChange values, and the width in meters."""
+    type: int
+    color: int
+    lane_change: int
+    width: float
+
+    def __init__(self, type: int = LaneMarkingType.NONE, color: int = LaneMarkingColor.Standard,
+                 lane_change: int = LaneChange.NONE, width: float = 0.0):
+        self.type = type
+        self.color = color
+        self.lane_change = lane_change
+        self.width = width
+
+    @staticmethod
+    def _from_c(c: CLaneMarking) -> LaneMarking:
+        return LaneMarking(int(c.type), int(c.color), int(c.lane_change), c.width)
+
+    def __repr__(self) -> str:
+        return (f"LaneMarking(type={self.type}, color={self.color}, "
+                f"lane_change={self.lane_change}, width={self.width})")

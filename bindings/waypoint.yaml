@@ -1,0 +1,33 @@
+# Waypoint operations: tsc_waypoint_<name> (issue #22).
+class: carla::client::Waypoint
+prefix: waypoint
+self: {type: const tsc_waypoint_t, name: waypoint, get: waypoint_of}
+blocks:
+  waypoint:
+    get_left_lane:
+      call: GetLeft
+      out: waypoint_or_null
+      doc: "*out = NULL (TSC_OK) when there is no such lane."
+    get_right_lane: {call: GetRight, out: waypoint_or_null}
+    is_rht:
+      call: IsRHT
+      via: waypoint_is_rht
+      out: bool
+      doc: "Right-hand traffic. CARLA 0.10.0 has no left-hand traffic: always 1 there."
+    get_left_lane_marking:
+      call: GetLeftLaneMarking
+      out: optional_lane_marking
+      doc: "*has_value = 0 (and *out zeroed) when there is no marking on that side."
+    get_right_lane_marking: {call: GetRightLaneMarking, out: optional_lane_marking}
+    get_lane_change:
+      call: GetLaneChange
+      out: lane_change
+      doc: "lane_change: LaneMarking::LaneChange flags."
+    get_landmarks:
+      call: GetAllLandmarksInDistance
+      args: {distance: distance, stop_at_junction: bool}
+      out: landmark_list
+    get_landmarks_of_type:
+      call: GetLandmarksOfTypeInDistance
+      args: {distance: distance, type: string_in, stop_at_junction: bool}
+      out: landmark_list

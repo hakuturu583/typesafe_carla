@@ -87,6 +87,49 @@ out("none_lookups", str(int(world.get_actor(999999) is None)) + "," +
     str(int(world.get_snapshot().find(999999) is None)) + "," +
     str(int(world.get_actors().find(999999) is None)) + "," + str(int(offroad is None)) + "," +
     str(int(wp.get_junction() is None)))
+# Issue #22: geo-reference, XODR waypoints, lane markings, landmarks, light geometry.
+# (Only the origin is compared for transform_to_geolocation: CARLA 0.10.0's
+# LibCarla and newer ones with geo projections differ elsewhere.)
+ref = m.get_georeference()
+out("georeference", fmt7(ref.latitude) + "," + fmt7(ref.longitude) + "," + fmt(ref.altitude))
+g0 = m.transform_to_geolocation(carla.Location(0.0, 0.0, 0.0))
+out("geo_origin", fmt7(g0.latitude) + "," + fmt7(g0.longitude) + "," + fmt(g0.altitude))
+xw = m.get_waypoint_xodr(wp.road_id, wp.lane_id, wp.s)
+out("waypoint_xodr", str(xw.road_id) + "," + str(xw.lane_id) + "," +
+    str(int(m.get_waypoint_xodr(999999, 1, 0.0) is None)))
+out("waypoint_xodr_loc", fmt(xw.transform.location.x) + "," + fmt(xw.transform.location.y) + "," +
+    fmt(xw.s))
+
+def marking_str(mk: Optional[carla.LaneMarking]) -> str:
+    if mk is None:
+        return "None"
+    k = unwrap(mk)
+    return str(k.type) + ":" + str(k.color) + ":" + str(k.lane_change) + ":" + fmt(k.width)
+
+out("lane_markings", marking_str(wp.left_lane_marking) + "," + marking_str(wp.right_lane_marking) +
+    "," + str(wp.lane_change) + "," + str(int(wp.is_rht)) + "," + str(int(wp.is_intersection)))
+lm0 = lms[0]
+out("landmark_details", str(int(lm0.waypoint is None)) + "," +
+    "/".join([str(a) + ":" + str(b) for a, b in lm0.get_lane_validities()]) + "," +
+    fmt(lm0.h_offset) + "," + str(int(lm0.is_dynamic)) + "," + fmt(lm0.pitch) + "," + fmt(lm0.roll))
+out("landmarks_by_id", str(len(m.get_all_landmarks_from_id(lm0.id))) + "," +
+    str(len(m.get_landmark_group(lm0))))
+# A loop, not a comprehension: Codon 0.19's compiler crashes on the
+# comprehension here (see CLAUDE.md, Codon gotchas).
+ahead_ids = List[str]()
+for l in wp.get_landmarks(200.0):
+    ahead_ids.append(l.id + ":" + str(int(l.waypoint is None)))
+ahead_ids.sort()
+out("landmarks_ahead", ";".join(ahead_ids) + "," +
+    str(len(wp.get_landmarks_of_type(200.0, "1000001"))) + "," +
+    str(len(wp.get_landmarks(200.0, True))))
+light_a = lights[0]
+out("light_geometry", light_a.get_opendrive_id() + "," +
+    str(len(light_a.get_affected_lane_waypoints())) + "," + str(len(light_a.get_stop_waypoints())) +
+    "," + str(len(light_a.get_group_traffic_lights())) + "," + str(len(light_a.get_light_boxes())))
+tv = light_a.trigger_volume
+out("light_trigger", fmt(tv.location.x) + "," + fmt(tv.location.y) + "," + fmt(tv.extent.x) + "," +
+    fmt(tv.extent.y) + "," + fmt(tv.extent.z))
 
 def lane_walk(start: carla.Waypoint, left: bool) -> str:
     ids = List[str]()

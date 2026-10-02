@@ -9,6 +9,11 @@
 #              default: `{}`
 #   invalid    a C value the conversion rejects (tests/native/test_generated.c
 #              passes it next to a NULL handle); default: 0
+#   c_param    C parameter(s) when not the default `c name` (input) or
+#              `c *name` (output); `{name}` is the parameter name. codon and
+#              invalid then list one value per C parameter.
+#   assign     an output written by a statement instead of `*out = ...`
+#              (`{out}` is the output name)
 #   cpp        regexes, one of which the canonical LibCarla parameter or
 #              return type must match (checked with libclang)
 
@@ -104,3 +109,91 @@ vehicle:
   codon: cobj
   to_carla: 'vehicle_ptr({}, "{name}")'
   cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]
+# --- #22 ---
+int32:
+  c: int32_t
+  codon: i32
+  cpp: ["int", "int32_t"]
+# A non-negative, finite search distance in meters (LibCarla takes a double).
+distance:
+  c: double
+  codon: float
+  to_carla: 'check_search_distance({}, "{name}")'
+  invalid: NAN
+  cpp: ["double"]
+# An input string as a (pointer, length) pair; NULL only with length 0.
+string_in:
+  c: const char *
+  c_param: "const char *{name}, size_t {name}_len"
+  codon: "cobj, int"
+  to_carla: 'to_string({name}, {name}_len, "{name}")'
+  invalid: "NULL, 1"
+  cpp: ["std::(__cxx11::)?basic_string<char.*>"]
+geo_location:
+  c: tsc_geo_location_t
+  struct: true
+  codon: CGeoLocation
+  from_carla: "from_carla({})"
+  cpp: ["carla::geom::GeoLocation"]
+# LaneMarking::LaneChange flags.
+lane_change:
+  c: int32_t
+  codon: i32
+  from_carla: "static_cast<int32_t>({})"
+  cpp: ["carla::road::element::LaneMarking::LaneChange"]
+# A landmark handle argument (tsc_landmark_handle_t).
+landmark:
+  c: const tsc_landmark_handle_t
+  handle: true
+  codon: cobj
+  to_carla: 'landmark_of({}, "{name}")'
+  cpp: ["carla::client::Landmark"]
+# Handle outputs: from_carla makes the new handle (NULL: no such object).
+waypoint_or_null:
+  c: tsc_waypoint_t
+  handle: true
+  codon: cobj
+  from_carla: "waypoint_or_null({})"
+  cpp: ["(boost|std)::shared_ptr<carla::client::Waypoint>"]
+waypoint_list:
+  c: tsc_waypoint_list_t
+  handle: true
+  codon: cobj
+  from_carla: "new tsc_waypoint_list(without_nulls({}))"
+  cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Waypoint>.*>"]
+landmark_list:
+  c: tsc_landmark_list_t
+  handle: true
+  codon: cobj
+  from_carla: "new tsc_landmark_list(without_nulls({}))"
+  cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Landmark>.*>"]
+traffic_light_list:
+  c: tsc_traffic_light_list_t
+  handle: true
+  codon: cobj
+  from_carla: "new tsc_traffic_light_list(without_nulls({}))"
+  cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::TrafficLight>.*>"]
+# Output buffers, two-call pattern: fills up to `capacity` values and reports
+# the total in *out_count (out may be NULL to only count).
+bounding_box_buffer:
+  c: tsc_bounding_box_t
+  c_param: "tsc_bounding_box_t *{name}, size_t capacity, size_t *{name}_count"
+  codon: "Ptr[CBoundingBox], int, Ptr[int]"
+  assign: "copy_out({}, {out}, capacity, {out}_count)"
+  invalid: "NULL, 0, NULL"
+  cpp: ["std::vector<carla::geom::BoundingBox.*>"]
+lane_validity_buffer:
+  c: tsc_lane_validity_t
+  c_param: "tsc_lane_validity_t *{name}, size_t capacity, size_t *{name}_count"
+  codon: "Ptr[CLaneValidity], int, Ptr[int]"
+  assign: "copy_out({}, {out}, capacity, {out}_count)"
+  invalid: "NULL, 0, NULL"
+  cpp: ["std::vector<carla::road::LaneValidity.*>"]
+# An optional lane marking: *has_value = 0 (and *out zeroed) when there is none.
+optional_lane_marking:
+  c: tsc_lane_marking_t
+  c_param: "int32_t *has_value, tsc_lane_marking_t *{name}"
+  codon: "Ptr[i32], Ptr[CLaneMarking]"
+  assign: "assign_optional({}, has_value, {out})"
+  invalid: "NULL, NULL"
+  cpp: ["(boost|std)::optional<carla::road::element::LaneMarking>"]

@@ -1,0 +1,13 @@
+# Strict mode: traffic-light geometry needs a checked as_traffic_light()
+# conversion. (Outside strict mode this compiles: a Python-API compatibility path.)
+# expect-error: strict mode: call as_traffic_light() first (Actor.get_stop_waypoints is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def stop_lines(world: carla.World) -> int:
+    n = 0
+    for actor in world.get_actors():
+        n += len(actor.get_stop_waypoints())
+    return n
+
+# Compile-only: Codon type-checks a function only when it is called.
+stop_lines(carla.Client("localhost", 2000).get_world())

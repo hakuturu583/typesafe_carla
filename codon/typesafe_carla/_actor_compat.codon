@@ -26,6 +26,7 @@ from ._ffi import TSC_KIND_WALKER_AI_CONTROLLER, tsc_handle_kind
 from ._strict import compat_shortcut
 from .errors import ActorTypeError
 from .control import VehicleControl, WalkerControl
+from .geometry import BoundingBox
 from .actor import Actor, Vehicle
 from .walker import Walker, WalkerAIController
 from .traffic_light import TrafficLight
@@ -192,6 +193,37 @@ class Actor:
         _plain_actor_only(self, "reset_group()")
         compat_shortcut("Actor.reset_group", "[tsc-compat] Actor.reset_group() without as_traffic_light()", "call as_traffic_light() first")
         return self.as_traffic_light().reset_group(*args, **kwargs)
+
+    def get_opendrive_id(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_opendrive_id()")
+        compat_shortcut("Actor.get_opendrive_id", "[tsc-compat] Actor.get_opendrive_id() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_opendrive_id(*args, **kwargs)
+
+    def get_affected_lane_waypoints(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_affected_lane_waypoints()")
+        compat_shortcut("Actor.get_affected_lane_waypoints", "[tsc-compat] Actor.get_affected_lane_waypoints() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_affected_lane_waypoints(*args, **kwargs)
+
+    def get_stop_waypoints(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_stop_waypoints()")
+        compat_shortcut("Actor.get_stop_waypoints", "[tsc-compat] Actor.get_stop_waypoints() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_stop_waypoints(*args, **kwargs)
+
+    def get_group_traffic_lights(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_group_traffic_lights()")
+        compat_shortcut("Actor.get_group_traffic_lights", "[tsc-compat] Actor.get_group_traffic_lights() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_group_traffic_lights(*args, **kwargs)
+
+    def get_light_boxes(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_light_boxes()")
+        compat_shortcut("Actor.get_light_boxes", "[tsc-compat] Actor.get_light_boxes() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_light_boxes(*args, **kwargs)
+
+    @property
+    def trigger_volume(self: S, S: type) -> BoundingBox:
+        _plain_actor_only(self, "trigger_volume")
+        compat_shortcut("Actor.trigger_volume", "[tsc-compat] Actor.trigger_volume without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().trigger_volume
 
     # Sensor
 

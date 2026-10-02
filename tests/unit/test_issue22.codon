@@ -1,0 +1,162 @@
+# Issue #22 on the mock backend: geo-reference and projections, XODR
+# waypoints, landmarks, lane markings, traffic light geometry, map files.
+import os
+import time
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+assert ffi.CLaneMarking.__elemsize__ == 24 and ffi.CGeoLocation.__elemsize__ == 24
+assert ffi.CGeoProjection.__elemsize__ == 128 and ffi.CLaneValidity.__elemsize__ == 8
+
+def close(a: float, b: float, eps: float = 1e-6) -> bool:
+    return abs(a - b) <= eps
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+m = world.get_map()
+
+# --- Geo-reference and projections ------------------------------------------------
+ref = m.get_georeference()
+assert ref == carla.GeoLocation(35.0, 139.0, 10.0) and ref != carla.GeoLocation()
+proj = m.get_geoprojection()
+assert isinstance(proj, carla.GeoProjectionTM) and not isinstance(proj, carla.GeoProjectionUTM)
+if isinstance(proj, carla.GeoProjectionTM):
+    assert proj.lat_0 == 35.0 and proj.lon_0 == 139.0 and proj.k == 1.0
+    assert proj.ellps.a == 6378137.0 and proj.ellps.f_inv == 298.257223563
+origin = m.transform_to_geolocation(carla.Location(0.0, 0.0, 0.0))
+assert close(origin.latitude, 35.0) and close(origin.longitude, 139.0)
+p = carla.Location(100.0, -50.0, 2.0)
+geo = m.transform_to_geolocation(p)
+assert geo.latitude < 35.0 and geo.longitude > 139.0 and geo.altitude == 2.0  # y is northing
+back = m.geolocation_to_transform(geo)
+assert close(back.x, 100.0, 1e-3) and close(back.y, -50.0, 1e-3) and close(back.z, 2.0)
+# An explicit projection, of each kind, and the map's own passed back in.
+for q in (m.transform_to_geolocation(p, carla.GeoProjectionTM(lat_0=35.0, lon_0=139.0)),
+          m.transform_to_geolocation(p, proj)):
+    assert close(q.latitude, geo.latitude, 1e-5) and close(q.longitude, geo.longitude, 1e-5)
+utm = carla.GeoProjectionUTM(zone=54, north=True,
+                             offset=carla.GeoOffsetTransform(1.0, 2.0, 3.0, 0.0))
+assert utm.offset is not None and utm.offset.offset_cos_h == 1.0
+for projection in (utm, carla.GeoProjectionWebMerc(carla.GeoEllipsoid(6378137.0, 298.257223563)),
+                   carla.GeoProjectionLCC2SP(lat_0=35.0, lat_1=30.0, lat_2=40.0, lon_0=139.0)):
+    g = m.transform_to_geolocation(p, projection)
+    l = m.geolocation_to_transform(g, projection)
+    assert close(l.x, 100.0, 1e-3) and close(l.y, -50.0, 1e-3), (projection, l)
+assert carla.GeoEllipsoid().f_inv > 1e300 and carla.GeoProjectionUTM().zone == 31
+assert carla.GeoProjectionLCC2SP().lat_1 == 0.0  # the Python API's default
+moved = carla.GeoOffsetTransform(10.0, 0.0, 1.0).ApplyTransformation(carla.Location(1.0, 2.0, 3.0))
+assert moved.x == 11.0 and moved.y == -2.0 and moved.z == 4.0
+# A Vector3D where a Location is expected works, as in the Python API.
+v = m.transform_to_geolocation(carla.Vector3D(100.0, -50.0, 2.0))
+assert v == geo
+
+# --- XODR waypoints ------------------------------------------------------------------
+wp = m.get_waypoint_xodr(1, -2, 50.0)
+assert wp is not None and wp.road_id == 1 and wp.lane_id == -2 and wp.s == 50.0
+assert m.get_waypoint_xodr(2, -1, 0.0) is None and m.get_waypoint_xodr(1, 5, 0.0) is None
+assert m.get_waypoint_xodr(-1, -1, 0.0) is None and m.get_waypoint_xodr(1, 1 << 40, 0.0) is None
+raised = False
+try:
+    m.get_waypoint_xodr(1, -1, float("nan"))
+except carla.CarlaError:
+    raised = True
+assert raised
+
+# --- Lane markings and traffic side ---------------------------------------------------
+w1 = m.get_waypoint(carla.Location(20.0, 0.0, 0.0))
+w2 = w1.get_right_lane()
+assert w1.lane_id == -1 and w2 is not None
+# The mock drives on the left beyond s = 150: is_rht really asks LibCarla.
+far_wp = m.get_waypoint_xodr(1, -1, 180.0)
+assert far_wp is not None and not far_wp.is_rht
+assert w1.is_rht and not w1.is_intersection and w1.is_intersection == w1.is_junction
+assert w1.lane_change == carla.LaneChange.Right and w2.lane_change == carla.LaneChange.Left
+left = w1.left_lane_marking
+assert left is not None
+if left is not None:
+    assert left.type == carla.LaneMarkingType.Solid and left.color == carla.LaneMarkingColor.Yellow
+    assert left.lane_change == carla.LaneChange.NONE and left.width == 0.15
+right = w1.right_lane_marking
+assert right is not None and right.type == carla.LaneMarkingType.Broken
+assert right.color == carla.LaneMarkingColor.White == carla.LaneMarkingColor.Standard
+assert right.lane_change == carla.LaneChange.Both
+assert w2.right_lane_marking is None and w2.left_lane_marking is not None
+assert carla.LaneMarkingType.NONE == 10 and carla.LaneMarkingType.Curb == 9
+
+# --- Landmarks -----------------------------------------------------------------------
+all_lms = m.get_all_landmarks()
+lm = all_lms[0]
+assert lm.waypoint is None  # map-level landmarks have no waypoint, as in LibCarla
+assert lm.get_lane_validities() == [(-1, -2)]
+assert lm.h_offset == 0.25 and lm.pitch == 0.0 and lm.roll == 0.0 and not lm.is_dynamic
+assert lm.orientation == carla.LandmarkOrientation.Positive
+assert lm.type == carla.LandmarkType.StopSign
+same = m.get_all_landmarks_from_id(lm.id)
+assert len(same) == 1 and same[0].id == lm.id
+assert len(m.get_all_landmarks_from_id("no such id")) == 0
+group = m.get_landmark_group(lm)
+assert len(group) == 0  # a stop sign has no controllers
+ahead = w1.get_landmarks(100.0)
+assert len(ahead) == 1 and ahead[0].distance == 80.0
+lw = ahead[0].waypoint
+assert lw is not None and lw.s == 100.0 and lw.lane_id == -1
+assert len(w1.get_landmarks(50.0)) == 0 and len(w1.get_landmarks(100.0, True)) == 1
+assert len(w1.get_landmarks_of_type(100.0, carla.LandmarkType.StopSign)) == 1
+assert len(w1.get_landmarks_of_type(100.0, carla.LandmarkType.YieldSign, stop_at_junction=True)) == 0
+raised = False
+try:
+    w1.get_landmarks(-1.0)
+except carla.CarlaError:
+    raised = True
+assert raised
+
+# --- Traffic light geometry ------------------------------------------------------------
+light = [a for a in world.get_actors() if a.is_traffic_light()][0].as_traffic_light()
+assert light.get_opendrive_id() == "1000"
+affected = light.get_affected_lane_waypoints()
+assert sorted([w.lane_id for w in affected]) == [-2, -1] and all(w.s == 100.0 for w in affected)
+stops = light.get_stop_waypoints()
+assert len(stops) == 2 and all(w.s == 95.0 for w in stops)
+group_lights = light.get_group_traffic_lights()
+assert len(group_lights) == 1 and group_lights[0].id == light.id
+boxes = light.get_light_boxes()
+assert len(boxes) == 1 and boxes[0].location.z == light.get_location().z + 4.0
+assert light.trigger_volume.extent.x == light.bounding_box.extent.x
+
+# Through a plain Actor (Python-API compatibility shortcuts).
+actor = world.get_actor(light.id)
+assert actor.get_opendrive_id() == "1000" and len(actor.get_stop_waypoints()) == 2
+assert len(actor.get_affected_lane_waypoints()) == 2 and len(actor.get_light_boxes()) == 1
+assert actor.get_group_traffic_lights()[0].id == light.id
+assert actor.trigger_volume.extent.x == light.trigger_volume.extent.x
+raised = False
+try:
+    world.get_actors()[0].get_stop_waypoints()  # a vehicle
+except carla.ActorTypeError:
+    raised = True
+assert raised
+
+# --- Map files -------------------------------------------------------------------------
+tmp = os.getenv("TMPDIR", "/tmp") + "/tsc_issue22_" + str(int(time.time() * 1e6))
+m.save_to_disk(tmp + "/sub/town")  # ".xodr" appended, parent created
+with open(tmp + "/sub/town.xodr") as f:
+    assert f.read() == m.to_opendrive() + "\n"
+m.save_to_disk(tmp + "/other.txt")  # another extension is replaced
+with open(tmp + "/other.xodr") as f:
+    assert f.read().startswith("<?xml")
+m.cook_in_memory_map(tmp + "/town.bin")
+with open(tmp + "/town.bin") as f:
+    assert len(f.read()) == 4
+raised = False
+try:
+    m.save_to_disk(tmp + "/other.xodr/inside")  # other.xodr is a file
+except carla.CarlaError:
+    raised = True
+assert raised
+from C import remove(cobj) -> i32
+from C import rmdir(cobj) -> i32
+for name in ("/sub/town.xodr", "/other.xodr", "/town.bin"):
+    assert remove((tmp + name).c_str()) == i32(0)
+assert rmdir((tmp + "/sub").c_str()) == i32(0) and rmdir(tmp.c_str()) == i32(0)
+
+print("OK")

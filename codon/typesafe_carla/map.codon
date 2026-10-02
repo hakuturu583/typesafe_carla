@@ -11,8 +11,21 @@ from ._ffi import (CLandmark, CBoundingBox, tsc_map_get_topology, tsc_map_get_cr
                    tsc_landmark_list_size, tsc_landmark_list_get, tsc_waypoint_get_junction,
                    tsc_junction_get_id, tsc_junction_get_bounding_box, tsc_junction_get_waypoints,
                    copy_string)
+from ._ffi import (CGeoLocation, CGeoProjection, CLaneMarking, CLaneValidity,
+                   tsc_map_get_georeference, tsc_map_get_geoprojection,
+                   tsc_map_transform_to_geolocation, tsc_map_geolocation_to_transform,
+                   tsc_map_get_waypoint_xodr, tsc_map_get_landmarks_from_id,
+                   tsc_map_get_landmark_group, tsc_map_cook_in_memory_map, tsc_map_save_to_disk,
+                   tsc_landmark_list_get_landmark, tsc_landmark_get_h_offset,
+                   tsc_landmark_get_pitch, tsc_landmark_get_roll, tsc_landmark_is_dynamic,
+                   tsc_landmark_get_waypoint, tsc_landmark_get_lane_validities,
+                   tsc_waypoint_get_landmarks, tsc_waypoint_get_landmarks_of_type,
+                   tsc_waypoint_get_left_lane_marking, tsc_waypoint_get_right_lane_marking,
+                   tsc_waypoint_is_rht, tsc_waypoint_get_lane_change)
 from .errors import _check
 from .geometry import Location, Transform, BoundingBox, _location_arg
+from .geo import GeoLocation, GeoProjection, _projection_ptr, _projection_from_c
+from .lane_marking import LaneMarking
 
 class LaneType:
     """OpenDRIVE lane types (bit flags, as carla.LaneType)."""
@@ -113,20 +126,79 @@ class Waypoint:
         _check(tsc_waypoint_get_right_lane(self._h.ptr, out))
         return _waypoint_or_none(out[0])
 
+    @property
+    def is_intersection(self) -> bool:
+        """Deprecated alias of is_junction (as in the Python API)."""
+        return self.is_junction
+
+    @property
+    def is_rht(self) -> bool:
+        """Right-hand traffic (always True with CARLA 0.10.0, which has no
+        left-hand traffic)."""
+        return _get_bool(tsc_waypoint_is_rht, self._h.ptr)
+
+    @property
+    def lane_change(self) -> int:
+        """The lane changes allowed here: a LaneChange value."""
+        return _get_int(tsc_waypoint_get_lane_change, self._h.ptr)
+
+    @property
+    def left_lane_marking(self) -> Optional[LaneMarking]:
+        return _lane_marking(tsc_waypoint_get_left_lane_marking, self._h.ptr)
+
+    @property
+    def right_lane_marking(self) -> Optional[LaneMarking]:
+        return _lane_marking(tsc_waypoint_get_right_lane_marking, self._h.ptr)
+
     def __repr__(self) -> str:
         return (f"Waypoint(id={self.id}, road_id={self.road_id}, lane_id={self.lane_id}, "
                 f"s={self.s}, {self.transform})")
+
+def _get_int(fn, h: cobj) -> int:
+    out = Ptr[i32](1)
+    _check(fn(h, out))
+    return int(out[0])
+
+def _get_bool(fn, h: cobj) -> bool:
+    return _get_int(fn, h) != 0
+
+def _get_float(fn, h: cobj) -> float:
+    out = Ptr[float](1)
+    _check(fn(h, out))
+    return out[0]
+
+def _lane_marking(fn, h: cobj) -> Optional[LaneMarking]:
+    """Calls a tsc_waypoint_get_*_lane_marking(handle, has_value, out) function."""
+    has_value = Ptr[i32](1)
+    out = Ptr[CLaneMarking](1)
+    _check(fn(h, has_value, out))
+    if int(has_value[0]) == 0:
+        return None
+    return LaneMarking._from_c(out[0])
 
 def _waypoint_or_none(ptr: cobj) -> Optional[Waypoint]:
     if ptr == cobj():
         return None
     return Waypoint(Handle(ptr))
 
-def _waypoints(fn, h: cobj, distance: float) -> List[Waypoint]:
-    """Calls a tsc_*(handle, distance, out) waypoint-list function."""
+def _waypoints(fn, h: cobj, *args) -> List[Waypoint]:
+    """Calls a tsc_*(handle, args..., out) waypoint-list function."""
     out = Ptr[cobj](1)
-    _check(fn(h, distance, out))
+    _check(fn(h, *args, out))
     return _take_list(out[0])
+
+def _read_buffer(fn, h: cobj, T: type, guess: int = 0) -> Tuple[Ptr[T], int]:
+    """Calls a two-call tsc_*(handle, buf, capacity, out_count) function with a
+    `guess`-sized buffer, and again only if that was too small: (buf, count)."""
+    n = guess
+    count = Ptr[int](1)
+    buf = Ptr[T](n if n > 0 else 1)
+    _check(fn(h, buf, n, count))
+    if count[0] > n:
+        n = count[0]
+        buf = Ptr[T](n)
+        _check(fn(h, buf, n, count))
+    return buf, min(n, count[0])
 
 def _take_list(ptr: cobj) -> List[Waypoint]:
     """Copies a native waypoint list into a Codon list and releases it."""
@@ -158,12 +230,8 @@ class Map:
         return take_string(out)
 
     def get_spawn_points(self) -> List[Transform]:
-        count = Ptr[int](1)
-        _check(tsc_map_get_spawn_points(self._h.ptr, Ptr[CTransform](), 0, count))
-        n = count[0]
-        buf = Ptr[CTransform](n if n > 0 else 1)
-        _check(tsc_map_get_spawn_points(self._h.ptr, buf, n, count))
-        return [Transform._from_c(buf[i]) for i in range(min(n, count[0]))]
+        buf, n = _read_buffer(tsc_map_get_spawn_points, self._h.ptr, CTransform)
+        return [Transform._from_c(buf[i]) for i in range(n)]
 
     def get_waypoint(self, location, project_to_road: bool = True,
                      lane_type: int = LaneType.Driving) -> Optional[Waypoint]:
@@ -215,8 +283,55 @@ class Junction:
     def __repr__(self) -> str:
         return f"Junction(id={self.id})"
 
+class LandmarkOrientation:
+    """carla.LandmarkOrientation: the road direction a landmark faces."""
+    Positive: ClassVar[int] = 0
+    Negative: ClassVar[int] = 1
+    Both: ClassVar[int] = 2
+
+class LandmarkType:
+    """carla.LandmarkType: OpenDRIVE signal types (the `type` strings of
+    common German traffic signs, as LibCarla's road::SignalType)."""
+    Danger: ClassVar[str] = "101"
+    LanesMerging: ClassVar[str] = "121"
+    CautionPedestrian: ClassVar[str] = "133"
+    CautionBicycle: ClassVar[str] = "138"
+    LevelCrossing: ClassVar[str] = "150"
+    StopSign: ClassVar[str] = "206"
+    YieldSign: ClassVar[str] = "205"
+    MandatoryTurnDirection: ClassVar[str] = "209"
+    MandatoryLeftRightDirection: ClassVar[str] = "211"
+    TwoChoiceTurnDirection: ClassVar[str] = "214"
+    Roundabout: ClassVar[str] = "215"
+    PassRightLeft: ClassVar[str] = "222"
+    AccessForbidden: ClassVar[str] = "250"
+    AccessForbiddenMotorvehicles: ClassVar[str] = "251"
+    AccessForbiddenTrucks: ClassVar[str] = "253"
+    AccessForbiddenBicycle: ClassVar[str] = "254"
+    AccessForbiddenWeight: ClassVar[str] = "263"
+    AccessForbiddenWidth: ClassVar[str] = "264"
+    AccessForbiddenHeight: ClassVar[str] = "265"
+    AccessForbiddenWrongDirection: ClassVar[str] = "267"
+    ForbiddenUTurn: ClassVar[str] = "272"
+    MaximumSpeed: ClassVar[str] = "274"
+    ForbiddenOvertakingMotorvehicles: ClassVar[str] = "276"
+    ForbiddenOvertakingTrucks: ClassVar[str] = "277"
+    AbsoluteNoStop: ClassVar[str] = "283"
+    RestrictedStop: ClassVar[str] = "286"
+    HasWayNextIntersection: ClassVar[str] = "301"
+    PriorityWay: ClassVar[str] = "306"
+    PriorityWayEnd: ClassVar[str] = "307"
+    CityBegin: ClassVar[str] = "310"
+    CityEnd: ClassVar[str] = "311"
+    Highway: ClassVar[str] = "330"
+    DeadEnd: ClassVar[str] = "357"
+    RecomendedSpeed: ClassVar[str] = "380"
+    RecomendedSpeedEnd: ClassVar[str] = "381"
+
 class Landmark:
-    """An OpenDRIVE signal or object (a plain value)."""
+    """An OpenDRIVE signal or object. The fields are copied when it is
+    created; the properties below ask LibCarla's landmark."""
+    _h: Handle
     id: str
     name: str
     type: str
@@ -235,7 +350,8 @@ class Landmark:
     width: float
     transform: Transform
 
-    def __init__(self, c: CLandmark):
+    def __init__(self, c: CLandmark, h: Handle):
+        self._h = h
         self.id = copy_string(c.id)
         self.name = copy_string(c.name)
         self.type = copy_string(c.type)
@@ -254,20 +370,73 @@ class Landmark:
         self.width = c.width
         self.transform = Transform._from_c(c.transform)
 
+    @property
+    def h_offset(self) -> float:
+        return _get_float(tsc_landmark_get_h_offset, self._h.ptr)
+
+    @property
+    def pitch(self) -> float:
+        return _get_float(tsc_landmark_get_pitch, self._h.ptr)
+
+    @property
+    def roll(self) -> float:
+        return _get_float(tsc_landmark_get_roll, self._h.ptr)
+
+    @property
+    def is_dynamic(self) -> bool:
+        return _get_bool(tsc_landmark_is_dynamic, self._h.ptr)
+
+    @property
+    def waypoint(self) -> Optional[Waypoint]:
+        """The waypoint the landmark applies at: set for landmarks from
+        Waypoint.get_landmarks*, None for those from Map.get_all_landmarks*."""
+        out = Ptr[cobj](1)
+        _check(tsc_landmark_get_waypoint(self._h.ptr, out))
+        return _waypoint_or_none(out[0])
+
+    def get_lane_validities(self) -> List[Tuple[int, int]]:
+        """(from_lane, to_lane) lane id ranges the landmark applies to."""
+        buf, n = _read_buffer(tsc_landmark_get_lane_validities, self._h.ptr, CLaneValidity)
+        return [(int(buf[i].from_lane), int(buf[i].to_lane)) for i in range(n)]
+
     def __repr__(self) -> str:
         return f"Landmark(id={self.id}, name={self.name}, type={self.type}, road_id={self.road_id}, s={self.s})"
 
 def _take_landmarks(ptr: cobj) -> List[Landmark]:
+    """Copies a native landmark list into a Codon list and releases it."""
     h = Handle(ptr)
     n = tsc_landmark_list_size(h.ptr)
     out = Ptr[CLandmark](1)
+    one = Ptr[cobj](1)
     result = List[Landmark](n)
     for i in range(n):
+        _check(tsc_landmark_list_get_landmark(h.ptr, i, one))
+        lm = Handle(one[0])
         _check(tsc_landmark_list_get(h.ptr, i, out))
-        result.append(Landmark(out[0]))
+        result.append(Landmark(out[0], lm))
         tsc_landmark_free(out)
     h.release()
     return result
+
+@extend
+class Waypoint:
+    def get_landmarks(self, distance: float, stop_at_junction: bool = False) -> List[Landmark]:
+        """Landmarks up to `distance` meters ahead on this lane."""
+        out = Ptr[cobj](1)
+        _check(tsc_waypoint_get_landmarks(self._h.ptr, distance, i32(int(stop_at_junction)), out))
+        return _take_landmarks(out[0])
+
+    def get_landmarks_of_type(self, distance: float, landmark_type: str,
+                              stop_at_junction: bool = False) -> List[Landmark]:
+        """Landmarks of an OpenDRIVE type (see LandmarkType) up to `distance`
+        meters ahead. (The Python API calls the second parameter `type`, a
+        name Codon 0.19 cannot use for a parameter here; as in
+        Map.get_all_landmarks_of_type, pass it by position.)"""
+        out = Ptr[cobj](1)
+        _check(tsc_waypoint_get_landmarks_of_type(self._h.ptr, distance, landmark_type.ptr,
+                                                  landmark_type.len, i32(int(stop_at_junction)),
+                                                  out))
+        return _take_landmarks(out[0])
 
 @extend
 class Waypoint:
@@ -291,15 +460,8 @@ class Map:
         """Crosswalk polygon corners (each polygon repeats its first point)."""
         # Computing the zones walks the whole road network, so guess a buffer
         # size and only call again when it was too small.
-        n = 256
-        count = Ptr[int](1)
-        buf = Ptr[CVector3D](n)
-        _check(tsc_map_get_crosswalks(self._h.ptr, buf, n, count))
-        if count[0] > n:
-            n = count[0]
-            buf = Ptr[CVector3D](n)
-            _check(tsc_map_get_crosswalks(self._h.ptr, buf, n, count))
-        return [Location._from_c(buf[i]) for i in range(min(n, count[0]))]
+        buf, n = _read_buffer(tsc_map_get_crosswalks, self._h.ptr, CVector3D, 256)
+        return [Location._from_c(buf[i]) for i in range(n)]
 
     def get_all_landmarks(self) -> List[Landmark]:
         out = Ptr[cobj](1)
@@ -312,3 +474,70 @@ class Map:
         _check(tsc_map_get_landmarks_of_type(self._h.ptr, landmark_type.ptr, landmark_type.len,
                                              out))
         return _take_landmarks(out[0])
+
+
+@extend
+class Map:
+    # Issue #22: geo-reference, XODR waypoints, landmark lookups, map files.
+
+    def get_georeference(self) -> GeoLocation:
+        out = Ptr[CGeoLocation](1)
+        _check(tsc_map_get_georeference(self._h.ptr, out))
+        return GeoLocation._from_c(out[0])
+
+    def get_geoprojection(self) -> GeoProjection:
+        """The map's projection: a GeoProjectionTM, GeoProjectionUTM,
+        GeoProjectionWebMerc or GeoProjectionLCC2SP (tell them apart with
+        isinstance). Raises CarlaError with a LibCarla without geo projections
+        (CARLA 0.10.0)."""
+        out = Ptr[CGeoProjection](1)
+        _check(tsc_map_get_geoprojection(self._h.ptr, out))
+        return _projection_from_c(out[0])
+
+    def transform_to_geolocation(self, location, projection=None) -> GeoLocation:
+        """location: Location (a Vector3D is accepted as in the Python API).
+        An explicit projection needs CARLA ue5-dev."""
+        loc = Ptr[CVector3D](1)
+        loc[0] = _location_arg(
+            location, "[tsc-compat] a Vector3D passed as a Location to Map.transform_to_geolocation")._to_c()
+        out = Ptr[CGeoLocation](1)
+        _check(tsc_map_transform_to_geolocation(self._h.ptr, loc, _projection_ptr(projection), out))
+        return GeoLocation._from_c(out[0])
+
+    def geolocation_to_transform(self, geo_location: GeoLocation, projection=None) -> Location:
+        """The inverse of transform_to_geolocation (needs CARLA ue5-dev)."""
+        geo = Ptr[CGeoLocation](1)
+        geo[0] = geo_location._to_c()
+        out = Ptr[CVector3D](1)
+        _check(tsc_map_geolocation_to_transform(self._h.ptr, geo, _projection_ptr(projection), out))
+        return Location._from_c(out[0])
+
+    def get_waypoint_xodr(self, road_id: int, lane_id: int, s: float) -> Optional[Waypoint]:
+        """The waypoint at OpenDRIVE (road_id, lane_id, s), or None when there
+        is no such lane."""
+        if not (0 <= road_id <= 0xFFFFFFFF and -0x80000000 <= lane_id <= 0x7FFFFFFF):
+            return None  # not an OpenDRIVE road / lane id
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_waypoint_xodr(self._h.ptr, u32(road_id), i32(lane_id), s, out))
+        return _waypoint_or_none(out[0])
+
+    def get_all_landmarks_from_id(self, opendrive_id: str) -> List[Landmark]:
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_landmarks_from_id(self._h.ptr, opendrive_id.ptr, opendrive_id.len, out))
+        return _take_landmarks(out[0])
+
+    def get_landmark_group(self, landmark: Landmark) -> List[Landmark]:
+        """The landmarks of the controllers of `landmark` (empty if it has none)."""
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_landmark_group(self._h.ptr, landmark._h.ptr, out))
+        return _take_landmarks(out[0])
+
+    def cook_in_memory_map(self, path: str = ""):
+        """Writes the Traffic Manager's binary map to `path` (default: the map
+        name + ".bin"). Like LibCarla, a file that cannot be opened is only logged."""
+        _check(tsc_map_cook_in_memory_map(self._h.ptr, path.ptr, path.len))
+
+    def save_to_disk(self, path: str = ""):
+        """Writes the OpenDRIVE file to `path` (".xodr" replaces another
+        extension; default: the map name). Raises CarlaError if it cannot be written."""
+        _check(tsc_map_save_to_disk(self._h.ptr, path.ptr, path.len))

@@ -44,6 +44,14 @@ def traffic_light_methods(actor: carla.Actor):
     pole: int = actor.get_pole_index()
     actor.reset_group()
     print(state, times, elapsed, frozen, pole)
+    # Issue #22.
+    odr: str = actor.get_opendrive_id()
+    affected: List[carla.Waypoint] = actor.get_affected_lane_waypoints()
+    stops: List[carla.Waypoint] = actor.get_stop_waypoints()
+    group: List[carla.TrafficLight] = actor.get_group_traffic_lights()
+    boxes: List[carla.BoundingBox] = actor.get_light_boxes()
+    trigger: carla.BoundingBox = actor.trigger_volume
+    print(odr, len(affected), len(stops), len(group), len(boxes), trigger)
 
 def sensor_methods(actor: carla.Actor):
     actor.listen()

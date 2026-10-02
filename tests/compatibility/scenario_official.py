@@ -93,6 +93,41 @@ out("none_lookups", f"{int(world.get_actor(999999) is None)},"
     f"{int(world.get_snapshot().find(999999) is None)},{int(world.get_actors().find(999999) is None)},"
     f"{int(offroad is None)},{int(wp.get_junction() is None)}")
 
+# Issue #22: geo-reference, XODR waypoints, lane markings, landmarks, light geometry.
+# (Only the origin is compared for transform_to_geolocation: CARLA 0.10.0's
+# LibCarla and newer ones with geo projections differ elsewhere.)
+ref = m.get_georeference()
+out("georeference", f"{ref.latitude:.7f},{ref.longitude:.7f},{ref.altitude:.3f}")
+g0 = m.transform_to_geolocation(carla.Location(0.0, 0.0, 0.0))
+out("geo_origin", f"{g0.latitude:.7f},{g0.longitude:.7f},{g0.altitude:.3f}")
+xw = m.get_waypoint_xodr(wp.road_id, wp.lane_id, wp.s)
+out("waypoint_xodr", f"{xw.road_id},{xw.lane_id},{int(m.get_waypoint_xodr(999999, 1, 0.0) is None)}")
+out("waypoint_xodr_loc", f"{xw.transform.location.x:.3f},{xw.transform.location.y:.3f},{xw.s:.3f}")
+
+
+def marking_str(mk):
+    if mk is None:
+        return "None"
+    return f"{int(mk.type)}:{int(mk.color)}:{int(mk.lane_change)}:{mk.width:.3f}"
+
+
+out("lane_markings", f"{marking_str(wp.left_lane_marking)},{marking_str(wp.right_lane_marking)},"
+    f"{int(wp.lane_change)},{int(wp.is_rht)},{int(wp.is_intersection)}")
+lm0 = lms[0]
+out("landmark_details", f"{int(lm0.waypoint is None)},"
+    + "/".join(f"{a}:{b}" for a, b in lm0.get_lane_validities())
+    + f",{lm0.h_offset:.3f},{int(lm0.is_dynamic)},{lm0.pitch:.3f},{lm0.roll:.3f}")
+out("landmarks_by_id", f"{len(m.get_all_landmarks_from_id(lm0.id))},{len(m.get_landmark_group(lm0))}")
+ahead = wp.get_landmarks(200.0)
+out("landmarks_ahead", ";".join(sorted(f"{l.id}:{int(l.waypoint is None)}" for l in ahead)) + ","
+    + str(len(wp.get_landmarks_of_type(200.0, "1000001"))) + "," + str(len(wp.get_landmarks(200.0, True))))
+light_a = lights[0]
+out("light_geometry", f"{light_a.get_opendrive_id()},{len(light_a.get_affected_lane_waypoints())},"
+    f"{len(light_a.get_stop_waypoints())},{len(light_a.get_group_traffic_lights())},"
+    f"{len(light_a.get_light_boxes())}")
+tv = light_a.trigger_volume
+out("light_trigger", f"{tv.location.x:.3f},{tv.location.y:.3f},{tv.extent.x:.3f},{tv.extent.y:.3f},{tv.extent.z:.3f}")
+
 
 def lane_walk(w, left):
     ids = []

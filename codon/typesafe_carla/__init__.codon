@@ -16,7 +16,11 @@ from .blueprint import (ActorAttribute, ActorAttributeType, ActorBlueprint, Blue
                         Color)
 from .actor import Actor, Vehicle, ActorList, TM_DEFAULT_PORT
 from .world import World, WorldSettings
-from .map import Map, Waypoint, LaneType, Junction, Landmark
+from .map import (Map, Waypoint, LaneType, Junction, Landmark, LandmarkOrientation,
+                  LandmarkType)
+from .lane_marking import LaneMarking, LaneMarkingType, LaneMarkingColor, LaneChange
+from .geo import (GeoLocation, GeoEllipsoid, GeoOffsetTransform, GeoProjection, GeoProjectionTM,
+                  GeoProjectionUTM, GeoProjectionWebMerc, GeoProjectionLCC2SP)
 from .snapshot import WorldSnapshot, ActorSnapshot, Timestamp
 from .command import Command, CommandResponse
 from .sensor import (Sensor, SensorData, SensorDataType, Image, LidarMeasurement, LidarDetection,

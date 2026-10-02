@@ -88,6 +88,13 @@ static void test_layout(void) {
   CHECK(offsetof(tsc_vehicle_physics_control_t, max_torque) == 80);
   CHECK(offsetof(tsc_vehicle_physics_control_t, center_of_mass) == 240);
   CHECK(offsetof(tsc_vehicle_physics_control_t, differential_type) == 288);
+  /* Issue #22 */
+  CHECK(sizeof(tsc_lane_marking_t) == 24);
+  CHECK(sizeof(tsc_geo_location_t) == 24);
+  CHECK(sizeof(tsc_geo_projection_t) == 128);
+  CHECK(offsetof(tsc_geo_projection_t, ellipsoid_a) == 16);
+  CHECK(offsetof(tsc_geo_projection_t, offset_x) == 88);
+  CHECK(sizeof(tsc_lane_validity_t) == 8);
 }
 
 static void test_null_arguments(void) {
@@ -789,6 +796,128 @@ static void test_mock_milestone4(void) {
   CHECK(tsc_live_handle_count() == before);
 }
 
+/* Issue #22: geo-reference, XODR waypoints, landmark handles, lane markings,
+ * traffic light geometry. */
+static void test_mock_issue22(void) {
+  uint64_t before = tsc_live_handle_count();
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  tsc_map_t *map = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2122, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+  CHECK_OK(tsc_world_get_map(world, &map));
+
+  /* Geo-reference and a round trip through the map's projection. */
+  tsc_geo_location_t ref, geo;
+  CHECK_OK(tsc_map_get_georeference(map, &ref));
+  CHECK(ref.latitude == 35.0 && ref.longitude == 139.0 && ref.altitude == 10.0);
+  tsc_geo_projection_t proj;
+  CHECK_OK(tsc_map_get_geoprojection(map, &proj));
+  CHECK(proj.type == TSC_GEO_PROJECTION_TM && proj.lat_0 == 35.0 && proj.k == 1.0);
+  tsc_location_t p = {100.0, -50.0, 2.0}, back;
+  CHECK_OK(tsc_map_transform_to_geolocation(map, &p, NULL, &geo));
+  CHECK(geo.latitude < 35.0 && geo.altitude == 2.0);
+  CHECK_OK(tsc_map_geolocation_to_transform(map, &geo, &proj, &back));
+  CHECK(back.x > 99.99 && back.x < 100.01 && back.y < -49.99 && back.y > -50.01);
+  proj.type = 7;
+  CHECK(tsc_map_transform_to_geolocation(map, &p, &proj, &geo) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_map_transform_to_geolocation(map, NULL, NULL, &geo) == TSC_INVALID_ARGUMENT);
+
+  /* XODR waypoints: NULL when the lane does not exist. */
+  tsc_waypoint_t *wp = NULL, *none = (tsc_waypoint_t *)0x1;
+  CHECK_OK(tsc_map_get_waypoint_xodr(map, 1, -1, 20.0, &wp));
+  CHECK(wp != NULL);
+  CHECK_OK(tsc_map_get_waypoint_xodr(map, 1, 3, 20.0, &none));
+  CHECK(none == NULL);
+
+  /* Lane markings and lane change. */
+  int32_t has = -1, lane_change = -1, rht = -1;
+  tsc_lane_marking_t marking;
+  CHECK_OK(tsc_waypoint_get_left_lane_marking(wp, &has, &marking));
+  CHECK(has == 1 && marking.type == 2 /* Solid */ && marking.color == 4 /* Yellow */);
+  CHECK_OK(tsc_waypoint_get_right_lane_marking(wp, &has, &marking));
+  CHECK(has == 1 && marking.type == 1 /* Broken */ && marking.lane_change == 3 /* Both */);
+  CHECK_OK(tsc_waypoint_get_lane_change(wp, &lane_change));
+  CHECK(lane_change == 1 /* Right */);
+  CHECK_OK(tsc_waypoint_is_rht(wp, &rht));
+  CHECK(rht == 1);
+  tsc_waypoint_t *far = NULL; /* the mock drives on the left beyond s = 150 */
+  CHECK_OK(tsc_map_get_waypoint_xodr(map, 1, -1, 180.0, &far));
+  CHECK_OK(tsc_waypoint_is_rht(far, &rht));
+  CHECK(rht == 0);
+  tsc_handle_release(H(far));
+  CHECK(tsc_waypoint_get_left_lane_marking(wp, NULL, &marking) == TSC_INVALID_ARGUMENT);
+
+  /* Landmarks ahead, as handles. */
+  tsc_landmark_list_t *ahead = NULL, *group = NULL;
+  tsc_landmark_handle_t *landmark = NULL;
+  CHECK_OK(tsc_waypoint_get_landmarks(wp, 100.0, 0, &ahead));
+  CHECK(tsc_landmark_list_size(ahead) == 1);
+  CHECK_OK(tsc_landmark_list_get_landmark(ahead, 0, &landmark));
+  CHECK(tsc_handle_kind(H(landmark)) == TSC_KIND_LANDMARK);
+  tsc_waypoint_t *at = NULL;
+  CHECK_OK(tsc_landmark_get_waypoint(landmark, &at));
+  CHECK(at != NULL);
+  tsc_lane_validity_t validity[2];
+  size_t count = 0;
+  CHECK_OK(tsc_landmark_get_lane_validities(landmark, validity, 2, &count));
+  CHECK(count == 1 && validity[0].from_lane == -1 && validity[0].to_lane == -2);
+  double h_offset = 0.0;
+  CHECK_OK(tsc_landmark_get_h_offset(landmark, &h_offset));
+  CHECK(h_offset == 0.25);
+  CHECK_OK(tsc_map_get_landmark_group(map, landmark, &group));
+  CHECK(tsc_landmark_list_size(group) == 0); /* a stop sign has no controllers */
+  tsc_landmark_handle_t *missing = NULL;
+  tsc_landmark_list_t *rejected = NULL;
+  CHECK(tsc_landmark_list_get_landmark(ahead, 1, &missing) == TSC_NOT_FOUND && missing == NULL);
+  CHECK(tsc_waypoint_get_landmarks(wp, -1.0, 0, &rejected) == TSC_INVALID_ARGUMENT &&
+        rejected == NULL);
+  /* A landmark handle is not a waypoint handle. */
+  CHECK(tsc_waypoint_get_lane_change((const tsc_waypoint_t *)landmark, &lane_change) ==
+        TSC_INVALID_ARGUMENT);
+
+  /* Traffic light geometry. */
+  tsc_actor_list_t *actors = NULL;
+  tsc_actor_t *light_actor = NULL;
+  tsc_traffic_light_t *light = NULL, *member = NULL;
+  tsc_traffic_light_list_t *lights = NULL;
+  tsc_waypoint_list_t *stops = NULL;
+  tsc_string_t id = {0};
+  tsc_bounding_box_t boxes[2];
+  CHECK_OK(tsc_world_get_actors(world, &actors));
+  CHECK_OK(tsc_actor_list_get(actors, 2, &light_actor));
+  CHECK_OK(tsc_actor_as_traffic_light(light_actor, &light));
+  CHECK_OK(tsc_traffic_light_get_opendrive_id(light, &id));
+  CHECK(strcmp(id.data, "1000") == 0);
+  tsc_string_free(&id);
+  CHECK_OK(tsc_traffic_light_get_stop_waypoints(light, &stops));
+  CHECK(tsc_waypoint_list_size(stops) == 2);
+  CHECK_OK(tsc_traffic_light_get_group_traffic_lights(light, &lights));
+  CHECK(tsc_traffic_light_list_size(lights) == 1);
+  CHECK_OK(tsc_traffic_light_list_get(lights, 0, &member));
+  CHECK(tsc_handle_kind(H(member)) == TSC_KIND_TRAFFIC_LIGHT);
+  CHECK_OK(tsc_traffic_light_get_light_boxes(light, NULL, 0, &count));
+  CHECK(count == 1);
+  CHECK_OK(tsc_traffic_light_get_light_boxes(light, boxes, 2, &count));
+  CHECK(count == 1 && boxes[0].extent.z > 0.0);
+
+  tsc_handle_release(H(member));
+  tsc_handle_release(H(lights));
+  tsc_handle_release(H(stops));
+  tsc_handle_release(H(light));
+  tsc_handle_release(H(light_actor));
+  tsc_handle_release(H(actors));
+  tsc_handle_release(H(group));
+  tsc_handle_release(H(at));
+  tsc_handle_release(H(landmark));
+  tsc_handle_release(H(ahead));
+  tsc_handle_release(H(wp));
+  tsc_handle_release(H(map));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK(tsc_live_handle_count() == before);
+}
+
 static void test_mock_timeout(void) {
   const char *host = "carla.invalid";
   tsc_client_t *client = NULL;
@@ -812,6 +941,7 @@ int main(void) {
     test_mock_milestone1();
     test_mock_sensors();
     test_mock_milestone4();
+    test_mock_issue22();
     test_mock_timeout();
   } else {
     printf("backend '%s': skipping mock-server checks\n", tsc_backend_name());

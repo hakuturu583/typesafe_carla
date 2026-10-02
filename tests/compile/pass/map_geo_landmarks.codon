@@ -1,0 +1,63 @@
+# Issue #22: geo-reference and projections, XODR waypoints, landmarks, lane
+# markings, traffic light geometry and map files, with their static types.
+# strict
+import typesafe_carla as carla
+
+def geo(m: carla.Map) -> carla.Location:
+    ref: carla.GeoLocation = m.get_georeference()
+    proj: carla.GeoProjection = m.get_geoprojection()
+    if isinstance(proj, carla.GeoProjectionUTM):
+        print("UTM zone", proj.zone)
+    here: carla.GeoLocation = m.transform_to_geolocation(carla.Location(1.0, 2.0, 0.0))
+    tm: carla.GeoLocation = m.transform_to_geolocation(
+        carla.Location(), carla.GeoProjectionTM(lat_0=ref.latitude, lon_0=ref.longitude))
+    again: carla.GeoLocation = m.transform_to_geolocation(carla.Location(), proj)
+    utm = carla.GeoProjectionUTM(zone=54, north=True, ellps=carla.GeoEllipsoid(6378137.0, 298.257223563),
+                                 offset=carla.GeoOffsetTransform(1.0, 2.0, 0.0, 0.5))
+    web = carla.GeoProjectionWebMerc()
+    lcc = carla.GeoProjectionLCC2SP(lat_1=30.0, lat_2=40.0)
+    print(here, tm, again, m.transform_to_geolocation(carla.Location(), web),
+          m.geolocation_to_transform(here, lcc))
+    return carla.Location(m.geolocation_to_transform(here, utm) + m.geolocation_to_transform(here))
+
+def road(m: carla.Map, path: str):
+    wp: Optional[carla.Waypoint] = m.get_waypoint_xodr(1, -1, 10.0)
+    if wp is not None:
+        lc: int = wp.lane_change
+        rht: bool = wp.is_rht
+        inter: bool = wp.is_intersection
+        left: Optional[carla.LaneMarking] = wp.left_lane_marking
+        if left is not None:
+            kind: int = left.type
+            color: int = left.color
+            width: float = left.width
+            print(kind == carla.LaneMarkingType.Solid, color == carla.LaneMarkingColor.Yellow,
+                  width, left.lane_change == carla.LaneChange.Both)
+        print(lc, rht, inter, wp.right_lane_marking)
+        ahead: List[carla.Landmark] = wp.get_landmarks(50.0)
+        stops: List[carla.Landmark] = wp.get_landmarks_of_type(50.0, carla.LandmarkType.StopSign, True)
+        print(len(ahead), len(stops))
+    lms: List[carla.Landmark] = m.get_all_landmarks_from_id("1000")
+    for lm in lms:
+        valid: List[Tuple[int, int]] = lm.get_lane_validities()
+        at: Optional[carla.Waypoint] = lm.waypoint
+        group: List[carla.Landmark] = m.get_landmark_group(lm)
+        print(valid, at, len(group), lm.h_offset, lm.pitch, lm.roll, lm.is_dynamic,
+              lm.orientation == carla.LandmarkOrientation.Both)
+    m.save_to_disk(path)
+    m.cook_in_memory_map()
+
+def light_geometry(light: carla.TrafficLight):
+    odr: str = light.get_opendrive_id()
+    trigger: carla.BoundingBox = light.trigger_volume
+    affected: List[carla.Waypoint] = light.get_affected_lane_waypoints()
+    stops: List[carla.Waypoint] = light.get_stop_waypoints()
+    group: List[carla.TrafficLight] = light.get_group_traffic_lights()
+    boxes: List[carla.BoundingBox] = light.get_light_boxes()
+    print(odr, trigger, len(affected), len(stops), len(group), len(boxes))
+
+# Compile-only: Codon type-checks a function only when it is called.
+world = carla.Client("localhost", 2000).get_world()
+geo(world.get_map())
+road(world.get_map(), "out.xodr")
+light_geometry(world.get_actors()[0].as_traffic_light())

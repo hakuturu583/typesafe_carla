@@ -3,6 +3,8 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 
 namespace carla {
 namespace client {
@@ -788,6 +790,9 @@ SharedPtr<Waypoint> Waypoint::GetLeft() const {
 Map::Map() : _name("Carla/Maps/MockTown") {
   _xodr = "<?xml version=\"1.0\"?><OpenDRIVE><header name=\"MockTown\"/>"
           "<road id=\"1\" length=\"200\"/></OpenDRIVE>";
+  _geo_reference = geom::GeoLocation(35.0, 139.0, 10.0);
+  _geo_projection = geom::GeoProjection::Make(geom::TransverseMercatorParams(
+      35.0, 139.0, 1.0, 0.0, 0.0, geom::Ellipsoid(6378137.0, 298.257223563)));
   for (double x : {10.0, 40.0, 70.0}) {
     for (int32_t lane : kLanes) {
       _spawn_points.emplace_back(
@@ -1287,6 +1292,100 @@ std::vector<SharedPtr<Landmark>> Map::GetAllLandmarksOfType(std::string type) co
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Issue #22: XODR waypoints, landmarks, lane markings, traffic light geometry
+
+namespace {
+
+constexpr double kSignalS = 100.0;  // the stop sign / traffic light signal "1000"
+
+using Marking = road::element::LaneMarking;
+
+}  // namespace
+
+SharedPtr<Waypoint> Map::GetWaypointXODR(road::RoadId road_id, road::LaneId lane_id,
+                                         float s) const {
+  if (road_id != 1u || (lane_id != -1 && lane_id != -2) || s < 0.0f || s > kRoadLength) {
+    return nullptr;
+  }
+  return MakeWaypoint(lane_id, s);
+}
+
+std::vector<SharedPtr<Landmark>> Map::GetLandmarksFromId(std::string id) const {
+  std::vector<SharedPtr<Landmark>> result;
+  for (auto &l : GetAllLandmarks())
+    if (l->GetId() == id) result.push_back(l);
+  return result;
+}
+
+std::vector<SharedPtr<Landmark>> Map::GetLandmarkGroup(const Landmark &) const {
+  // LibCarla returns the landmarks of the signal's controllers. The mock's
+  // only signal is a stop sign, which (as in CARLA's towns) has none.
+  return {};
+}
+
+void Map::CookInMemoryMap(const std::string &path) const {
+  // LibCarla logs (and otherwise ignores) a file it cannot open.
+  std::ofstream out(path.empty() ? std::string("MockTown.bin") : path, std::ios::binary);
+  const uint32_t records = 0u;
+  out.write(reinterpret_cast<const char *>(&records), sizeof records);
+}
+
+std::optional<road::element::LaneMarking> Waypoint::GetLeftLaneMarking() const {
+  if (_lane_id == -1) {
+    return Marking(Marking::Type::Solid, Marking::Color::Yellow, Marking::LaneChange::None, 0.15);
+  }
+  return Marking(Marking::Type::Broken, Marking::Color::Standard, Marking::LaneChange::Both, 0.15);
+}
+
+std::optional<road::element::LaneMarking> Waypoint::GetRightLaneMarking() const {
+  if (_lane_id == -1) {
+    return Marking(Marking::Type::Broken, Marking::Color::Standard, Marking::LaneChange::Both, 0.15);
+  }
+  return std::nullopt;  // the road edge has no marking record
+}
+
+road::element::LaneMarking::LaneChange Waypoint::GetLaneChange() const {
+  return _lane_id == -1 ? Marking::LaneChange::Right : Marking::LaneChange::Left;
+}
+
+std::vector<SharedPtr<Landmark>> Waypoint::GetAllLandmarksInDistance(double distance,
+                                                                     bool) const {
+  if (_s > kSignalS || kSignalS - _s > distance) return {};
+  return {std::make_shared<Landmark>("1000", "Stop", "206", kSignalS,
+                                     geom::Transform(geom::Location(100.0f, -3.0f, 1.0f)),
+                                     MakeWaypoint(_lane_id, kSignalS), kSignalS - _s)};
+}
+
+std::vector<SharedPtr<Landmark>> Waypoint::GetLandmarksOfTypeInDistance(
+    double distance, std::string filter_type, bool stop_at_junction) const {
+  std::vector<SharedPtr<Landmark>> result;
+  for (auto &l : GetAllLandmarksInDistance(distance, stop_at_junction))
+    if (l->GetType() == filter_type) result.push_back(l);
+  return result;
+}
+
+std::vector<SharedPtr<TrafficLight>> TrafficLight::GetGroupTrafficLights() {
+  WithData([](mock::ActorData &) { return 0; });  // throws if destroyed
+  return {std::static_pointer_cast<TrafficLight>(shared_from_this())};
+}
+
+std::vector<SharedPtr<Waypoint>> TrafficLight::GetAffectedLaneWaypoints() const {
+  WithData([](mock::ActorData &) { return 0; });
+  return {MakeWaypoint(-1, kSignalS), MakeWaypoint(-2, kSignalS)};
+}
+
+std::vector<geom::BoundingBox> TrafficLight::GetLightBoxes() const {
+  const auto t = GetTransform();
+  return {geom::BoundingBox(geom::Location(t.location.x, t.location.y, t.location.z + 4.0f),
+                            geom::Vector3D(0.3f, 0.3f, 0.9f), t.rotation)};
+}
+
+std::vector<SharedPtr<Waypoint>> TrafficLight::GetStopWaypoints() const {
+  WithData([](mock::ActorData &) { return 0; });
+  return {MakeWaypoint(-1, kSignalS - 5.0), MakeWaypoint(-2, kSignalS - 5.0)};
+}
+
 traffic_manager::TrafficManager Client::GetInstanceTM(uint16_t port) const {
   return traffic_manager::TrafficManager(mock::Connect(_endpoint, _timeout), port);
 }
@@ -1379,4 +1478,67 @@ void TrafficManager::SetForceLaneChange(const ActorPtr &, bool) {}
 void TrafficManager::SetUpdateVehicleLights(const ActorPtr &, bool) {}
 
 }  // namespace traffic_manager
+
+// ---------------------------------------------------------------------------
+// Issue #22: geo projections and file paths
+
+namespace geom {
+
+namespace {
+
+// The mock's projections: an equirectangular approximation around each
+// projection's origin (not the real projection formulas).
+struct Origin {
+  double lat_0, lon_0, x_0, y_0, a;
+};
+
+Origin OriginOf(const ProjectionParams &params) {
+  return std::visit(
+      [](const auto &p) -> Origin {
+        using T = std::decay_t<decltype(p)>;
+        if constexpr (std::is_same_v<T, TransverseMercatorParams> ||
+                      std::is_same_v<T, LambertConformalConicParams>) {
+          return {p.lat_0, p.lon_0, p.x_0, p.y_0, p.ellps.a};
+        } else if constexpr (std::is_same_v<T, UniversalTransverseMercatorParams>) {
+          return {0.0, p.zone * 6.0 - 183.0, 0.0, 0.0, p.ellps.a};
+        } else {
+          return {0.0, 0.0, 0.0, 0.0, p.ellps.a};
+        }
+      },
+      params);
+}
+
+constexpr double kDegrees = 180.0 / 3.14159265358979323846;
+
+}  // namespace
+
+GeoLocation GeoProjection::TransformToGeoLocation(const Location &location) const {
+  const Origin o = OriginOf(params);
+  // Like ue5-dev's projections: y is northing as given, the altitude is z.
+  const double east = location.x - o.x_0;
+  const double north = location.y - o.y_0;
+  return GeoLocation(o.lat_0 + north / o.a * kDegrees,
+                     o.lon_0 + east / (o.a * std::cos(o.lat_0 / kDegrees)) * kDegrees,
+                     location.z);
+}
+
+Location GeoProjection::GeoLocationToTransform(const GeoLocation &geolocation) const {
+  const Origin o = OriginOf(params);
+  const double north = (geolocation.latitude - o.lat_0) / kDegrees * o.a;
+  const double east =
+      (geolocation.longitude - o.lon_0) / kDegrees * o.a * std::cos(o.lat_0 / kDegrees);
+  return Location(static_cast<float>(east + o.x_0), static_cast<float>(north + o.y_0),
+                  static_cast<float>(geolocation.altitude));
+}
+
+}  // namespace geom
+
+void FileSystem::ValidateFilePath(std::string &filepath, const std::string &ext) {
+  std::filesystem::path path(filepath);
+  if (!ext.empty() && path.extension() != ext) path.replace_extension(ext);
+  auto parent = path.parent_path();
+  if (!parent.empty() && !std::filesystem::exists(parent)) std::filesystem::create_directories(parent);
+  filepath = path.string();
+}
+
 }  // namespace carla

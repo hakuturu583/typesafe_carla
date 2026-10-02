@@ -35,9 +35,11 @@ extern "C" {
  * 2.0: tsc_command_t gained `scalar` (and new command types), Milestone 4.
  * 2.1: tsc_sensor_pending_count; tsc_sensor_listen queue_capacity 0 = unbounded.
  * 3.0: VehiclePhysicsControl with every LibCarla field: physics-control
- *      snapshot handles, new vehicle/wheel structs (issue #12). */
+ *      snapshot handles, new vehicle/wheel structs (issue #12).
+ * 3.1: map geo-reference, XODR waypoints, landmarks as handles, lane markings,
+ *      traffic light geometry (#22). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 0
+#define TSC_ABI_VERSION_MINOR 1
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -114,7 +116,9 @@ typedef enum {
   TSC_KIND_TRAFFIC_MANAGER = 17,
   TSC_KIND_LANDMARK_LIST = 18,
   TSC_KIND_JUNCTION = 19,
-  TSC_KIND_PHYSICS_CONTROL = 20 /* ABI 3.0 */
+  TSC_KIND_PHYSICS_CONTROL = 20, /* ABI 3.0 */
+  TSC_KIND_LANDMARK = 21,          /* issue #22 */
+  TSC_KIND_TRAFFIC_LIGHT_LIST = 22 /* issue #22 */
 } tsc_handle_kind_t;
 
 typedef struct tsc_handle tsc_handle_t;
@@ -411,9 +415,6 @@ TSC_API tsc_status_t tsc_waypoint_next_until_lane_end(const tsc_waypoint_t *wp, 
 TSC_API tsc_status_t tsc_waypoint_previous_until_lane_start(const tsc_waypoint_t *wp,
                                                             double distance,
                                                             tsc_waypoint_list_t **out);
-/* *out = NULL (TSC_OK) when there is no such lane. */
-TSC_API tsc_status_t tsc_waypoint_get_left_lane(const tsc_waypoint_t *wp, tsc_waypoint_t **out);
-TSC_API tsc_status_t tsc_waypoint_get_right_lane(const tsc_waypoint_t *wp, tsc_waypoint_t **out);
 TSC_API size_t tsc_waypoint_list_size(const tsc_waypoint_list_t *list);
 TSC_API tsc_status_t tsc_waypoint_list_get(const tsc_waypoint_list_t *list, size_t index,
                                            tsc_waypoint_t **out);
@@ -927,6 +928,155 @@ TSC_API tsc_status_t tsc_junction_get_bounding_box(const tsc_junction_t *j,
 /* Pairs (entry, exit) as a waypoint list [b0, e0, b1, e1, ...]. */
 TSC_API tsc_status_t tsc_junction_get_waypoints(const tsc_junction_t *j, int32_t lane_type,
                                                 tsc_waypoint_list_t **out);
+
+/* --- Lane markings (shared with #24 (LaneInvasionEvent)) ------------------------------ */
+
+/* road::element::LaneMarking. type, color and lane_change hold the values of
+ * LibCarla's LaneMarking::Type, ::Color and ::LaneChange enums. */
+typedef struct {
+  int32_t type;
+  int32_t color;
+  int32_t lane_change;
+  int32_t reserved0;
+  double width;
+} tsc_lane_marking_t;
+
+/* --- Issue #22: geo-reference, XODR waypoints, landmarks, traffic light geometry --- */
+
+typedef struct tsc_landmark_handle tsc_landmark_handle_t; /* one landmark */
+typedef struct tsc_traffic_light_list tsc_traffic_light_list_t;
+
+typedef struct {
+  double latitude, longitude, altitude;
+} tsc_geo_location_t;
+
+/* geom::ProjectionType (CARLA ue5-dev). */
+typedef enum {
+  TSC_GEO_PROJECTION_TM = 0,       /* TransverseMercatorParams */
+  TSC_GEO_PROJECTION_UTM = 1,      /* UniversalTransverseMercatorParams */
+  TSC_GEO_PROJECTION_WEB_MERC = 2, /* WebMercatorParams */
+  TSC_GEO_PROJECTION_LCC2SP = 3    /* LambertConformalConicParams */
+} tsc_geo_projection_type_t;
+
+/* One geom::GeoProjection; `type` says which fields are used:
+ *   TM:       lat_0, lon_0, k, x_0, y_0, ellipsoid_*
+ *   UTM:      utm_zone, utm_north, ellipsoid_*, offset_* if utm_has_offset
+ *   WEB_MERC: ellipsoid_*
+ *   LCC2SP:   lat_0, lat_1, lat_2, lon_0, x_0, y_0, ellipsoid_* */
+typedef struct {
+  int32_t type; /* tsc_geo_projection_type_t */
+  int32_t utm_zone;
+  int32_t utm_north;
+  int32_t utm_has_offset;
+  double ellipsoid_a;
+  double ellipsoid_f_inv;
+  double lat_0, lat_1, lat_2, lon_0, k, x_0, y_0;
+  double offset_x, offset_y, offset_z, offset_cos_h, offset_sin_h;
+} tsc_geo_projection_t;
+
+/* BEGIN GENERATED map from bindings/map.yaml, do not edit */
+TSC_API tsc_status_t tsc_map_get_georeference(const tsc_map_t *map, tsc_geo_location_t *out);
+/* *out = NULL (TSC_OK) when the road or lane does not exist. */
+TSC_API tsc_status_t tsc_map_get_waypoint_xodr(const tsc_map_t *map, uint32_t road_id,
+                                               int32_t lane_id, double s, tsc_waypoint_t **out);
+TSC_API tsc_status_t tsc_map_get_landmarks_from_id(
+    const tsc_map_t *map, const char *opendrive_id, size_t opendrive_id_len,
+    tsc_landmark_list_t **out);
+TSC_API tsc_status_t tsc_map_get_landmark_group(const tsc_map_t *map,
+                                                const tsc_landmark_handle_t *landmark,
+                                                tsc_landmark_list_t **out);
+/* Writes the Traffic Manager's in-memory map; empty path: "<map name>.bin". LibCarla only logs a file that cannot be opened. */
+TSC_API tsc_status_t tsc_map_cook_in_memory_map(const tsc_map_t *map,
+                                                const char *path, size_t path_len);
+/* END GENERATED map */
+/* The map's projection. TSC_ERROR when LibCarla has no geo projections
+ * (CARLA 0.10.0; ue5-dev has them). */
+TSC_API tsc_status_t tsc_map_get_geoprojection(const tsc_map_t *map, tsc_geo_projection_t *out);
+/* projection NULL: the map's own (with CARLA 0.10.0, the geo-reference's
+ * Mercator approximation). A non-NULL projection needs ue5-dev. */
+TSC_API tsc_status_t tsc_map_transform_to_geolocation(const tsc_map_t *map,
+                                                      const tsc_location_t *location,
+                                                      const tsc_geo_projection_t *projection,
+                                                      tsc_geo_location_t *out);
+/* The inverse; needs ue5-dev (TSC_ERROR with CARLA 0.10.0). */
+TSC_API tsc_status_t tsc_map_geolocation_to_transform(const tsc_map_t *map,
+                                                      const tsc_geo_location_t *geolocation,
+                                                      const tsc_geo_projection_t *projection,
+                                                      tsc_location_t *out);
+/* Writes the OpenDRIVE file like the Python API (".xodr" replaces another
+ * extension, parent directories are created; empty path: the map name).
+ * TSC_ERROR when the file cannot be written. */
+TSC_API tsc_status_t tsc_map_save_to_disk(const tsc_map_t *map, const char *path, size_t path_len);
+
+/* One landmark of a list as a handle (waypoint, lane validities, groups). */
+TSC_API tsc_status_t tsc_landmark_list_get_landmark(const tsc_landmark_list_t *list, size_t index,
+                                                    tsc_landmark_handle_t **out);
+
+typedef struct {
+  int32_t from_lane;
+  int32_t to_lane;
+} tsc_lane_validity_t;
+
+/* BEGIN GENERATED landmark from bindings/landmark.yaml, do not edit */
+TSC_API tsc_status_t tsc_landmark_get_h_offset(const tsc_landmark_handle_t *landmark, double *out);
+TSC_API tsc_status_t tsc_landmark_get_pitch(const tsc_landmark_handle_t *landmark, double *out);
+TSC_API tsc_status_t tsc_landmark_get_roll(const tsc_landmark_handle_t *landmark, double *out);
+TSC_API tsc_status_t tsc_landmark_is_dynamic(const tsc_landmark_handle_t *landmark, int32_t *out);
+/* *out = NULL (TSC_OK) when the landmark has no waypoint (Map.get_all_landmarks*). */
+TSC_API tsc_status_t tsc_landmark_get_waypoint(const tsc_landmark_handle_t *landmark,
+                                               tsc_waypoint_t **out);
+/* Two-call pattern, like tsc_map_get_spawn_points. */
+TSC_API tsc_status_t tsc_landmark_get_lane_validities(
+    const tsc_landmark_handle_t *landmark,
+    tsc_lane_validity_t *out, size_t capacity, size_t *out_count);
+/* END GENERATED landmark */
+
+/* Waypoint: neighbour lanes, lane markings, traffic side, landmarks. */
+/* BEGIN GENERATED waypoint from bindings/waypoint.yaml, do not edit */
+/* *out = NULL (TSC_OK) when there is no such lane. */
+TSC_API tsc_status_t tsc_waypoint_get_left_lane(const tsc_waypoint_t *waypoint,
+                                                tsc_waypoint_t **out);
+TSC_API tsc_status_t tsc_waypoint_get_right_lane(const tsc_waypoint_t *waypoint,
+                                                 tsc_waypoint_t **out);
+/* Right-hand traffic. CARLA 0.10.0 has no left-hand traffic: always 1 there. */
+TSC_API tsc_status_t tsc_waypoint_is_rht(const tsc_waypoint_t *waypoint, int32_t *out);
+/* *has_value = 0 (and *out zeroed) when there is no marking on that side. */
+TSC_API tsc_status_t tsc_waypoint_get_left_lane_marking(
+    const tsc_waypoint_t *waypoint, int32_t *has_value, tsc_lane_marking_t *out);
+TSC_API tsc_status_t tsc_waypoint_get_right_lane_marking(
+    const tsc_waypoint_t *waypoint, int32_t *has_value, tsc_lane_marking_t *out);
+/* lane_change: LaneMarking::LaneChange flags. */
+TSC_API tsc_status_t tsc_waypoint_get_lane_change(const tsc_waypoint_t *waypoint, int32_t *out);
+TSC_API tsc_status_t tsc_waypoint_get_landmarks(const tsc_waypoint_t *waypoint, double distance,
+                                                int32_t stop_at_junction,
+                                                tsc_landmark_list_t **out);
+TSC_API tsc_status_t tsc_waypoint_get_landmarks_of_type(const tsc_waypoint_t *waypoint,
+                                                        double distance,
+                                                        const char *type, size_t type_len,
+                                                        int32_t stop_at_junction,
+                                                        tsc_landmark_list_t **out);
+/* END GENERATED waypoint */
+
+/* Traffic light geometry. The waypoint and light lists skip null entries
+ * (LibCarla returns them for lanes or actors that do not exist). */
+TSC_API size_t tsc_traffic_light_list_size(const tsc_traffic_light_list_t *list);
+TSC_API tsc_status_t tsc_traffic_light_list_get(const tsc_traffic_light_list_t *list, size_t index,
+                                                tsc_traffic_light_t **out);
+/* BEGIN GENERATED traffic_light_geometry from bindings/traffic_light.yaml, do not edit */
+TSC_API tsc_status_t tsc_traffic_light_get_opendrive_id(tsc_traffic_light_t *light,
+                                                        tsc_string_t *out);
+TSC_API tsc_status_t tsc_traffic_light_get_trigger_volume(tsc_traffic_light_t *light,
+                                                          tsc_bounding_box_t *out);
+/* Fills up to `capacity` boxes, the total in *out_count (one server call). */
+TSC_API tsc_status_t tsc_traffic_light_get_light_boxes(
+    tsc_traffic_light_t *light, tsc_bounding_box_t *out, size_t capacity, size_t *out_count);
+TSC_API tsc_status_t tsc_traffic_light_get_affected_lane_waypoints(tsc_traffic_light_t *light,
+                                                                   tsc_waypoint_list_t **out);
+TSC_API tsc_status_t tsc_traffic_light_get_stop_waypoints(tsc_traffic_light_t *light,
+                                                          tsc_waypoint_list_t **out);
+TSC_API tsc_status_t tsc_traffic_light_get_group_traffic_lights(tsc_traffic_light_t *light,
+                                                                tsc_traffic_light_list_t **out);
+/* END GENERATED traffic_light_geometry */
 
 /* --- Traffic Manager ---------------------------------------------------------------- */
 

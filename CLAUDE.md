@@ -64,6 +64,11 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
 - Forward references in return types: define later and attach with `@extend`.
 - `str.__copy__` does not copy; use `str.memcpy` into a new buffer.
 - No `f"{x:.6f}"` (needs a locale); use `str(float)`.
+- A comprehension over a list returned by a method called on an implicitly
+  unwrapped `Optional` crashes the compiler (`build`: segfault, rc 139; `run`:
+  `'<unknown type>' does not match expected type 'List[T]'`), even through a
+  variable. Repro: `wp = get()` (`-> Optional[W]`), `xs = wp.ls()`,
+  `[x for x in xs]`. Use `unwrap(wp)` or a plain `for` loop.
 - `codon build -release` aborts (capture.cpp:618, "found multiple synthetic
   assignments for loop var") on a lambda that captures a loop variable;
   move the loop body into a function taking the variable.

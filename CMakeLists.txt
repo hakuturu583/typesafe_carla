@@ -70,9 +70,11 @@ add_library(typesafe_carla_ffi SHARED
   native/src/client.cpp
   native/src/client_ext.cpp
   native/src/error.cpp
+  native/src/geo.cpp
   native/src/handle.cpp
   native/src/map.cpp
   native/src/map_ext.cpp
+  native/src/map_road.cpp
   native/src/sensor.cpp
   native/src/snapshot.cpp
   native/src/traffic_manager.cpp

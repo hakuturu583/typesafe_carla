@@ -10,3 +10,13 @@ blocks:
     set_red_time: {call: SetRedTime, args: {t: non_negative}}
     freeze: {call: Freeze, args: {freeze: bool}}
     reset_group: {call: ResetGroup}
+  traffic_light_geometry:
+    get_opendrive_id: {call: GetOpenDRIVEID, out: string}
+    get_trigger_volume: {call: GetTriggerVolume, out: bounding_box}
+    get_light_boxes:
+      call: GetLightBoxes
+      out: bounding_box_buffer
+      doc: "Fills up to `capacity` boxes, the total in *out_count (one server call)."
+    get_affected_lane_waypoints: {call: GetAffectedLaneWaypoints, out: waypoint_list}
+    get_stop_waypoints: {call: GetStopWaypoints, out: waypoint_list}
+    get_group_traffic_lights: {call: GetGroupTrafficLights, out: traffic_light_list}

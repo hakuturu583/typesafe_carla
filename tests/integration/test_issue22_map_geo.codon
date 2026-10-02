@@ -1,0 +1,141 @@
+# Issue #22 against a real CARLA server: geo-reference and projections, XODR
+# waypoints, lane markings, landmarks, traffic light geometry and map files.
+import os
+import time
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+m = world.get_map()
+print("map", m.name, "LibCarla", carla.libcarla_git_ref())
+
+# --- Geo-reference -----------------------------------------------------------------
+ref = m.get_georeference()
+origin = m.transform_to_geolocation(carla.Location(0.0, 0.0, 0.0))
+print("georeference", ref, "origin", origin)
+assert abs(origin.latitude - ref.latitude) < 1e-6 and abs(origin.longitude - ref.longitude) < 1e-6
+far = m.transform_to_geolocation(carla.Location(100.0, -50.0, 2.0))
+# The altitude is z with geo projections (ue5-dev), the geo-reference's + z with 0.10.0.
+assert far != origin and (abs(far.altitude - 2.0) < 1e-3 or
+                          abs(far.altitude - (ref.altitude + 2.0)) < 1e-3), far
+has_projections = True
+try:
+    proj = m.get_geoprojection()
+    print("projection", proj)
+    back = m.geolocation_to_transform(far)
+    print("round trip", back)
+    assert abs(back.x - 100.0) < 0.05 and abs(back.y + 50.0) < 0.05, back
+    # The map's own projection passed explicitly gives the same result.
+    again = m.transform_to_geolocation(carla.Location(100.0, -50.0, 2.0), proj)
+    assert abs(again.latitude - far.latitude) < 1e-9 and abs(again.longitude - far.longitude) < 1e-9
+    utm = carla.GeoProjectionUTM(zone=31, north=True)
+    u = m.geolocation_to_transform(m.transform_to_geolocation(carla.Location(10.0, 20.0, 0.0), utm), utm)
+    assert abs(u.x - 10.0) < 0.05 and abs(u.y - 20.0) < 0.05, u
+except carla.CarlaError as e:
+    # CARLA 0.10.0's LibCarla has no geo projections (and no inverse).
+    print("no geo projections:", e.message)
+    has_projections = False
+    raised = False
+    try:
+        m.geolocation_to_transform(far)
+    except carla.CarlaError:
+        raised = True
+    assert raised
+    raised = False
+    try:
+        m.transform_to_geolocation(carla.Location(), carla.GeoProjectionTM())
+    except carla.CarlaError:
+        raised = True
+    assert raised
+print("geo projections:", has_projections)
+
+# --- XODR waypoints ------------------------------------------------------------------
+wp = m.get_waypoint(m.get_spawn_points()[0].location)
+xw = m.get_waypoint_xodr(wp.road_id, wp.lane_id, wp.s)
+assert xw is not None and xw.road_id == wp.road_id and xw.lane_id == wp.lane_id
+assert abs(xw.s - wp.s) < 0.01 and xw.transform.location.distance(wp.transform.location) < 0.05
+assert m.get_waypoint_xodr(999999, 1, 0.0) is None
+assert m.get_waypoint_xodr(wp.road_id, 99, wp.s) is None
+
+# --- Lane markings ---------------------------------------------------------------------
+marked = 0
+for w in m.generate_waypoints(20.0):
+    assert w.is_intersection == w.is_junction
+    assert 0 <= w.lane_change <= 3
+    for mk in (w.left_lane_marking, w.right_lane_marking):
+        if mk is not None:
+            marked += 1
+            assert carla.LaneMarkingType.Other <= mk.type <= carla.LaneMarkingType.NONE
+            assert 0 <= mk.color <= carla.LaneMarkingColor.Other and 0 <= mk.lane_change <= 3
+            assert mk.width >= 0.0
+print("lane markings", marked, "rht", wp.is_rht)
+assert marked > 10 and wp.is_rht  # CARLA's towns drive on the right
+
+# --- Landmarks -------------------------------------------------------------------------
+landmarks = m.get_all_landmarks()
+lm = landmarks[0]
+print("landmark", lm, lm.get_lane_validities(), lm.h_offset, lm.is_dynamic, lm.pitch, lm.roll)
+assert lm.waypoint is None  # map-level landmarks carry no waypoint
+assert any(len(l.get_lane_validities()) > 0 for l in landmarks)
+same = m.get_all_landmarks_from_id(lm.id)
+assert len(same) >= 1 and all(l.id == lm.id for l in same)
+assert len(m.get_all_landmarks_from_id("no such id")) == 0
+lights_lms = m.get_all_landmarks_of_type("1000001")
+if len(lights_lms) > 0:
+    group = m.get_landmark_group(lights_lms[0])
+    print("landmark group", len(group))
+    assert any(g.id == lights_lms[0].id for g in group)
+found = 0
+for w in m.generate_waypoints(30.0):
+    ahead = w.get_landmarks(50.0)
+    for l in ahead:
+        at = l.waypoint
+        assert at is not None and 0.0 <= l.distance <= 50.5, l
+        found += 1
+    for l in w.get_landmarks_of_type(50.0, "1000001", True):
+        assert l.type == "1000001"
+    if found > 20:
+        break
+print("landmarks ahead", found)
+assert found > 0
+
+# --- Traffic light geometry -------------------------------------------------------------
+lights = [a.as_traffic_light() for a in world.get_actors() if a.is_traffic_light()]
+light = lights[0]
+odr = light.get_opendrive_id()
+trigger = light.trigger_volume
+affected = light.get_affected_lane_waypoints()
+stops = light.get_stop_waypoints()
+group_lights = light.get_group_traffic_lights()
+boxes = light.get_light_boxes()
+print("light", light.id, odr, trigger, len(affected), len(stops), len(group_lights), len(boxes))
+assert odr != "" and trigger.extent.x > 0.0
+assert len(affected) > 0 and len(stops) > 0 and len(boxes) > 0
+assert any(g.id == light.id for g in group_lights)
+assert len(m.get_all_landmarks_from_id(odr)) > 0  # the light's OpenDRIVE signal
+# Through a plain Actor (compatibility shortcuts).
+plain = world.get_actor(light.id)
+assert plain.get_opendrive_id() == odr and len(plain.get_stop_waypoints()) == len(stops)
+
+# --- Map files ---------------------------------------------------------------------------
+tmp = os.getenv("TMPDIR", "/tmp") + "/tsc_issue22_" + str(int(time.time() * 1e6))
+m.save_to_disk(tmp + "/town")
+with open(tmp + "/town.xodr") as f:
+    assert f.read() == m.to_opendrive() + "\n"
+m.cook_in_memory_map(tmp + "/town.bin")
+with open(tmp + "/town.bin") as f:
+    size = len(f.read())
+print("in-memory map bytes", size)
+assert size > 4
+from C import remove(cobj) -> i32
+from C import rmdir(cobj) -> i32
+remove((tmp + "/town.xodr").c_str())
+remove((tmp + "/town.bin").c_str())
+rmdir(tmp.c_str())
+
+print("OK")
