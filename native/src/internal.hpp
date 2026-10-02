@@ -6,6 +6,10 @@
 #include "carla_compat.hpp"
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
 #include <cmath>
 #include <cstring>
 #include <optional>
@@ -128,6 +132,44 @@ struct tsc_vehicle : tsc_actor {
       : tsc_actor(std::move(v), TSC_KIND_VEHICLE) {}
 };
 
+namespace tsc {
+
+// Measurements from LibCarla's sensor threads, waiting to be polled by the
+// Codon side (design section 15). Bounded: when full, the oldest is dropped.
+class SensorQueue {
+ public:
+  using Item = carla::SharedPtr<carla::sensor::SensorData>;
+  explicit SensorQueue(size_t capacity) : _capacity(capacity) {}
+  void push(Item item);
+  Item pop();                                        // nullptr when empty
+  Item wait(std::chrono::milliseconds timeout);      // nullptr on timeout
+  uint64_t dropped() const;
+
+ private:
+  mutable std::mutex _mutex;
+  std::condition_variable _ready;
+  std::deque<Item> _items;
+  size_t _capacity;
+  uint64_t _dropped = 0;
+};
+
+}  // namespace tsc
+
+// A sensor handle is an actor handle whose `actor` is a carla::client::Sensor.
+// The queue is shared with the LibCarla callback, so it outlives the handle
+// if the sensor keeps streaming (call stop()).
+struct tsc_sensor : tsc_actor {
+  std::shared_ptr<tsc::SensorQueue> queue;
+  explicit tsc_sensor(carla::SharedPtr<carla::client::Sensor> s)
+      : tsc_actor(std::move(s), TSC_KIND_SENSOR) {}
+};
+
+struct tsc_sensor_data : tsc_handle {
+  carla::SharedPtr<carla::sensor::SensorData> data;
+  explicit tsc_sensor_data(carla::SharedPtr<carla::sensor::SensorData> d)
+      : tsc_handle(TSC_KIND_SENSOR_DATA), data(std::move(d)) {}
+};
+
 struct tsc_actor_list : tsc_handle {
   carla::SharedPtr<carla::client::ActorList> list;
   explicit tsc_actor_list(carla::SharedPtr<carla::client::ActorList> l)
@@ -192,7 +234,9 @@ const T *check_handle(const T *h, const char *name, tsc_handle_kind_t kind,
   return check_handle(const_cast<T *>(h), name, kind, alt);
 }
 
+// Any actor handle: plain actors, vehicles and sensors.
 inline tsc_actor *check_actor(tsc_actor *a, const char *name = "actor") {
+  if (a != nullptr && a->kind == TSC_KIND_SENSOR) return a;
   return check_handle(a, name, TSC_KIND_ACTOR, TSC_KIND_VEHICLE);
 }
 

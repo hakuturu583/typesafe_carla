@@ -26,6 +26,9 @@ tsc_actor *make_actor_handle(const carla::SharedPtr<carla::client::Actor> &actor
   if (auto vehicle = downcast<carla::client::Vehicle>(actor)) {
     return new tsc_vehicle(std::move(vehicle));
   }
+  if (auto sensor = downcast<carla::client::Sensor>(actor)) {
+    return new tsc_sensor(std::move(sensor));
+  }
   return new tsc_actor(actor);
 }
 

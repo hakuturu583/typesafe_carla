@@ -23,7 +23,13 @@ struct ActorData {
   rpc::VehiclePhysicsControl physics;
   bool autopilot = false;
   bool simulate_physics = true;
+  // Attached actors (sensors) follow their parent at a fixed offset.
+  std::optional<rpc::ActorId> parent;
+  geom::Transform offset;
+  std::map<std::string, std::string> attributes;  // blueprint attributes at spawn
 };
+
+using Delivery = std::function<void()>;  // run after the episode lock is released
 
 rpc::VehiclePhysicsControl DefaultPhysics() {
   rpc::VehiclePhysicsControl pc;
@@ -34,7 +40,7 @@ rpc::VehiclePhysicsControl DefaultPhysics() {
   return pc;
 }
 
-struct Episode {
+struct Episode : std::enable_shared_from_this<Episode> {
   std::mutex mutex;
   uint64_t id = 1;
   uint64_t frame = 0;
@@ -55,14 +61,17 @@ struct Episode {
   }
 
   // World::SpawnActor and the SpawnActor batch command. Throws on failure.
-  rpc::ActorId SpawnLocked(const std::string &type_id, geom::Transform t,
+  rpc::ActorId SpawnLocked(const rpc::ActorDescription &description, geom::Transform t,
                            std::optional<rpc::ActorId> parent) {
+    const std::string &type_id = description.id;
+    const geom::Transform offset = t;
     if (parent) {
       auto p = actors.find(*parent);
       if (p == actors.end()) throw std::runtime_error("parent actor is destroyed");
       t.location.x += p->second.transform.location.x;
       t.location.y += p->second.transform.location.y;
       t.location.z += p->second.transform.location.z;
+      t.rotation.yaw += p->second.transform.rotation.yaw;
     }
     const bool is_vehicle = type_id.rfind("vehicle.", 0) == 0;
     if (is_vehicle) {
@@ -77,8 +86,20 @@ struct Episode {
         }
       }
     }
-    return AddActorLocked(type_id, is_vehicle, t);
+    const rpc::ActorId id = AddActorLocked(type_id, is_vehicle, t);
+    ActorData &data = actors.at(id);
+    data.parent = parent;
+    data.offset = offset;
+    data.attributes = description.attributes;
+    return id;
   }
+
+  std::map<rpc::ActorId, std::function<void(SharedPtr<sensor::SensorData>)>> listeners;
+
+  // Synthetic measurements for every listening sensor (see the class comment
+  // on client::Sensor). Collision events need actor objects, whose
+  // constructors take the episode lock, so they are built in the delivery.
+  std::vector<Delivery> SenseLocked();
 
   ActorData &LiveLocked(rpc::ActorId id) {
     auto it = actors.find(id);
@@ -108,6 +129,7 @@ struct Episode {
   void ResetLocked(bool reset_settings, bool with_parked_vehicle) {
     ++id;
     actors.clear();
+    listeners.clear();
     if (reset_settings) settings = rpc::EpisodeSettings{};
     if (with_parked_vehicle) {
       // A pre-existing vehicle so that `world.get_actors()[0].as_vehicle()`
@@ -118,7 +140,8 @@ struct Episode {
     AddActorLocked("spectator", false, geom::Transform(geom::Location(0.0f, 0.0f, 50.0f)));
   }
 
-  void StepLocked() {
+  // Advances one frame; returns the sensor deliveries to run after unlocking.
+  std::vector<Delivery> StepLocked() {
     const double dt = DeltaSeconds();
     for (auto &entry : actors) {
       ActorData &a = entry.second;
@@ -146,7 +169,24 @@ struct Episode {
       a.transform.location.x += static_cast<float>(new_velocity.x * dt);
       a.transform.location.y += static_cast<float>(new_velocity.y * dt);
     }
+    for (auto &entry : actors) {
+      ActorData &a = entry.second;
+      if (!a.parent) continue;
+      auto p = actors.find(*a.parent);
+      if (p == actors.end()) continue;
+      const geom::Transform &pt = p->second.transform;
+      a.transform = geom::Transform(
+          geom::Location(pt.location.x + a.offset.location.x, pt.location.y + a.offset.location.y,
+                         pt.location.z + a.offset.location.z),
+          geom::Rotation(pt.rotation.pitch + a.offset.rotation.pitch,
+                         pt.rotation.yaw + a.offset.rotation.yaw,
+                         pt.rotation.roll + a.offset.rotation.roll));
+      a.velocity = p->second.velocity;
+      a.acceleration = p->second.acceleration;
+      a.angular_velocity = p->second.angular_velocity;
+    }
     ++frame;
+    return SenseLocked();
   }
 };
 
@@ -219,6 +259,19 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
                      {ActorAttribute("role_name", rpc::ActorAttributeType::String, "pedestrian", true),
                       ActorAttribute("speed", rpc::ActorAttributeType::Float, "1.4", true),
                       ActorAttribute("is_invincible", rpc::ActorAttributeType::Bool, "true", true)}),
+      ActorBlueprint("sensor.camera.rgb", {"sensor", "camera", "rgb"},
+                     {ActorAttribute("image_size_x", rpc::ActorAttributeType::Int, "800", true),
+                      ActorAttribute("image_size_y", rpc::ActorAttributeType::Int, "600", true),
+                      ActorAttribute("fov", rpc::ActorAttributeType::Float, "90.0", true),
+                      ActorAttribute("role_name", rpc::ActorAttributeType::String, "front", true)}),
+      ActorBlueprint("sensor.lidar.ray_cast", {"sensor", "lidar", "ray_cast"},
+                     {ActorAttribute("channels", rpc::ActorAttributeType::Int, "32", true),
+                      ActorAttribute("range", rpc::ActorAttributeType::Float, "10.0", true),
+                      ActorAttribute("points_per_second", rpc::ActorAttributeType::Int, "56000", true),
+                      ActorAttribute("rotation_frequency", rpc::ActorAttributeType::Float, "10.0", true)}),
+      ActorBlueprint("sensor.other.gnss", {"sensor", "other", "gnss"}, {}),
+      ActorBlueprint("sensor.other.imu", {"sensor", "other", "imu"}, {}),
+      ActorBlueprint("sensor.other.collision", {"sensor", "other", "collision"}, {}),
       ActorBlueprint("static.prop.trafficcone01", {"static", "prop", "trafficcone01"},
                      {ActorAttribute("role_name", rpc::ActorAttributeType::String, "prop", true),
                       ActorAttribute("size", rpc::ActorAttributeType::String, "small", false)}),
@@ -227,6 +280,7 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
 
 SharedPtr<Actor> MakeActor(const std::shared_ptr<Episode> &episode, const ActorData &data) {
   if (data.is_vehicle) return std::make_shared<Vehicle>(episode, data.id);
+  if (data.type_id.rfind("sensor.", 0) == 0) return std::make_shared<Sensor>(episode, data.id);
   return std::make_shared<Actor>(episode, data.id);
 }
 
@@ -386,6 +440,7 @@ bool Actor::Destroy() {
   auto it = _episode->actors.find(_id);
   if (it == _episode->actors.end()) return false;
   _episode->actors.erase(it);
+  _episode->listeners.erase(_id);
   return true;
 }
 
@@ -465,7 +520,8 @@ SharedPtr<Actor> World::SpawnActor(const ActorBlueprint &blueprint,
     std::lock_guard<std::mutex> lock(_episode->mutex);
     std::optional<rpc::ActorId> parent_id;
     if (parent != nullptr) parent_id = parent->GetId();
-    data = _episode->actors.at(_episode->SpawnLocked(blueprint.GetId(), transform, parent_id));
+    data = _episode->actors.at(
+        _episode->SpawnLocked(blueprint.MakeActorDescription(), transform, parent_id));
   }
   return mock::MakeActor(_episode, data);
 }
@@ -482,9 +538,15 @@ SharedPtr<Actor> World::TrySpawnActor(const ActorBlueprint &blueprint,
 }
 
 uint64_t World::Tick(time_duration) {
-  std::lock_guard<std::mutex> lock(_episode->mutex);
-  _episode->StepLocked();
-  return _episode->frame;
+  std::vector<mock::Delivery> deliveries;
+  uint64_t frame;
+  {
+    std::lock_guard<std::mutex> lock(_episode->mutex);
+    deliveries = _episode->StepLocked();
+    frame = _episode->frame;
+  }
+  for (auto &d : deliveries) d();
+  return frame;
 }
 
 SharedPtr<Map> World::GetMap() const { return std::make_shared<Map>(); }
@@ -495,12 +557,18 @@ WorldSnapshot World::GetSnapshot() const {
 }
 
 WorldSnapshot World::WaitForTick(time_duration timeout) const {
-  std::lock_guard<std::mutex> lock(_episode->mutex);
-  if (_episode->settings.synchronous_mode) {
-    throw TimeoutException("mock (synchronous mode: no tick will come)", timeout);
+  std::vector<mock::Delivery> deliveries;
+  std::optional<WorldSnapshot> snapshot;
+  {
+    std::lock_guard<std::mutex> lock(_episode->mutex);
+    if (_episode->settings.synchronous_mode) {
+      throw TimeoutException("mock (synchronous mode: no tick will come)", timeout);
+    }
+    deliveries = _episode->StepLocked();
+    snapshot = _episode->SnapshotLocked();
   }
-  _episode->StepLocked();
-  return _episode->SnapshotLocked();
+  for (auto &d : deliveries) d();
+  return *snapshot;
 }
 
 rpc::EpisodeSettings World::GetSettings() const {
@@ -657,7 +725,7 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
       [&](const auto &c) -> rpc::ActorId {
         using T = std::decay_t<decltype(c)>;
         if constexpr (std::is_same_v<T, Command::SpawnActor>) {
-          const rpc::ActorId id = e.SpawnLocked(c.description.id, c.transform, c.parent);
+          const rpc::ActorId id = e.SpawnLocked(c.description, c.transform, c.parent);
           // Like the server: a failing then-command does not fail the spawn.
           for (const auto &after : c.do_after) {
             try {
@@ -703,22 +771,171 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
 std::vector<rpc::CommandResponse> Client::ApplyBatchSync(std::vector<rpc::Command> commands,
                                                          bool do_tick_cue) const {
   auto episode = mock::Connect(_endpoint, _timeout);
-  std::lock_guard<std::mutex> lock(episode->mutex);
   std::vector<rpc::CommandResponse> responses;
-  for (const auto &cmd : commands) {
-    try {
-      responses.emplace_back(Execute(*episode, cmd, 0));
-    } catch (const std::exception &e) {
-      responses.emplace_back(rpc::ResponseError(e.what()));
+  std::vector<mock::Delivery> deliveries;
+  {
+    std::lock_guard<std::mutex> lock(episode->mutex);
+    for (const auto &cmd : commands) {
+      try {
+        responses.emplace_back(Execute(*episode, cmd, 0));
+      } catch (const std::exception &e) {
+        responses.emplace_back(rpc::ResponseError(e.what()));
+      }
     }
+    if (do_tick_cue) deliveries = episode->StepLocked();
   }
-  if (do_tick_cue) episode->StepLocked();
+  for (auto &d : deliveries) d();
   return responses;
 }
 
 void Client::ApplyBatch(std::vector<rpc::Command> commands, bool do_tick_cue) const {
   ApplyBatchSync(std::move(commands), do_tick_cue);
 }
+
+// ---------------------------------------------------------------------------
+// Sensors
+
+rpc::ActorDescription ActorBlueprint::MakeActorDescription() const {
+  rpc::ActorDescription d;
+  d.id = _id;
+  for (const auto &entry : _attributes) d.attributes[entry.first] = entry.second.GetValue();
+  return d;
+}
+
+void Sensor::Listen(CallbackFunctionType callback) {
+  WithData([&](mock::ActorData &) {
+    _episode->listeners[_id] = std::move(callback);
+    return 0;
+  });
+}
+
+void Sensor::Stop() {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  _episode->listeners.erase(_id);
+}
+
+bool Sensor::IsListening() const {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  return _episode->listeners.count(_id) > 0;
+}
+
+namespace mock {
+
+namespace {
+
+long AttributeInt(const ActorData &a, const std::string &key, long fallback) {
+  auto it = a.attributes.find(key);
+  return it == a.attributes.end() ? fallback : std::strtol(it->second.c_str(), nullptr, 10);
+}
+
+double AttributeDouble(const ActorData &a, const std::string &key, double fallback) {
+  auto it = a.attributes.find(key);
+  return it == a.attributes.end() ? fallback : std::strtod(it->second.c_str(), nullptr);
+}
+
+}  // namespace
+
+std::vector<Delivery> Episode::SenseLocked() {
+  std::vector<Delivery> out;
+  const double timestamp = static_cast<double>(frame) * DeltaSeconds();
+  auto self = shared_from_this();
+  for (const auto &entry : listeners) {
+    auto it = actors.find(entry.first);
+    if (it == actors.end()) continue;
+    const ActorData &a = it->second;
+    const auto callback = entry.second;
+    SharedPtr<sensor::SensorData> data;
+    namespace sd = sensor::data;
+    if (a.type_id == "sensor.camera.rgb") {
+      const auto w = static_cast<size_t>(AttributeInt(a, "image_size_x", 800));
+      const auto h = static_cast<size_t>(AttributeInt(a, "image_size_y", 600));
+      auto image = std::make_shared<sd::Image>(frame, timestamp, a.transform, w, h,
+                                               static_cast<float>(AttributeDouble(a, "fov", 90.0)));
+      // A gradient that changes with the frame: B = x, G = y, R = frame.
+      for (size_t y = 0; y < h; ++y) {
+        for (size_t x = 0; x < w; ++x) {
+          image->data()[y * w + x] = sd::Color{static_cast<uint8_t>(x), static_cast<uint8_t>(y),
+                                               static_cast<uint8_t>(frame), 255u};
+        }
+      }
+      data = image;
+    } else if (a.type_id == "sensor.lidar.ray_cast") {
+      const auto channels = static_cast<uint32_t>(AttributeInt(a, "channels", 32));
+      const float range = static_cast<float>(AttributeDouble(a, "range", 10.0));
+      constexpr uint32_t kPerChannel = 100;
+      std::vector<uint32_t> per_channel(channels, kPerChannel);
+      std::vector<sd::LidarDetection> points;
+      for (uint32_t c = 0; c < channels; ++c) {
+        const double elevation = (static_cast<double>(c) / std::max(1u, channels - 1) - 0.5) * 0.5;
+        for (uint32_t i = 0; i < kPerChannel; ++i) {
+          const double azimuth = 2.0 * M_PI * i / kPerChannel;
+          sd::LidarDetection d;
+          d.point = geom::Location(static_cast<float>(range * std::cos(azimuth) * std::cos(elevation)),
+                                   static_cast<float>(range * std::sin(azimuth) * std::cos(elevation)),
+                                   static_cast<float>(range * std::sin(elevation)));
+          d.intensity = 1.0f - static_cast<float>(c) / static_cast<float>(channels);
+          points.push_back(d);
+        }
+      }
+      data = std::make_shared<sd::LidarMeasurement>(frame, timestamp, a.transform, 0.0f,
+                                                    std::move(per_channel), std::move(points));
+    } else if (a.type_id == "sensor.other.gnss") {
+      // Flat-earth reference at (0, 0): ~111 km per degree, CARLA's y points south.
+      data = std::make_shared<sd::GnssMeasurement>(frame, timestamp, a.transform,
+                                                   -a.transform.location.y / 111111.0,
+                                                   a.transform.location.x / 111111.0,
+                                                   a.transform.location.z);
+    } else if (a.type_id == "sensor.other.imu") {
+      geom::Vector3D accel = a.acceleration;
+      accel.z += 9.81f;
+      const geom::Vector3D gyro(a.angular_velocity.x * static_cast<float>(M_PI / 180.0),
+                                a.angular_velocity.y * static_cast<float>(M_PI / 180.0),
+                                a.angular_velocity.z * static_cast<float>(M_PI / 180.0));
+      data = std::make_shared<sd::IMUMeasurement>(
+          frame, timestamp, a.transform, accel, gyro,
+          static_cast<float>(std::fmod(a.transform.rotation.yaw + 90.0, 360.0) * M_PI / 180.0));
+    } else if (a.type_id == "sensor.other.collision" && a.parent) {
+      // A collision while the parent vehicle is within 2 m of another vehicle.
+      auto parent = actors.find(*a.parent);
+      if (parent == actors.end()) continue;
+      for (const auto &other_entry : actors) {
+        const ActorData &other = other_entry.second;
+        if (other.id == parent->second.id || !other.is_vehicle) continue;
+        const auto &p = parent->second.transform.location;
+        const auto &o = other.transform.location;
+        if (std::hypot(p.x - o.x, p.y - o.y) >= 2.0) continue;
+        const rpc::ActorId self_id = parent->second.id;
+        const rpc::ActorId other_id = other.id;
+        const geom::Transform t = a.transform;
+        const size_t f = frame;
+        const geom::Vector3D impulse(1000.0f * (p.x - o.x), 1000.0f * (p.y - o.y), 0.0f);
+        out.push_back([self, callback, self_id, other_id, t, f, timestamp, impulse]() {
+          auto make = [&](rpc::ActorId id) -> SharedPtr<Actor> {
+            try {
+              ActorData d;
+              {
+                std::lock_guard<std::mutex> lock(self->mutex);
+                d = self->actors.at(id);
+              }
+              return MakeActor(self, d);
+            } catch (const std::exception &) {
+              return nullptr;
+            }
+          };
+          callback(std::make_shared<sensor::data::CollisionEvent>(f, timestamp, t, make(self_id),
+                                                                   make(other_id), impulse));
+        });
+      }
+      continue;
+    } else {
+      continue;
+    }
+    out.push_back([callback, data]() { callback(data); });
+  }
+  return out;
+}
+
+}  // namespace mock
 
 }  // namespace client
 }  // namespace carla

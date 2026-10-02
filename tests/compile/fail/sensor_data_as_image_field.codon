@@ -1,0 +1,9 @@
+# A measurement must be converted (checked) before typed access.
+# expect-error: 'SensorData' object has no attribute 'width'
+import typesafe_carla as carla
+
+def width(camera: carla.Sensor) -> int:
+    return camera.wait_for_data(1.0).width
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(width(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()))

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -178,6 +179,7 @@ struct VehiclePhysicsControl {
 class ActorDescription {
  public:
   std::string id;
+  std::map<std::string, std::string> attributes;
 };
 
 class ResponseError {
@@ -264,6 +266,10 @@ class Command {
 };
 
 }  // namespace rpc
+
+namespace sensor {
+class SensorData;
+}  // namespace sensor
 
 namespace client {
 
@@ -387,7 +393,7 @@ class ActorBlueprint {
   const ActorAttribute &GetAttribute(const std::string &id) const;
   void SetAttribute(const std::string &id, std::string value);
   size_t size() const { return _attributes.size(); }
-  rpc::ActorDescription MakeActorDescription() const { return rpc::ActorDescription{_id}; }
+  rpc::ActorDescription MakeActorDescription() const;
 
  private:
   std::string _id;
@@ -454,6 +460,16 @@ class Vehicle : public Actor {
   PhysicsControl GetPhysicsControl() const;
 };
 
+// Mock sensors produce synthetic measurements on every tick (see mock.cpp).
+class Sensor : public Actor {
+ public:
+  using CallbackFunctionType = std::function<void(SharedPtr<sensor::SensorData>)>;
+  using Actor::Actor;
+  void Listen(CallbackFunctionType callback);
+  void Stop();
+  bool IsListening() const;
+};
+
 class ActorList : public std::enable_shared_from_this<ActorList> {
  public:
   explicit ActorList(std::vector<SharedPtr<Actor>> actors) : _actors(std::move(actors)) {}
@@ -517,4 +533,118 @@ class Client {
 };
 
 }  // namespace client
+
+namespace sensor {
+
+class SensorData : public std::enable_shared_from_this<SensorData> {
+ public:
+  SensorData(size_t frame, double timestamp, const geom::Transform &transform)
+      : _frame(frame), _timestamp(timestamp), _transform(transform) {}
+  virtual ~SensorData() = default;
+  size_t GetFrame() const { return _frame; }
+  double GetTimestamp() const { return _timestamp; }
+  const geom::Transform &GetSensorTransform() const { return _transform; }
+
+ private:
+  size_t _frame;
+  double _timestamp;
+  geom::Transform _transform;
+};
+
+namespace data {
+
+struct Color {
+  uint8_t b = 0u;
+  uint8_t g = 0u;
+  uint8_t r = 0u;
+  uint8_t a = 0u;
+};
+
+class Image : public SensorData {
+ public:
+  Image(size_t frame, double timestamp, const geom::Transform &t, size_t width, size_t height,
+        float fov)
+      : SensorData(frame, timestamp, t), _width(width), _height(height), _fov(fov),
+        _pixels(width * height) {}
+  size_t GetWidth() const { return _width; }
+  size_t GetHeight() const { return _height; }
+  float GetFOVAngle() const { return _fov; }
+  const Color *data() const { return _pixels.data(); }
+  Color *data() { return _pixels.data(); }
+  size_t size() const { return _pixels.size(); }
+
+ private:
+  size_t _width, _height;
+  float _fov;
+  std::vector<Color> _pixels;
+};
+
+struct LidarDetection {
+  geom::Location point;
+  float intensity = 0.0f;
+};
+
+class LidarMeasurement : public SensorData {
+ public:
+  LidarMeasurement(size_t frame, double timestamp, const geom::Transform &t, float angle,
+                   std::vector<uint32_t> per_channel, std::vector<LidarDetection> points)
+      : SensorData(frame, timestamp, t), _angle(angle), _per_channel(std::move(per_channel)),
+        _points(std::move(points)) {}
+  float GetHorizontalAngle() const { return _angle; }
+  uint32_t GetChannelCount() const { return static_cast<uint32_t>(_per_channel.size()); }
+  uint32_t GetPointCount(size_t channel) const { return _per_channel.at(channel); }
+  const LidarDetection *data() const { return _points.data(); }
+  size_t size() const { return _points.size(); }
+
+ private:
+  float _angle;
+  std::vector<uint32_t> _per_channel;
+  std::vector<LidarDetection> _points;
+};
+
+class GnssMeasurement : public SensorData {
+ public:
+  GnssMeasurement(size_t frame, double timestamp, const geom::Transform &t, double lat,
+                  double lon, double alt)
+      : SensorData(frame, timestamp, t), _lat(lat), _lon(lon), _alt(alt) {}
+  double GetLatitude() const { return _lat; }
+  double GetLongitude() const { return _lon; }
+  double GetAltitude() const { return _alt; }
+
+ private:
+  double _lat, _lon, _alt;
+};
+
+class IMUMeasurement : public SensorData {
+ public:
+  IMUMeasurement(size_t frame, double timestamp, const geom::Transform &t,
+                 const geom::Vector3D &accel, const geom::Vector3D &gyro, float compass)
+      : SensorData(frame, timestamp, t), _accel(accel), _gyro(gyro), _compass(compass) {}
+  geom::Vector3D GetAccelerometer() const { return _accel; }
+  geom::Vector3D GetGyroscope() const { return _gyro; }
+  float GetCompass() const { return _compass; }
+
+ private:
+  geom::Vector3D _accel, _gyro;
+  float _compass;
+};
+
+class CollisionEvent : public SensorData {
+ public:
+  CollisionEvent(size_t frame, double timestamp, const geom::Transform &t,
+                 SharedPtr<client::Actor> self, SharedPtr<client::Actor> other,
+                 const geom::Vector3D &impulse)
+      : SensorData(frame, timestamp, t), _self(std::move(self)), _other(std::move(other)),
+        _impulse(impulse) {}
+  SharedPtr<client::Actor> GetActor() const { return _self; }
+  SharedPtr<client::Actor> GetOtherActor() const { return _other; }
+  const geom::Vector3D &GetNormalImpulse() const { return _impulse; }
+
+ private:
+  SharedPtr<client::Actor> _self, _other;
+  geom::Vector3D _impulse;
+};
+
+}  // namespace data
+}  // namespace sensor
 }  // namespace carla

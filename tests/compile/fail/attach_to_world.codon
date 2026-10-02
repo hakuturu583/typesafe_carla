@@ -1,0 +1,10 @@
+# attach_to must be an actor.
+# expect-error: attach_to must be an Actor
+import typesafe_carla as carla
+
+def spawn(world: carla.World):
+    world.spawn_actor(world.get_blueprint_library().find("sensor.other.gnss"), carla.Transform(),
+                      attach_to=world)
+
+# Compile-only: Codon type-checks a function only when it is called.
+spawn(carla.Client("localhost", 2000).get_world())

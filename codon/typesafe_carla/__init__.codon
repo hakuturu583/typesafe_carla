@@ -18,6 +18,8 @@ from .world import World, WorldSettings
 from .map import Map, Waypoint, LaneType
 from .snapshot import WorldSnapshot, ActorSnapshot, Timestamp
 from .command import Command, CommandResponse
+from .sensor import (Sensor, SensorData, SensorDataType, Image, LidarMeasurement, LidarDetection,
+                     GnssMeasurement, IMUMeasurement, CollisionEvent)
 from .client import Client
 import typesafe_carla.command as command
 

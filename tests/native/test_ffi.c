@@ -68,6 +68,13 @@ static void test_layout(void) {
   CHECK(sizeof(tsc_command_t) == 144);
   CHECK(offsetof(tsc_command_response_t, error) == 8);
   CHECK(sizeof(tsc_command_response_t) == 24);
+  /* ABI 1.3 */
+  CHECK(sizeof(tsc_sensor_data_info_t) == 72);
+  CHECK(sizeof(tsc_image_t) == 32);
+  CHECK(sizeof(tsc_lidar_t) == 32);
+  CHECK(sizeof(tsc_gnss_t) == 24);
+  CHECK(sizeof(tsc_imu_t) == 56);
+  CHECK(sizeof(tsc_collision_t) == 32);
 }
 
 static void test_null_arguments(void) {
@@ -359,6 +366,78 @@ static void test_mock_milestone1(void) {
   CHECK(tsc_live_handle_count() == before);
 }
 
+static void test_mock_sensors(void) {
+  uint64_t before = tsc_live_handle_count();
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  tsc_actor_list_t *actors = NULL;
+  tsc_actor_t *vehicle = NULL;
+  tsc_blueprint_library_t *library = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2103, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+  CHECK_OK(tsc_world_get_actors(world, &actors));
+  CHECK_OK(tsc_actor_list_get(actors, 0, &vehicle));
+  CHECK_OK(tsc_world_get_blueprint_library(world, &library));
+
+  tsc_actor_blueprint_t *bp = NULL;
+  CHECK_OK(tsc_blueprint_library_find(library, "sensor.camera.rgb", 17, &bp));
+  CHECK_OK(tsc_actor_blueprint_set_attribute(bp, "image_size_x", 12, "8", 1));
+  CHECK_OK(tsc_actor_blueprint_set_attribute(bp, "image_size_y", 12, "4", 1));
+  tsc_transform_t at = {{0, 0, 2}, {0, 0, 0}};
+  tsc_actor_t *actor = NULL;
+  tsc_sensor_t *camera = NULL;
+  CHECK_OK(tsc_world_spawn_actor(world, bp, &at, vehicle, &actor));
+  CHECK(tsc_handle_kind(H(actor)) == TSC_KIND_SENSOR);
+  CHECK_OK(tsc_actor_as_sensor(actor, &camera));
+  tsc_sensor_t *not_sensor = (tsc_sensor_t *)0x1;
+  CHECK(tsc_actor_as_sensor(vehicle, &not_sensor) == TSC_TYPE_ERROR && not_sensor == NULL);
+  /* A sensor handle is an actor handle. */
+  tsc_transform_t t;
+  CHECK_OK(tsc_actor_get_transform((tsc_actor_t *)camera, &t));
+
+  tsc_sensor_data_t *data = (tsc_sensor_data_t *)0x1;
+  CHECK(tsc_sensor_poll(camera, &data) == TSC_ERROR); /* not listening yet */
+  CHECK(tsc_sensor_listen(camera, 0) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_sensor_listen(camera, 2));
+  int32_t listening = 0;
+  CHECK_OK(tsc_sensor_is_listening(camera, &listening));
+  CHECK(listening == 1);
+  CHECK_OK(tsc_sensor_poll(camera, &data));
+  CHECK(data == NULL);
+  CHECK(tsc_sensor_wait_for_data(camera, 0.01, &data) == TSC_TIMEOUT);
+
+  uint64_t frame = 0;
+  for (int i = 0; i < 3; ++i) CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+  uint64_t dropped = 0;
+  CHECK_OK(tsc_sensor_dropped_count(camera, &dropped));
+  CHECK(dropped == 1); /* capacity 2, three frames */
+  CHECK_OK(tsc_sensor_wait_for_data(camera, 1.0, &data));
+  tsc_sensor_data_info_t info;
+  CHECK_OK(tsc_sensor_data_get_info(data, &info));
+  CHECK(info.type == TSC_SENSOR_DATA_IMAGE && info.frame == frame - 1);
+  tsc_image_t image;
+  CHECK_OK(tsc_sensor_data_as_image(data, &image));
+  CHECK(image.width == 8 && image.height == 4 && image.size == 8 * 4 * 4);
+  CHECK(image.data[4 * 3] == 3 && image.data[4 * 8 + 1] == 1); /* B = x, G = y */
+  tsc_lidar_t lidar;
+  CHECK(tsc_sensor_data_as_lidar(data, &lidar) == TSC_TYPE_ERROR);
+
+  CHECK_OK(tsc_sensor_stop(camera));
+  CHECK_OK(tsc_sensor_is_listening(camera, &listening));
+  CHECK(listening == 0);
+
+  tsc_handle_release(H(data));
+  tsc_handle_release(H(camera));
+  tsc_handle_release(H(actor));
+  tsc_handle_release(H(bp));
+  tsc_handle_release(H(library));
+  tsc_handle_release(H(vehicle));
+  tsc_handle_release(H(actors));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK(tsc_live_handle_count() == before);
+}
+
 static void test_mock_timeout(void) {
   const char *host = "carla.invalid";
   tsc_client_t *client = NULL;
@@ -380,6 +459,7 @@ int main(void) {
   if (strcmp(tsc_backend_name(), "mock") == 0) {
     test_mock_session();
     test_mock_milestone1();
+    test_mock_sensors();
     test_mock_timeout();
   } else {
     printf("backend '%s': skipping mock-server checks\n", tsc_backend_name());

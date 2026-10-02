@@ -1,0 +1,104 @@
+# Milestone 2 on the mock backend: sensors, queues, typed measurements.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+assert ffi.CSensorDataInfo.__elemsize__ == 72 and ffi.CImage.__elemsize__ == 32
+assert ffi.CLidar.__elemsize__ == 32 and ffi.CLidarPoint.__elemsize__ == 16
+assert ffi.CGnss.__elemsize__ == 24 and ffi.CImu.__elemsize__ == 56
+assert ffi.CCollision.__elemsize__ == 32
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+vehicle = world.get_actors()[0].as_vehicle()
+lib = world.get_blueprint_library()
+
+cam_bp = lib.find("sensor.camera.rgb")
+cam_bp.set_attribute("image_size_x", "16")
+cam_bp.set_attribute("image_size_y", "8")
+camera = world.spawn_actor(cam_bp, carla.Transform(carla.Location(1.0, 0.0, 2.0)),
+                           attach_to=vehicle).as_sensor()
+lidar = world.spawn_actor(lib.find("sensor.lidar.ray_cast"), carla.Transform(), attach_to=vehicle).as_sensor()
+gnss = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform(), attach_to=vehicle).as_sensor()
+imu = world.spawn_actor(lib.find("sensor.other.imu"), carla.Transform(), attach_to=vehicle).as_sensor()
+collision = world.spawn_actor(lib.find("sensor.other.collision"), carla.Transform(),
+                              attach_to=vehicle).as_sensor()
+assert camera.is_sensor() and not vehicle.is_sensor()
+assert world.get_actor(camera.id).is_sensor()
+
+raised = False
+try:
+    vehicle.as_sensor()
+except carla.ActorTypeError:
+    raised = True
+assert raised
+
+raised = False
+try:
+    camera.poll()  # not listening yet
+except carla.CarlaError as e:
+    raised = True
+    assert "listen" in e.message
+assert raised
+
+for s in (camera, lidar, gnss, imu, collision):
+    s.listen(4)
+    assert s.is_listening
+assert camera.poll() is None
+
+frame = world.tick()
+image = camera.wait_for_data(1.0).as_image()
+assert image.frame == frame and image.width == 16 and image.height == 8
+assert image.raw_size() == 16 * 8 * 4 and abs(image.fov - 90.0) < 1e-6
+assert image.pixel(5, 3) == carla.Color(frame % 256, 3, 5, 255)
+# The sensor follows its parent (offset 1, 0, 2 from the parked vehicle at z=0.5).
+assert image.transform.location.distance(carla.Location(1.0, 0.0, 2.5)) < 1e-4
+
+sweep = lidar.wait_for_data(1.0).as_lidar()
+assert sweep.channels == 32 and len(sweep) == 3200 and sweep.get_point_count(31) == 100
+assert abs(sweep[0].point.distance(carla.Location()) - 10.0) < 1e-3
+assert sum(1 for _ in sweep) == 3200
+
+fix = gnss.wait_for_data(1.0).as_gnss()
+assert fix.latitude == 0.0 and fix.longitude == 0.0 and abs(fix.altitude - 0.5) < 1e-6
+reading = imu.wait_for_data(1.0).as_imu()
+assert abs(reading.accelerometer.z - 9.81) < 1e-4
+
+raised = False
+try:
+    gnss.wait_for_data(0.05)
+except carla.TimeoutError:
+    raised = True
+assert raised
+
+# Collision: push another vehicle right next to ours.
+bp = lib.find("vehicle.audi.tt")
+other = world.spawn_actor(bp, carla.Transform(carla.Location(10.0, 0.0, 0.5)))
+other.set_location(carla.Location(1.0, 0.0, 0.5))
+world.tick()
+event = collision.wait_for_data(1.0).as_collision()
+assert event.actor_id == vehicle.id and event.other_actor_id == other.id
+
+# Bounded queue: oldest dropped.
+for _ in range(10):
+    world.tick()
+assert camera.dropped_count >= 6
+last = Optional[carla.SensorData]()
+while True:
+    d = camera.poll()
+    if d is None:
+        break
+    last = d
+assert last is not None and last.frame == world.get_snapshot().frame
+
+raised = False
+try:
+    last.as_gnss()
+except carla.ActorTypeError:
+    raised = True
+assert raised
+
+for s in (camera, lidar, gnss, imu, collision):
+    s.stop()
+    assert not s.is_listening
+    assert s.destroy()
+print("OK")

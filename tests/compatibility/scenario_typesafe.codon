@@ -13,6 +13,13 @@ def fmt(x: float) -> str:
     s = str(v // 1000) + "." + str(1000 + v % 1000)[1:]
     return ("-" + s) if copysign(1.0, x) < 0.0 else s
 
+def fmt7(x: float) -> str:
+    # Like f"{x:.7f}".
+    from math import copysign
+    v = int(round(abs(x) * 10000000.0))
+    s = str(v // 10000000) + "." + str(10000000 + v % 10000000)[1:]
+    return ("-" + s) if copysign(1.0, x) < 0.0 else s
+
 def out(key: str, value: str):
     print(key + "=" + value)
 
@@ -64,6 +71,31 @@ try:
         world.tick()
     t = vehicle.get_transform()
     out("settled", fmt(t.location.x) + "," + fmt(t.location.y) + "," + fmt(t.rotation.yaw))
+    # Milestone 2: sensors on the settled vehicle.
+    cam_bp = lib.find("sensor.camera.rgb")
+    cam_bp.set_attribute("image_size_x", "320")
+    cam_bp.set_attribute("image_size_y", "240")
+    cam_bp.set_attribute("fov", "100")
+    lidar_bp = lib.find("sensor.lidar.ray_cast")
+    lidar_bp.set_attribute("channels", "16")
+    sensors = [world.spawn_actor(b, carla.Transform(carla.Location(0.0, 0.0, 2.0)),
+                                 attach_to=vehicle).as_sensor()
+               for b in (cam_bp, lidar_bp, lib.find("sensor.other.gnss"), lib.find("sensor.other.imu"))]
+    for s in sensors:
+        s.listen()
+    world.tick()
+    image = sensors[0].wait_for_data(20.0).as_image()
+    sweep = sensors[1].wait_for_data(20.0).as_lidar()
+    fix = sensors[2].wait_for_data(20.0).as_gnss()
+    imu = sensors[3].wait_for_data(20.0).as_imu()
+    out("camera", str(image.width) + "," + str(image.height) + "," + fmt(image.fov) + "," +
+        str(image.raw_size()))
+    out("lidar_channels", str(sweep.channels))
+    out("gnss", fmt7(fix.latitude) + "," + fmt7(fix.longitude) + "," + fmt(fix.altitude))
+    out("imu_compass", fmt(imu.compass))
+    for s in sensors:
+        s.stop()
+        s.destroy()
     vehicle.apply_control(carla.VehicleControl(throttle=0.6, steer=0.0))
     for _ in range(40):
         world.tick()

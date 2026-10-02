@@ -1,0 +1,333 @@
+# Sensors (design sections 15-16).
+#
+# LibCarla delivers measurements on its own threads into a bounded queue; the
+# program polls it, so Codon code never runs on a LibCarla thread:
+#
+#     camera = world.spawn_actor(bp, transform, attach_to=vehicle).as_sensor()
+#     camera.listen()                       # start queueing measurements
+#     image = camera.wait_for_data(2.0).as_image()
+#     pixels: Ptr[u8] = image.raw_data()    # zero copy, BGRA
+#
+# Typed measurements keep their SensorData (and so the native buffer) alive.
+
+from ._ffi import (Handle, CSensorDataInfo, CImage, CLidar, CLidarPoint, CGnss, CImu, CCollision,
+                   TSC_KIND_SENSOR, tsc_handle_kind, tsc_actor_as_sensor, tsc_sensor_listen,
+                   tsc_sensor_stop, tsc_sensor_is_listening, tsc_sensor_dropped_count,
+                   tsc_sensor_poll, tsc_sensor_wait_for_data, tsc_sensor_data_get_info,
+                   tsc_sensor_data_as_image, tsc_sensor_data_as_lidar,
+                   tsc_lidar_channel_point_count, tsc_sensor_data_as_gnss,
+                   tsc_sensor_data_as_imu, tsc_sensor_data_as_collision,
+                   TSC_INVALID_ARGUMENT)
+from .errors import _check, CarlaError, _normalize_index
+from .geometry import Location, Transform, Vector3D
+from .blueprint import Color
+from .actor import Actor
+
+class SensorDataType:
+    Other: ClassVar[int] = 0
+    Image: ClassVar[int] = 1
+    Lidar: ClassVar[int] = 2
+    Gnss: ClassVar[int] = 3
+    Imu: ClassVar[int] = 4
+    Collision: ClassVar[int] = 5
+
+class SensorData:
+    """One measurement. Convert with as_image(), as_lidar(), ... (checked)."""
+    _h: Handle
+    _info: CSensorDataInfo
+
+    def __init__(self, h: Handle):
+        self._h = h
+        out = Ptr[CSensorDataInfo](1)
+        _check(tsc_sensor_data_get_info(h.ptr, out))
+        self._info = out[0]
+
+    @property
+    def frame(self) -> int:
+        return int(self._info.frame)
+
+    @property
+    def timestamp(self) -> float:
+        """Simulation time of the measurement, in seconds."""
+        return self._info.timestamp
+
+    @property
+    def transform(self) -> Transform:
+        """Sensor transform (world space) when the measurement was taken."""
+        return Transform._from_c(self._info.sensor_transform)
+
+    @property
+    def type(self) -> int:
+        """A SensorDataType value."""
+        return int(self._info.type)
+
+    def __repr__(self) -> str:
+        return f"SensorData(frame={self.frame}, type={self.type})"
+
+class Image:
+    """Camera image: BGRA, 4 bytes per pixel, row-major."""
+    data: SensorData
+    _c: CImage
+
+    def __init__(self, data: SensorData, c: CImage):
+        self.data = data
+        self._c = c
+
+    @property
+    def frame(self) -> int:
+        return self.data.frame
+
+    @property
+    def timestamp(self) -> float:
+        return self.data.timestamp
+
+    @property
+    def transform(self) -> Transform:
+        return self.data.transform
+
+    @property
+    def width(self) -> int:
+        return int(self._c.width)
+
+    @property
+    def height(self) -> int:
+        return int(self._c.height)
+
+    @property
+    def fov(self) -> float:
+        return self._c.fov
+
+    def raw_data(self) -> Ptr[u8]:
+        """Zero-copy view of the pixels, valid while this Image is alive."""
+        return self._c.data
+
+    def raw_size(self) -> int:
+        return self._c.size
+
+    def pixel(self, x: int, y: int) -> Color:
+        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+            raise IndexError(f"pixel ({x}, {y}) outside {self.width}x{self.height}")
+        p = self._c.data + 4 * (y * self.width + x)
+        return Color(int(p[2]), int(p[1]), int(p[0]), int(p[3]))
+
+    def __repr__(self) -> str:
+        return f"Image(frame={self.frame}, size={self.width}x{self.height}, fov={self.fov})"
+
+class LidarDetection:
+    point: Location
+    intensity: float
+
+    def __init__(self, point: Location, intensity: float):
+        self.point = point
+        self.intensity = intensity
+
+    def __repr__(self) -> str:
+        return f"LidarDetection({self.point}, intensity={self.intensity})"
+
+class LidarMeasurement:
+    """A LiDAR sweep. Points are a zero-copy view of float32 {x, y, z, intensity}."""
+    data: SensorData
+    _c: CLidar
+
+    def __init__(self, data: SensorData, c: CLidar):
+        self.data = data
+        self._c = c
+
+    @property
+    def frame(self) -> int:
+        return self.data.frame
+
+    @property
+    def timestamp(self) -> float:
+        return self.data.timestamp
+
+    @property
+    def transform(self) -> Transform:
+        return self.data.transform
+
+    @property
+    def channels(self) -> int:
+        return int(self._c.channels)
+
+    @property
+    def horizontal_angle(self) -> float:
+        return self._c.horizontal_angle
+
+    def get_point_count(self, channel: int) -> int:
+        if channel < 0 or channel >= self.channels:
+            raise IndexError(f"channel {channel} out of range for {self.channels} channels")
+        out = Ptr[u32](1)
+        _check(tsc_lidar_channel_point_count(self.data._h.ptr, u32(channel), out))
+        return int(out[0])
+
+    def raw_points(self) -> Ptr[CLidarPoint]:
+        """Zero-copy view, valid while this measurement is alive."""
+        return self._c.points
+
+    def __len__(self) -> int:
+        return self._c.point_count
+
+    def __getitem__(self, index: int) -> LidarDetection:
+        p = self._c.points[_normalize_index(index, len(self), "lidar point")]
+        return LidarDetection(Location(float(p.x), float(p.y), float(p.z)), float(p.intensity))
+
+    def __iter__(self) -> Generator[LidarDetection]:
+        for i in range(len(self)):
+            p = self._c.points[i]
+            yield LidarDetection(Location(float(p.x), float(p.y), float(p.z)), float(p.intensity))
+
+    def __repr__(self) -> str:
+        return f"LidarMeasurement(frame={self.frame}, channels={self.channels}, points={len(self)})"
+
+class GnssMeasurement:
+    data: SensorData
+    latitude: float
+    longitude: float
+    altitude: float
+
+    def __init__(self, data: SensorData, c: CGnss):
+        self.data = data
+        self.latitude = c.latitude
+        self.longitude = c.longitude
+        self.altitude = c.altitude
+
+    @property
+    def frame(self) -> int:
+        return self.data.frame
+
+    @property
+    def timestamp(self) -> float:
+        return self.data.timestamp
+
+    def __repr__(self) -> str:
+        return (f"GnssMeasurement(frame={self.frame}, lat={self.latitude}, lon={self.longitude}, "
+                f"alt={self.altitude})")
+
+class IMUMeasurement:
+    data: SensorData
+    accelerometer: Vector3D  # m/s^2
+    gyroscope: Vector3D  # rad/s
+    compass: float  # radians from north
+
+    def __init__(self, data: SensorData, c: CImu):
+        self.data = data
+        self.accelerometer = Vector3D._from_c(c.accelerometer)
+        self.gyroscope = Vector3D._from_c(c.gyroscope)
+        self.compass = c.compass
+
+    @property
+    def frame(self) -> int:
+        return self.data.frame
+
+    @property
+    def timestamp(self) -> float:
+        return self.data.timestamp
+
+    def __repr__(self) -> str:
+        return (f"IMUMeasurement(frame={self.frame}, accelerometer={self.accelerometer}, "
+                f"gyroscope={self.gyroscope}, compass={self.compass})")
+
+class CollisionEvent:
+    data: SensorData
+    actor_id: int  # the actor the sensor is attached to
+    other_actor_id: int  # 0 when the other side is not an actor (e.g. static geometry)
+    normal_impulse: Vector3D
+
+    def __init__(self, data: SensorData, c: CCollision):
+        self.data = data
+        self.actor_id = int(c.actor_id)
+        self.other_actor_id = int(c.other_actor_id)
+        self.normal_impulse = Vector3D._from_c(c.normal_impulse)
+
+    @property
+    def frame(self) -> int:
+        return self.data.frame
+
+    @property
+    def timestamp(self) -> float:
+        return self.data.timestamp
+
+    def __repr__(self) -> str:
+        return (f"CollisionEvent(frame={self.frame}, actor_id={self.actor_id}, "
+                f"other_actor_id={self.other_actor_id}, normal_impulse={self.normal_impulse})")
+
+@extend
+class SensorData:
+    def as_image(self) -> Image:
+        out = Ptr[CImage](1)
+        _check(tsc_sensor_data_as_image(self._h.ptr, out))
+        return Image(self, out[0])
+
+    def as_lidar(self) -> LidarMeasurement:
+        out = Ptr[CLidar](1)
+        _check(tsc_sensor_data_as_lidar(self._h.ptr, out))
+        return LidarMeasurement(self, out[0])
+
+    def as_gnss(self) -> GnssMeasurement:
+        out = Ptr[CGnss](1)
+        _check(tsc_sensor_data_as_gnss(self._h.ptr, out))
+        return GnssMeasurement(self, out[0])
+
+    def as_imu(self) -> IMUMeasurement:
+        out = Ptr[CImu](1)
+        _check(tsc_sensor_data_as_imu(self._h.ptr, out))
+        return IMUMeasurement(self, out[0])
+
+    def as_collision(self) -> CollisionEvent:
+        out = Ptr[CCollision](1)
+        _check(tsc_sensor_data_as_collision(self._h.ptr, out))
+        return CollisionEvent(self, out[0])
+
+class Sensor(Actor):
+    def __init__(self, h: Handle):
+        super().__init__(h)
+
+    def listen(self, queue_size: int = 64):
+        """Starts queueing measurements; the oldest is dropped when queue_size is reached."""
+        if queue_size < 1:
+            raise CarlaError("queue_size must be at least 1", TSC_INVALID_ARGUMENT)
+        _check(tsc_sensor_listen(self._h.ptr, queue_size))
+
+    def stop(self):
+        _check(tsc_sensor_stop(self._h.ptr))
+
+    @property
+    def is_listening(self) -> bool:
+        out = Ptr[i32](1)
+        _check(tsc_sensor_is_listening(self._h.ptr, out))
+        return int(out[0]) != 0
+
+    @property
+    def dropped_count(self) -> int:
+        """Measurements dropped because the queue was full."""
+        out = Ptr[u64](1)
+        _check(tsc_sensor_dropped_count(self._h.ptr, out))
+        return int(out[0])
+
+    def poll(self) -> Optional[SensorData]:
+        """The oldest queued measurement, or None. Never blocks."""
+        out = Ptr[cobj](1)
+        _check(tsc_sensor_poll(self._h.ptr, out))
+        if out[0] == cobj():
+            return None
+        return SensorData(Handle(out[0]))
+
+    def wait_for_data(self, seconds: float = 10.0) -> SensorData:
+        """Blocks until a measurement arrives. Raises TimeoutError."""
+        out = Ptr[cobj](1)
+        _check(tsc_sensor_wait_for_data(self._h.ptr, seconds, out))
+        return SensorData(Handle(out[0]))
+
+    def __repr__(self) -> str:
+        return f"Sensor(id={self.id}, type={self.type_id})"
+
+@extend
+class Actor:
+    def is_sensor(self) -> bool:
+        return int(tsc_handle_kind(self._h.ptr)) == TSC_KIND_SENSOR
+
+    def as_sensor(self) -> Sensor:
+        """Checked conversion. Raises ActorTypeError if this actor is not a sensor."""
+        out = Ptr[cobj](1)
+        _check(tsc_actor_as_sensor(self._h.ptr, out))
+        return Sensor(Handle(out[0]))
