@@ -105,6 +105,9 @@ class Function:
     # `validate` accepts the method missing only on those.
     optional: str | None = None
     missing_in: tuple[str, ...] = ()
+    # The Codon FFI type of the self parameter: an opaque handle by default,
+    # Ptr[<struct>] for a value type bound by pointer (e.g. Transform).
+    self_codon: str = "cobj"
 
     def c_params(self) -> list[str]:
         params = [f"{self.self_type} *{self.self_name}"]
@@ -117,7 +120,7 @@ class Function:
         return params
 
     def codon_params(self) -> list[str]:
-        params = ["cobj"] + [a.type.codon_param() for a in self.args]
+        params = [self.self_codon] + [a.type.codon_param() for a in self.args]
         if self.out:
             t = self.out.type
             params.append(t.codon if t.c_param_template else f"Ptr[{t.codon}]")
@@ -198,6 +201,9 @@ def load(bindings: Path = BINDINGS) -> Spec:
         if unknown:
             raise SpecError(f"{path.name}: unknown keys {sorted(unknown)}")
         self_ = raw["self"]
+        unknown = set(self_) - {"type", "name", "get", "codon"}
+        if unknown:
+            raise SpecError(f"{path.name}: self: unknown keys {sorted(unknown)}")
         for block, entries in raw["blocks"].items():
             for short, entry in entries.items():
                 where = f"{path.name}: {short}"
@@ -245,7 +251,8 @@ def load(bindings: Path = BINDINGS) -> Spec:
                     name=name, block=block, spec_file=path.name, cpp_class=raw["class"],
                     call=entry["call"], via=entry.get("via"), self_type=self_["type"], self_name=self_["name"],
                     self_get=self_["get"], args=args, out=out, doc=entry.get("doc"),
-                    optional=optional, missing_in=missing_in))
+                    optional=optional, missing_in=missing_in,
+                    self_codon=self_.get("codon", "cobj")))
     blocks: dict[str, str] = {}
     for f in functions:
         if blocks.setdefault(f.block, f.spec_file) != f.spec_file:

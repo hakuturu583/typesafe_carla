@@ -614,6 +614,7 @@ from C import LIB.tsc_handle_refcount(cobj) -> u32
 from C import LIB.tsc_live_handle_count() -> u64
 
 from C import LIB.tsc_client_create(cobj, int, u16, Ptr[cobj]) -> i32
+# BEGIN GENERATED client from bindings/client.yaml, do not edit
 from C import LIB.tsc_client_set_timeout(cobj, float) -> i32
 from C import LIB.tsc_client_get_timeout(cobj, Ptr[float]) -> i32
 from C import LIB.tsc_client_get_client_version(cobj, Ptr[CString]) -> i32
@@ -621,20 +622,25 @@ from C import LIB.tsc_client_get_server_version(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_client_get_world(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_client_load_world(cobj, cobj, int, i32, Ptr[cobj]) -> i32
 from C import LIB.tsc_client_reload_world(cobj, i32, Ptr[cobj]) -> i32
+# END GENERATED client
 
+# BEGIN GENERATED world_core from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_id(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_world_get_actors(cobj, Ptr[cobj]) -> i32
-from C import LIB.tsc_world_get_actor(cobj, u32, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_blueprint_library(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_try_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_tick(cobj, float, Ptr[u64]) -> i32
+# END GENERATED world_core
+from C import LIB.tsc_world_get_actor(cobj, u32, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_settings(cobj, Ptr[CWorldSettings]) -> i32
 from C import LIB.tsc_world_apply_settings(cobj, Ptr[CWorldSettings], float, Ptr[u64]) -> i32
 
 from C import LIB.tsc_actor_list_size(cobj) -> int
 from C import LIB.tsc_actor_list_get(cobj, int, Ptr[cobj]) -> i32
+# BEGIN GENERATED actor_list from bindings/actor_list.yaml, do not edit
 from C import LIB.tsc_actor_list_filter(cobj, cobj, int, Ptr[cobj]) -> i32
+# END GENERATED actor_list
 
 # BEGIN GENERATED actor from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_get_id(cobj, Ptr[u32]) -> i32
@@ -649,11 +655,15 @@ from C import LIB.tsc_actor_set_target_velocity(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_actor_get_acceleration(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_actor_get_angular_velocity(cobj, Ptr[CVector3D]) -> i32
 # END GENERATED actor
+# BEGIN GENERATED actor_destroy from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_destroy(cobj, Ptr[i32]) -> i32
+# END GENERATED actor_destroy
 from C import LIB.tsc_actor_as_vehicle(cobj, Ptr[cobj]) -> i32
 
+# BEGIN GENERATED vehicle_control from bindings/vehicle.yaml, do not edit
 from C import LIB.tsc_vehicle_apply_control(cobj, Ptr[CVehicleControl]) -> i32
 from C import LIB.tsc_vehicle_get_control(cobj, Ptr[CVehicleControl]) -> i32
+# END GENERATED vehicle_control
 # BEGIN GENERATED vehicle from bindings/vehicle.yaml, do not edit
 from C import LIB.tsc_vehicle_set_autopilot(cobj, i32, u16) -> i32
 # END GENERATED vehicle
@@ -661,10 +671,14 @@ from C import LIB.tsc_vehicle_set_autopilot(cobj, i32, u16) -> i32
 from C import LIB.tsc_blueprint_library_size(cobj) -> int
 from C import LIB.tsc_blueprint_library_get(cobj, int, Ptr[cobj]) -> i32
 from C import LIB.tsc_blueprint_library_find(cobj, cobj, int, Ptr[cobj]) -> i32
+# BEGIN GENERATED blueprint_library from bindings/blueprint_library.yaml, do not edit
 from C import LIB.tsc_blueprint_library_filter(cobj, cobj, int, Ptr[cobj]) -> i32
+# END GENERATED blueprint_library
+# BEGIN GENERATED actor_blueprint from bindings/actor_blueprint.yaml, do not edit
 from C import LIB.tsc_actor_blueprint_get_id(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_actor_blueprint_has_tag(cobj, cobj, int, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_blueprint_has_attribute(cobj, cobj, int, Ptr[i32]) -> i32
+# END GENERATED actor_blueprint
 from C import LIB.tsc_actor_blueprint_get_attribute(cobj, cobj, int, Ptr[CActorAttribute]) -> i32
 from C import LIB.tsc_actor_blueprint_set_attribute(cobj, cobj, int, cobj, int) -> i32
 
@@ -672,27 +686,39 @@ from C import LIB.tsc_actor_blueprint_set_attribute(cobj, cobj, int, cobj, int) 
 # BEGIN GENERATED actor_bounding_box from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_get_bounding_box(cobj, Ptr[CBoundingBox]) -> i32
 # END GENERATED actor_bounding_box
+# BEGIN GENERATED world_snapshots from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_snapshot(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_wait_for_tick(cobj, float, Ptr[cobj]) -> i32
+# END GENERATED world_snapshots
+# BEGIN GENERATED world_snapshot from bindings/world_snapshot.yaml, do not edit
 from C import LIB.tsc_world_snapshot_get_id(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_world_snapshot_get_timestamp(cobj, Ptr[CTimestamp]) -> i32
+# END GENERATED world_snapshot
 from C import LIB.tsc_world_snapshot_size(cobj) -> int
 from C import LIB.tsc_world_snapshot_get(cobj, int, Ptr[CActorSnapshot]) -> i32
 from C import LIB.tsc_world_snapshot_find(cobj, u32, Ptr[CActorSnapshot]) -> i32
+# BEGIN GENERATED world_map from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_map(cobj, Ptr[cobj]) -> i32
+# END GENERATED world_map
+# BEGIN GENERATED map_core from bindings/map.yaml, do not edit
 from C import LIB.tsc_map_get_name(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_map_to_opendrive(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_map_get_spawn_points(cobj, Ptr[CTransform], int, Ptr[int]) -> i32
 from C import LIB.tsc_map_get_waypoint(cobj, Ptr[CVector3D], i32, i32, Ptr[cobj]) -> i32
 from C import LIB.tsc_map_generate_waypoints(cobj, float, Ptr[cobj]) -> i32
+# END GENERATED map_core
 from C import LIB.tsc_waypoint_get_info(cobj, Ptr[CWaypointInfo]) -> i32
+# BEGIN GENERATED waypoint_navigation from bindings/waypoint.yaml, do not edit
 from C import LIB.tsc_waypoint_next(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_previous(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_next_until_lane_end(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_waypoint_previous_until_lane_start(cobj, float, Ptr[cobj]) -> i32
+# END GENERATED waypoint_navigation
 from C import LIB.tsc_waypoint_list_size(cobj) -> int
 from C import LIB.tsc_waypoint_list_get(cobj, int, Ptr[cobj]) -> i32
+# BEGIN GENERATED vehicle_physics from bindings/vehicle.yaml, do not edit
 from C import LIB.tsc_vehicle_get_physics_control(cobj, Ptr[cobj]) -> i32
+# END GENERATED vehicle_physics
 from C import LIB.tsc_physics_control_view(cobj, Ptr[CVehiclePhysicsControl]) -> i32
 from C import LIB.tsc_vehicle_apply_physics_control(cobj, Ptr[CVehiclePhysicsControl]) -> i32
 from C import LIB.tsc_client_apply_batch(cobj, Ptr[CCommand], int, i32) -> i32
@@ -702,7 +728,9 @@ from C import LIB.tsc_client_apply_batch_sync(cobj, Ptr[CCommand], int, i32, Ptr
 from C import LIB.tsc_actor_as_sensor(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_listen(cobj, int) -> i32
 from C import LIB.tsc_sensor_stop(cobj) -> i32
+# BEGIN GENERATED sensor from bindings/sensor.yaml, do not edit
 from C import LIB.tsc_sensor_is_listening(cobj, Ptr[i32]) -> i32
+# END GENERATED sensor
 from C import LIB.tsc_sensor_dropped_count(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_sensor_pending_count(cobj, Ptr[int]) -> i32  # ABI 2.1
 from C import LIB.tsc_sensor_poll(cobj, Ptr[cobj]) -> i32
@@ -757,7 +785,9 @@ from C import LIB.tsc_vehicle_get_speed_limit(cobj, Ptr[float]) -> i32
 from C import LIB.tsc_vehicle_get_traffic_light_state(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_vehicle_is_at_traffic_light(cobj, Ptr[i32]) -> i32
 # END GENERATED vehicle_lights
+# BEGIN GENERATED vehicle_traffic_light from bindings/vehicle.yaml, do not edit
 from C import LIB.tsc_vehicle_get_traffic_light(cobj, Ptr[cobj]) -> i32
+# END GENERATED vehicle_traffic_light
 from C import LIB.tsc_traffic_light_get_info(cobj, Ptr[CTrafficLightInfo]) -> i32
 # BEGIN GENERATED traffic_light from bindings/traffic_light.yaml, do not edit
 from C import LIB.tsc_traffic_light_set_state(cobj, i32) -> i32
@@ -767,24 +797,33 @@ from C import LIB.tsc_traffic_light_set_red_time(cobj, float) -> i32
 from C import LIB.tsc_traffic_light_freeze(cobj, i32) -> i32
 from C import LIB.tsc_traffic_light_reset_group(cobj) -> i32
 # END GENERATED traffic_light
+# BEGIN GENERATED walker_control from bindings/walker.yaml, do not edit
 from C import LIB.tsc_walker_apply_control(cobj, Ptr[CWalkerControl]) -> i32
 from C import LIB.tsc_walker_get_control(cobj, Ptr[CWalkerControl]) -> i32
+# END GENERATED walker_control
 # BEGIN GENERATED walker_ai_controller from bindings/walker_ai_controller.yaml, do not edit
 from C import LIB.tsc_walker_ai_controller_start(cobj) -> i32
 from C import LIB.tsc_walker_ai_controller_stop(cobj) -> i32
 from C import LIB.tsc_walker_ai_controller_go_to_location(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_walker_ai_controller_set_max_speed(cobj, float) -> i32
 # END GENERATED walker_ai_controller
+# BEGIN GENERATED world_navigation from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_random_location_from_navigation(cobj, Ptr[CVector3D], Ptr[i32]) -> i32
+# END GENERATED world_navigation
+# BEGIN GENERATED world_weather from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_weather(cobj, Ptr[CWeather]) -> i32
 from C import LIB.tsc_world_set_weather(cobj, Ptr[CWeather]) -> i32
 from C import LIB.tsc_world_is_weather_enabled(cobj, Ptr[i32]) -> i32
+# END GENERATED world_weather
 from C import LIB.tsc_weather_preset(cobj, int, Ptr[CWeather]) -> i32
+# BEGIN GENERATED debug_draw from bindings/debug.yaml, do not edit
 from C import LIB.tsc_debug_draw_point(cobj, Ptr[CVector3D], float, Ptr[CColor], float) -> i32
 from C import LIB.tsc_debug_draw_line(cobj, Ptr[CVector3D], Ptr[CVector3D], float, Ptr[CColor], float) -> i32
 from C import LIB.tsc_debug_draw_arrow(cobj, Ptr[CVector3D], Ptr[CVector3D], float, float, Ptr[CColor], float) -> i32
 from C import LIB.tsc_debug_draw_box(cobj, Ptr[CBoundingBox], Ptr[CRotation], float, Ptr[CColor], float) -> i32
 from C import LIB.tsc_debug_draw_string(cobj, Ptr[CVector3D], cobj, int, i32, Ptr[CColor], float) -> i32
+# END GENERATED debug_draw
+# BEGIN GENERATED client_recorder from bindings/client.yaml, do not edit
 from C import LIB.tsc_client_start_recorder(cobj, cobj, int, i32, Ptr[CString]) -> i32
 from C import LIB.tsc_client_stop_recorder(cobj) -> i32
 from C import LIB.tsc_client_show_recorder_file_info(cobj, cobj, int, i32, Ptr[CString]) -> i32
@@ -793,18 +832,29 @@ from C import LIB.tsc_client_show_recorder_actors_blocked(cobj, cobj, int, float
 from C import LIB.tsc_client_replay_file(cobj, cobj, int, float, float, u32, i32, Ptr[CString]) -> i32
 from C import LIB.tsc_client_stop_replayer(cobj, i32) -> i32
 from C import LIB.tsc_client_set_replayer_time_factor(cobj, float) -> i32
+# END GENERATED client_recorder
+# BEGIN GENERATED client_opendrive from bindings/client.yaml, do not edit
 from C import LIB.tsc_client_generate_opendrive_world(cobj, cobj, int, Ptr[COpendriveParameters], i32, Ptr[cobj]) -> i32
+# END GENERATED client_opendrive
+# BEGIN GENERATED map_topology from bindings/map.yaml, do not edit
 from C import LIB.tsc_map_get_topology(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_map_get_crosswalks(cobj, Ptr[CVector3D], int, Ptr[int]) -> i32
+# END GENERATED map_topology
 from C import LIB.tsc_landmark_free(Ptr[CLandmark]) -> None
+# BEGIN GENERATED map_landmarks from bindings/map.yaml, do not edit
 from C import LIB.tsc_map_get_all_landmarks(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_map_get_landmarks_of_type(cobj, cobj, int, Ptr[cobj]) -> i32
+# END GENERATED map_landmarks
 from C import LIB.tsc_landmark_list_size(cobj) -> int
 from C import LIB.tsc_landmark_list_get(cobj, int, Ptr[CLandmark]) -> i32
+# BEGIN GENERATED waypoint_junction from bindings/waypoint.yaml, do not edit
 from C import LIB.tsc_waypoint_get_junction(cobj, Ptr[cobj]) -> i32
+# END GENERATED waypoint_junction
+# BEGIN GENERATED junction from bindings/junction.yaml, do not edit
 from C import LIB.tsc_junction_get_id(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_junction_get_bounding_box(cobj, Ptr[CBoundingBox]) -> i32
 from C import LIB.tsc_junction_get_waypoints(cobj, i32, Ptr[cobj]) -> i32
+# END GENERATED junction
 # Issue #22.
 # BEGIN GENERATED map from bindings/map.yaml, do not edit
 from C import LIB.tsc_map_get_georeference(cobj, Ptr[CGeoLocation]) -> i32
@@ -846,7 +896,9 @@ from C import LIB.tsc_traffic_light_get_affected_lane_waypoints(cobj, Ptr[cobj])
 from C import LIB.tsc_traffic_light_get_stop_waypoints(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_traffic_light_get_group_traffic_lights(cobj, Ptr[cobj]) -> i32
 # END GENERATED traffic_light_geometry
+# BEGIN GENERATED client_traffic_manager from bindings/client.yaml, do not edit
 from C import LIB.tsc_client_get_traffic_manager(cobj, u16, Ptr[cobj]) -> i32
+# END GENERATED client_traffic_manager
 # BEGIN GENERATED traffic_manager from bindings/traffic_manager.yaml, do not edit
 from C import LIB.tsc_traffic_manager_get_port(cobj, Ptr[u16]) -> i32
 from C import LIB.tsc_traffic_manager_set_synchronous_mode(cobj, i32) -> i32
@@ -889,8 +941,12 @@ from C import LIB.tsc_walker_show_pose(cobj) -> i32
 from C import LIB.tsc_walker_hide_pose(cobj) -> i32
 from C import LIB.tsc_walker_get_pose_from_animation(cobj) -> i32
 # END GENERATED walker_pose
+# BEGIN GENERATED walker_bones from bindings/walker.yaml, do not edit
 from C import LIB.tsc_walker_set_bones(cobj, Ptr[CBoneTransform], int) -> i32
+# END GENERATED walker_bones
+# BEGIN GENERATED walker_bone_list from bindings/walker.yaml, do not edit
 from C import LIB.tsc_walker_get_bones(cobj, Ptr[cobj]) -> i32
+# END GENERATED walker_bone_list
 from C import LIB.tsc_bone_list_size(cobj) -> int
 from C import LIB.tsc_bone_list_get(cobj, int, Ptr[CBoneTransformOut]) -> i32
 
@@ -927,15 +983,19 @@ from C import LIB.tsc_road_options_free(Ptr[u8]) -> None
 from C import LIB.tsc_actor_blueprint_get_tags(cobj, Ptr[CStringList]) -> i32
 from C import LIB.tsc_actor_blueprint_match_tags(cobj, cobj, int, Ptr[i32]) -> i32
 # END GENERATED actor_blueprint_tags
+# BEGIN GENERATED blueprint_library_attributes from bindings/blueprint_library.yaml, do not edit
 from C import LIB.tsc_blueprint_library_filter_by_attribute(cobj, cobj, int, cobj, int, Ptr[cobj]) -> i32
+# END GENERATED blueprint_library_attributes
 # BEGIN GENERATED debug_clear from bindings/debug.yaml, do not edit
 from C import LIB.tsc_debug_clear_shapes(cobj) -> i32
 from C import LIB.tsc_debug_clear_strings(cobj) -> i32
 # END GENERATED debug_clear
 from C import LIB.tsc_world_get_settings_ext(cobj, Ptr[CWorldSettings], Ptr[CWorldSettingsExt]) -> i32
 from C import LIB.tsc_world_apply_settings_ext(cobj, Ptr[CWorldSettings], Ptr[CWorldSettingsExt], float, Ptr[u64]) -> i32
+# BEGIN GENERATED transform from bindings/transform.yaml, do not edit
 from C import LIB.tsc_transform_get_matrix(Ptr[CTransform], Ptr[float]) -> i32
 from C import LIB.tsc_transform_get_inverse_matrix(Ptr[CTransform], Ptr[float]) -> i32
+# END GENERATED transform
 
 # Issue #19: actor state, parent, tags, attributes, physics at a location,
 # skeleton queries, textures, traffic signs.

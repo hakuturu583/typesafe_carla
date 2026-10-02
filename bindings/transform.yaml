@@ -1,0 +1,13 @@
+# Transform computations: tsc_transform_<name>, on a tsc_transform_t
+# value (passed by pointer). LibCarla computes them because its rotation sign
+# convention for pitch and roll changed between CARLA 0.10.0 and ue5-dev.
+class: carla::geom::Transform
+prefix: transform
+self: {type: const tsc_transform_t, name: transform, get: transform_of, codon: "Ptr[CTransform]"}
+blocks:
+  transform:
+    get_matrix:
+      call: GetMatrix
+      out: {type: matrix4x4, name: out16}
+      doc: "16 doubles, row major, in the linked LibCarla's rotation convention."
+    get_inverse_matrix: {call: GetInverseMatrix, out: {type: matrix4x4, name: out16}}

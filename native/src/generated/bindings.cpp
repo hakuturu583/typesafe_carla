@@ -8,6 +8,10 @@ extern "C" {
 
 // bindings/actor.yaml: carla::client::Actor
 
+tsc_status_t tsc_actor_destroy(tsc_actor_t *actor, int32_t *out_destroyed) {
+  return TSC_GUARD({ store_if(out_destroyed, actor_of(actor).Destroy() ? 1 : 0); });
+}
+
 tsc_status_t tsc_actor_get_id(tsc_actor_t *actor, uint32_t *out_id) {
   return TSC_GUARD({ *require_ptr(out_id, "out_id") = actor_of(actor).GetId(); });
 }
@@ -221,6 +225,36 @@ tsc_status_t tsc_actor_get_socket_relative_transforms(tsc_actor_t *actor,
   });
 }
 
+// bindings/actor_blueprint.yaml: carla::client::ActorBlueprint
+
+tsc_status_t tsc_actor_blueprint_get_id(const tsc_actor_blueprint_t *blueprint, tsc_string_t *out) {
+  return TSC_GUARD({ string_assign(out, blueprint_of(blueprint).GetId()); });
+}
+
+tsc_status_t tsc_actor_blueprint_has_tag(const tsc_actor_blueprint_t *blueprint,
+                                         const char *tag, size_t tag_len, int32_t *out_has) {
+  return TSC_GUARD({
+    *require_ptr(out_has, "out_has") = blueprint_of(blueprint).ContainsTag(to_string(tag, tag_len, "tag")) ? 1 : 0;
+  });
+}
+
+tsc_status_t tsc_actor_blueprint_has_attribute(const tsc_actor_blueprint_t *blueprint,
+                                               const char *id, size_t id_len, int32_t *out_has) {
+  return TSC_GUARD({
+    *require_ptr(out_has, "out_has") = blueprint_of(blueprint).ContainsAttribute(to_string(id, id_len, "id")) ? 1 : 0;
+  });
+}
+
+// bindings/actor_list.yaml: carla::client::ActorList
+
+tsc_status_t tsc_actor_list_filter(const tsc_actor_list_t *list,
+                                   const char *pattern, size_t pattern_len,
+                                   tsc_actor_list_t **out_list) {
+  return new_handle(__func__, out_list, [&] {
+    return new tsc_actor_list(actor_list_of(list).Filter(to_string(pattern, pattern_len, "pattern")));
+  });
+}
+
 // bindings/blueprint.yaml: carla::client::ActorBlueprint
 
 tsc_status_t tsc_actor_blueprint_get_tags(tsc_actor_blueprint_t *blueprint,
@@ -235,7 +269,132 @@ tsc_status_t tsc_actor_blueprint_match_tags(tsc_actor_blueprint_t *blueprint,
   });
 }
 
+// bindings/blueprint_library.yaml: carla::client::BlueprintLibrary
+
+tsc_status_t tsc_blueprint_library_filter(const tsc_blueprint_library_t *library,
+                                          const char *pattern, size_t pattern_len,
+                                          tsc_blueprint_library_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_blueprint_library(blueprint_library_of(library).Filter(to_string(pattern, pattern_len, "pattern")));
+  });
+}
+
+tsc_status_t tsc_blueprint_library_filter_by_attribute(const tsc_blueprint_library_t *library,
+                                                       const char *name, size_t name_len,
+                                                       const char *value, size_t value_len,
+                                                       tsc_blueprint_library_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_blueprint_library(blueprint_library_of(library).FilterByAttribute(to_string(name, name_len, "name"), to_string(value, value_len, "value")));
+  });
+}
+
 // bindings/client.yaml: carla::client::Client
+
+tsc_status_t tsc_client_set_timeout(tsc_client_t *client, double seconds) {
+  return TSC_GUARD({ client_of(client).SetTimeout(seconds_to_duration(seconds)); });
+}
+
+tsc_status_t tsc_client_get_timeout(tsc_client_t *client, double *out_seconds) {
+  return TSC_GUARD({
+    *require_ptr(out_seconds, "out_seconds") = duration_seconds(client_of(client).GetTimeout());
+  });
+}
+
+tsc_status_t tsc_client_get_client_version(tsc_client_t *client, tsc_string_t *out) {
+  return TSC_GUARD({ string_assign(out, client_of(client).GetClientVersion()); });
+}
+
+tsc_status_t tsc_client_get_server_version(tsc_client_t *client, tsc_string_t *out) {
+  return TSC_GUARD({ string_assign(out, client_of(client).GetServerVersion()); });
+}
+
+tsc_status_t tsc_client_get_world(tsc_client_t *client, tsc_world_t **out_world) {
+  return new_handle(__func__, out_world, [&] {
+    return new tsc_world(client_of(client).GetWorld());
+  });
+}
+
+tsc_status_t tsc_client_load_world(tsc_client_t *client, const char *map_name, size_t map_name_len,
+                                   int32_t reset_settings, tsc_world_t **out_world) {
+  return new_handle(__func__, out_world, [&] {
+    return new tsc_world(client_of(client).LoadWorld(to_string(map_name, map_name_len, "map_name"), reset_settings != 0));
+  });
+}
+
+tsc_status_t tsc_client_reload_world(tsc_client_t *client, int32_t reset_settings,
+                                     tsc_world_t **out_world) {
+  return new_handle(__func__, out_world, [&] {
+    return new tsc_world(client_of(client).ReloadWorld(reset_settings != 0));
+  });
+}
+
+tsc_status_t tsc_client_start_recorder(tsc_client_t *client, const char *name, size_t name_len,
+                                       int32_t additional_data, tsc_string_t *out) {
+  return TSC_GUARD({
+    string_assign(out, client_of(client).StartRecorder(to_string(name, name_len, "name"), additional_data != 0));
+  });
+}
+
+tsc_status_t tsc_client_stop_recorder(tsc_client_t *client) {
+  return TSC_GUARD({ client_of(client).StopRecorder(); });
+}
+
+tsc_status_t tsc_client_show_recorder_file_info(tsc_client_t *client,
+                                                const char *name, size_t name_len, int32_t show_all,
+                                                tsc_string_t *out) {
+  return TSC_GUARD({
+    string_assign(out, client_of(client).ShowRecorderFileInfo(to_string(name, name_len, "name"), show_all != 0));
+  });
+}
+
+tsc_status_t tsc_client_show_recorder_collisions(tsc_client_t *client,
+                                                 const char *name, size_t name_len, char type1,
+                                                 char type2, tsc_string_t *out) {
+  return TSC_GUARD({
+    string_assign(out, client_of(client).ShowRecorderCollisions(to_string(name, name_len, "name"), type1, type2));
+  });
+}
+
+tsc_status_t tsc_client_show_recorder_actors_blocked(tsc_client_t *client,
+                                                     const char *name, size_t name_len,
+                                                     double min_time, double min_distance,
+                                                     tsc_string_t *out) {
+  return TSC_GUARD({
+    string_assign(out, client_of(client).ShowRecorderActorsBlocked(to_string(name, name_len, "name"), min_time, min_distance));
+  });
+}
+
+tsc_status_t tsc_client_replay_file(tsc_client_t *client, const char *name, size_t name_len,
+                                    double start, double duration, uint32_t follow_id,
+                                    int32_t replay_sensors, tsc_string_t *out) {
+  return TSC_GUARD({
+    string_assign(out, client_of(client).ReplayFile(to_string(name, name_len, "name"), start, duration, follow_id, replay_sensors != 0));
+  });
+}
+
+tsc_status_t tsc_client_stop_replayer(tsc_client_t *client, int32_t keep_actors) {
+  return TSC_GUARD({ client_of(client).StopReplayer(keep_actors != 0); });
+}
+
+tsc_status_t tsc_client_set_replayer_time_factor(tsc_client_t *client, double factor) {
+  return TSC_GUARD({ client_of(client).SetReplayerTimeFactor(check_positive(factor, "factor")); });
+}
+
+tsc_status_t tsc_client_generate_opendrive_world(tsc_client_t *client,
+                                                 const char *opendrive, size_t opendrive_len,
+                                                 const tsc_opendrive_parameters_t *parameters,
+                                                 int32_t reset_settings, tsc_world_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_world(client_of(client).GenerateOpenDriveWorld(to_nonempty_string(opendrive, opendrive_len, "opendrive"), to_carla(*require_ptr(parameters, "parameters")), reset_settings != 0));
+  });
+}
+
+tsc_status_t tsc_client_get_traffic_manager(tsc_client_t *client, uint16_t port,
+                                            tsc_traffic_manager_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_traffic_manager(client_of(client).GetInstanceTM(port));
+  });
+}
 
 tsc_status_t tsc_client_set_replayer_ignore_hero(tsc_client_t *client, int32_t ignore_hero) {
   return TSC_GUARD({ client_of(client).SetReplayerIgnoreHero(ignore_hero != 0); });
@@ -285,6 +444,45 @@ tsc_status_t tsc_collision_event_get_other_actor(const tsc_sensor_data_t *data, 
 
 // bindings/debug.yaml: carla::client::DebugHelper
 
+tsc_status_t tsc_debug_draw_point(tsc_world_t *world, const tsc_location_t *location, double size,
+                                  const tsc_color_t *color, double life_time) {
+  return TSC_GUARD({
+    debug_of(world).DrawPoint(to_carla(*require_ptr(location, "location")), size, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"));
+  });
+}
+
+tsc_status_t tsc_debug_draw_line(tsc_world_t *world, const tsc_location_t *begin,
+                                 const tsc_location_t *end, double thickness,
+                                 const tsc_color_t *color, double life_time) {
+  return TSC_GUARD({
+    debug_of(world).DrawLine(to_carla(*require_ptr(begin, "begin")), to_carla(*require_ptr(end, "end")), thickness, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"));
+  });
+}
+
+tsc_status_t tsc_debug_draw_arrow(tsc_world_t *world, const tsc_location_t *begin,
+                                  const tsc_location_t *end, double thickness, double arrow_size,
+                                  const tsc_color_t *color, double life_time) {
+  return TSC_GUARD({
+    debug_of(world).DrawArrow(to_carla(*require_ptr(begin, "begin")), to_carla(*require_ptr(end, "end")), thickness, arrow_size, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"));
+  });
+}
+
+tsc_status_t tsc_debug_draw_box(tsc_world_t *world, const tsc_bounding_box_t *box,
+                                const tsc_rotation_t *rotation, double thickness,
+                                const tsc_color_t *color, double life_time) {
+  return TSC_GUARD({
+    debug_of(world).DrawBox(to_carla(*require_ptr(box, "box")), to_carla(*require_ptr(rotation, "rotation")), thickness, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"));
+  });
+}
+
+tsc_status_t tsc_debug_draw_string(tsc_world_t *world, const tsc_location_t *location,
+                                   const char *text, size_t text_len, int32_t draw_shadow,
+                                   const tsc_color_t *color, double life_time) {
+  return TSC_GUARD({
+    debug_of(world).DrawString(to_carla(*require_ptr(location, "location")), to_string(text, text_len, "text"), draw_shadow != 0, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"));
+  });
+}
+
 tsc_status_t tsc_debug_clear_shapes(tsc_world_t *world) {
   return TSC_GUARD({
     TSC_CALL_OPTIONAL(debug_of(world), ClearDebugShape, "DebugHelper.clear_debug_shape");
@@ -294,6 +492,26 @@ tsc_status_t tsc_debug_clear_shapes(tsc_world_t *world) {
 tsc_status_t tsc_debug_clear_strings(tsc_world_t *world) {
   return TSC_GUARD({
     TSC_CALL_OPTIONAL(debug_of(world), ClearDebugString, "DebugHelper.clear_debug_string");
+  });
+}
+
+// bindings/junction.yaml: carla::client::Junction
+
+tsc_status_t tsc_junction_get_id(const tsc_junction_t *junction, int32_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = junction_of(junction).GetId(); });
+}
+
+tsc_status_t tsc_junction_get_bounding_box(const tsc_junction_t *junction,
+                                           tsc_bounding_box_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = from_carla(junction_of(junction).GetBoundingBox());
+  });
+}
+
+tsc_status_t tsc_junction_get_waypoints(const tsc_junction_t *junction, int32_t lane_type,
+                                        tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint_list(flatten(junction_of(junction).GetWaypoints(static_cast<carla::road::Lane::LaneType>(lane_type))));
   });
 }
 
@@ -372,6 +590,60 @@ tsc_status_t tsc_light_manager_set_day_night_cycle(tsc_light_manager_t *manager,
 
 // bindings/map.yaml: carla::client::Map
 
+tsc_status_t tsc_map_get_name(const tsc_map_t *map, tsc_string_t *out) {
+  return TSC_GUARD({ string_assign(out, map_of(map).GetName()); });
+}
+
+tsc_status_t tsc_map_to_opendrive(const tsc_map_t *map, tsc_string_t *out) {
+  return TSC_GUARD({ string_assign(out, map_of(map).GetOpenDrive()); });
+}
+
+tsc_status_t tsc_map_get_spawn_points(const tsc_map_t *map,
+                                      tsc_transform_t *out, size_t capacity, size_t *out_count) {
+  return TSC_GUARD({
+    copy_out(map_of(map).GetRecommendedSpawnPoints(), out, capacity, out_count);
+  });
+}
+
+tsc_status_t tsc_map_get_waypoint(const tsc_map_t *map, const tsc_location_t *location,
+                                  int32_t project_to_road, int32_t lane_type,
+                                  tsc_waypoint_t **out) {
+  return new_handle(__func__, out, [&] {
+    return waypoint_or_null(map_of(map).GetWaypoint(to_carla(*require_ptr(location, "location")), project_to_road != 0, lane_type));
+  });
+}
+
+tsc_status_t tsc_map_generate_waypoints(const tsc_map_t *map, double distance,
+                                        tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint_list(without_nulls(map_of(map).GenerateWaypoints(check_step_distance(distance, "distance"))));
+  });
+}
+
+tsc_status_t tsc_map_get_topology(const tsc_map_t *map, tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint_list(flatten(map_of(map).GetTopology()));
+  });
+}
+
+tsc_status_t tsc_map_get_crosswalks(const tsc_map_t *map,
+                                    tsc_location_t *out, size_t capacity, size_t *out_count) {
+  return TSC_GUARD({ copy_out(map_of(map).GetAllCrosswalkZones(), out, capacity, out_count); });
+}
+
+tsc_status_t tsc_map_get_all_landmarks(const tsc_map_t *map, tsc_landmark_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_landmark_list(without_nulls(map_of(map).GetAllLandmarks()));
+  });
+}
+
+tsc_status_t tsc_map_get_landmarks_of_type(const tsc_map_t *map, const char *type, size_t type_len,
+                                           tsc_landmark_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_landmark_list(without_nulls(map_of(map).GetAllLandmarksOfType(to_string(type, type_len, "type"))));
+  });
+}
+
 tsc_status_t tsc_map_get_georeference(const tsc_map_t *map, tsc_geo_location_t *out) {
   return TSC_GUARD({ *require_ptr(out, "out") = from_carla(map_of(map).GetGeoReference()); });
 }
@@ -419,6 +691,12 @@ tsc_status_t tsc_obstacle_detection_get_other_actor(const tsc_sensor_data_t *dat
   return new_handle(__func__, out, [&] {
     return make_actor_handle(obstacle_event_of(data).GetOtherActor());
   });
+}
+
+// bindings/sensor.yaml: carla::client::Sensor
+
+tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = sensor_of(sensor).IsListening() ? 1 : 0; });
 }
 
 // bindings/traffic_light.yaml: carla::client::TrafficLight
@@ -612,7 +890,40 @@ tsc_status_t tsc_traffic_sign_get_trigger_volume(tsc_traffic_sign_t *sign,
   return TSC_GUARD({ *require_ptr(out, "out") = from_carla(sign_of(sign).GetTriggerVolume()); });
 }
 
+// bindings/transform.yaml: carla::geom::Transform
+
+tsc_status_t tsc_transform_get_matrix(const tsc_transform_t *transform, double *out16) {
+  return TSC_GUARD({ copy_matrix(transform_of(transform).GetMatrix(), out16); });
+}
+
+tsc_status_t tsc_transform_get_inverse_matrix(const tsc_transform_t *transform, double *out16) {
+  return TSC_GUARD({ copy_matrix(transform_of(transform).GetInverseMatrix(), out16); });
+}
+
 // bindings/vehicle.yaml: carla::client::Vehicle
+
+tsc_status_t tsc_vehicle_apply_control(tsc_vehicle_t *vehicle,
+                                       const tsc_vehicle_control_t *control) {
+  return TSC_GUARD({
+    vehicle_of(vehicle).ApplyControl(to_carla(*require_ptr(control, "control")));
+  });
+}
+
+tsc_status_t tsc_vehicle_get_control(tsc_vehicle_t *vehicle, tsc_vehicle_control_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = from_carla(vehicle_of(vehicle).GetControl()); });
+}
+
+tsc_status_t tsc_vehicle_get_physics_control(tsc_vehicle_t *vehicle, tsc_physics_control_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_physics_control(vehicle_of(vehicle).GetPhysicsControl());
+  });
+}
+
+tsc_status_t tsc_vehicle_get_traffic_light(tsc_vehicle_t *vehicle, tsc_traffic_light_t **out) {
+  return new_handle(__func__, out, [&] {
+    return make_traffic_light_handle(vehicle_of(vehicle).GetTrafficLight());
+  });
+}
 
 tsc_status_t tsc_vehicle_set_autopilot(tsc_vehicle_t *vehicle, int32_t enabled, uint16_t tm_port) {
   return TSC_GUARD({ vehicle_of(vehicle).SetAutopilot(enabled != 0, tm_port); });
@@ -734,6 +1045,29 @@ tsc_status_t tsc_vehicle_get_vehicle_bone_world_transforms(
 
 // bindings/walker.yaml: carla::client::Walker
 
+tsc_status_t tsc_walker_apply_control(tsc_walker_t *walker, const tsc_walker_control_t *control) {
+  return TSC_GUARD({ walker_of(walker).ApplyControl(to_carla(*require_ptr(control, "control"))); });
+}
+
+tsc_status_t tsc_walker_get_control(tsc_walker_t *walker, tsc_walker_control_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = from_carla(walker_of(walker).GetWalkerControl());
+  });
+}
+
+tsc_status_t tsc_walker_set_bones(tsc_walker_t *walker,
+                                  const tsc_bone_transform_t *bones, size_t count) {
+  return TSC_GUARD({
+    walker_of(walker).SetBonesTransform(to_bone_control(bones, count, "bones"));
+  });
+}
+
+tsc_status_t tsc_walker_get_bones(tsc_walker_t *walker, tsc_bone_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_bone_list(walker_of(walker).GetBonesTransform().bone_transforms);
+  });
+}
+
 tsc_status_t tsc_walker_blend_pose(tsc_walker_t *walker, double blend) {
   return TSC_GUARD({ walker_of(walker).BlendPose(check_finite(blend, "blend")); });
 }
@@ -775,6 +1109,40 @@ tsc_status_t tsc_walker_ai_controller_set_max_speed(tsc_walker_ai_controller_t *
 }
 
 // bindings/waypoint.yaml: carla::client::Waypoint
+
+tsc_status_t tsc_waypoint_next(const tsc_waypoint_t *waypoint, double distance,
+                               tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetNext(check_step_distance(distance, "distance"))));
+  });
+}
+
+tsc_status_t tsc_waypoint_previous(const tsc_waypoint_t *waypoint, double distance,
+                                   tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetPrevious(check_step_distance(distance, "distance"))));
+  });
+}
+
+tsc_status_t tsc_waypoint_next_until_lane_end(const tsc_waypoint_t *waypoint, double distance,
+                                              tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetNextUntilLaneEnd(check_step_distance(distance, "distance"))));
+  });
+}
+
+tsc_status_t tsc_waypoint_previous_until_lane_start(const tsc_waypoint_t *waypoint, double distance,
+                                                    tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_waypoint_list(without_nulls(waypoint_of(waypoint).GetPreviousUntilLaneStart(check_step_distance(distance, "distance"))));
+  });
+}
+
+tsc_status_t tsc_waypoint_get_junction(const tsc_waypoint_t *waypoint, tsc_junction_t **out) {
+  return new_handle(__func__, out, [&] {
+    return junction_or_null(waypoint_of(waypoint).GetJunction());
+  });
+}
 
 tsc_status_t tsc_waypoint_get_left_lane(const tsc_waypoint_t *waypoint, tsc_waypoint_t **out) {
   return new_handle(__func__, out, [&] {
@@ -829,6 +1197,81 @@ tsc_status_t tsc_waypoint_get_landmarks_of_type(const tsc_waypoint_t *waypoint, 
 }
 
 // bindings/world.yaml: carla::client::World
+
+tsc_status_t tsc_world_get_id(tsc_world_t *world, uint64_t *out_id) {
+  return TSC_GUARD({ *require_ptr(out_id, "out_id") = world_of(world).GetId(); });
+}
+
+tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_list) {
+  return new_handle(__func__, out_list, [&] {
+    return new tsc_actor_list(world_of(world).GetActors());
+  });
+}
+
+tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
+                                             tsc_blueprint_library_t **out_library) {
+  return new_handle(__func__, out_library, [&] {
+    return new tsc_blueprint_library(world_of(world).GetBlueprintLibrary());
+  });
+}
+
+tsc_status_t tsc_world_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
+                                   const tsc_transform_t *transform, tsc_actor_t *parent,
+                                   tsc_actor_t **out_actor) {
+  return new_handle(__func__, out_actor, [&] {
+    return make_actor_handle(spawned(world_of(world).SpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent"))));
+  });
+}
+
+tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
+                                       const tsc_transform_t *transform, tsc_actor_t *parent,
+                                       tsc_actor_t **out_actor) {
+  return new_handle(__func__, out_actor, [&] {
+    return make_actor_handle(world_of(world).TrySpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent")));
+  });
+}
+
+tsc_status_t tsc_world_tick(tsc_world_t *world, double timeout_seconds, uint64_t *out_frame) {
+  return TSC_GUARD({
+    *require_ptr(out_frame, "out_frame") = world_of(world).Tick(seconds_to_duration(timeout_seconds));
+  });
+}
+
+tsc_status_t tsc_world_get_snapshot(tsc_world_t *world, tsc_world_snapshot_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_world_snapshot(world_of(world).GetSnapshot());
+  });
+}
+
+tsc_status_t tsc_world_wait_for_tick(tsc_world_t *world, double timeout_seconds,
+                                     tsc_world_snapshot_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_world_snapshot(world_of(world).WaitForTick(seconds_to_duration(timeout_seconds)));
+  });
+}
+
+tsc_status_t tsc_world_get_map(tsc_world_t *world, tsc_map_t **out) {
+  return new_handle(__func__, out, [&] { return new tsc_map(world_of(world).GetMap()); });
+}
+
+tsc_status_t tsc_world_get_random_location_from_navigation(
+    tsc_world_t *world, tsc_location_t *out, int32_t *out_found) {
+  return TSC_GUARD({
+    assign_optional(world_of(world).GetRandomLocationFromNavigation(), out_found, out, "out_found");
+  });
+}
+
+tsc_status_t tsc_world_get_weather(tsc_world_t *world, tsc_weather_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = from_carla(world_of(world).GetWeather()); });
+}
+
+tsc_status_t tsc_world_set_weather(tsc_world_t *world, const tsc_weather_t *weather) {
+  return TSC_GUARD({ world_of(world).SetWeather(to_carla(*require_ptr(weather, "weather"))); });
+}
+
+tsc_status_t tsc_world_is_weather_enabled(tsc_world_t *world, int32_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = world_of(world).IsWeatherEnabled() ? 1 : 0; });
+}
 
 tsc_status_t tsc_world_get_spectator(tsc_world_t *world, tsc_actor_t **out) {
   return new_handle(__func__, out, [&] {
@@ -1001,6 +1444,19 @@ tsc_status_t tsc_world_apply_textures_to_objects(
 tsc_status_t tsc_world_get_light_manager(tsc_world_t *world, tsc_light_manager_t **out) {
   return new_handle(__func__, out, [&] {
     return make_light_manager_handle(world_of(world).GetLightManager());
+  });
+}
+
+// bindings/world_snapshot.yaml: carla::client::WorldSnapshot
+
+tsc_status_t tsc_world_snapshot_get_id(const tsc_world_snapshot_t *snapshot, uint64_t *out) {
+  return TSC_GUARD({ *require_ptr(out, "out") = snapshot_of(snapshot).GetId(); });
+}
+
+tsc_status_t tsc_world_snapshot_get_timestamp(const tsc_world_snapshot_t *snapshot,
+                                              tsc_timestamp_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = from_carla(snapshot_of(snapshot).GetTimestamp());
   });
 }
 

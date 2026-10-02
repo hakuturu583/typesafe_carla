@@ -1,0 +1,14 @@
+# BlueprintLibrary operations: tsc_blueprint_library_<name>. The list
+# accessors and find are hand-written (native/src/blueprint.cpp).
+class: carla::client::BlueprintLibrary
+prefix: blueprint_library
+self: {type: const tsc_blueprint_library_t, name: library, get: blueprint_library_of}
+blocks:
+  blueprint_library:
+    filter: {call: Filter, args: {pattern: string_in}, out: blueprint_library_handle}
+  blueprint_library_attributes:
+    filter_by_attribute:
+      call: FilterByAttribute
+      args: {name: string_in, value: string_in}
+      out: blueprint_library_handle
+      doc: "Blueprints whose attribute `name` has `value` (or recommends it)."

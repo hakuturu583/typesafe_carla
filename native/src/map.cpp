@@ -1,67 +1,13 @@
-// Map and waypoints.
+// Map and waypoints: the hand-written part (structs of several calls, list
+// accessors and the file write of Map.save_to_disk). The rest is generated
+// (bindings/map.yaml, waypoint.yaml, junction.yaml, landmark.yaml).
 #include "internal.hpp"
+
+#include <fstream>
 
 using namespace tsc;
 
-namespace {
-
-using WaypointPtr = carla::SharedPtr<carla::client::Waypoint>;
-
-double check_distance(double distance) {
-  if (!(distance > 0.0) || !std::isfinite(distance)) {
-    fail(TSC_INVALID_ARGUMENT, "distance must be a positive finite number of meters");
-  }
-  return distance;
-}
-
-// The Waypoint methods that take a distance and return a list of waypoints.
-using WaypointListFn = std::vector<WaypointPtr> (carla::client::Waypoint::*)(double) const;
-
-tsc_status_t waypoint_list(const char *function, const tsc_waypoint_t *wp, double distance,
-                           WaypointListFn fn, tsc_waypoint_list_t **out) {
-  return new_handle(function, out, [&]() {
-    return new tsc_waypoint_list((waypoint_of(wp).*fn)(check_distance(distance)));
-  });
-}
-
-}  // namespace
-
 extern "C" {
-
-tsc_status_t tsc_world_get_map(tsc_world_t *world, tsc_map_t **out) {
-  return new_handle(__func__, out, [&]() { return new tsc_map(world_of(world).GetMap()); });
-}
-
-tsc_status_t tsc_map_get_name(const tsc_map_t *map, tsc_string_t *out) {
-  return TSC_GUARD({ string_assign(out, map_of(map).GetName()); });
-}
-
-tsc_status_t tsc_map_to_opendrive(const tsc_map_t *map, tsc_string_t *out) {
-  return TSC_GUARD({ string_assign(out, map_of(map).GetOpenDrive()); });
-}
-
-tsc_status_t tsc_map_get_spawn_points(const tsc_map_t *map, tsc_transform_t *out, size_t capacity,
-                                      size_t *out_count) {
-  return TSC_GUARD({
-    copy_out(map_of(map).GetRecommendedSpawnPoints(), out, capacity, out_count);
-  });
-}
-
-tsc_status_t tsc_map_get_waypoint(const tsc_map_t *map, const tsc_location_t *location,
-                                  int32_t project_to_road, int32_t lane_type,
-                                  tsc_waypoint_t **out) {
-  return new_handle(__func__, out, [&]() {
-    return waypoint_or_null(map_of(map).GetWaypoint(to_carla(*require_ptr(location, "location")),
-                                                 project_to_road != 0, lane_type));
-  });
-}
-
-tsc_status_t tsc_map_generate_waypoints(const tsc_map_t *map, double distance,
-                                        tsc_waypoint_list_t **out) {
-  return new_handle(__func__, out, [&]() {
-    return new tsc_waypoint_list(map_of(map).GenerateWaypoints(check_distance(distance)));
-  });
-}
 
 tsc_status_t tsc_waypoint_get_info(const tsc_waypoint_t *wp, tsc_waypoint_info_t *out) {
   return TSC_GUARD({
@@ -82,27 +28,6 @@ tsc_status_t tsc_waypoint_get_info(const tsc_waypoint_t *wp, tsc_waypoint_info_t
   });
 }
 
-tsc_status_t tsc_waypoint_next(const tsc_waypoint_t *wp, double distance,
-                               tsc_waypoint_list_t **out) {
-  return waypoint_list(__func__, wp, distance, &carla::client::Waypoint::GetNext, out);
-}
-
-tsc_status_t tsc_waypoint_previous(const tsc_waypoint_t *wp, double distance,
-                                   tsc_waypoint_list_t **out) {
-  return waypoint_list(__func__, wp, distance, &carla::client::Waypoint::GetPrevious, out);
-}
-
-tsc_status_t tsc_waypoint_next_until_lane_end(const tsc_waypoint_t *wp, double distance,
-                                              tsc_waypoint_list_t **out) {
-  return waypoint_list(__func__, wp, distance, &carla::client::Waypoint::GetNextUntilLaneEnd, out);
-}
-
-tsc_status_t tsc_waypoint_previous_until_lane_start(const tsc_waypoint_t *wp, double distance,
-                                                    tsc_waypoint_list_t **out) {
-  return waypoint_list(__func__, wp, distance, &carla::client::Waypoint::GetPreviousUntilLaneStart,
-                       out);
-}
-
 size_t tsc_waypoint_list_size(const tsc_waypoint_list_t *list) {
   if (list == nullptr || list->kind != TSC_KIND_WAYPOINT_LIST) return 0;
   return list->waypoints.size();
@@ -115,6 +40,91 @@ tsc_status_t tsc_waypoint_list_get(const tsc_waypoint_list_t *list, size_t index
     check_index(index, w.size(), "waypoint list");
     if (w[index] == nullptr) fail(TSC_ERROR, "LibCarla returned a null waypoint");
     return new tsc_waypoint(w[index]);
+  });
+}
+
+void tsc_landmark_free(tsc_landmark_t *l) {
+  if (l == nullptr) return;
+  for (tsc_string_t *s : {&l->id, &l->name, &l->type, &l->sub_type, &l->country, &l->unit, &l->text}) {
+    tsc_string_free(s);
+  }
+}
+
+size_t tsc_landmark_list_size(const tsc_landmark_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_LANDMARK_LIST) return 0;
+  return list->landmarks.size();
+}
+
+tsc_status_t tsc_landmark_list_get(const tsc_landmark_list_t *list, size_t index, tsc_landmark_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+    *out = tsc_landmark_t{};
+    const auto &all = check_handle(list, "list", TSC_KIND_LANDMARK_LIST)->landmarks;
+    check_index(index, all.size(), "landmark list");
+    const carla::client::Landmark &lm = *all[index];
+    tsc_landmark_t r{};
+    try {
+      string_assign(&r.id, lm.GetId());
+      string_assign(&r.name, lm.GetName());
+      string_assign(&r.type, lm.GetType());
+      string_assign(&r.sub_type, lm.GetSubType());
+      string_assign(&r.country, lm.GetCountry());
+      string_assign(&r.unit, lm.GetUnit());
+      string_assign(&r.text, lm.GetText());
+    } catch (...) {
+      tsc_landmark_free(&r);
+      throw;
+    }
+    r.road_id = lm.GetRoadId();
+    r.orientation = static_cast<int32_t>(lm.GetOrientation());
+    r.s = lm.GetS();
+    r.t = lm.GetT();
+    r.distance = lm.GetDistance();
+    r.z_offset = lm.GetZOffset();
+    r.value = lm.GetValue();
+    r.height = lm.GetHeight();
+    r.width = lm.GetWidth();
+    r.transform = from_carla(lm.GetTransform());
+    *out = r;
+  });
+}
+
+tsc_status_t tsc_map_save_to_disk(const tsc_map_t *map, const char *path, size_t path_len) {
+  return TSC_GUARD({
+    const auto &m = map_of(map);
+    std::string file = to_string(path, path_len, "path");
+    if (file.empty()) file = m.GetName();
+    // What the Python API's Map.save_to_disk does, except that a file that
+    // cannot be written is an error rather than silently ignored.
+    carla::FileSystem::ValidateFilePath(file, ".xodr");
+    std::ofstream stream(file);
+    if (!stream) fail(TSC_ERROR, "cannot open " + file + " for writing");
+    stream << m.GetOpenDrive() << std::endl;
+    if (!stream) fail(TSC_ERROR, "cannot write " + file);
+  });
+}
+
+tsc_status_t tsc_landmark_list_get_landmark(const tsc_landmark_list_t *list, size_t index,
+                                            tsc_landmark_handle_t **out) {
+  return new_handle(__func__, out, [&] {
+    const auto &all = check_handle(list, "list", TSC_KIND_LANDMARK_LIST)->landmarks;
+    check_index(index, all.size(), "landmark list");
+    if (all[index] == nullptr) fail(TSC_ERROR, "LibCarla returned a null landmark");
+    return new tsc_landmark_handle(all[index]);
+  });
+}
+
+size_t tsc_traffic_light_list_size(const tsc_traffic_light_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_TRAFFIC_LIGHT_LIST) return 0;
+  return list->lights.size();
+}
+
+tsc_status_t tsc_traffic_light_list_get(const tsc_traffic_light_list_t *list, size_t index,
+                                        tsc_traffic_light_t **out) {
+  return new_handle(__func__, out, [&] {
+    const auto &lights = check_handle(list, "list", TSC_KIND_TRAFFIC_LIGHT_LIST)->lights;
+    check_index(index, lights.size(), "traffic light list");
+    return new tsc_traffic_light(lights[index]);
   });
 }
 

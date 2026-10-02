@@ -3,6 +3,13 @@ class: carla::client::Walker
 prefix: walker
 self: {type: tsc_walker_t, name: walker, get: walker_of}
 blocks:
+  walker_control:
+    apply_control: {call: ApplyControl, args: {control: walker_control}}
+    get_control: {call: GetWalkerControl, out: walker_control}
+  walker_bones:
+    set_bones: {call: SetBonesTransform, args: {bones: bone_transforms}}
+  walker_bone_list:
+    get_bones: {call: GetBonesTransform, out: bone_list_handle}
   walker_pose:
     blend_pose:
       call: BlendPose

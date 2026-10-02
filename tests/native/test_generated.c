@@ -20,6 +20,7 @@ static void expect_null_rejected(tsc_status_t status, const char *function) {
 }
 
 int main(void) {
+  expect_null_rejected(tsc_actor_destroy(NULL, NULL), "tsc_actor_destroy");
   expect_null_rejected(tsc_actor_get_id(NULL, NULL), "tsc_actor_get_id");
   expect_null_rejected(tsc_actor_get_type_id(NULL, NULL), "tsc_actor_get_type_id");
   expect_null_rejected(tsc_actor_is_alive(NULL, NULL), "tsc_actor_is_alive");
@@ -62,8 +63,31 @@ int main(void) {
   expect_null_rejected(tsc_actor_get_socket_names(NULL, NULL), "tsc_actor_get_socket_names");
   expect_null_rejected(tsc_actor_get_socket_world_transforms(NULL, NULL), "tsc_actor_get_socket_world_transforms");
   expect_null_rejected(tsc_actor_get_socket_relative_transforms(NULL, NULL), "tsc_actor_get_socket_relative_transforms");
+  expect_null_rejected(tsc_actor_blueprint_get_id(NULL, NULL), "tsc_actor_blueprint_get_id");
+  expect_null_rejected(tsc_actor_blueprint_has_tag(NULL, NULL, 1, NULL), "tsc_actor_blueprint_has_tag");
+  expect_null_rejected(tsc_actor_blueprint_has_attribute(NULL, NULL, 1, NULL), "tsc_actor_blueprint_has_attribute");
+  expect_null_rejected(tsc_actor_list_filter(NULL, NULL, 1, (tsc_actor_list_t *[1]){NULL}), "tsc_actor_list_filter");
   expect_null_rejected(tsc_actor_blueprint_get_tags(NULL, NULL), "tsc_actor_blueprint_get_tags");
   expect_null_rejected(tsc_actor_blueprint_match_tags(NULL, NULL, 1, NULL), "tsc_actor_blueprint_match_tags");
+  expect_null_rejected(tsc_blueprint_library_filter(NULL, NULL, 1, (tsc_blueprint_library_t *[1]){NULL}), "tsc_blueprint_library_filter");
+  expect_null_rejected(tsc_blueprint_library_filter_by_attribute(NULL, NULL, 1, NULL, 1, (tsc_blueprint_library_t *[1]){NULL}), "tsc_blueprint_library_filter_by_attribute");
+  expect_null_rejected(tsc_client_set_timeout(NULL, NAN), "tsc_client_set_timeout");
+  expect_null_rejected(tsc_client_get_timeout(NULL, NULL), "tsc_client_get_timeout");
+  expect_null_rejected(tsc_client_get_client_version(NULL, NULL), "tsc_client_get_client_version");
+  expect_null_rejected(tsc_client_get_server_version(NULL, NULL), "tsc_client_get_server_version");
+  expect_null_rejected(tsc_client_get_world(NULL, (tsc_world_t *[1]){NULL}), "tsc_client_get_world");
+  expect_null_rejected(tsc_client_load_world(NULL, NULL, 1, 0, (tsc_world_t *[1]){NULL}), "tsc_client_load_world");
+  expect_null_rejected(tsc_client_reload_world(NULL, 0, (tsc_world_t *[1]){NULL}), "tsc_client_reload_world");
+  expect_null_rejected(tsc_client_start_recorder(NULL, NULL, 1, 0, NULL), "tsc_client_start_recorder");
+  expect_null_rejected(tsc_client_stop_recorder(NULL), "tsc_client_stop_recorder");
+  expect_null_rejected(tsc_client_show_recorder_file_info(NULL, NULL, 1, 0, NULL), "tsc_client_show_recorder_file_info");
+  expect_null_rejected(tsc_client_show_recorder_collisions(NULL, NULL, 1, 0, 0, NULL), "tsc_client_show_recorder_collisions");
+  expect_null_rejected(tsc_client_show_recorder_actors_blocked(NULL, NULL, 1, 0, 0, NULL), "tsc_client_show_recorder_actors_blocked");
+  expect_null_rejected(tsc_client_replay_file(NULL, NULL, 1, 0, 0, 0, 0, NULL), "tsc_client_replay_file");
+  expect_null_rejected(tsc_client_stop_replayer(NULL, 0), "tsc_client_stop_replayer");
+  expect_null_rejected(tsc_client_set_replayer_time_factor(NULL, NAN), "tsc_client_set_replayer_time_factor");
+  expect_null_rejected(tsc_client_generate_opendrive_world(NULL, NULL, 0, NULL, 0, (tsc_world_t *[1]){NULL}), "tsc_client_generate_opendrive_world");
+  expect_null_rejected(tsc_client_get_traffic_manager(NULL, 0, (tsc_traffic_manager_t *[1]){NULL}), "tsc_client_get_traffic_manager");
   expect_null_rejected(tsc_client_set_replayer_ignore_hero(NULL, 0), "tsc_client_set_replayer_ignore_hero");
   expect_null_rejected(tsc_client_set_replayer_ignore_spectator(NULL, 0), "tsc_client_set_replayer_ignore_spectator");
   expect_null_rejected(tsc_client_get_available_maps(NULL, NULL), "tsc_client_get_available_maps");
@@ -72,8 +96,16 @@ int main(void) {
   expect_null_rejected(tsc_client_set_files_base_folder(NULL, NULL, 1, NULL), "tsc_client_set_files_base_folder");
   expect_null_rejected(tsc_collision_event_get_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_collision_event_get_actor");
   expect_null_rejected(tsc_collision_event_get_other_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_collision_event_get_other_actor");
+  expect_null_rejected(tsc_debug_draw_point(NULL, NULL, 0, NULL, NAN), "tsc_debug_draw_point");
+  expect_null_rejected(tsc_debug_draw_line(NULL, NULL, NULL, 0, NULL, NAN), "tsc_debug_draw_line");
+  expect_null_rejected(tsc_debug_draw_arrow(NULL, NULL, NULL, 0, 0, NULL, NAN), "tsc_debug_draw_arrow");
+  expect_null_rejected(tsc_debug_draw_box(NULL, NULL, NULL, 0, NULL, NAN), "tsc_debug_draw_box");
+  expect_null_rejected(tsc_debug_draw_string(NULL, NULL, NULL, 1, 0, NULL, NAN), "tsc_debug_draw_string");
   expect_null_rejected(tsc_debug_clear_shapes(NULL), "tsc_debug_clear_shapes");
   expect_null_rejected(tsc_debug_clear_strings(NULL), "tsc_debug_clear_strings");
+  expect_null_rejected(tsc_junction_get_id(NULL, NULL), "tsc_junction_get_id");
+  expect_null_rejected(tsc_junction_get_bounding_box(NULL, NULL), "tsc_junction_get_bounding_box");
+  expect_null_rejected(tsc_junction_get_waypoints(NULL, 0, (tsc_waypoint_list_t *[1]){NULL}), "tsc_junction_get_waypoints");
   expect_null_rejected(tsc_landmark_get_h_offset(NULL, NULL), "tsc_landmark_get_h_offset");
   expect_null_rejected(tsc_landmark_get_pitch(NULL, NULL), "tsc_landmark_get_pitch");
   expect_null_rejected(tsc_landmark_get_roll(NULL, NULL), "tsc_landmark_get_roll");
@@ -86,6 +118,15 @@ int main(void) {
   expect_null_rejected(tsc_light_manager_get_turned_on_lights(NULL, 99, NULL), "tsc_light_manager_get_turned_on_lights");
   expect_null_rejected(tsc_light_manager_get_turned_off_lights(NULL, 99, NULL), "tsc_light_manager_get_turned_off_lights");
   expect_null_rejected(tsc_light_manager_set_day_night_cycle(NULL, 0), "tsc_light_manager_set_day_night_cycle");
+  expect_null_rejected(tsc_map_get_name(NULL, NULL), "tsc_map_get_name");
+  expect_null_rejected(tsc_map_to_opendrive(NULL, NULL), "tsc_map_to_opendrive");
+  expect_null_rejected(tsc_map_get_spawn_points(NULL, NULL, 0, NULL), "tsc_map_get_spawn_points");
+  expect_null_rejected(tsc_map_get_waypoint(NULL, NULL, 0, 0, (tsc_waypoint_t *[1]){NULL}), "tsc_map_get_waypoint");
+  expect_null_rejected(tsc_map_generate_waypoints(NULL, NAN, (tsc_waypoint_list_t *[1]){NULL}), "tsc_map_generate_waypoints");
+  expect_null_rejected(tsc_map_get_topology(NULL, (tsc_waypoint_list_t *[1]){NULL}), "tsc_map_get_topology");
+  expect_null_rejected(tsc_map_get_crosswalks(NULL, NULL, 0, NULL), "tsc_map_get_crosswalks");
+  expect_null_rejected(tsc_map_get_all_landmarks(NULL, (tsc_landmark_list_t *[1]){NULL}), "tsc_map_get_all_landmarks");
+  expect_null_rejected(tsc_map_get_landmarks_of_type(NULL, NULL, 1, (tsc_landmark_list_t *[1]){NULL}), "tsc_map_get_landmarks_of_type");
   expect_null_rejected(tsc_map_get_georeference(NULL, NULL), "tsc_map_get_georeference");
   expect_null_rejected(tsc_map_get_waypoint_xodr(NULL, 0, 0, NAN, (tsc_waypoint_t *[1]){NULL}), "tsc_map_get_waypoint_xodr");
   expect_null_rejected(tsc_map_get_landmarks_from_id(NULL, NULL, 1, (tsc_landmark_list_t *[1]){NULL}), "tsc_map_get_landmarks_from_id");
@@ -94,6 +135,7 @@ int main(void) {
   expect_null_rejected(tsc_obstacle_detection_get_distance(NULL, NULL), "tsc_obstacle_detection_get_distance");
   expect_null_rejected(tsc_obstacle_detection_get_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_obstacle_detection_get_actor");
   expect_null_rejected(tsc_obstacle_detection_get_other_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_obstacle_detection_get_other_actor");
+  expect_null_rejected(tsc_sensor_is_listening(NULL, NULL), "tsc_sensor_is_listening");
   expect_null_rejected(tsc_traffic_light_set_state(NULL, 99), "tsc_traffic_light_set_state");
   expect_null_rejected(tsc_traffic_light_set_green_time(NULL, NAN), "tsc_traffic_light_set_green_time");
   expect_null_rejected(tsc_traffic_light_set_yellow_time(NULL, NAN), "tsc_traffic_light_set_yellow_time");
@@ -127,6 +169,12 @@ int main(void) {
   expect_null_rejected(tsc_traffic_manager_set_path(NULL, NULL, NULL, 1, 0), "tsc_traffic_manager_set_path");
   expect_null_rejected(tsc_traffic_manager_set_route(NULL, NULL, NULL, 1, 0), "tsc_traffic_manager_set_route");
   expect_null_rejected(tsc_traffic_sign_get_trigger_volume(NULL, NULL), "tsc_traffic_sign_get_trigger_volume");
+  expect_null_rejected(tsc_transform_get_matrix(NULL, NULL), "tsc_transform_get_matrix");
+  expect_null_rejected(tsc_transform_get_inverse_matrix(NULL, NULL), "tsc_transform_get_inverse_matrix");
+  expect_null_rejected(tsc_vehicle_apply_control(NULL, NULL), "tsc_vehicle_apply_control");
+  expect_null_rejected(tsc_vehicle_get_control(NULL, NULL), "tsc_vehicle_get_control");
+  expect_null_rejected(tsc_vehicle_get_physics_control(NULL, (tsc_physics_control_t *[1]){NULL}), "tsc_vehicle_get_physics_control");
+  expect_null_rejected(tsc_vehicle_get_traffic_light(NULL, (tsc_traffic_light_t *[1]){NULL}), "tsc_vehicle_get_traffic_light");
   expect_null_rejected(tsc_vehicle_set_autopilot(NULL, 0, 0), "tsc_vehicle_set_autopilot");
   expect_null_rejected(tsc_vehicle_set_light_state(NULL, 0), "tsc_vehicle_set_light_state");
   expect_null_rejected(tsc_vehicle_get_light_state(NULL, NULL), "tsc_vehicle_get_light_state");
@@ -146,6 +194,10 @@ int main(void) {
   expect_null_rejected(tsc_vehicle_enable_carsim(NULL, NULL, 1), "tsc_vehicle_enable_carsim");
   expect_null_rejected(tsc_vehicle_enable_chrono_physics(NULL, 0, NAN, NULL, 1, NULL, 1, NULL, 1, NULL, 1), "tsc_vehicle_enable_chrono_physics");
   expect_null_rejected(tsc_vehicle_get_vehicle_bone_world_transforms(NULL, NULL, 0, NULL), "tsc_vehicle_get_vehicle_bone_world_transforms");
+  expect_null_rejected(tsc_walker_apply_control(NULL, NULL), "tsc_walker_apply_control");
+  expect_null_rejected(tsc_walker_get_control(NULL, NULL), "tsc_walker_get_control");
+  expect_null_rejected(tsc_walker_set_bones(NULL, NULL, 1), "tsc_walker_set_bones");
+  expect_null_rejected(tsc_walker_get_bones(NULL, (tsc_bone_list_t *[1]){NULL}), "tsc_walker_get_bones");
   expect_null_rejected(tsc_walker_blend_pose(NULL, NAN), "tsc_walker_blend_pose");
   expect_null_rejected(tsc_walker_show_pose(NULL), "tsc_walker_show_pose");
   expect_null_rejected(tsc_walker_hide_pose(NULL), "tsc_walker_hide_pose");
@@ -154,6 +206,11 @@ int main(void) {
   expect_null_rejected(tsc_walker_ai_controller_stop(NULL), "tsc_walker_ai_controller_stop");
   expect_null_rejected(tsc_walker_ai_controller_go_to_location(NULL, NULL), "tsc_walker_ai_controller_go_to_location");
   expect_null_rejected(tsc_walker_ai_controller_set_max_speed(NULL, NAN), "tsc_walker_ai_controller_set_max_speed");
+  expect_null_rejected(tsc_waypoint_next(NULL, NAN, (tsc_waypoint_list_t *[1]){NULL}), "tsc_waypoint_next");
+  expect_null_rejected(tsc_waypoint_previous(NULL, NAN, (tsc_waypoint_list_t *[1]){NULL}), "tsc_waypoint_previous");
+  expect_null_rejected(tsc_waypoint_next_until_lane_end(NULL, NAN, (tsc_waypoint_list_t *[1]){NULL}), "tsc_waypoint_next_until_lane_end");
+  expect_null_rejected(tsc_waypoint_previous_until_lane_start(NULL, NAN, (tsc_waypoint_list_t *[1]){NULL}), "tsc_waypoint_previous_until_lane_start");
+  expect_null_rejected(tsc_waypoint_get_junction(NULL, (tsc_junction_t *[1]){NULL}), "tsc_waypoint_get_junction");
   expect_null_rejected(tsc_waypoint_get_left_lane(NULL, (tsc_waypoint_t *[1]){NULL}), "tsc_waypoint_get_left_lane");
   expect_null_rejected(tsc_waypoint_get_right_lane(NULL, (tsc_waypoint_t *[1]){NULL}), "tsc_waypoint_get_right_lane");
   expect_null_rejected(tsc_waypoint_is_rht(NULL, NULL), "tsc_waypoint_is_rht");
@@ -162,6 +219,19 @@ int main(void) {
   expect_null_rejected(tsc_waypoint_get_lane_change(NULL, NULL), "tsc_waypoint_get_lane_change");
   expect_null_rejected(tsc_waypoint_get_landmarks(NULL, NAN, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks");
   expect_null_rejected(tsc_waypoint_get_landmarks_of_type(NULL, NAN, NULL, 1, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks_of_type");
+  expect_null_rejected(tsc_world_get_id(NULL, NULL), "tsc_world_get_id");
+  expect_null_rejected(tsc_world_get_actors(NULL, (tsc_actor_list_t *[1]){NULL}), "tsc_world_get_actors");
+  expect_null_rejected(tsc_world_get_blueprint_library(NULL, (tsc_blueprint_library_t *[1]){NULL}), "tsc_world_get_blueprint_library");
+  expect_null_rejected(tsc_world_spawn_actor(NULL, NULL, NULL, NULL, (tsc_actor_t *[1]){NULL}), "tsc_world_spawn_actor");
+  expect_null_rejected(tsc_world_try_spawn_actor(NULL, NULL, NULL, NULL, (tsc_actor_t *[1]){NULL}), "tsc_world_try_spawn_actor");
+  expect_null_rejected(tsc_world_tick(NULL, NAN, NULL), "tsc_world_tick");
+  expect_null_rejected(tsc_world_get_snapshot(NULL, (tsc_world_snapshot_t *[1]){NULL}), "tsc_world_get_snapshot");
+  expect_null_rejected(tsc_world_wait_for_tick(NULL, NAN, (tsc_world_snapshot_t *[1]){NULL}), "tsc_world_wait_for_tick");
+  expect_null_rejected(tsc_world_get_map(NULL, (tsc_map_t *[1]){NULL}), "tsc_world_get_map");
+  expect_null_rejected(tsc_world_get_random_location_from_navigation(NULL, NULL, NULL), "tsc_world_get_random_location_from_navigation");
+  expect_null_rejected(tsc_world_get_weather(NULL, NULL), "tsc_world_get_weather");
+  expect_null_rejected(tsc_world_set_weather(NULL, NULL), "tsc_world_set_weather");
+  expect_null_rejected(tsc_world_is_weather_enabled(NULL, NULL), "tsc_world_is_weather_enabled");
   expect_null_rejected(tsc_world_get_spectator(NULL, (tsc_actor_t *[1]){NULL}), "tsc_world_get_spectator");
   expect_null_rejected(tsc_world_get_traffic_light_from_opendrive_id(NULL, NULL, 1, (tsc_traffic_light_t *[1]){NULL}), "tsc_world_get_traffic_light_from_opendrive_id");
   expect_null_rejected(tsc_world_get_traffic_sign(NULL, NULL, (tsc_actor_t *[1]){NULL}), "tsc_world_get_traffic_sign");
@@ -188,7 +258,9 @@ int main(void) {
   expect_null_rejected(tsc_world_apply_float_color_texture_to_objects(NULL, NULL, 1, 99, NULL), "tsc_world_apply_float_color_texture_to_objects");
   expect_null_rejected(tsc_world_apply_textures_to_objects(NULL, NULL, 1, NULL, NULL, NULL, NULL), "tsc_world_apply_textures_to_objects");
   expect_null_rejected(tsc_world_get_light_manager(NULL, (tsc_light_manager_t *[1]){NULL}), "tsc_world_get_light_manager");
+  expect_null_rejected(tsc_world_snapshot_get_id(NULL, NULL), "tsc_world_snapshot_get_id");
+  expect_null_rejected(tsc_world_snapshot_get_timestamp(NULL, NULL), "tsc_world_snapshot_get_timestamp");
   if (g_failures != 0) return 1;
-  printf("test_generated: 168 generated functions reject NULL handles\n");
+  printf("test_generated: 240 generated functions reject NULL handles\n");
   return 0;
 }

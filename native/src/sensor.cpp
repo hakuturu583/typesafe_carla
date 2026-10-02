@@ -9,12 +9,6 @@ namespace data = carla::sensor::data;
 
 namespace {
 
-tsc_sensor &sensor_handle(tsc_sensor_t *s) { return *check_handle(s, "sensor", TSC_KIND_SENSOR); }
-
-carla::client::Sensor &sensor_of(tsc_sensor_t *s) {
-  return static_cast<carla::client::Sensor &>(*sensor_handle(s).actor);
-}
-
 SensorQueue &queue_of(tsc_sensor_t *s) {
   auto &h = sensor_handle(s);
   if (h.queue == nullptr) fail(TSC_ERROR, "sensor is not listening; call listen() first");
@@ -104,10 +98,6 @@ tsc_status_t tsc_sensor_stop(tsc_sensor_t *sensor) {
     auto &s = sensor_of(sensor);
     if (s.IsListening()) s.Stop();
   });
-}
-
-tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out) {
-  return TSC_GUARD({ *require_ptr(out, "out") = sensor_of(sensor).IsListening() ? 1 : 0; });
 }
 
 tsc_status_t tsc_sensor_dropped_count(tsc_sensor_t *sensor, uint64_t *out) {

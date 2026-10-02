@@ -1,0 +1,13 @@
+# Junction operations: tsc_junction_<name>.
+class: carla::client::Junction
+prefix: junction
+self: {type: const tsc_junction_t, name: junction, get: junction_of}
+blocks:
+  junction:
+    get_id: {call: GetId, out: int32}
+    get_bounding_box: {call: GetBoundingBox, out: bounding_box}
+    get_waypoints:
+      call: GetWaypoints
+      args: {lane_type: lane_type}
+      out: waypoint_pair_list
+      doc: "Pairs (entry, exit) as a waypoint list [b0, e0, b1, e1, ...]."

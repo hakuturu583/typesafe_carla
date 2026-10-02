@@ -60,6 +60,12 @@ sensor data handle and fails with `TSC_TYPE_ERROR` unless it holds an
 `ObstacleDetectionEvent`. `self.type` is pasted into the C signature as
 written, so it may be `const`-qualified (`const tsc_sensor_data_t` there).
 
+`self` may also be a value struct passed by pointer rather than a handle
+(issue #31): `transform.yaml` binds `carla::geom::Transform` with
+`self: {type: const tsc_transform_t, name: transform, get: transform_of,
+codon: "Ptr[CTransform]"}`. `transform_of` checks the pointer and converts the
+value; `self.codon` is the self parameter's Codon type (default `cobj`).
+
 A function has:
 - `call`: the LibCarla method;
 - `args`: name to type, in order (optional);
@@ -232,6 +238,24 @@ If the new C function is a handle check, conversions and a single LibCarla call:
    `uv run python -m tools.bindgen validate --build-dir build`.
 3. Write the Codon wrapper and the tests as for any new API (see CLAUDE.md).
 
-Anything more involved stays hand-written in `native/src/*.cpp`. That includes
-structs with many fields, list accessors, callbacks, and calls that differ
-between LibCarla versions in more than which method exists.
+Validation and conversions belong in the type, not in a hand-written
+function: a struct input converts and validates in its `to_carla` overload
+(`vehicle_control`, `walker_control`, `opendrive_parameters`), a checked
+scalar names a `check_*` helper (`positive`, `step_distance`, `timeout`), and
+an output the caller may omit is `nullable_bool` (`store_if`).
+
+Anything more involved stays hand-written in `native/src/*.cpp` (issue #31
+reviewed every remaining function):
+- callbacks and queues (sensor listen/poll, World.on_tick);
+- zero-copy views of measurements and physics controls;
+- converters and file writers (image conversion, PNG / PLY / OpenDRIVE files);
+- several LibCarla calls combined into one struct or result (waypoint and
+  traffic light info, settings, telemetry, load_world_if_different, the
+  Traffic Manager actions, geo projections);
+- all-or-nothing validation of many values (batches, light manager setters,
+  physics control);
+- handle conversions and list accessors, which call no LibCarla method
+  (`tsc_actor_as_*`, `tsc_*_list_size` / `_get`), handle lifetime, errors and
+  versions;
+- lookups whose not-found error names the argument (`tsc_world_get_actor`,
+  `tsc_blueprint_library_find`, `tsc_world_snapshot_find`).

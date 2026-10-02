@@ -13,14 +13,15 @@ from tools.bindgen import spec
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load(tmp_path: Path, entry: str, types_extra: str = "") -> spec.Spec:
+def _load(tmp_path: Path, entry: str, types_extra: str = "",
+          self_: str = "{type: tsc_thing_t, name: thing, get: thing_of}") -> spec.Spec:
     shutil.copy(ROOT / "bindings" / "types.yaml", tmp_path / "types.yaml")
     if types_extra:
         with open(tmp_path / "types.yaml", "a") as f:
             f.write(types_extra)
     (tmp_path / "thing.yaml").write_text(
         "class: carla::client::Thing\nprefix: thing\n"
-        "self: {type: tsc_thing_t, name: thing, get: thing_of}\n"
+        f"self: {self_}\n"
         "blocks:\n  thing:\n" + "".join(f"    {line}\n" for line in entry.strip().splitlines()))
     return spec.load(tmp_path)
 
@@ -76,6 +77,23 @@ def test_spec_errors(tmp_path, entry, message):
     with pytest.raises(spec.SpecError) as e:
         _load(tmp_path, entry)
     assert message in str(e.value)
+
+
+def test_self_by_value(tmp_path):
+    """`self.codon` (issue #31): a value type bound by pointer, e.g. a
+    Transform, crosses as Ptr[<struct>] in Codon instead of an opaque handle."""
+    s = _load(tmp_path, "m: {call: GetMatrix, out: {type: matrix4x4, name: out16}}",
+              self_="{type: const tsc_transform_t, name: transform, get: transform_of, "
+                    "codon: \"Ptr[CTransform]\"}")
+    (m,) = s.functions
+    assert m.c_params() == ["const tsc_transform_t *transform", "double *out16"]
+    assert m.codon_params() == ["Ptr[CTransform]", "Ptr[float]"]
+    assert m.body() == "copy_matrix(transform_of(transform).GetMatrix(), out16);"
+
+
+def test_unknown_self_key(tmp_path):
+    with pytest.raises(spec.SpecError, match=r"self: unknown keys \['colour'\]"):
+        _load(tmp_path, "f: {call: F}", self_="{type: t, name: n, get: g, colour: red}")
 
 
 def test_unknown_type_key(tmp_path):

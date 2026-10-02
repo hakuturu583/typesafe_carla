@@ -1,9 +1,60 @@
-# Client operations: tsc_client_<name>. Functions that create handles are
-# hand-written (native/src/client*.cpp).
+# Client operations: tsc_client_<name>. tsc_client_create and
+# tsc_client_load_world_if_different are hand-written (native/src/client.cpp).
 class: carla::client::Client
 prefix: client
 self: {type: tsc_client_t, name: client, get: client_of}
 blocks:
+  client:
+    set_timeout: {call: SetTimeout, args: {seconds: timeout}}
+    get_timeout: {call: GetTimeout, out: {type: timeout_seconds, name: out_seconds}}
+    get_client_version: {call: GetClientVersion, out: string}
+    get_server_version: {call: GetServerVersion, out: string}
+    get_world: {call: GetWorld, out: {type: world_handle, name: out_world}}
+    load_world:
+      call: LoadWorld
+      args: {map_name: string_in, reset_settings: bool}
+      out: {type: world_handle, name: out_world}
+    reload_world:
+      call: ReloadWorld
+      args: {reset_settings: bool}
+      out: {type: world_handle, name: out_world}
+  client_recorder:
+    start_recorder:
+      call: StartRecorder
+      args: {name: string_in, additional_data: bool}
+      out: string
+      doc: "The recorder functions return the server's text output in *out (tsc_string_free)."
+    stop_recorder: {call: StopRecorder}
+    show_recorder_file_info:
+      call: ShowRecorderFileInfo
+      args: {name: string_in, show_all: bool}
+      out: string
+    show_recorder_collisions:
+      call: ShowRecorderCollisions
+      args: {name: string_in, type1: char, type2: char}
+      out: string
+    show_recorder_actors_blocked:
+      call: ShowRecorderActorsBlocked
+      args: {name: string_in, min_time: double, min_distance: double}
+      out: string
+    replay_file:
+      call: ReplayFile
+      args: {name: string_in, start: double, duration: double, follow_id: uint32,
+             replay_sensors: bool}
+      out: string
+    stop_replayer: {call: StopReplayer, args: {keep_actors: bool}}
+    set_replayer_time_factor: {call: SetReplayerTimeFactor, args: {factor: positive}}
+  client_opendrive:
+    generate_opendrive_world:
+      call: GenerateOpenDriveWorld
+      args: {opendrive: nonempty_string_in, parameters: opendrive_parameters,
+             reset_settings: bool}
+      out: world_handle
+  client_traffic_manager:
+    get_traffic_manager:
+      call: GetInstanceTM
+      args: {port: uint16}
+      out: traffic_manager_handle
   client_replayer:
     set_replayer_ignore_hero: {call: SetReplayerIgnoreHero, args: {ignore_hero: bool}}
     set_replayer_ignore_spectator:

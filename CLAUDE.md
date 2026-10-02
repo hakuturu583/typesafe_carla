@@ -50,6 +50,10 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   generated code calls it through `TSC_CALL_OPTIONAL` (TSC_ERROR where it is
   missing), and `validate` accepts it missing only on a libcarla build of a
   listed ref (never on the mock).
+  Put argument validation and struct conversion in the type (`to_carla`
+  overload or `check_*` helper in `internal.hpp`) so the function stays
+  generatable; `self.codon` binds a value struct (e.g. `tsc_transform_t`)
+  as self. What stays hand-written and why: `docs/bindgen.md`.
 - A new API parameter typed `Vector3D` or `Location` is generic (no
   annotation) and goes through `geometry._vector_arg` / `_location_arg`
   (`_vector_or` / `_location_or` if optional), with a distinct literal

@@ -8,14 +8,14 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**310 of 378 methods bound (82%), 147 of them generated.**
+**314 of 378 methods bound (83%), 217 of them generated.**
 
 | class | bound |
 |---|---|
 | `carla::client::Client` | 26 / 27 |
 | `carla::client::World` | 44 / 48 |
 | `carla::client::Map` | 15 / 18 |
-| `carla::client::Waypoint` | 18 / 22 |
+| `carla::client::Waypoint` | 22 / 22 |
 | `carla::client::Junction` | 3 / 3 |
 | `carla::client::Landmark` | 23 / 23 |
 | `carla::client::Actor` | 32 / 37 |
@@ -51,31 +51,31 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 |---|---|
 | `ApplyBatch` | hand-written |
 | `ApplyBatchSync` | hand-written |
-| `GenerateOpenDriveWorld` | hand-written |
+| `GenerateOpenDriveWorld` | generated |
 | `GetAvailableMaps` | generated |
-| `GetClientVersion` | hand-written |
+| `GetClientVersion` | generated |
 | `GetCurrentEpisode` | — |
-| `GetInstanceTM` | hand-written |
+| `GetInstanceTM` | generated |
 | `GetRequiredFiles` | generated |
-| `GetServerVersion` | hand-written |
-| `GetTimeout` | hand-written |
-| `GetWorld` | hand-written |
-| `LoadWorld` | hand-written |
+| `GetServerVersion` | generated |
+| `GetTimeout` | generated |
+| `GetWorld` | generated |
+| `LoadWorld` | generated |
 | `LoadWorldIfDifferent` | hand-written |
-| `ReloadWorld` | hand-written |
-| `ReplayFile` | hand-written |
+| `ReloadWorld` | generated |
+| `ReplayFile` | generated |
 | `RequestFile` | generated |
 | `SetFilesBaseFolder` | generated |
 | `SetReplayerIgnoreHero` | generated |
 | `SetReplayerIgnoreSpectator` | generated |
-| `SetReplayerTimeFactor` | hand-written |
-| `SetTimeout` | hand-written |
-| `ShowRecorderActorsBlocked` | hand-written |
-| `ShowRecorderCollisions` | hand-written |
-| `ShowRecorderFileInfo` | hand-written |
-| `StartRecorder` | hand-written |
-| `StopRecorder` | hand-written |
-| `StopReplayer` | hand-written |
+| `SetReplayerTimeFactor` | generated |
+| `SetTimeout` | generated |
+| `ShowRecorderActorsBlocked` | generated |
+| `ShowRecorderCollisions` | generated |
+| `ShowRecorderFileInfo` | generated |
+| `StartRecorder` | generated |
+| `StopRecorder` | generated |
+| `StopReplayer` | generated |
 
 ### `carla::client::World`
 
@@ -92,18 +92,18 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `EnableEnvironmentObjects` | generated |
 | `FreezeAllTrafficLights` | generated |
 | `GetActor` | hand-written |
-| `GetActors` | hand-written |
-| `GetBlueprintLibrary` | hand-written |
+| `GetActors` | generated |
+| `GetBlueprintLibrary` | generated |
 | `GetEnvironmentObjects` | generated |
 | `GetEpisode` | hand-written |
-| `GetId` | hand-written |
+| `GetId` | generated |
 | `GetLevelBBs` | generated |
 | `GetLightManager` | generated |
-| `GetMap` | hand-written |
+| `GetMap` | generated |
 | `GetNamesOfAllObjects` | generated |
-| `GetRandomLocationFromNavigation` | hand-written |
+| `GetRandomLocationFromNavigation` | generated |
 | `GetSettings` | hand-written |
-| `GetSnapshot` | hand-written |
+| `GetSnapshot` | generated |
 | `GetSpectator` | generated |
 | `GetTrafficLight` | generated |
 | `GetTrafficLightFromOpenDRIVE` | generated |
@@ -111,9 +111,9 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetTrafficLightsInJunction` | generated |
 | `GetTrafficSign` | generated |
 | `GetVehiclesLightStates` | generated |
-| `GetWeather` | hand-written |
+| `GetWeather` | generated |
 | `GroundProjection` | generated |
-| `IsWeatherEnabled` | hand-written |
+| `IsWeatherEnabled` | generated |
 | `LoadLevelLayer` | generated |
 | `MakeDebugHelper` | hand-written |
 | `OnTick` | hand-written |
@@ -122,12 +122,12 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `ResetAllTrafficLights` | generated |
 | `SetPedestriansCrossFactor` | generated |
 | `SetPedestriansSeed` | generated |
-| `SetWeather` | hand-written |
-| `SpawnActor` | hand-written |
-| `Tick` | hand-written |
-| `TrySpawnActor` | hand-written |
+| `SetWeather` | generated |
+| `SpawnActor` | generated |
+| `Tick` | generated |
+| `TrySpawnActor` | generated |
 | `UnloadLevelLayer` | generated |
-| `WaitForTick` | hand-written |
+| `WaitForTick` | generated |
 | `operator=` | — |
 
 ### `carla::client::Map`
@@ -136,21 +136,21 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 |---|---|
 | `CalculateCrossedLanes` | — |
 | `CookInMemoryMap` | generated |
-| `GenerateWaypoints` | hand-written |
-| `GetAllCrosswalkZones` | hand-written |
-| `GetAllLandmarks` | hand-written |
-| `GetAllLandmarksOfType` | hand-written |
+| `GenerateWaypoints` | generated |
+| `GetAllCrosswalkZones` | generated |
+| `GetAllLandmarks` | generated |
+| `GetAllLandmarksOfType` | generated |
 | `GetGeoReference` | generated |
 | `GetJunction` | — |
 | `GetJunctionWaypoints` | — |
 | `GetLandmarkGroup` | generated |
 | `GetLandmarksFromId` | generated |
 | `GetMap` | hand-written |
-| `GetName` | hand-written |
-| `GetOpenDrive` | hand-written |
-| `GetRecommendedSpawnPoints` | hand-written |
-| `GetTopology` | hand-written |
-| `GetWaypoint` | hand-written |
+| `GetName` | generated |
+| `GetOpenDrive` | generated |
+| `GetRecommendedSpawnPoints` | generated |
+| `GetTopology` | generated |
+| `GetWaypoint` | generated |
 | `GetWaypointXODR` | generated |
 
 ### `carla::client::Waypoint`
@@ -160,7 +160,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetAllLandmarksInDistance` | generated |
 | `GetDistance` | hand-written |
 | `GetId` | hand-written |
-| `GetJunction` | hand-written |
+| `GetJunction` | generated |
 | `GetJunctionId` | hand-written |
 | `GetLandmarksOfTypeInDistance` | generated |
 | `GetLaneChange` | generated |
@@ -168,10 +168,10 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetLaneWidth` | hand-written |
 | `GetLeft` | generated |
 | `GetLeftLaneMarking` | generated |
-| `GetNext` | — |
-| `GetNextUntilLaneEnd` | — |
-| `GetPrevious` | — |
-| `GetPreviousUntilLaneStart` | — |
+| `GetNext` | generated |
+| `GetNextUntilLaneEnd` | generated |
+| `GetPrevious` | generated |
+| `GetPreviousUntilLaneStart` | generated |
 | `GetRight` | generated |
 | `GetRightLaneMarking` | generated |
 | `GetRoadId` | hand-written |
@@ -184,9 +184,9 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 
 | method | binding |
 |---|---|
-| `GetBoundingBox` | hand-written |
-| `GetId` | hand-written |
-| `GetWaypoints` | hand-written |
+| `GetBoundingBox` | generated |
+| `GetId` | generated |
+| `GetWaypoints` | generated |
 
 ### `carla::client::Landmark`
 
@@ -225,7 +225,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `AddImpulse` | generated |
 | `AddTorque` | generated |
 | `ApplyTexture` | generated |
-| `Destroy` | hand-written |
+| `Destroy` | generated |
 | `DisableConstantVelocity` | generated |
 | `EnableConstantVelocity` | generated |
 | `GetAcceleration` | generated |
@@ -264,18 +264,18 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 |---|---|
 | `ApplyAckermannControl` | generated |
 | `ApplyAckermannControllerSettings` | generated |
-| `ApplyControl` | hand-written |
+| `ApplyControl` | generated |
 | `ApplyPhysicsControl` | hand-written |
 | `CloseDoor` | generated |
 | `EnableCarSim` | generated |
 | `EnableChronoPhysics` | generated |
 | `GetAckermannControllerSettings` | generated |
-| `GetControl` | hand-written |
+| `GetControl` | generated |
 | `GetFailureState` | generated |
 | `GetLightState` | generated |
-| `GetPhysicsControl` | hand-written |
+| `GetPhysicsControl` | generated |
 | `GetSpeedLimit` | generated |
-| `GetTrafficLight` | hand-written |
+| `GetTrafficLight` | generated |
 | `GetTrafficLightState` | generated |
 | `GetWheelSteerAngle` | generated |
 | `IsAtTrafficLight` | generated |
@@ -290,13 +290,13 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 
 | method | binding |
 |---|---|
-| `ApplyControl` | hand-written |
+| `ApplyControl` | generated |
 | `BlendPose` | generated |
-| `GetBonesTransform` | hand-written |
+| `GetBonesTransform` | generated |
 | `GetPoseFromAnimation` | generated |
-| `GetWalkerControl` | hand-written |
+| `GetWalkerControl` | generated |
 | `HidePose` | generated |
-| `SetBonesTransform` | hand-written |
+| `SetBonesTransform` | generated |
 | `ShowPose` | generated |
 
 ### `carla::client::WalkerAIController`
@@ -343,7 +343,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 
 | method | binding |
 |---|---|
-| `IsListening` | hand-written |
+| `IsListening` | generated |
 | `Listen` | hand-written |
 | `Stop` | hand-written |
 
@@ -351,8 +351,8 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 
 | method | binding |
 |---|---|
-| `Filter` | hand-written |
-| `FilterByAttribute` | hand-written |
+| `Filter` | generated |
+| `FilterByAttribute` | generated |
 | `Find` | hand-written |
 | `at` | hand-written |
 | `begin` | — |
@@ -366,10 +366,10 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 
 | method | binding |
 |---|---|
-| `ContainsAttribute` | hand-written |
-| `ContainsTag` | hand-written |
+| `ContainsAttribute` | generated |
+| `ContainsTag` | generated |
 | `GetAttribute` | hand-written |
-| `GetId` | hand-written |
+| `GetId` | generated |
 | `GetTags` | generated |
 | `MakeActorDescription` | hand-written |
 | `MatchTags` | generated |
@@ -382,7 +382,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 
 | method | binding |
 |---|---|
-| `Filter` | hand-written |
+| `Filter` | generated |
 | `Find` | — |
 | `at` | hand-written |
 | `begin` | — |
@@ -398,8 +398,8 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `Contains` | — |
 | `Find` | hand-written |
 | `GetFrame` | hand-written |
-| `GetId` | hand-written |
-| `GetTimestamp` | hand-written |
+| `GetId` | generated |
+| `GetTimestamp` | generated |
 | `begin` | — |
 | `end` | — |
 | `operator!=` | — |
@@ -410,11 +410,11 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 
 | method | binding |
 |---|---|
-| `DrawArrow` | hand-written |
-| `DrawBox` | hand-written |
-| `DrawLine` | hand-written |
-| `DrawPoint` | hand-written |
-| `DrawString` | hand-written |
+| `DrawArrow` | generated |
+| `DrawBox` | generated |
+| `DrawLine` | generated |
+| `DrawPoint` | generated |
+| `DrawString` | generated |
 
 ### `carla::client::LightManager`
 

@@ -3,6 +3,16 @@ class: carla::client::Vehicle
 prefix: vehicle
 self: {type: tsc_vehicle_t, name: vehicle, get: vehicle_of}
 blocks:
+  vehicle_control:
+    apply_control: {call: ApplyControl, args: {control: vehicle_control}}
+    get_control: {call: GetControl, out: vehicle_control}
+  vehicle_physics:
+    get_physics_control: {call: GetPhysicsControl, out: physics_control_handle}
+  vehicle_traffic_light:
+    get_traffic_light:
+      call: GetTrafficLight
+      out: traffic_light_handle
+      doc: "*out = NULL (TSC_OK) when the vehicle is not affected by a traffic light."
   vehicle:
     set_autopilot: {call: SetAutopilot, args: {enabled: bool, tm_port: uint16}}
   vehicle_lights:

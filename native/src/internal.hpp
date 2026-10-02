@@ -562,8 +562,9 @@ void copy_out(const Vec &values, Out *out, size_t capacity, size_t *out_count) {
 
 // An optional LibCarla value: *has_value = 0 and *out zeroed when it is empty.
 template <typename Out, typename Optional>
-void assign_optional(const Optional &value, int32_t *has_value, Out *out) {
-  require_ptr(has_value, "has_value");
+void assign_optional(const Optional &value, int32_t *has_value, Out *out,
+                     const char *has_value_name = "has_value") {
+  require_ptr(has_value, has_value_name);
   require_ptr(out, "out");
   *has_value = value.has_value() ? 1 : 0;
   *out = value.has_value() ? from_carla(*value) : Out{};
@@ -735,4 +736,158 @@ void light_list_assign(tsc_light_list_t *out, const std::vector<carla::client::L
 inline carla::client::LightManager &light_manager_of(tsc_light_manager_t *m) {
   return *check_handle(m, "light_manager", TSC_KIND_LIGHT_MANAGER)->manager;
 }
+
+// ---------------------------------------------------------------------------
+// Issue #31: accessors and conversions named in bindings/*.yaml.
+// ---------------------------------------------------------------------------
+
+inline const carla::client::BlueprintLibrary &blueprint_library_of(
+    const tsc_blueprint_library_t *l) {
+  return *library_of(l);
+}
+
+inline const carla::client::ActorList &actor_list_of(const tsc_actor_list_t *l) {
+  return *check_handle(l, "list", TSC_KIND_ACTOR_LIST)->list;
+}
+
+inline const carla::client::WorldSnapshot &snapshot_of(const tsc_world_snapshot_t *s) {
+  return check_handle(s, "snapshot", TSC_KIND_WORLD_SNAPSHOT)->snapshot;
+}
+
+inline const carla::client::Junction &junction_of(const tsc_junction_t *j) {
+  return *check_handle(j, "junction", TSC_KIND_JUNCTION)->junction;
+}
+
+inline tsc_sensor &sensor_handle(tsc_sensor_t *s) {
+  return *check_handle(s, "sensor", TSC_KIND_SENSOR);
+}
+
+inline carla::client::Sensor &sensor_of(tsc_sensor_t *s) {
+  return static_cast<carla::client::Sensor &>(*sensor_handle(s).actor);
+}
+
+// The geometry behind Transform.get_matrix & co: a tsc_transform_t by value.
+inline carla::geom::Transform transform_of(const tsc_transform_t *t) {
+  return to_carla(*require_ptr(t, "transform"));
+}
+
+// No range checks: like the Python API, NaN and infinities just propagate.
+template <typename M>
+void copy_matrix(const M &m, double *out16) {
+  require_ptr(out16, "out16");
+  for (size_t i = 0; i < 16; ++i) out16[i] = static_cast<double>(m[i]);
+}
+
+// An output the caller may omit.
+template <typename T, typename V>
+void store_if(T *out, V value) {
+  if (out != nullptr) *out = value;
+}
+
+inline double duration_seconds(carla::time_duration d) {
+  return static_cast<double>(d.milliseconds()) / 1000.0;
+}
+
+inline double check_positive(double v, const char *name) {
+  if (!(v > 0.0) || !std::isfinite(v)) {
+    fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be a positive finite number");
+  }
+  return v;
+}
+
+// A step between waypoints in meters.
+inline double check_step_distance(double v, const char *name) {
+  if (!(v > 0.0) || !std::isfinite(v)) {
+    fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be a positive finite number of meters");
+  }
+  return v;
+}
+
+inline std::string to_nonempty_string(const char *data, size_t len, const char *name) {
+  std::string s = to_string(data, len, name);
+  if (s.empty()) fail(TSC_INVALID_ARGUMENT, std::string(name) + " must not be empty");
+  return s;
+}
+
+// A spawn's parent: NULL for none.
+inline carla::client::Actor *actor_or_null(tsc_actor_t *a, const char *name) {
+  return a == nullptr ? nullptr : check_actor(a, name)->actor.get();
+}
+
+// LibCarla's SpawnActor throws on failure; a NULL result would be a bug there.
+inline carla::SharedPtr<carla::client::Actor> spawned(carla::SharedPtr<carla::client::Actor> a) {
+  if (a == nullptr) fail(TSC_ERROR, "spawn failed");
+  return a;
+}
+
+inline tsc_junction *junction_or_null(carla::SharedPtr<carla::client::Junction> j) {
+  return j == nullptr ? nullptr : new tsc_junction(std::move(j));
+}
+
+// Pairs (begin, end) as one list [b0, e0, b1, e1, ...].
+template <typename W>
+std::vector<W> flatten(std::vector<std::pair<W, W>> pairs) {
+  std::vector<W> flat;
+  flat.reserve(2 * pairs.size());
+  for (auto &p : pairs) {
+    flat.push_back(std::move(p.first));
+    flat.push_back(std::move(p.second));
+  }
+  return flat;
+}
+
+inline carla::rpc::OpendriveGenerationParameters to_carla(const tsc_opendrive_parameters_t &p) {
+  return carla::rpc::OpendriveGenerationParameters(
+      p.vertex_distance, p.max_road_length, p.wall_height, p.additional_width,
+      p.smooth_junctions != 0, p.enable_mesh_visibility != 0, p.enable_pedestrian_navigation != 0);
+}
+
+inline carla::sensor::data::Color to_carla(const tsc_color_t &c) {
+  return carla::sensor::data::Color(c.r, c.g, c.b, c.a);
+}
+
+inline tsc_weather_t from_carla(const carla::rpc::WeatherParameters &w) {
+  return tsc_weather_t{w.cloudiness,         w.precipitation,        w.precipitation_deposits,
+                       w.wind_intensity,     w.sun_azimuth_angle,    w.sun_altitude_angle,
+                       w.fog_density,        w.fog_distance,         w.fog_falloff,
+                       w.wetness,            w.scattering_intensity, w.mie_scattering_scale,
+                       w.rayleigh_scattering_scale, w.dust_storm};
+}
+
+inline carla::rpc::WeatherParameters to_carla(const tsc_weather_t &w) {
+  auto f = [](double v) { return static_cast<float>(v); };
+  return carla::rpc::WeatherParameters(
+      f(w.cloudiness), f(w.precipitation), f(w.precipitation_deposits), f(w.wind_intensity),
+      f(w.sun_azimuth_angle), f(w.sun_altitude_angle), f(w.fog_density), f(w.fog_distance),
+      f(w.fog_falloff), f(w.wetness), f(w.scattering_intensity), f(w.mie_scattering_scale),
+      f(w.rayleigh_scattering_scale), f(w.dust_storm));
+}
+
+inline tsc_timestamp_t from_carla(const carla::client::Timestamp &t) {
+  return tsc_timestamp_t{t.frame, t.elapsed_seconds, t.delta_seconds, t.platform_timestamp};
+}
+
+inline tsc_vehicle_control_t from_carla(const carla::rpc::VehicleControl &c) {
+  tsc_vehicle_control_t r{};
+  r.throttle = c.throttle;
+  r.steer = c.steer;
+  r.brake = c.brake;
+  r.hand_brake = c.hand_brake ? 1 : 0;
+  r.reverse = c.reverse ? 1 : 0;
+  r.manual_gear_shift = c.manual_gear_shift ? 1 : 0;
+  r.gear = c.gear;
+  return r;
+}
+
+inline carla::rpc::WalkerControl to_carla(const tsc_walker_control_t &c) {
+  return to_carla_walker_control(c.direction, c.speed, c.jump != 0);
+}
+
+inline tsc_walker_control_t from_carla(const carla::rpc::WalkerControl &c) {
+  return tsc_walker_control_t{from_carla(c.direction), c.speed, c.jump ? 1 : 0, 0};
+}
+
+// Walker.set_bones (walker.cpp): names and finite transforms.
+carla::rpc::WalkerBoneControlIn to_bone_control(const tsc_bone_transform_t *bones, size_t count,
+                                                const char *name);
 }  // namespace tsc

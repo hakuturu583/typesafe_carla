@@ -43,37 +43,6 @@ tsc_status_t tsc_blueprint_library_find(const tsc_blueprint_library_t *library, 
   });
 }
 
-tsc_status_t tsc_blueprint_library_filter(const tsc_blueprint_library_t *library,
-                                          const char *pattern, size_t pattern_len,
-                                          tsc_blueprint_library_t **out) {
-  return TSC_GUARD({
-    require_ptr(out, "out");
-    *out = nullptr;
-    *out = new tsc_blueprint_library(
-        library_of(library)->Filter(to_string(pattern, pattern_len, "pattern")));
-  });
-}
-
-tsc_status_t tsc_actor_blueprint_get_id(const tsc_actor_blueprint_t *blueprint, tsc_string_t *out) {
-  return TSC_GUARD({ string_assign(out, blueprint_of(blueprint).GetId()); });
-}
-
-tsc_status_t tsc_actor_blueprint_has_tag(const tsc_actor_blueprint_t *blueprint, const char *tag,
-                                         size_t tag_len, int32_t *out_has) {
-  return TSC_GUARD({
-    require_ptr(out_has, "out_has");
-    *out_has = blueprint_of(blueprint).ContainsTag(to_string(tag, tag_len, "tag")) ? 1 : 0;
-  });
-}
-
-tsc_status_t tsc_actor_blueprint_has_attribute(const tsc_actor_blueprint_t *blueprint,
-                                               const char *id, size_t id_len, int32_t *out_has) {
-  return TSC_GUARD({
-    require_ptr(out_has, "out_has");
-    *out_has = blueprint_of(blueprint).ContainsAttribute(to_string(id, id_len, "id")) ? 1 : 0;
-  });
-}
-
 tsc_status_t tsc_actor_blueprint_get_attribute(const tsc_actor_blueprint_t *blueprint,
                                                const char *id, size_t id_len,
                                                tsc_actor_attribute_t *out) {
@@ -113,15 +82,5 @@ tsc_status_t tsc_actor_blueprint_set_attribute(tsc_actor_blueprint_t *blueprint,
 }
 
 // --- Issue #23 -------------------------------------------------------------------
-
-tsc_status_t tsc_blueprint_library_filter_by_attribute(const tsc_blueprint_library_t *library,
-                                                       const char *name, size_t name_len,
-                                                       const char *value, size_t value_len,
-                                                       tsc_blueprint_library_t **out) {
-  return new_handle(__func__, out, [&] {
-    return new tsc_blueprint_library(library_of(library)->FilterByAttribute(
-        to_string(name, name_len, "name"), to_string(value, value_len, "value")));
-  });
-}
 
 }  // extern "C"
