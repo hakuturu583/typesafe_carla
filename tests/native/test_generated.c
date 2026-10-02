@@ -76,7 +76,7 @@ int main(void) {
   expect_null_rejected(tsc_client_get_client_version(NULL, (tsc_string_t[1]){0}), "tsc_client_get_client_version");
   expect_null_rejected(tsc_client_get_server_version(NULL, (tsc_string_t[1]){0}), "tsc_client_get_server_version");
   expect_null_rejected(tsc_client_get_world(NULL, (tsc_world_t *[1]){NULL}), "tsc_client_get_world");
-  expect_null_rejected(tsc_client_load_world(NULL, NULL, 1, 0, (tsc_world_t *[1]){NULL}), "tsc_client_load_world");
+  expect_null_rejected(tsc_client_load_world(NULL, NULL, 1, 0, 0, (tsc_world_t *[1]){NULL}), "tsc_client_load_world");
   expect_null_rejected(tsc_client_reload_world(NULL, 0, (tsc_world_t *[1]){NULL}), "tsc_client_reload_world");
   expect_null_rejected(tsc_client_start_recorder(NULL, NULL, 1, 0, (tsc_string_t[1]){0}), "tsc_client_start_recorder");
   expect_null_rejected(tsc_client_stop_recorder(NULL), "tsc_client_stop_recorder");

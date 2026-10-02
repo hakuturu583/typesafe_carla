@@ -1,0 +1,25 @@
+# Issue #35: Client defaults (host='127.0.0.1', port=2000, worker_threads=0)
+# and map_layers on load_world / load_world_if_different, with the official
+# keyword names.
+import typesafe_carla as carla
+
+def defaults() -> carla.Client:
+    return carla.Client()
+
+def keywords() -> carla.Client:
+    return carla.Client(host="localhost", port=2000, worker_threads=2)
+
+def load(client: carla.Client) -> carla.World:
+    client.load_world("Town01")
+    client.load_world("Town01", False)
+    return client.load_world("Town01", reset_settings=True,
+                             map_layers=carla.MapLayer.Buildings | carla.MapLayer.Walls)
+
+def load_if_different(client: carla.Client) -> Optional[carla.World]:
+    client.load_world_if_different("Town01", True, carla.MapLayer.NONE)
+    return client.load_world_if_different("Town01", map_layers=carla.MapLayer.All)
+
+client: carla.Client = defaults()
+other = keywords()
+world: carla.World = load(other)
+maybe: Optional[carla.World] = load_if_different(client)

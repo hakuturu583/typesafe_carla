@@ -1,0 +1,30 @@
+# Issue #35 against a real CARLA server: Client worker_threads, and
+# load_world with a reduced MapLayer set, then the map restored with every
+# layer. Two map loads in all (they are slow).
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port, worker_threads=2)
+client.set_timeout(120.0)
+world = client.get_world()
+map_name = world.get_map().name
+short_name = map_name.split("/")[-1]  # as test_m4_opendrive loads it
+print("current map:", map_name)
+
+# load_world_if_different does nothing for the current map (whatever the layers).
+assert client.load_world_if_different(map_name, map_layers=carla.MapLayer.NONE) is None
+assert client.get_world().id == world.id
+
+reduced = client.load_world(short_name, reset_settings=False,
+                            map_layers=carla.MapLayer.Buildings | carla.MapLayer.Ground)
+assert reduced.id != world.id
+assert reduced.get_map().name == map_name, reduced.get_map().name
+
+restored = client.load_world(short_name, reset_settings=False, map_layers=carla.MapLayer.All)
+assert restored.id != reduced.id
+assert restored.get_map().name == map_name
+print("OK")

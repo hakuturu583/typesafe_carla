@@ -49,7 +49,7 @@ extern "C" {
  * 3.6: sensor data frame_number, image convert/save, point cloud save, collision
  *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 6
+#define TSC_ABI_VERSION_MINOR 7
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -228,8 +228,9 @@ TSC_API void tsc_actor_attribute_free(tsc_actor_attribute_t *attribute);
 /* Client                                                                   */
 /* ------------------------------------------------------------------------ */
 
+/* worker_threads: LibCarla's asynchronous worker threads, 0 for all cores. */
 TSC_API tsc_status_t tsc_client_create(const char *host, size_t host_len, uint16_t port,
-                                       tsc_client_t **out_client);
+                                       size_t worker_threads, tsc_client_t **out_client);
 /* BEGIN GENERATED client from bindings/client.yaml, do not edit */
 TSC_API tsc_status_t tsc_client_set_timeout(tsc_client_t *client, double seconds);
 TSC_API tsc_status_t tsc_client_get_timeout(tsc_client_t *client, double *out_seconds);
@@ -238,7 +239,8 @@ TSC_API tsc_status_t tsc_client_get_server_version(tsc_client_t *client, tsc_str
 TSC_API tsc_status_t tsc_client_get_world(tsc_client_t *client, tsc_world_t **out_world);
 TSC_API tsc_status_t tsc_client_load_world(tsc_client_t *client,
                                            const char *map_name, size_t map_name_len,
-                                           int32_t reset_settings, tsc_world_t **out_world);
+                                           int32_t reset_settings, uint16_t map_layers,
+                                           tsc_world_t **out_world);
 TSC_API tsc_status_t tsc_client_reload_world(tsc_client_t *client, int32_t reset_settings,
                                              tsc_world_t **out_world);
 /* END GENERATED client */
@@ -1574,10 +1576,11 @@ TSC_API tsc_status_t tsc_client_set_files_base_folder(tsc_client_t *client,
 /* END GENERATED client_files */
 /* LibCarla's LoadWorldIfDifferent: loads `map_name` unless it is the current
  * map (with or without the "Carla/Maps/" prefix). *out is the new world, or
- * NULL when the map was already loaded. */
+ * NULL when the map was already loaded. map_layers: CARLA MapLayer bit flags. */
 TSC_API tsc_status_t tsc_client_load_world_if_different(tsc_client_t *client,
                                                         const char *map_name, size_t map_name_len,
-                                                        int32_t reset_settings, tsc_world_t **out);
+                                                        int32_t reset_settings, uint16_t map_layers,
+                                                        tsc_world_t **out);
 
 /* --- Traffic Manager ------------------------------------------------------------ */
 
