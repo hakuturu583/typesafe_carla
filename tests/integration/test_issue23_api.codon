@@ -48,7 +48,8 @@ client.set_replayer_ignore_spectator(True)
 lib = world.get_blueprint_library()
 four = lib.filter_by_attribute("number_of_wheels", "4")
 two = lib.filter_by_attribute("number_of_wheels", "2")
-assert len(four) > 0 and len(two) > 0
+# CARLA 0.10.0 ships no two-wheelers (the official API also finds none).
+assert len(four) > 0
 for b in four:
     assert b.get_attribute("number_of_wheels").as_int() == 4, b.id
 for b in two:
