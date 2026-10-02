@@ -30,6 +30,11 @@ shim sources     ──libclang──> bindgen coverage   (docs/coverage.md)
 Struct types cross the ABI by pointer. Codon passes an `@tuple` by value as
 separate scalars, which does not match the C calling convention.
 
+Enumerations cross as `int32_t` and convert through a checking function in
+`to_carla` (`to_enum<E>({}, first, last, "what")` from `internal.hpp`, or
+`to_light_state({})`), which rejects values outside the enumeration; `invalid`
+is such a value.
+
 Each remaining file binds one LibCarla class:
 
 ```yaml

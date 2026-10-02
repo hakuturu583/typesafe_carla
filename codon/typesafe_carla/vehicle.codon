@@ -1,0 +1,284 @@
+# Vehicle API beyond basic control (issue #20): Ackermann control, doors,
+# failure state, telemetry, wheel steering, bone transforms and the
+# server-side physics plugins (CarSim, Chrono).
+#
+#     vehicle.apply_ackermann_control(carla.VehicleAckermannControl(speed=5.0))
+#     vehicle.open_door(carla.VehicleDoor.All)
+#     if vehicle.get_failure_state() == carla.VehicleFailureState.Rollover: ...
+#
+# VehicleDoor, VehicleWheelLocation and VehicleFailureState are distinct types
+# (as the Python API's enums), so passing a wheel location as a door, or an
+# int as either, is a compile error.
+
+from ._ffi import (CVehicleAckermannControl, CAckermannControllerSettings, CWheelTelemetryData,
+                   CVehicleTelemetryData, CTransform, tsc_vehicle_apply_ackermann_control,
+                   tsc_vehicle_get_ackermann_controller_settings,
+                   tsc_vehicle_apply_ackermann_controller_settings, tsc_vehicle_open_door,
+                   tsc_vehicle_close_door, tsc_vehicle_get_failure_state,
+                   tsc_vehicle_show_debug_telemetry, tsc_vehicle_get_wheel_steer_angle,
+                   tsc_vehicle_set_wheel_steer_direction, tsc_vehicle_use_carsim_road,
+                   tsc_vehicle_enable_carsim, tsc_vehicle_enable_chrono_physics,
+                   tsc_vehicle_get_telemetry_data, tsc_vehicle_get_vehicle_bone_world_transforms,
+                   TSC_INVALID_ARGUMENT)
+from .errors import _check, _i32, CarlaError
+from .map import _read_buffer
+from .geometry import Transform
+from .actor import Vehicle
+from .control import _fields_eq, _fields_repr
+
+def _enum_repr(name: str, names: List[str], value: int) -> str:
+    """The member's name, as the Python API prints it, else name(value)."""
+    return names[value] if 0 <= value < len(names) else f"{name}({value})"
+
+@tuple
+class VehicleDoor:
+    """A vehicle door, as carla.VehicleDoor (FL, FR, RL, RR, All)."""
+    value: int
+    FL: ClassVar[VehicleDoor] = VehicleDoor(0)
+    FR: ClassVar[VehicleDoor] = VehicleDoor(1)
+    RL: ClassVar[VehicleDoor] = VehicleDoor(2)
+    RR: ClassVar[VehicleDoor] = VehicleDoor(3)
+    All: ClassVar[VehicleDoor] = VehicleDoor(6)
+
+    def __int__(self) -> int:
+        return self.value
+
+    def __repr__(self) -> str:
+        # LibCarla's Hood (4) and Trunk (5) have no Python API name.
+        return _enum_repr("VehicleDoor", ["FL", "FR", "RL", "RR", "VehicleDoor(4)",
+                                          "VehicleDoor(5)", "All"], self.value)
+
+@tuple
+class VehicleWheelLocation:
+    """A wheel, as carla.VehicleWheelLocation. Front_Wheel and Back_Wheel (for
+    two-wheeled vehicles) are FL_Wheel and FR_Wheel, as in CARLA."""
+    value: int
+    FL_Wheel: ClassVar[VehicleWheelLocation] = VehicleWheelLocation(0)
+    FR_Wheel: ClassVar[VehicleWheelLocation] = VehicleWheelLocation(1)
+    BL_Wheel: ClassVar[VehicleWheelLocation] = VehicleWheelLocation(2)
+    BR_Wheel: ClassVar[VehicleWheelLocation] = VehicleWheelLocation(3)
+    Front_Wheel: ClassVar[VehicleWheelLocation] = VehicleWheelLocation(0)
+    Back_Wheel: ClassVar[VehicleWheelLocation] = VehicleWheelLocation(1)
+
+    def __int__(self) -> int:
+        return self.value
+
+    def __repr__(self) -> str:
+        # str() of the Python API's attributes; Front_Wheel and Back_Wheel are
+        # the same values as FL_Wheel and FR_Wheel and print as those here.
+        return _enum_repr("VehicleWheelLocation",
+                          ["FL_Wheel", "FR_Wheel", "BL_Wheel", "BR_Wheel"], self.value)
+
+@tuple
+class VehicleFailureState:
+    """Why a vehicle stopped working, as carla.VehicleFailureState."""
+    value: int
+    NONE: ClassVar[VehicleFailureState] = VehicleFailureState(0)
+    Rollover: ClassVar[VehicleFailureState] = VehicleFailureState(1)
+    Engine: ClassVar[VehicleFailureState] = VehicleFailureState(2)
+    TirePuncture: ClassVar[VehicleFailureState] = VehicleFailureState(3)
+
+    def __int__(self) -> int:
+        return self.value
+
+    def __repr__(self) -> str:
+        return _enum_repr("VehicleFailureState", ["NONE", "Rollover", "Engine", "TirePuncture"],
+                          self.value)
+
+class VehicleAckermannControl:
+    """Target steering and speed for the server's Ackermann controller, as
+    carla.VehicleAckermannControl. Values must be finite."""
+    steer: float  # rad
+    steer_speed: float  # rad/s
+    speed: float  # m/s
+    acceleration: float  # m/s^2
+    jerk: float  # m/s^3
+
+    def __init__(self, steer: float = 0.0, steer_speed: float = 0.0, speed: float = 0.0,
+                 acceleration: float = 0.0, jerk: float = 0.0):
+        self.steer = steer
+        self.steer_speed = steer_speed
+        self.speed = speed
+        self.acceleration = acceleration
+        self.jerk = jerk
+
+    def __eq__(self, other: VehicleAckermannControl) -> bool:
+        return _fields_eq(self, other)
+
+    def __ne__(self, other: VehicleAckermannControl) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return _fields_repr("VehicleAckermannControl", self)
+
+    def _to_c(self) -> CVehicleAckermannControl:
+        return CVehicleAckermannControl(self.steer, self.steer_speed, self.speed,
+                                        self.acceleration, self.jerk)
+
+class AckermannControllerSettings:
+    """PID gains of the server's Ackermann controller, as
+    carla.AckermannControllerSettings. Values must be finite."""
+    speed_kp: float
+    speed_ki: float
+    speed_kd: float
+    accel_kp: float
+    accel_ki: float
+    accel_kd: float
+
+    def __init__(self, speed_kp: float = 0.0, speed_ki: float = 0.0, speed_kd: float = 0.0,
+                 accel_kp: float = 0.0, accel_ki: float = 0.0, accel_kd: float = 0.0):
+        self.speed_kp = speed_kp
+        self.speed_ki = speed_ki
+        self.speed_kd = speed_kd
+        self.accel_kp = accel_kp
+        self.accel_ki = accel_ki
+        self.accel_kd = accel_kd
+
+    def __eq__(self, other: AckermannControllerSettings) -> bool:
+        return _fields_eq(self, other)
+
+    def __ne__(self, other: AckermannControllerSettings) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return _fields_repr("AckermannControllerSettings", self)
+
+    def _to_c(self) -> CAckermannControllerSettings:
+        return CAckermannControllerSettings(self.speed_kp, self.speed_ki, self.speed_kd,
+                                            self.accel_kp, self.accel_ki, self.accel_kd)
+
+    @staticmethod
+    def _from_c(c: CAckermannControllerSettings) -> AckermannControllerSettings:
+        return AckermannControllerSettings(c.speed_kp, c.speed_ki, c.speed_kd, c.accel_kp,
+                                           c.accel_ki, c.accel_kd)
+
+class WheelTelemetryData:
+    """One wheel of VehicleTelemetryData, as carla.WheelTelemetryData."""
+    lat_slip: float
+    long_slip: float
+    omega: float  # angular velocity
+
+    def __init__(self, lat_slip: float = 0.0, long_slip: float = 0.0, omega: float = 0.0):
+        self.lat_slip = lat_slip
+        self.long_slip = long_slip
+        self.omega = omega
+
+    def __repr__(self) -> str:
+        return _fields_repr("WheelTelemetryData", self)
+
+class VehicleTelemetryData:
+    """Vehicle.get_telemetry_data(), as carla.VehicleTelemetryData."""
+    speed: float  # forward speed, m/s
+    steer: float
+    throttle: float
+    brake: float
+    engine_rpm: float
+    gear: int
+    wheels: List[WheelTelemetryData]
+
+    def __init__(self, speed: float = 0.0, steer: float = 0.0, throttle: float = 0.0,
+                 brake: float = 0.0, engine_rpm: float = 0.0, gear: int = 0,
+                 wheels: Optional[List[WheelTelemetryData]] = None):
+        self.speed = speed
+        self.steer = steer
+        self.throttle = throttle
+        self.brake = brake
+        self.engine_rpm = engine_rpm
+        self.gear = gear
+        self.wheels = wheels if wheels is not None else List[WheelTelemetryData]()
+
+    def __repr__(self) -> str:
+        return (f"VehicleTelemetryData(speed={self.speed}, steer={self.steer}, "
+                f"throttle={self.throttle}, brake={self.brake}, engine_rpm={self.engine_rpm}, "
+                f"gear={self.gear}, wheels={len(self.wheels)})")
+
+@extend
+class Vehicle:
+    def apply_ackermann_control(self, control: VehicleAckermannControl):
+        """Drives with the server's Ackermann controller until the next apply_control."""
+        c = Ptr[CVehicleAckermannControl](1)
+        c[0] = control._to_c()
+        _check(tsc_vehicle_apply_ackermann_control(self._h.ptr, c))
+
+    def get_ackermann_controller_settings(self) -> AckermannControllerSettings:
+        out = Ptr[CAckermannControllerSettings](1)
+        _check(tsc_vehicle_get_ackermann_controller_settings(self._h.ptr, out))
+        return AckermannControllerSettings._from_c(out[0])
+
+    def apply_ackermann_controller_settings(self, settings: AckermannControllerSettings):
+        c = Ptr[CAckermannControllerSettings](1)
+        c[0] = settings._to_c()
+        _check(tsc_vehicle_apply_ackermann_controller_settings(self._h.ptr, c))
+
+    def open_door(self, door_idx: VehicleDoor):
+        _check(tsc_vehicle_open_door(self._h.ptr, _i32(door_idx.value, "door_idx")))
+
+    def close_door(self, door_idx: VehicleDoor):
+        _check(tsc_vehicle_close_door(self._h.ptr, _i32(door_idx.value, "door_idx")))
+
+    def get_failure_state(self) -> VehicleFailureState:
+        """From the last tick's snapshot (no RPC)."""
+        out = Ptr[i32](1)
+        _check(tsc_vehicle_get_failure_state(self._h.ptr, out))
+        return VehicleFailureState(int(out[0]))
+
+    def show_debug_telemetry(self, enabled: bool = True):
+        """Shows the vehicle's telemetry on the server's screen."""
+        _check(tsc_vehicle_show_debug_telemetry(self._h.ptr, i32(int(enabled))))
+
+    def get_telemetry_data(self) -> VehicleTelemetryData:
+        """One RPC. Needs a LibCarla with Vehicle::GetTelemetryData (CARLA
+        ue5-dev); with LibCarla 0.10.0 it raises CarlaError."""
+        out = Ptr[CVehicleTelemetryData](1)
+        wheels, n = _read_buffer(lambda h, buf, cap, count: tsc_vehicle_get_telemetry_data(
+            h, out, buf, cap, count), self._h.ptr, CWheelTelemetryData, 8)
+        c = out[0]
+        return VehicleTelemetryData(
+            c.speed, c.steer, c.throttle, c.brake, c.engine_rpm, int(c.gear),
+            [WheelTelemetryData(wheels[i].lat_slip, wheels[i].long_slip, wheels[i].omega)
+             for i in range(n)])
+
+    def get_wheel_steer_angle(self, wheel_location: VehicleWheelLocation) -> float:
+        """The wheel's physics steering angle, degrees."""
+        out = Ptr[float](1)
+        _check(tsc_vehicle_get_wheel_steer_angle(
+            self._h.ptr, _i32(wheel_location.value, "wheel_location"), out))
+        return out[0]
+
+    def set_wheel_steer_direction(self, wheel_location: VehicleWheelLocation,
+                                  angle_in_deg: float):
+        """Turns the wheel's bone (visual only; the physics is unaffected)."""
+        _check(tsc_vehicle_set_wheel_steer_direction(
+            self._h.ptr, _i32(wheel_location.value, "wheel_location"), angle_in_deg))
+
+    def get_vehicle_bone_world_transforms(self) -> List[Transform]:
+        """One RPC. Needs a LibCarla with Vehicle::GetVehicleBoneWorldTransforms
+        (CARLA ue5-dev); with LibCarla 0.10.0 it raises CarlaError."""
+        buf, n = _read_buffer(tsc_vehicle_get_vehicle_bone_world_transforms, self._h.ptr,
+                              CTransform, 128)
+        return [Transform._from_c(buf[i]) for i in range(n)]
+
+    def enable_carsim(self, simfile_path: str = ""):
+        """Needs the server's CarSim plugin; otherwise the server ignores it."""
+        _check(tsc_vehicle_enable_carsim(self._h.ptr, simfile_path.ptr,
+                                         simfile_path.len))
+
+    def use_carsim_road(self, enabled: bool):
+        """Needs the server's CarSim plugin; otherwise the server ignores it."""
+        _check(tsc_vehicle_use_carsim_road(self._h.ptr, i32(int(enabled))))
+
+    def enable_chrono_physics(self, max_substeps: int = 30, max_substep_delta_time: float = 0.002,
+                              vehicle_json: str = "", powetrain_json: str = "",
+                              tire_json: str = "", base_json_path: str = ""):
+        """Needs the server's Chrono plugin; otherwise the server ignores it.
+
+        `powetrain_json` is spelled as in the official Python API."""
+        if max_substeps < 0:
+            raise CarlaError(f"max_substeps must be non-negative, got {max_substeps}",
+                             TSC_INVALID_ARGUMENT)
+        _check(tsc_vehicle_enable_chrono_physics(
+            self._h.ptr, u64(max_substeps), max_substep_delta_time,
+            vehicle_json.ptr, vehicle_json.len,
+            powetrain_json.ptr, powetrain_json.len,
+            tire_json.ptr, tire_json.len,
+            base_json_path.ptr, base_json_path.len))

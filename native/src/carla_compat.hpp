@@ -3,6 +3,10 @@
 #pragma once
 
 #include <carla/FileSystem.h>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
 #include <carla/Memory.h>
 #include <carla/Time.h>
 #include <carla/Version.h>
@@ -83,6 +87,33 @@ bool waypoint_is_rht(const W &waypoint) {
     return waypoint.IsRHT();
   } else {
     return true;
+  }
+}
+
+// Vehicle::GetTelemetryData and Vehicle::GetVehicleBoneWorldTransforms are in
+// ue5-dev, not in CARLA 0.10.0 (issue #20); without them these throw (TSC_ERROR).
+// rpc::VehicleTelemetryData does not exist in 0.10.0 either, so the result is
+// only touched inside `use`.
+inline std::runtime_error missing_in_libcarla(const char *method) {
+  return std::runtime_error(std::string(method) + " is not available in LibCarla " +
+                            carla::version() + " (it needs a newer CARLA, e.g. ue5-dev)");
+}
+
+template <typename V, typename Use>
+void with_telemetry_data(const V &vehicle, Use &&use) {
+  if constexpr (requires { vehicle.GetTelemetryData(); }) {
+    use(vehicle.GetTelemetryData());
+  } else {
+    throw missing_in_libcarla("Vehicle::GetTelemetryData");
+  }
+}
+
+template <typename V>
+std::vector<carla::geom::Transform> vehicle_bone_world_transforms(const V &vehicle) {
+  if constexpr (requires { vehicle.GetVehicleBoneWorldTransforms(); }) {
+    return vehicle.GetVehicleBoneWorldTransforms();
+  } else {
+    throw missing_in_libcarla("Vehicle::GetVehicleBoneWorldTransforms");
   }
 }
 

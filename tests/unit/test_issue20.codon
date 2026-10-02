@@ -1,0 +1,190 @@
+# Issue #20 on the mock backend: Ackermann control, doors, failure state,
+# telemetry, wheel steering, vehicle bones, CarSim / Chrono, walker bones and
+# poses, and the two batch commands.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+from typesafe_carla.map import _read_buffer
+
+assert ffi.CVehicleAckermannControl.__elemsize__ == 40
+assert ffi.CAckermannControllerSettings.__elemsize__ == 48
+assert ffi.CWheelTelemetryData.__elemsize__ == 24 and ffi.CVehicleTelemetryData.__elemsize__ == 48
+assert ffi.CBoneTransform.__elemsize__ == 64 and ffi.CBoneTransformOut.__elemsize__ == 160
+
+client = carla.Client("localhost", 2020)
+world = client.get_world()
+world.apply_settings(carla.WorldSettings(synchronous_mode=True, fixed_delta_seconds=0.05))
+lib = world.get_blueprint_library()
+vehicle = world.spawn_actor(lib.find("vehicle.audi.tt"),
+                            world.get_map().get_spawn_points()[3]).as_vehicle()
+
+def invalid(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError as e:
+        return e.status == ffi.TSC_INVALID_ARGUMENT
+    return False
+
+# Value types: Python API defaults and equality.
+a = carla.VehicleAckermannControl()
+assert a.steer == 0.0 and a.steer_speed == 0.0 and a.speed == 0.0
+assert a.acceleration == 0.0 and a.jerk == 0.0
+assert carla.VehicleAckermannControl(0.1, 0.2, 3.0, 1.0, 0.5) == \
+    carla.VehicleAckermannControl(steer=0.1, steer_speed=0.2, speed=3.0, acceleration=1.0, jerk=0.5)
+assert carla.VehicleAckermannControl(speed=1.0) != a
+s = carla.AckermannControllerSettings(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
+assert s.speed_kp == 1.0 and s.accel_kd == 6.0 and s != carla.AckermannControllerSettings()
+
+# Enumerations: distinct types with the Python API's names and values.
+assert int(carla.VehicleDoor.FL) == 0 and int(carla.VehicleDoor.RR) == 3
+assert int(carla.VehicleDoor.All) == 6 and str(carla.VehicleDoor.All) == "All"
+assert carla.VehicleWheelLocation.Front_Wheel == carla.VehicleWheelLocation.FL_Wheel
+assert carla.VehicleWheelLocation.Back_Wheel == carla.VehicleWheelLocation.FR_Wheel
+assert int(carla.VehicleWheelLocation.BR_Wheel) == 3
+assert str(carla.VehicleWheelLocation.FL_Wheel) == "FL_Wheel"
+assert str(carla.VehicleWheelLocation.BR_Wheel) == "BR_Wheel"
+assert str(carla.VehicleDoor.RL) == "RL" and str(carla.VehicleDoor(4)) == "VehicleDoor(4)"
+assert str(carla.VehicleFailureState.Rollover) == "Rollover"
+assert int(carla.VehicleFailureState.TirePuncture) == 3
+assert str(carla.VehicleFailureState.NONE) == "NONE"
+
+# Ackermann controller settings: the server's defaults, then a round trip.
+d = vehicle.get_ackermann_controller_settings()
+assert abs(d.speed_kp - 0.15) < 1e-6 and d.speed_ki == 0.0 and abs(d.speed_kd - 0.25) < 1e-6
+vehicle.apply_ackermann_controller_settings(carla.AckermannControllerSettings(0.5, 0.0, 0.25,
+                                                                              0.5, 0.0, 0.125))
+assert vehicle.get_ackermann_controller_settings() == carla.AckermannControllerSettings(
+    0.5, 0.0, 0.25, 0.5, 0.0, 0.125)
+assert invalid(lambda: vehicle.apply_ackermann_controller_settings(
+    carla.AckermannControllerSettings(speed_kp=float("nan"))))
+
+# Ackermann control drives to the target speed; apply_control takes over again.
+vehicle.apply_ackermann_control(carla.VehicleAckermannControl(speed=4.0, acceleration=2.0))
+for _ in range(60):
+    world.tick()
+assert abs(vehicle.get_velocity().length() - 4.0) < 0.01
+assert invalid(lambda: vehicle.apply_ackermann_control(
+    carla.VehicleAckermannControl(steer=float("inf"))))
+
+# Telemetry: one entry per wheel.
+t = vehicle.get_telemetry_data()
+assert abs(t.speed - 4.0) < 0.01 and t.gear == 1 and t.engine_rpm > 0.0
+assert len(t.wheels) == 4 and t.wheels[0].omega > 0.0
+vehicle.show_debug_telemetry()
+vehicle.show_debug_telemetry(False)
+
+# Wheel steering: the physics angle follows the control; the direction is visual.
+vehicle.apply_control(carla.VehicleControl(steer=-0.5, brake=1.0))
+assert abs(vehicle.get_wheel_steer_angle(carla.VehicleWheelLocation.FL_Wheel) + 35.0) < 1e-6
+assert vehicle.get_wheel_steer_angle(carla.VehicleWheelLocation.BR_Wheel) == 0.0
+vehicle.set_wheel_steer_direction(carla.VehicleWheelLocation.FR_Wheel, 20.0)
+assert abs(vehicle.get_wheel_steer_angle(carla.VehicleWheelLocation.FR_Wheel) + 35.0) < 1e-6
+assert invalid(lambda: vehicle.set_wheel_steer_direction(carla.VehicleWheelLocation(9), 1.0))
+
+# Vehicle bones: the root and one per wheel on the mock.
+bones = vehicle.get_vehicle_bone_world_transforms()
+assert len(bones) == 5 and bones[0] == vehicle.get_transform()
+# A buffer that is too small is retried at the reported size.
+buf, n = _read_buffer(ffi.tsc_vehicle_get_vehicle_bone_world_transforms, vehicle._h.ptr,
+                      ffi.CTransform, 2)
+assert n == 5 and carla.Transform._from_c(buf[4]) == bones[4]
+
+# Doors and failure state.
+vehicle.open_door(carla.VehicleDoor.All)
+vehicle.close_door(carla.VehicleDoor.FL)
+assert invalid(lambda: vehicle.open_door(carla.VehicleDoor(7)))
+assert vehicle.get_failure_state() == carla.VehicleFailureState.NONE
+
+# CarSim / Chrono: accepted (the server ignores them without its plugins).
+vehicle.enable_carsim()
+vehicle.enable_carsim("simfile.par")
+vehicle.use_carsim_road(True)
+vehicle.enable_chrono_physics()
+vehicle.enable_chrono_physics(10, 0.001, "vehicle.json", powetrain_json="powertrain.json",
+                              tire_json="tire.json", base_json_path="/data/")
+assert invalid(lambda: vehicle.enable_chrono_physics(max_substep_delta_time=-1.0))
+assert invalid(lambda: vehicle.enable_chrono_physics(max_substeps=-1))
+
+# Batch: ApplyVehicleAckermannControl and ShowDebugTelemetry. Distinct values
+# catch a permuted field: target 3 m/s at 1 m/s^2 is 0.5 m/s after 0.5 s
+# (swapped speed and acceleration would give 1 m/s), and a positive steer turns left.
+for _ in range(20):
+    world.tick()
+assert vehicle.get_velocity().length() < 0.01
+yaw0 = vehicle.get_transform().rotation.yaw
+responses = client.apply_batch_sync(
+    [carla.command.ApplyVehicleAckermannControl(vehicle.id, carla.VehicleAckermannControl(
+        steer=0.1, steer_speed=0.2, speed=3.0, acceleration=1.0, jerk=0.3)),
+     carla.command.ShowDebugTelemetry(vehicle.id, True)], True)
+assert len(responses) == 2 and not responses[0].has_error() and not responses[1].has_error()
+for _ in range(9):  # with the do_tick above: 10 frames of 0.05 s
+    world.tick()
+assert abs(vehicle.get_velocity().length() - 0.5) < 1e-3, vehicle.get_velocity()
+assert vehicle.get_transform().rotation.yaw > yaw0
+for _ in range(60):
+    world.tick()
+assert abs(vehicle.get_velocity().length() - 3.0) < 1e-3
+assert invalid(lambda: client.apply_batch([carla.command.ApplyVehicleAckermannControl(
+    vehicle.id, carla.VehicleAckermannControl(jerk=float("nan")))]))
+assert invalid(lambda: client.apply_batch([carla.command.ApplyVehicleAckermannControl(
+    vehicle.id, carla.VehicleAckermannControl(acceleration=float("inf")))]))
+client.apply_batch_sync([carla.command.ApplyVehicleAckermannControl(
+    vehicle.id, carla.VehicleAckermannControl(speed=0.0))], True)
+for _ in range(80):
+    world.tick()
+assert vehicle.get_velocity().length() < 0.01
+# A then-command acts on the spawned vehicle.
+spawned_car = client.apply_batch_sync([carla.command.SpawnActor(
+    lib.find("vehicle.audi.tt"), carla.Transform(carla.Location(-60.0, 60.0, 0.5))).then(
+        carla.command.ApplyVehicleAckermannControl(carla.command.FutureActor,
+                                                   carla.VehicleAckermannControl(speed=2.0)))])
+assert not spawned_car[0].has_error()
+for _ in range(60):
+    world.tick()
+car2 = unwrap(world.get_actor(spawned_car[0].actor_id)).as_vehicle()
+assert abs(car2.get_velocity().length() - 2.0) < 1e-3
+car2.destroy()
+assert "ShowDebugTelemetry" in str(carla.command.ShowDebugTelemetry(vehicle.id, False))
+walker_bp = lib.find("walker.pedestrian.0001")
+spawned = client.apply_batch_sync([carla.command.SpawnActor(walker_bp, carla.Transform(
+    carla.Location(40.0, 40.0, 1.0)))])
+assert not spawned[0].has_error()
+
+# Walker bones and poses.
+walker = unwrap(world.get_actor(spawned[0].actor_id)).as_walker()
+out = walker.get_bones()
+assert len(out.bone_transforms) > 2
+hips = out.bone_transforms[1]
+assert hips.name == "crl_hips__C" and hips.world.location.x == 40.0
+pose = carla.WalkerBoneControlIn([("crl_hips__C", carla.Transform(carla.Location(0.0, 0.0, 0.5),
+                                                                  carla.Rotation(yaw=90.0)))])
+assert pose.bone_transforms[0].name == "crl_hips__C"
+walker.set_bones(pose)
+assert walker.get_bones().bone_transforms[1].relative.location.z != 0.5  # not blended in yet
+walker.show_pose()
+relative = walker.get_bones().bone_transforms[1].relative
+assert relative.location.z == 0.5 and relative.rotation.yaw == 90.0
+walker.hide_pose()
+assert walker.get_bones().bone_transforms[1].relative.location.z != 0.5
+walker.blend_pose(0.5)
+walker.get_pose_from_animation()
+assert walker.get_bones().bone_transforms[1].relative.location.z != 0.5
+walker.set_bones(carla.WalkerBoneControlIn([carla.bone_transform("crl_spine__C",
+                                                                 carla.Transform())]))
+walker.set_bones(carla.WalkerBoneControlIn())
+assert invalid(lambda: walker.blend_pose(float("nan")))
+assert invalid(lambda: walker.set_bones(carla.WalkerBoneControlIn(
+    [("crl_hips__C", carla.Transform(carla.Location(float("inf"), 0.0, 0.0)))])))
+
+# Plain actors: the Python-API shortcuts convert at run time.
+actor = world.get_actor(vehicle.id)
+assert actor.get_failure_state() == carla.VehicleFailureState.NONE
+try:
+    world.get_actor(walker.id).open_door(carla.VehicleDoor.FL)
+    assert False
+except carla.ActorTypeError:
+    pass
+assert len(world.get_actor(walker.id).get_bones().bone_transforms) > 2
+
+walker.destroy()
+vehicle.destroy()
+print("OK")

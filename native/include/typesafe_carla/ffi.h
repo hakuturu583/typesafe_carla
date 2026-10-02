@@ -37,9 +37,11 @@ extern "C" {
  * 3.0: VehiclePhysicsControl with every LibCarla field: physics-control
  *      snapshot handles, new vehicle/wheel structs (issue #12).
  * 3.1: map geo-reference, XODR waypoints, landmarks as handles, lane markings,
- *      traffic light geometry (#22). */
+ *      traffic light geometry (#22).
+ * 3.2: vehicle Ackermann/doors/failure state/telemetry/wheel steer, walker bones
+ *      and poses (#20). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 1
+#define TSC_ABI_VERSION_MINOR 2
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -117,8 +119,9 @@ typedef enum {
   TSC_KIND_LANDMARK_LIST = 18,
   TSC_KIND_JUNCTION = 19,
   TSC_KIND_PHYSICS_CONTROL = 20, /* ABI 3.0 */
-  TSC_KIND_LANDMARK = 21,          /* issue #22 */
-  TSC_KIND_TRAFFIC_LIGHT_LIST = 22 /* issue #22 */
+  TSC_KIND_LANDMARK = 21,           /* issue #22 */
+  TSC_KIND_TRAFFIC_LIGHT_LIST = 22, /* issue #22 */
+  TSC_KIND_BONE_LIST = 23           /* ABI 3.2 (#20): Walker.get_bones() result */
 } tsc_handle_kind_t;
 
 typedef struct tsc_handle tsc_handle_t;
@@ -551,7 +554,12 @@ typedef enum {
   TSC_COMMAND_SET_ENABLE_GRAVITY = 14,        /* flag */
   TSC_COMMAND_SET_VEHICLE_LIGHT_STATE = 15,   /* flag: light state bits */
   TSC_COMMAND_APPLY_LOCATION = 16,            /* transform.location */
-  TSC_COMMAND_SET_TRAFFIC_LIGHT_STATE = 17    /* flag: tsc_traffic_light_state_t */
+  TSC_COMMAND_SET_TRAFFIC_LIGHT_STATE = 17,   /* flag: tsc_traffic_light_state_t */
+  /* ABI 3.2 (#20) */
+  TSC_COMMAND_APPLY_VEHICLE_ACKERMANN_CONTROL = 18, /* vector: (steer, steer_speed, speed),
+                                                       transform.location: (acceleration,
+                                                       jerk, unused) */
+  TSC_COMMAND_SHOW_DEBUG_TELEMETRY = 19        /* flag */
 } tsc_command_type_t;
 
 /* Flat tagged record; only the fields the type uses are read.
@@ -1124,6 +1132,160 @@ TSC_API tsc_status_t tsc_traffic_manager_set_update_vehicle_lights(tsc_traffic_m
                                                                    tsc_vehicle_t *vehicle,
                                                                    int32_t enabled);
 /* END GENERATED traffic_manager_vehicle */
+
+/* ------------------------------------------------------------------------ */
+/* Issue #20: Vehicle and Walker API gaps (ABI 3.2)                         */
+/* ------------------------------------------------------------------------ */
+
+/* carla.VehicleAckermannControl: steer in radians, steer_speed in rad/s,
+ * speed in m/s, acceleration in m/s^2, jerk in m/s^3. Values must be finite. */
+typedef struct {
+  double steer;
+  double steer_speed;
+  double speed;
+  double acceleration;
+  double jerk;
+} tsc_vehicle_ackermann_control_t;
+
+/* carla.AckermannControllerSettings: PID gains. Values must be finite. */
+typedef struct {
+  double speed_kp;
+  double speed_ki;
+  double speed_kd;
+  double accel_kp;
+  double accel_ki;
+  double accel_kd;
+} tsc_ackermann_controller_settings_t;
+
+/* carla.VehicleDoor (LibCarla rpc::VehicleDoor); other values are rejected. */
+typedef enum {
+  TSC_VEHICLE_DOOR_FL = 0,
+  TSC_VEHICLE_DOOR_FR = 1,
+  TSC_VEHICLE_DOOR_RL = 2,
+  TSC_VEHICLE_DOOR_RR = 3,
+  TSC_VEHICLE_DOOR_HOOD = 4,
+  TSC_VEHICLE_DOOR_TRUNK = 5,
+  TSC_VEHICLE_DOOR_ALL = 6
+} tsc_vehicle_door_t;
+
+/* carla.VehicleWheelLocation (Front_Wheel = FL, Back_Wheel = FR for 2-wheel
+ * vehicles, as in LibCarla); other values are rejected. */
+typedef enum {
+  TSC_WHEEL_FL = 0,
+  TSC_WHEEL_FR = 1,
+  TSC_WHEEL_BL = 2,
+  TSC_WHEEL_BR = 3
+} tsc_vehicle_wheel_location_t;
+
+/* carla.VehicleFailureState. */
+typedef enum {
+  TSC_VEHICLE_FAILURE_NONE = 0,
+  TSC_VEHICLE_FAILURE_ROLLOVER = 1,
+  TSC_VEHICLE_FAILURE_ENGINE = 2,
+  TSC_VEHICLE_FAILURE_TIRE_PUNCTURE = 3
+} tsc_vehicle_failure_state_t;
+
+/* BEGIN GENERATED vehicle_ackermann from bindings/vehicle_ext.yaml, do not edit */
+TSC_API tsc_status_t tsc_vehicle_apply_ackermann_control(
+    tsc_vehicle_t *vehicle, const tsc_vehicle_ackermann_control_t *control);
+TSC_API tsc_status_t tsc_vehicle_get_ackermann_controller_settings(
+    tsc_vehicle_t *vehicle, tsc_ackermann_controller_settings_t *out);
+TSC_API tsc_status_t tsc_vehicle_apply_ackermann_controller_settings(
+    tsc_vehicle_t *vehicle, const tsc_ackermann_controller_settings_t *settings);
+/* END GENERATED vehicle_ackermann */
+/* BEGIN GENERATED vehicle_state from bindings/vehicle_ext.yaml, do not edit */
+/* door: tsc_vehicle_door_t */
+TSC_API tsc_status_t tsc_vehicle_open_door(tsc_vehicle_t *vehicle, int32_t door);
+TSC_API tsc_status_t tsc_vehicle_close_door(tsc_vehicle_t *vehicle, int32_t door);
+/* state: tsc_vehicle_failure_state_t */
+TSC_API tsc_status_t tsc_vehicle_get_failure_state(tsc_vehicle_t *vehicle, int32_t *out);
+TSC_API tsc_status_t tsc_vehicle_show_debug_telemetry(tsc_vehicle_t *vehicle, int32_t enabled);
+/* wheel_location: tsc_vehicle_wheel_location_t; *out in degrees */
+TSC_API tsc_status_t tsc_vehicle_get_wheel_steer_angle(tsc_vehicle_t *vehicle,
+                                                       int32_t wheel_location, double *out);
+/* Rotates the wheel's bone only (visual); physics is unaffected. */
+TSC_API tsc_status_t tsc_vehicle_set_wheel_steer_direction(tsc_vehicle_t *vehicle,
+                                                           int32_t wheel_location,
+                                                           double angle_in_deg);
+TSC_API tsc_status_t tsc_vehicle_use_carsim_road(tsc_vehicle_t *vehicle, int32_t enabled);
+/* Needs the server's CarSim plugin; the server ignores it otherwise. */
+TSC_API tsc_status_t tsc_vehicle_enable_carsim(tsc_vehicle_t *vehicle,
+                                               const char *simfile_path, size_t simfile_path_len);
+/* Needs the server's Chrono plugin; the server ignores it otherwise. */
+TSC_API tsc_status_t tsc_vehicle_enable_chrono_physics(
+    tsc_vehicle_t *vehicle, uint64_t max_substeps, double max_substep_delta_time,
+    const char *vehicle_json, size_t vehicle_json_len,
+    const char *powertrain_json, size_t powertrain_json_len,
+    const char *tire_json, size_t tire_json_len,
+    const char *base_json_path, size_t base_json_path_len);
+/* END GENERATED vehicle_state */
+
+typedef struct {
+  double lat_slip;
+  double long_slip;
+  double omega;
+} tsc_wheel_telemetry_data_t;
+
+typedef struct {
+  double speed;
+  double steer;
+  double throttle;
+  double brake;
+  double engine_rpm;
+  int32_t gear;
+  int32_t reserved0;
+} tsc_vehicle_telemetry_data_t;
+
+/* One RPC. Fills *out and up to wheel_capacity wheels (wheels may be NULL when
+ * wheel_capacity is 0); *out_wheel_count is the vehicle's wheel count, which
+ * may exceed wheel_capacity. TSC_ERROR when LibCarla has no
+ * Vehicle::GetTelemetryData (CARLA 0.10.0; it is in ue5-dev). */
+TSC_API tsc_status_t tsc_vehicle_get_telemetry_data(tsc_vehicle_t *vehicle,
+                                                    tsc_vehicle_telemetry_data_t *out,
+                                                    tsc_wheel_telemetry_data_t *wheels,
+                                                    size_t wheel_capacity,
+                                                    size_t *out_wheel_count);
+/* BEGIN GENERATED vehicle_bones from bindings/vehicle_ext.yaml, do not edit */
+/* Two-call buffer. TSC_ERROR with LibCarla 0.10.0, which lacks the method. */
+TSC_API tsc_status_t tsc_vehicle_get_vehicle_bone_world_transforms(
+    tsc_vehicle_t *vehicle, tsc_transform_t *out, size_t capacity, size_t *out_count);
+/* END GENERATED vehicle_bones */
+
+/* --- Walker bones and poses ------------------------------------------------ */
+
+/* BEGIN GENERATED walker_pose from bindings/walker.yaml, do not edit */
+/* blend: 0 = animation, 1 = the custom pose set with tsc_walker_set_bones. */
+TSC_API tsc_status_t tsc_walker_blend_pose(tsc_walker_t *walker, double blend);
+TSC_API tsc_status_t tsc_walker_show_pose(tsc_walker_t *walker);
+TSC_API tsc_status_t tsc_walker_hide_pose(tsc_walker_t *walker);
+TSC_API tsc_status_t tsc_walker_get_pose_from_animation(tsc_walker_t *walker);
+/* END GENERATED walker_pose */
+
+/* carla.bone_transform: one entry of WalkerBoneControlIn. */
+typedef struct {
+  const char *name; /* (pointer, length); need not be NUL terminated */
+  size_t name_len;
+  tsc_transform_t transform; /* relative to the parent bone */
+} tsc_bone_transform_t;
+
+TSC_API tsc_status_t tsc_walker_set_bones(tsc_walker_t *walker, const tsc_bone_transform_t *bones,
+                                          size_t count);
+
+/* carla.bone_transform_out: one entry of WalkerBoneControlOut. */
+typedef struct {
+  tsc_string_t name; /* owned: free with tsc_string_free */
+  tsc_transform_t world;
+  tsc_transform_t component;
+  tsc_transform_t relative;
+} tsc_bone_transform_out_t;
+
+/* The result of one Walker::GetBonesTransform RPC (TSC_KIND_BONE_LIST). */
+typedef struct tsc_bone_list tsc_bone_list_t;
+TSC_API tsc_status_t tsc_walker_get_bones(tsc_walker_t *walker, tsc_bone_list_t **out);
+TSC_API size_t tsc_bone_list_size(const tsc_bone_list_t *list);
+/* TSC_NOT_FOUND when index >= size. */
+TSC_API tsc_status_t tsc_bone_list_get(const tsc_bone_list_t *list, size_t index,
+                                       tsc_bone_transform_out_t *out);
 
 #ifdef __cplusplus
 } /* extern "C" */

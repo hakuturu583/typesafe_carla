@@ -405,6 +405,92 @@ class WalkerControl {
   bool jump = false;
 };
 
+// Issue #20: Ackermann control, doors, failure state, telemetry, walker bones.
+class VehicleAckermannControl {
+ public:
+  VehicleAckermannControl() = default;
+  VehicleAckermannControl(float in_steer, float in_steer_speed, float in_speed,
+                          float in_acceleration, float in_jerk)
+      : steer(in_steer), steer_speed(in_steer_speed), speed(in_speed),
+        acceleration(in_acceleration), jerk(in_jerk) {}
+  float steer = 0.0f;
+  float steer_speed = 0.0f;
+  float speed = 0.0f;
+  float acceleration = 0.0f;
+  float jerk = 0.0f;
+};
+
+class AckermannControllerSettings {
+ public:
+  AckermannControllerSettings() = default;
+  AckermannControllerSettings(float speed_kp, float speed_ki, float speed_kd, float accel_kp,
+                              float accel_ki, float accel_kd)
+      : speed_kp(speed_kp), speed_ki(speed_ki), speed_kd(speed_kd), accel_kp(accel_kp),
+        accel_ki(accel_ki), accel_kd(accel_kd) {}
+  float speed_kp = 0.0f;
+  float speed_ki = 0.0f;
+  float speed_kd = 0.0f;
+  float accel_kp = 0.0f;
+  float accel_ki = 0.0f;
+  float accel_kd = 0.0f;
+};
+
+enum class VehicleDoor : uint8_t { FL = 0, FR = 1, RL = 2, RR = 3, Hood = 4, Trunk = 5, All = 6 };
+
+enum class VehicleWheelLocation : uint8_t {
+  FL_Wheel = 0, FR_Wheel = 1, BL_Wheel = 2, BR_Wheel = 3, Front_Wheel = 0, Back_Wheel = 1,
+};
+
+enum class VehicleFailureState : uint8_t { None, Rollover, Engine, TirePuncture };
+
+// ue5-dev only (not in CARLA 0.10.0); the mock mirrors ue5-dev.
+class WheelTelemetryData {
+ public:
+  WheelTelemetryData() = default;
+  WheelTelemetryData(float lat_slip, float long_slip, float omega)
+      : lat_slip(lat_slip), long_slip(long_slip), omega(omega) {}
+  float lat_slip = 0.0f;
+  float long_slip = 0.0f;
+  float omega = 0.0f;
+};
+
+class VehicleTelemetryData {
+ public:
+  float speed = 0.0f;
+  float steer = 0.0f;
+  float throttle = 0.0f;
+  float brake = 0.0f;
+  float engine_rpm = 0.0f;
+  int32_t gear = 0;
+  std::vector<WheelTelemetryData> wheels = {};
+};
+
+using BoneTransformDataIn = std::pair<std::string, geom::Transform>;
+
+class BoneTransformDataOut {
+ public:
+  std::string bone_name;
+  geom::Transform world;
+  geom::Transform component;
+  geom::Transform relative;
+};
+
+class WalkerBoneControlIn {
+ public:
+  WalkerBoneControlIn() = default;
+  explicit WalkerBoneControlIn(std::vector<BoneTransformDataIn> bone_transforms)
+      : bone_transforms(bone_transforms) {}
+  std::vector<BoneTransformDataIn> bone_transforms;
+};
+
+class WalkerBoneControlOut {
+ public:
+  WalkerBoneControlOut() = default;
+  explicit WalkerBoneControlOut(std::vector<BoneTransformDataOut> bone_transforms)
+      : bone_transforms(bone_transforms) {}
+  std::vector<BoneTransformDataOut> bone_transforms;
+};
+
 class WeatherParameters {
  public:
   static WeatherParameters Default, ClearNoon, CloudyNoon, WetNoon, WetCloudyNoon, MidRainyNoon,
@@ -587,6 +673,17 @@ class Command {
     ActorId actor;
     TrafficLightState traffic_light_state;
   };
+  struct ApplyVehicleAckermannControl : CommandBase<ApplyVehicleAckermannControl> {
+    ApplyVehicleAckermannControl(ActorId id, const VehicleAckermannControl &value)
+        : actor(id), control(value) {}
+    ActorId actor;
+    VehicleAckermannControl control;
+  };
+  struct ShowDebugTelemetry : CommandBase<ShowDebugTelemetry> {
+    ShowDebugTelemetry(ActorId id, bool value) : actor(id), enabled(value) {}
+    ActorId actor;
+    bool enabled;
+  };
   struct SetAutopilot : CommandBase<SetAutopilot> {
     SetAutopilot(ActorId id, bool value, uint16_t port) : actor(id), enabled(value), tm_port(port) {}
     ActorId actor;
@@ -598,7 +695,8 @@ class Command {
       std::variant<SpawnActor, DestroyActor, ApplyVehicleControl, ApplyTransform, ApplyTargetVelocity,
                    SetSimulatePhysics, SetAutopilot, ApplyWalkerControl, ApplyTargetAngularVelocity,
                    ApplyImpulse, ApplyForce, ApplyAngularImpulse, ApplyTorque, SetEnableGravity,
-                   SetVehicleLightState, ApplyLocation, SetTrafficLightState>;
+                   SetVehicleLightState, ApplyLocation, SetTrafficLightState,
+                   ApplyVehicleAckermannControl, ShowDebugTelemetry>;
   CommandType command;
 };
 
@@ -841,6 +939,30 @@ class Vehicle : public Actor {
   rpc::TrafficLightState GetTrafficLightState() const;
   bool IsAtTrafficLight();
   SharedPtr<TrafficLight> GetTrafficLight() const;
+  // Issue #20. Ackermann control drives towards the target speed (see mock.cpp).
+  using AckermannControl = rpc::VehicleAckermannControl;
+  using VehicleDoor = rpc::VehicleDoor;
+  using WheelLocation = rpc::VehicleWheelLocation;
+  using TelemetryData = rpc::VehicleTelemetryData;
+  void ShowDebugTelemetry(bool enabled = true);
+  void ApplyAckermannControl(const AckermannControl &control);
+  rpc::AckermannControllerSettings GetAckermannControllerSettings() const;
+  void ApplyAckermannControllerSettings(const rpc::AckermannControllerSettings &settings);
+  void OpenDoor(const VehicleDoor door_idx);
+  void CloseDoor(const VehicleDoor door_idx);
+  // Visual only, as on the server: GetWheelSteerAngle reports the physics angle.
+  void SetWheelSteerDirection(WheelLocation wheel_location, float angle_in_deg);
+  float GetWheelSteerAngle(WheelLocation wheel_location);
+  TelemetryData GetTelemetryData() const;
+  // No CarSim / Chrono on the mock "server": accepted and recorded, like the
+  // asynchronous RPCs a server without the plugins ignores.
+  void EnableCarSim(std::string simfile_path);
+  void UseCarSimRoad(bool enabled);
+  void EnableChronoPhysics(uint64_t MaxSubsteps, float MaxSubstepDeltaTime,
+                           std::string VehicleJSON = "", std::string PowertrainJSON = "",
+                           std::string TireJSON = "", std::string BaseJSONPath = "");
+  rpc::VehicleFailureState GetFailureState() const;
+  std::vector<geom::Transform> GetVehicleBoneWorldTransforms() const;
 };
 
 // Mock sensors produce synthetic measurements on every tick (see mock.cpp).
@@ -874,6 +996,16 @@ class Walker : public Actor {
   using Actor::Actor;
   void ApplyControl(const Control &control);
   Control GetWalkerControl() const;
+  // Issue #20: a fixed mock skeleton; set bones form a custom pose that
+  // get_bones reports while it is blended in (blend > 0).
+  using BoneControlIn = rpc::WalkerBoneControlIn;
+  using BoneControlOut = rpc::WalkerBoneControlOut;
+  BoneControlOut GetBonesTransform();
+  void SetBonesTransform(const BoneControlIn &bones);
+  void BlendPose(float blend);
+  void ShowPose() { BlendPose(1.0f); };
+  void HidePose() { BlendPose(0.0f); };
+  void GetPoseFromAnimation();
 };
 
 // Moves its parent walker towards the destination at up to max speed.

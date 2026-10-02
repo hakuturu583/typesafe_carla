@@ -1,0 +1,9 @@
+# command.ApplyVehicleAckermannControl takes a VehicleAckermannControl.
+# expect-error: 'VehicleControl' does not match expected type 'VehicleAckermannControl'
+import typesafe_carla as carla
+
+def batch(vehicle: carla.Vehicle) -> carla.Command:
+    return carla.command.ApplyVehicleAckermannControl(vehicle.id, carla.VehicleControl())
+
+# Compile-only: Codon type-checks a function only when it is called.
+batch(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

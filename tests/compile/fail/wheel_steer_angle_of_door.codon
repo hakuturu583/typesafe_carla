@@ -1,0 +1,9 @@
+# get_wheel_steer_angle takes a VehicleWheelLocation.
+# expect-error: 'VehicleDoor' does not match expected type 'VehicleWheelLocation'
+import typesafe_carla as carla
+
+def angle(vehicle: carla.Vehicle) -> float:
+    return vehicle.get_wheel_steer_angle(carla.VehicleDoor.FL)
+
+# Compile-only: Codon type-checks a function only when it is called.
+angle(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

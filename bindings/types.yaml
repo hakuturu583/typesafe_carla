@@ -197,3 +197,45 @@ optional_lane_marking:
   assign: "assign_optional({}, has_value, {out})"
   invalid: "NULL, NULL"
   cpp: ["(boost|std)::optional<carla::road::element::LaneMarking>"]
+# --- #20 ---
+vehicle_ackermann_control:
+  c: tsc_vehicle_ackermann_control_t
+  struct: true
+  codon: CVehicleAckermannControl
+  to_carla: "to_carla({})"
+  cpp: ["carla::rpc::VehicleAckermannControl"]
+ackermann_controller_settings:
+  c: tsc_ackermann_controller_settings_t
+  struct: true
+  codon: CAckermannControllerSettings
+  to_carla: "to_carla({})"
+  from_carla: "from_carla({})"
+  cpp: ["carla::rpc::AckermannControllerSettings"]
+# tsc_vehicle_door_t; out-of-range values are rejected.
+vehicle_door:
+  c: int32_t
+  codon: i32
+  to_carla: 'to_enum<carla::rpc::VehicleDoor>({}, TSC_VEHICLE_DOOR_FL, TSC_VEHICLE_DOOR_ALL, "vehicle door")'
+  invalid: 99
+  cpp: ["carla::rpc::VehicleDoor"]
+# tsc_vehicle_wheel_location_t; out-of-range values are rejected.
+vehicle_wheel_location:
+  c: int32_t
+  codon: i32
+  to_carla: 'to_enum<carla::rpc::VehicleWheelLocation>({}, TSC_WHEEL_FL, TSC_WHEEL_BR, "wheel location")'
+  invalid: 99
+  cpp: ["carla::rpc::VehicleWheelLocation"]
+# tsc_vehicle_failure_state_t.
+vehicle_failure_state:
+  c: int32_t
+  codon: i32
+  from_carla: "static_cast<int32_t>({})"
+  cpp: ["carla::rpc::VehicleFailureState"]
+# Output buffer of transforms, two-call pattern (see bounding_box_buffer).
+transform_buffer:
+  c: tsc_transform_t
+  c_param: "tsc_transform_t *{name}, size_t capacity, size_t *{name}_count"
+  codon: "Ptr[CTransform], int, Ptr[int]"
+  assign: "copy_out({}, {out}, capacity, {out}_count)"
+  invalid: "NULL, 0, NULL"
+  cpp: ["std::vector<carla::geom::Transform.*>"]

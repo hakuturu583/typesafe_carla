@@ -95,6 +95,15 @@ static void test_layout(void) {
   CHECK(offsetof(tsc_geo_projection_t, ellipsoid_a) == 16);
   CHECK(offsetof(tsc_geo_projection_t, offset_x) == 88);
   CHECK(sizeof(tsc_lane_validity_t) == 8);
+  /* issue #20 */
+  CHECK(sizeof(tsc_vehicle_ackermann_control_t) == 40);
+  CHECK(sizeof(tsc_ackermann_controller_settings_t) == 48);
+  CHECK(sizeof(tsc_wheel_telemetry_data_t) == 24);
+  CHECK(sizeof(tsc_vehicle_telemetry_data_t) == 48);
+  CHECK(sizeof(tsc_bone_transform_t) == 64);
+  CHECK(offsetof(tsc_bone_transform_t, transform) == 16);
+  CHECK(offsetof(tsc_vehicle_telemetry_data_t, gear) == 40);
+  CHECK(sizeof(tsc_bone_transform_out_t) == 160);
 }
 
 static void test_null_arguments(void) {
@@ -918,6 +927,165 @@ static void test_mock_issue22(void) {
   CHECK(tsc_live_handle_count() == before);
 }
 
+/* Issue #20: Ackermann control, doors, failure state, telemetry, wheel steer,
+ * walker bones and poses. */
+static void test_mock_issue20(void) {
+  uint64_t before = tsc_live_handle_count();
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  tsc_actor_list_t *actors = NULL;
+  tsc_actor_t *vehicle_actor = NULL, *walker_actor = NULL;
+  tsc_vehicle_t *vehicle = NULL;
+  tsc_walker_t *walker = NULL;
+  tsc_blueprint_library_t *library = NULL;
+  tsc_actor_blueprint_t *walker_bp = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2120, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+  CHECK_OK(tsc_world_get_actors(world, &actors));
+  CHECK_OK(tsc_actor_list_get(actors, 0, &vehicle_actor));
+  CHECK_OK(tsc_actor_as_vehicle(vehicle_actor, &vehicle));
+
+  /* Ackermann controller settings: server defaults, then a round trip. */
+  tsc_ackermann_controller_settings_t s;
+  CHECK_OK(tsc_vehicle_get_ackermann_controller_settings(vehicle, &s));
+  CHECK(s.speed_kp > 0.149 && s.speed_kp < 0.151);
+  tsc_ackermann_controller_settings_t s2 = {0.5, 0.1, 0.2, 0.3, 0.0, 0.05};
+  CHECK_OK(tsc_vehicle_apply_ackermann_controller_settings(vehicle, &s2));
+  CHECK_OK(tsc_vehicle_get_ackermann_controller_settings(vehicle, &s));
+  CHECK(s.speed_kp == 0.5 && s.accel_kd > 0.0499 && s.accel_kd < 0.0501);
+  s2.accel_ki = 0.0 / 0.0;
+  CHECK(tsc_vehicle_apply_ackermann_controller_settings(vehicle, &s2) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_vehicle_apply_ackermann_controller_settings(vehicle, NULL) == TSC_INVALID_ARGUMENT);
+
+  /* Ackermann control drives the vehicle towards the target speed. */
+  tsc_vehicle_ackermann_control_t ack = {0.0, 0.0, 5.0, 2.0, 0.0};
+  CHECK_OK(tsc_vehicle_apply_ackermann_control(vehicle, &ack));
+  uint64_t frame = 0;
+  for (int i = 0; i < 100; ++i) CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+  tsc_vector3d_t v;
+  CHECK_OK(tsc_actor_get_velocity(vehicle_actor, &v));
+  CHECK(v.x > 4.9 && v.x < 5.1);
+  ack.jerk = 1.0 / 0.0;
+  CHECK(tsc_vehicle_apply_ackermann_control(vehicle, &ack) == TSC_INVALID_ARGUMENT);
+
+  /* Telemetry: one entry per wheel; a smaller buffer still reports the count. */
+  tsc_vehicle_telemetry_data_t tel;
+  tsc_wheel_telemetry_data_t wheels[8];
+  size_t wheel_count = 0;
+  CHECK_OK(tsc_vehicle_get_telemetry_data(vehicle, &tel, wheels, 8, &wheel_count));
+  CHECK(wheel_count == 4 && tel.speed > 4.9 && tel.gear == 1 && wheels[0].omega > 0.0);
+  CHECK_OK(tsc_vehicle_get_telemetry_data(vehicle, &tel, NULL, 0, &wheel_count));
+  CHECK(wheel_count == 4);
+  CHECK(tsc_vehicle_get_telemetry_data(vehicle, &tel, NULL, 2, &wheel_count) ==
+        TSC_INVALID_ARGUMENT);
+
+  /* Bones of the vehicle: the root and one per wheel on the mock. */
+  tsc_transform_t bones[8];
+  size_t bone_count = 0;
+  CHECK_OK(tsc_vehicle_get_vehicle_bone_world_transforms(vehicle, bones, 8, &bone_count));
+  CHECK(bone_count == 5);
+
+  /* Doors, failure state, debug telemetry, CarSim / Chrono (no-ops here). */
+  CHECK_OK(tsc_vehicle_open_door(vehicle, TSC_VEHICLE_DOOR_ALL));
+  CHECK_OK(tsc_vehicle_close_door(vehicle, TSC_VEHICLE_DOOR_FL));
+  CHECK(tsc_vehicle_open_door(vehicle, 7) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_vehicle_open_door(vehicle, -1) == TSC_INVALID_ARGUMENT);
+  int32_t failure = -1;
+  CHECK_OK(tsc_vehicle_get_failure_state(vehicle, &failure));
+  CHECK(failure == TSC_VEHICLE_FAILURE_NONE);
+  CHECK_OK(tsc_vehicle_show_debug_telemetry(vehicle, 1));
+  CHECK_OK(tsc_vehicle_enable_carsim(vehicle, "sim.par", 7));
+  CHECK_OK(tsc_vehicle_enable_carsim(vehicle, NULL, 0));
+  CHECK(tsc_vehicle_enable_carsim(vehicle, NULL, 3) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_vehicle_use_carsim_road(vehicle, 1));
+  CHECK_OK(tsc_vehicle_enable_chrono_physics(vehicle, 30, 0.002, "", 0, NULL, 0, NULL, 0,
+                                             "/tmp/", 5));
+  CHECK(tsc_vehicle_enable_chrono_physics(vehicle, 30, -1.0, NULL, 0, NULL, 0, NULL, 0, NULL,
+                                          0) == TSC_INVALID_ARGUMENT);
+
+  /* Wheel steer: the physics angle follows the control; the direction is visual. */
+  tsc_vehicle_control_t control = {0.0, 0.5, 0.0, 0, 0, 0, 0};
+  CHECK_OK(tsc_vehicle_apply_control(vehicle, &control));
+  double angle = 0.0;
+  CHECK_OK(tsc_vehicle_get_wheel_steer_angle(vehicle, TSC_WHEEL_FL, &angle));
+  CHECK(angle > 34.9 && angle < 35.1);
+  CHECK_OK(tsc_vehicle_get_wheel_steer_angle(vehicle, TSC_WHEEL_BL, &angle));
+  CHECK(angle == 0.0);
+  CHECK_OK(tsc_vehicle_set_wheel_steer_direction(vehicle, TSC_WHEEL_FR, 10.0));
+  CHECK(tsc_vehicle_set_wheel_steer_direction(vehicle, 4, 10.0) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_vehicle_set_wheel_steer_direction(vehicle, TSC_WHEEL_FR, 0.0 / 0.0) ==
+        TSC_INVALID_ARGUMENT);
+
+  /* Batch: Ackermann control and debug telemetry. */
+  tsc_command_t cmds[2];
+  memset(cmds, 0, sizeof cmds);
+  cmds[0].type = TSC_COMMAND_APPLY_VEHICLE_ACKERMANN_CONTROL;
+  cmds[0].then_of = -1;
+  CHECK_OK(tsc_actor_get_id(vehicle_actor, &cmds[0].actor_id));
+  cmds[0].vector = (tsc_vector3d_t){0.0, 0.0, 0.0};
+  cmds[0].transform.location = (tsc_location_t){3.0, 0.0, 0.0};
+  cmds[1].type = TSC_COMMAND_SHOW_DEBUG_TELEMETRY;
+  cmds[1].then_of = -1;
+  cmds[1].actor_id = cmds[0].actor_id;
+  cmds[1].flag = 0;
+  tsc_command_response_t r[2];
+  size_t n = 0;
+  CHECK_OK(tsc_client_apply_batch_sync(client, cmds, 2, 0, r, 2, &n));
+  CHECK(n == 2 && !r[0].has_error && !r[1].has_error);
+  for (size_t i = 0; i < n; ++i) tsc_string_free(&r[i].error);
+  for (int i = 0; i < 100; ++i) CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+  CHECK_OK(tsc_actor_get_velocity(vehicle_actor, &v));
+  CHECK(v.x * v.x + v.y * v.y < 0.01);
+  cmds[0].transform.location.y = 0.0 / 0.0; /* jerk */
+  CHECK(tsc_client_apply_batch(client, cmds, 1, 0) == TSC_INVALID_ARGUMENT);
+
+  /* Walker bones and poses. */
+  CHECK_OK(tsc_world_get_blueprint_library(world, &library));
+  CHECK_OK(tsc_blueprint_library_find(library, "walker.pedestrian.0001", 22, &walker_bp));
+  tsc_transform_t at = {{20.0, 20.0, 1.0}, {0, 0, 0}};
+  CHECK_OK(tsc_world_spawn_actor(world, walker_bp, &at, NULL, &walker_actor));
+  CHECK_OK(tsc_actor_as_walker(walker_actor, &walker));
+  tsc_bone_list_t *list = NULL;
+  CHECK_OK(tsc_walker_get_bones(walker, &list));
+  CHECK(tsc_handle_kind(H(list)) == TSC_KIND_BONE_LIST);
+  size_t nbones = tsc_bone_list_size(list);
+  CHECK(nbones > 2);
+  tsc_bone_transform_out_t bone;
+  CHECK_OK(tsc_bone_list_get(list, 1, &bone));
+  CHECK(strcmp(bone.name.data, "crl_hips__C") == 0 && bone.world.location.x == 20.0);
+  tsc_string_free(&bone.name);
+  CHECK(tsc_bone_list_get(list, nbones, &bone) == TSC_NOT_FOUND);
+  CHECK(tsc_bone_list_size((tsc_bone_list_t *)world) == 0);
+  tsc_handle_release(H(list));
+  tsc_bone_transform_t in[1] = {{"crl_hips__C", 11, {{0.0, 0.0, 0.5}, {0.0, 90.0, 0.0}}}};
+  CHECK_OK(tsc_walker_set_bones(walker, in, 1));
+  CHECK_OK(tsc_walker_show_pose(walker));
+  CHECK_OK(tsc_walker_get_bones(walker, &list));
+  CHECK_OK(tsc_bone_list_get(list, 1, &bone));
+  CHECK(bone.relative.location.z == 0.5 && bone.relative.rotation.yaw == 90.0);
+  tsc_string_free(&bone.name);
+  tsc_handle_release(H(list));
+  CHECK_OK(tsc_walker_hide_pose(walker));
+  CHECK_OK(tsc_walker_blend_pose(walker, 0.5));
+  CHECK(tsc_walker_blend_pose(walker, 0.0 / 0.0) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_walker_get_pose_from_animation(walker));
+  CHECK(tsc_walker_set_bones(walker, NULL, 1) == TSC_INVALID_ARGUMENT);
+  in[0].transform.location.x = 1.0 / 0.0;
+  CHECK(tsc_walker_set_bones(walker, in, 1) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_walker_set_bones((tsc_walker_t *)vehicle, in, 0) == TSC_INVALID_ARGUMENT);
+
+  tsc_handle_release(H(walker));
+  tsc_handle_release(H(walker_actor));
+  tsc_handle_release(H(walker_bp));
+  tsc_handle_release(H(library));
+  tsc_handle_release(H(vehicle));
+  tsc_handle_release(H(vehicle_actor));
+  tsc_handle_release(H(actors));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK(tsc_live_handle_count() == before);
+}
+
 static void test_mock_timeout(void) {
   const char *host = "carla.invalid";
   tsc_client_t *client = NULL;
@@ -942,6 +1110,7 @@ int main(void) {
     test_mock_sensors();
     test_mock_milestone4();
     test_mock_issue22();
+    test_mock_issue20();
     test_mock_timeout();
   } else {
     printf("backend '%s': skipping mock-server checks\n", tsc_backend_name());

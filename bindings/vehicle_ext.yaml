@@ -1,0 +1,54 @@
+# Vehicle operations added for issue #20: Ackermann control, doors, failure
+# state, wheel steering, CarSim / Chrono. tsc_vehicle_<name>.
+class: carla::client::Vehicle
+prefix: vehicle
+self: {type: tsc_vehicle_t, name: vehicle, get: vehicle_of}
+blocks:
+  vehicle_ackermann:
+    apply_ackermann_control:
+      call: ApplyAckermannControl
+      args: {control: vehicle_ackermann_control}
+    get_ackermann_controller_settings:
+      call: GetAckermannControllerSettings
+      out: ackermann_controller_settings
+    apply_ackermann_controller_settings:
+      call: ApplyAckermannControllerSettings
+      args: {settings: ackermann_controller_settings}
+  vehicle_state:
+    open_door: {call: OpenDoor, args: {door: vehicle_door}, doc: "door: tsc_vehicle_door_t"}
+    close_door: {call: CloseDoor, args: {door: vehicle_door}}
+    get_failure_state:
+      call: GetFailureState
+      out: vehicle_failure_state
+      doc: "state: tsc_vehicle_failure_state_t"
+    show_debug_telemetry: {call: ShowDebugTelemetry, args: {enabled: bool}}
+    get_wheel_steer_angle:
+      call: GetWheelSteerAngle
+      args: {wheel_location: vehicle_wheel_location}
+      out: double
+      doc: "wheel_location: tsc_vehicle_wheel_location_t; *out in degrees"
+    set_wheel_steer_direction:
+      call: SetWheelSteerDirection
+      args: {wheel_location: vehicle_wheel_location, angle_in_deg: finite}
+      doc: "Rotates the wheel's bone only (visual); physics is unaffected."
+    use_carsim_road: {call: UseCarSimRoad, args: {enabled: bool}}
+    enable_carsim:
+      call: EnableCarSim
+      args: {simfile_path: string_in}
+      doc: "Needs the server's CarSim plugin; the server ignores it otherwise."
+    enable_chrono_physics:
+      call: EnableChronoPhysics
+      args:
+        max_substeps: uint64
+        max_substep_delta_time: non_negative
+        vehicle_json: string_in
+        powertrain_json: string_in
+        tire_json: string_in
+        base_json_path: string_in
+      doc: "Needs the server's Chrono plugin; the server ignores it otherwise."
+  vehicle_bones:
+    get_vehicle_bone_world_transforms:
+      call: GetVehicleBoneWorldTransforms
+      via: vehicle_bone_world_transforms
+      out: transform_buffer
+      doc: "Two-call buffer. TSC_ERROR with LibCarla 0.10.0, which lacks the method."

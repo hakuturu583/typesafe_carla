@@ -30,15 +30,15 @@ Milestones (design section 43):
 | 2: sensors | ✅ verified against a CARLA 0.10.0 server |
 | 3: distribution | ✅ release pipeline verified end to end (manylinux wheels from CI, clean-container `uv sync` → `build` → `./main` against a CARLA server); publishing to PyPI needs the one-time setup in [docs/releasing.md](docs/releasing.md) |
 | 4: broader compatibility | ✅ verified against a CARLA 0.10.0 server |
-| 5: binding generation | ✅ 69 C ABI functions generated from `bindings/*.yaml`, spec validated against LibCarla 0.10.0 and ue5-dev with libclang, [coverage report](docs/coverage.md) |
+| 5: binding generation | ✅ 86 C ABI functions generated from `bindings/*.yaml`, spec validated against LibCarla 0.10.0 and ue5-dev with libclang, [coverage report](docs/coverage.md) |
 
 | Area | Implemented |
 |---|---|
 | Client | `Client`, `set_timeout`, `get_timeout`, `get_world`, `load_world`, `reload_world`, `get_server_version`, `get_client_version`, `apply_batch`, `apply_batch_sync`, `get_trafficmanager`, `generate_opendrive_world` (+ `OpendriveGenerationParameters`), recorder: `start_recorder`, `stop_recorder`, `show_recorder_file_info`, `show_recorder_collisions`, `show_recorder_actors_blocked`, `replay_file`, `stop_replayer`, `set_replayer_time_factor` |
 | World | `id`, `get_actors`, `get_actor` (→ `Optional[Actor]`), `get_blueprint_library`, `spawn_actor`, `try_spawn_actor` (→ `Optional[Actor]`), `tick`, `wait_for_tick`, `get_snapshot`, `get_map`, `get_settings`, `apply_settings`, `get_weather` / `set_weather` / `is_weather_enabled`, `get_random_location_from_navigation` (→ `Optional`), `debug` (`DebugHelper`: `draw_point`, `draw_line`, `draw_arrow`, `draw_box`, `draw_string`) |
 | Actor | `id`, `type_id`, `is_alive`, `bounding_box`, `get/set_transform`, `get/set_location`, `get_velocity`, `set_target_velocity`, `get_acceleration`, `get_angular_velocity`, `destroy`, `set_target_angular_velocity`, `add_impulse`, `add_force`, `add_angular_impulse`, `add_torque`, `set_simulate_physics`, `set_enable_gravity`; checked `as_vehicle` / `as_sensor` / `as_walker` / `as_walker_ai_controller` / `as_traffic_light`; the methods of Vehicle, Walker, WalkerAIController, TrafficLight and Sensor, as in the Python API (on a plain `Actor` only; checked at run time, `ActorTypeError` on the wrong kind; compile errors with `--strict`) |
-| Vehicle | `apply_control`, `get_control`, `set_autopilot`, `get_physics_control` / `apply_physics_control` (every LibCarla UE5 field), `set_light_state` / `get_light_state` (`VehicleLightState`), `get_speed_limit`, `get_traffic_light_state`, `is_at_traffic_light`, `get_traffic_light` (→ `Optional`) |
-| Walkers | `Walker` (`apply_control(WalkerControl)`, `get_control`), `WalkerAIController` (`start`, `stop`, `go_to_location`, `set_max_speed`) |
+| Vehicle | `apply_control`, `get_control`, `set_autopilot`, `get_physics_control` / `apply_physics_control` (every LibCarla UE5 field), `set_light_state` / `get_light_state` (`VehicleLightState`), `get_speed_limit`, `get_traffic_light_state`, `is_at_traffic_light`, `get_traffic_light` (→ `Optional`); issue #20: `apply_ackermann_control` (`VehicleAckermannControl`), `get_ackermann_controller_settings` / `apply_ackermann_controller_settings` (`AckermannControllerSettings`), `open_door` / `close_door` (`VehicleDoor`), `get_failure_state` (`VehicleFailureState`), `get_telemetry_data` (`VehicleTelemetryData`, `WheelTelemetryData`; LibCarla ue5-dev only), `show_debug_telemetry`, `get_wheel_steer_angle` / `set_wheel_steer_direction` (`VehicleWheelLocation`), `get_vehicle_bone_world_transforms` (LibCarla ue5-dev only), `enable_carsim`, `use_carsim_road`, `enable_chrono_physics` (server plugins) |
+| Walkers | `Walker` (`apply_control(WalkerControl)`, `get_control`; issue #20: `get_bones` (→ `WalkerBoneControlOut` of `bone_transform_out`), `set_bones` (`WalkerBoneControlIn` of `bone_transform` or `(name, Transform)` pairs), `blend_pose`, `show_pose`, `hide_pose`, `get_pose_from_animation`), `WalkerAIController` (`start`, `stop`, `go_to_location`, `set_max_speed`) |
 | Traffic lights | `TrafficLight` (`get_state` / `set_state` (`TrafficLightState`), green/yellow/red times, `get_elapsed_time`, `freeze`, `is_frozen`, `get_pole_index`, `reset_group`, `get_opendrive_id`, `trigger_volume`, `get_affected_lane_waypoints`, `get_stop_waypoints`, `get_group_traffic_lights`, `get_light_boxes`) |
 | Traffic Manager | `TrafficManager` (`set_synchronous_mode`, `set_random_device_seed`, `set_hybrid_physics_mode`, `global_percentage_speed_difference`, `set_global_distance_to_leading_vehicle`, per-vehicle `vehicle_percentage_speed_difference`, `distance_to_leading_vehicle`, `random_left/right_lanechange_percentage`, `ignore_lights/signs/vehicles/walkers_percentage`, `keep_right_rule_percentage`, `set_desired_speed`, `vehicle_lane_offset`, `auto_lane_change`, `force_lane_change`, `update_vehicle_lights`, `get_port`) |
 | Weather | `WeatherParameters` (all 14 fields, `WeatherParameters.preset("ClearNoon")` for LibCarla's named presets) |
@@ -47,9 +47,9 @@ Milestones (design section 43):
 | Landmark | every field of the Python API (`id`, `name`, `type`, `road_id`, `s`, `t`, `distance`, `orientation` (`LandmarkOrientation`), `h_offset`, `pitch`, `roll`, `is_dynamic`, ...), `waypoint` (→ `Optional[Waypoint]`), `get_lane_validities`; `LandmarkType` |
 | Snapshots | `WorldSnapshot` (`id`, `frame`, `timestamp`, `find` → `Optional`, `has_actor`, indexing, iteration), `ActorSnapshot`, `Timestamp` |
 | Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`; `SensorData.as_image()` / `as_lidar()` / `as_gnss()` / `as_imu()` / `as_collision()` (checked); `Image` (zero-copy `raw_data()`, `pixel`), `LidarMeasurement` (zero-copy `raw_points()`, iteration, `get_point_count`), `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` |
-| Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyWalkerControl`, `ApplyTransform`, `ApplyLocation`, `ApplyTargetVelocity`, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, `SetAutopilot`, `SetSimulatePhysics`, `SetEnableGravity`, `SetVehicleLightState`, `SetTrafficLightState`; `CommandResponse` |
+| Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyWalkerControl`, `ApplyTransform`, `ApplyLocation`, `ApplyTargetVelocity`, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, `SetAutopilot`, `SetSimulatePhysics`, `SetEnableGravity`, `SetVehicleLightState`, `SetTrafficLightState`, `ApplyVehicleAckermannControl`, `ShowDebugTelemetry`; `CommandResponse` |
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, indexing, iteration), `ActorBlueprint` (`id`, `has_tag`, `has_attribute`, `get_attribute`, `set_attribute`), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`) |
-| Values | `Location`, `Rotation`, `Transform`, `Vector2D`, `Vector3D`, `BoundingBox`, `VehicleControl`, `VehiclePhysicsControl` and `WheelPhysicsControl` (all fields: curves, gear ratios, wheels), `WorldSettings`, `Color` |
+| Values | `Location`, `Rotation`, `Transform`, `Vector2D`, `Vector3D`, `BoundingBox`, `VehicleControl`, `VehiclePhysicsControl` and `WheelPhysicsControl` (all fields: curves, gear ratios, wheels), `WorldSettings`, `Color`, `VehicleAckermannControl`, `AckermannControllerSettings`, `VehicleTelemetryData`, `WheelTelemetryData`, `WalkerBoneControlIn` / `WalkerBoneControlOut`, `bone_transform` / `bone_transform_out`; enumerations `VehicleDoor`, `VehicleWheelLocation`, `VehicleFailureState` |
 | Errors | `CarlaError`, `TimeoutError`, `ActorTypeError`, `VersionError` (plus `IndexError` for lookups by key or index) |
 | Tooling | `typesafe-codon` launcher, `typesafe-carla-toolchain` (bundled Codon), uv workspace + `uv.lock`, CI, PyPI release workflow, binding generator ([docs/bindgen.md](docs/bindgen.md)) |
 
@@ -90,8 +90,35 @@ Notes on Milestone 4:
 - **Traffic Manager.** It runs inside LibCarla in the client process. In synchronous mode, call `tm.set_synchronous_mode(True)` as well.
 - **Enumerations.** `TrafficLightState`, `VehicleLightState` and `LaneType` are integer constants, as in the Python API (`VehicleLightState` values combine with `|`).
 
+Notes on issue #20 (Vehicle and Walker API gaps):
+- **Typed enumerations.** `VehicleDoor`, `VehicleWheelLocation` and `VehicleFailureState`
+  are distinct types, not `int` constants (unlike `TrafficLightState` and the bit-flag
+  enumerations): `vehicle.open_door(carla.VehicleWheelLocation.FL_Wheel)` and
+  `vehicle.open_door(0)` do not compile. The official API rejects an `int` there too.
+  `int(carla.VehicleDoor.All)` gives the value. `VehicleDoor` has the Python API's
+  members (`FL`, `FR`, `RL`, `RR`, `All`); LibCarla's `Hood` and `Trunk` have no named
+  members, as in the Python API; their raw values 4 and 5 (`carla.VehicleDoor(4)`) pass through.
+- **Depends on the LibCarla version.** `Vehicle.get_telemetry_data()` and
+  `Vehicle.get_vehicle_bone_world_transforms()` call LibCarla methods that ue5-dev has
+  and CARLA 0.10.0 does not. Built against LibCarla 0.10.0, they raise `CarlaError`
+  ("... is not available in LibCarla 0.10.0"); the rest of the library is unaffected.
+- **Server plugins.** `enable_carsim`, `use_carsim_road` and `enable_chrono_physics`
+  are bound (one LibCarla call each), but they only do something on a server built with
+  the CarSim or Chrono plugin, which CARLA UE5 does not ship. LibCarla sends them
+  asynchronously, so an unsupported server ignores them without an error.
+  `enable_chrono_physics`'s fourth keyword is `powetrain_json`, spelled as in the
+  official Python API. `restore_physx_physics` is not bound: neither LibCarla 0.10.0
+  nor ue5-dev has a counterpart (the official module lists it, but there is no
+  LibCarla method to call).
+- **Fire and forget.** `open_door`, `close_door`, `set_wheel_steer_direction`,
+  `show_debug_telemetry`, `apply_ackermann_controller_settings`, `set_bones`,
+  `blend_pose` / `show_pose` / `hide_pose` and `get_pose_from_animation` are
+  asynchronous RPCs in LibCarla: the server's errors (an unknown bone name, a door a
+  vehicle does not have) are not reported. `set_wheel_steer_direction` turns the wheel's
+  bone only; `get_wheel_steer_angle` reports the physics angle.
+
 Notes on Milestone 5:
-- **Generated plumbing, hand-written API.** 69 C ABI functions are generated from
+- **Generated plumbing, hand-written API.** 86 C ABI functions are generated from
   `bindings/*.yaml`: the C declarations, the C++ shim and the Codon FFI. Each one is a handle check,
   argument conversions and a single LibCarla call. The ABI is unchanged; libclang compared every
   prototype and struct size before and after the migration. See [docs/bindgen.md](docs/bindgen.md).
@@ -135,7 +162,7 @@ resolved commit are compiled in: `typesafe-codon info`,
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
-| 0.1.0 | 3.1 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
+| 0.1.0 | 3.2 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
 
 ### Backends
 

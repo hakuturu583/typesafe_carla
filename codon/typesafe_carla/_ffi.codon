@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 3
-TSC_ABI_VERSION_MINOR = 1
+TSC_ABI_VERSION_MINOR = 2
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -29,6 +29,7 @@ TSC_KIND_SENSOR = 12
 TSC_KIND_WALKER = 14
 TSC_KIND_WALKER_AI_CONTROLLER = 15
 TSC_KIND_TRAFFIC_LIGHT = 16
+TSC_KIND_BONE_LIST = 23  # issue #20
 
 # --- POD mirrors (layouts checked by tests/native/test_ffi.c) ---------------
 
@@ -391,6 +392,54 @@ class CLaneValidity:
     from_lane: i32
     to_lane: i32
 
+# Issue #20: Vehicle and Walker API gaps.
+
+@tuple
+class CVehicleAckermannControl:
+    steer: float
+    steer_speed: float
+    speed: float
+    acceleration: float
+    jerk: float
+
+@tuple
+class CAckermannControllerSettings:
+    speed_kp: float
+    speed_ki: float
+    speed_kd: float
+    accel_kp: float
+    accel_ki: float
+    accel_kd: float
+
+@tuple
+class CWheelTelemetryData:
+    lat_slip: float
+    long_slip: float
+    omega: float
+
+@tuple
+class CVehicleTelemetryData:
+    speed: float
+    steer: float
+    throttle: float
+    brake: float
+    engine_rpm: float
+    gear: i32
+    reserved0: i32
+
+@tuple
+class CBoneTransform:
+    name: cobj
+    name_len: int
+    transform: CTransform
+
+@tuple
+class CBoneTransformOut:
+    name: CString
+    world: CTransform
+    component: CTransform
+    relative: CTransform
+
 # --- Functions ----------------------------------------------------------------
 
 from C import LIB.tsc_last_error_message() -> cobj
@@ -636,6 +685,38 @@ from C import LIB.tsc_traffic_manager_set_auto_lane_change(cobj, cobj, i32) -> i
 from C import LIB.tsc_traffic_manager_force_lane_change(cobj, cobj, i32) -> i32
 from C import LIB.tsc_traffic_manager_set_update_vehicle_lights(cobj, cobj, i32) -> i32
 # END GENERATED traffic_manager_vehicle
+
+# Issue #20: Vehicle and Walker API gaps.
+# BEGIN GENERATED vehicle_ackermann from bindings/vehicle_ext.yaml, do not edit
+from C import LIB.tsc_vehicle_apply_ackermann_control(cobj, Ptr[CVehicleAckermannControl]) -> i32
+from C import LIB.tsc_vehicle_get_ackermann_controller_settings(cobj, Ptr[CAckermannControllerSettings]) -> i32
+from C import LIB.tsc_vehicle_apply_ackermann_controller_settings(cobj, Ptr[CAckermannControllerSettings]) -> i32
+# END GENERATED vehicle_ackermann
+# BEGIN GENERATED vehicle_state from bindings/vehicle_ext.yaml, do not edit
+from C import LIB.tsc_vehicle_open_door(cobj, i32) -> i32
+from C import LIB.tsc_vehicle_close_door(cobj, i32) -> i32
+from C import LIB.tsc_vehicle_get_failure_state(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_vehicle_show_debug_telemetry(cobj, i32) -> i32
+from C import LIB.tsc_vehicle_get_wheel_steer_angle(cobj, i32, Ptr[float]) -> i32
+from C import LIB.tsc_vehicle_set_wheel_steer_direction(cobj, i32, float) -> i32
+from C import LIB.tsc_vehicle_use_carsim_road(cobj, i32) -> i32
+from C import LIB.tsc_vehicle_enable_carsim(cobj, cobj, int) -> i32
+from C import LIB.tsc_vehicle_enable_chrono_physics(cobj, u64, float, cobj, int, cobj, int, cobj, int, cobj, int) -> i32
+# END GENERATED vehicle_state
+# BEGIN GENERATED vehicle_bones from bindings/vehicle_ext.yaml, do not edit
+from C import LIB.tsc_vehicle_get_vehicle_bone_world_transforms(cobj, Ptr[CTransform], int, Ptr[int]) -> i32
+# END GENERATED vehicle_bones
+from C import LIB.tsc_vehicle_get_telemetry_data(cobj, Ptr[CVehicleTelemetryData], Ptr[CWheelTelemetryData], int, Ptr[int]) -> i32
+# BEGIN GENERATED walker_pose from bindings/walker.yaml, do not edit
+from C import LIB.tsc_walker_blend_pose(cobj, float) -> i32
+from C import LIB.tsc_walker_show_pose(cobj) -> i32
+from C import LIB.tsc_walker_hide_pose(cobj) -> i32
+from C import LIB.tsc_walker_get_pose_from_animation(cobj) -> i32
+# END GENERATED walker_pose
+from C import LIB.tsc_walker_set_bones(cobj, Ptr[CBoneTransform], int) -> i32
+from C import LIB.tsc_walker_get_bones(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_bone_list_size(cobj) -> int
+from C import LIB.tsc_bone_list_get(cobj, int, Ptr[CBoneTransformOut]) -> i32
 
 # --- Helpers --------------------------------------------------------------------
 

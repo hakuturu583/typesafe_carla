@@ -48,6 +48,14 @@ Command to_command(const tsc_command_t &c) {
       return Command::ApplyLocation(c.actor_id, to_carla(c.transform.location));
     case TSC_COMMAND_SET_TRAFFIC_LIGHT_STATE:
       return Command::SetTrafficLightState(c.actor_id, to_light_state(c.flag));
+    case TSC_COMMAND_APPLY_VEHICLE_ACKERMANN_CONTROL: {
+      const tsc_vehicle_ackermann_control_t control{c.vector.x, c.vector.y, c.vector.z,
+                                                    c.transform.location.x,
+                                                    c.transform.location.y};
+      return Command::ApplyVehicleAckermannControl(c.actor_id, to_carla(control));
+    }
+    case TSC_COMMAND_SHOW_DEBUG_TELEMETRY:
+      return Command::ShowDebugTelemetry(c.actor_id, c.flag != 0);
     default:
       fail(TSC_INVALID_ARGUMENT, "unknown command type " + std::to_string(c.type));
   }

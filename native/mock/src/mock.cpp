@@ -1,6 +1,7 @@
 // Implementation of the in-memory mock LibCarla (see carla/mock/Mock.h).
 #include "carla/mock/Mock.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -40,6 +41,19 @@ struct ActorData {
   std::optional<rpc::ActorId> parent;
   geom::Transform offset;
   std::map<std::string, std::string> attributes;  // blueprint attributes at spawn
+  // Issue #20. Ackermann control replaces the VehicleControl until the next
+  // ApplyControl; the settings default to the CARLA server's PID gains.
+  std::optional<rpc::VehicleAckermannControl> ackermann;
+  rpc::AckermannControllerSettings ackermann_settings{0.15f, 0.0f, 0.25f, 0.01f, 0.0f, 0.01f};
+  uint32_t open_doors = 0u;  // bit per rpc::VehicleDoor below All
+  bool debug_telemetry = false;
+  std::map<int, float> wheel_steer_direction;  // visual only
+  rpc::VehicleFailureState failure_state = rpc::VehicleFailureState::None;
+  std::string carsim_file;
+  bool carsim_road = false;
+  bool chrono = false;
+  float pose_blend = 0.0f;                         // walkers
+  std::map<std::string, geom::Transform> custom_pose;  // walkers: SetBonesTransform
 
   bool is_walker() const { return type_id.rfind("walker.", 0) == 0; }
   bool is_walker_ai_controller() const { return type_id == "controller.ai.walker"; }
@@ -205,6 +219,28 @@ struct Episode : std::enable_shared_from_this<Episode> {
                    geom::Transform(geom::Location(100.0f, -3.0f, 0.0f)));
   }
 
+  // Ackermann control (issue #20): reach the target speed at `acceleration`
+  // (6 m/s^2 when 0), turn with a kinematic bicycle model (2.8 m wheelbase).
+  void StepAckermannLocked(ActorData &a, double speed_before, double dt) {
+    const rpc::VehicleAckermannControl &k = *a.ackermann;
+    const double rate = k.acceleration > 0.0f ? k.acceleration : 6.0;
+    const double diff = k.speed - speed_before;
+    const double speed = std::abs(diff) <= rate * dt ? k.speed
+                                                     : speed_before + (diff > 0 ? rate : -rate) * dt;
+    const double yaw = a.transform.rotation.yaw * M_PI / 180.0;
+    const double new_yaw = yaw + speed * std::tan(k.steer) / 2.8 * dt;
+    a.transform.rotation.yaw = static_cast<float>(new_yaw * 180.0 / M_PI);
+    const geom::Vector3D v(static_cast<float>(speed * std::cos(new_yaw)),
+                           static_cast<float>(speed * std::sin(new_yaw)), 0.0f);
+    a.acceleration = geom::Vector3D(static_cast<float>((v.x - a.velocity.x) / dt),
+                                    static_cast<float>((v.y - a.velocity.y) / dt), 0.0f);
+    a.angular_velocity =
+        geom::Vector3D(0.0f, 0.0f, static_cast<float>((new_yaw - yaw) * 180.0 / M_PI / dt));
+    a.velocity = v;
+    a.transform.location.x += static_cast<float>(v.x * dt);
+    a.transform.location.y += static_cast<float>(v.y * dt);
+  }
+
   // Advances one frame; returns the sensor deliveries to run after unlocking.
   std::vector<Delivery> StepLocked() {
     const double dt = DeltaSeconds();
@@ -218,6 +254,10 @@ struct Episode : std::enable_shared_from_this<Episode> {
       }
       const double yaw = a.transform.rotation.yaw * M_PI / 180.0;
       const double speed_before = std::hypot(a.velocity.x, a.velocity.y);
+      if (a.ackermann && !a.autopilot) {
+        StepAckermannLocked(a, speed_before, dt);
+        continue;
+      }
       double accel = 6.0 * c.throttle * (c.reverse ? -1.0 : 1.0) - 0.2 * speed_before;
       if (c.brake > 0.0f || c.hand_brake) {
         const double braking = 9.0 * (c.hand_brake ? 1.0 : c.brake);
@@ -559,7 +599,11 @@ void Vehicle::SetAutopilot(bool enabled, uint16_t) {
 }
 
 void Vehicle::ApplyControl(const Control &control) {
-  WithData([&](mock::ActorData &a) { a.control = control; return 0; });
+  WithData([&](mock::ActorData &a) {
+    a.control = control;
+    a.ackermann.reset();
+    return 0;
+  });
 }
 
 void Vehicle::ApplyPhysicsControl(const PhysicsControl &physics_control) {
@@ -865,6 +909,17 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
           auto &a = target(c.actor);
           if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
           a.control = c.control;
+          a.ackermann.reset();
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyVehicleAckermannControl>) {
+          auto &a = target(c.actor);
+          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          a.ackermann = c.control;
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ShowDebugTelemetry>) {
+          auto &a = target(c.actor);
+          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          a.debug_telemetry = c.enabled;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyTransform>) {
           auto &a = target(c.actor);
@@ -1179,6 +1234,177 @@ SharedPtr<TrafficLight> Vehicle::GetTrafficLight() const {
     return l == nullptr ? 0u : l->id;
   });
   return id == 0 ? nullptr : std::make_shared<TrafficLight>(_episode, id);
+}
+
+// --- Issue #20 -----------------------------------------------------------------
+
+void Vehicle::ShowDebugTelemetry(bool enabled) {
+  WithData([&](mock::ActorData &a) { a.debug_telemetry = enabled; return 0; });
+}
+
+void Vehicle::ApplyAckermannControl(const AckermannControl &control) {
+  WithData([&](mock::ActorData &a) { a.ackermann = control; return 0; });
+}
+
+rpc::AckermannControllerSettings Vehicle::GetAckermannControllerSettings() const {
+  return WithData([](mock::ActorData &a) { return a.ackermann_settings; });
+}
+
+void Vehicle::ApplyAckermannControllerSettings(const rpc::AckermannControllerSettings &settings) {
+  WithData([&](mock::ActorData &a) { a.ackermann_settings = settings; return 0; });
+}
+
+namespace {
+
+uint32_t DoorBits(rpc::VehicleDoor door) {
+  return door == rpc::VehicleDoor::All ? 0x3Fu : 1u << static_cast<uint32_t>(door);
+}
+
+// The server answers an unknown wheel with an error, which CallAndWait throws.
+const rpc::WheelPhysicsControl &WheelAt(const mock::ActorData &a, rpc::VehicleWheelLocation w) {
+  const auto i = static_cast<size_t>(w);
+  if (i >= a.physics.wheels.size()) {
+    throw std::runtime_error("vehicle " + std::to_string(a.id) + " has no wheel " +
+                             std::to_string(i));
+  }
+  return a.physics.wheels[i];
+}
+
+double ForwardSpeed(const mock::ActorData &a) {
+  const double yaw = a.transform.rotation.yaw * M_PI / 180.0;
+  return a.velocity.x * std::cos(yaw) + a.velocity.y * std::sin(yaw);
+}
+
+}  // namespace
+
+void Vehicle::OpenDoor(const VehicleDoor door_idx) {
+  WithData([&](mock::ActorData &a) { a.open_doors |= DoorBits(door_idx); return 0; });
+}
+
+void Vehicle::CloseDoor(const VehicleDoor door_idx) {
+  WithData([&](mock::ActorData &a) { a.open_doors &= ~DoorBits(door_idx); return 0; });
+}
+
+void Vehicle::SetWheelSteerDirection(WheelLocation wheel_location, float angle_in_deg) {
+  WithData([&](mock::ActorData &a) {
+    WheelAt(a, wheel_location);
+    a.wheel_steer_direction[static_cast<int>(wheel_location)] = angle_in_deg;
+    return 0;
+  });
+}
+
+float Vehicle::GetWheelSteerAngle(WheelLocation wheel_location) {
+  return WithData([&](mock::ActorData &a) {
+    const auto &w = WheelAt(a, wheel_location);
+    if (!w.affected_by_steering) return 0.0f;
+    const float steer = a.ackermann ? static_cast<float>(a.ackermann->steer * 180.0 / M_PI) /
+                                          std::max(w.max_steer_angle, 1.0f)
+                                    : a.control.steer;
+    return std::clamp(steer, -1.0f, 1.0f) * w.max_steer_angle;
+  });
+}
+
+Vehicle::TelemetryData Vehicle::GetTelemetryData() const {
+  return WithData([](mock::ActorData &a) {
+    TelemetryData t;
+    const double speed = ForwardSpeed(a);
+    t.speed = static_cast<float>(speed);
+    t.steer = a.control.steer;
+    t.throttle = a.control.throttle;
+    t.brake = a.control.brake;
+    t.gear = speed > 0.1 ? 1 : speed < -0.1 ? -1 : 0;
+    t.engine_rpm = static_cast<float>(800.0 + 120.0 * std::abs(speed));
+    for (const auto &w : a.physics.wheels) {
+      const double radius_m = std::max(w.wheel_radius, 1.0f) / 100.0;
+      t.wheels.emplace_back(0.0f, 0.0f, static_cast<float>(speed / radius_m));
+    }
+    return t;
+  });
+}
+
+void Vehicle::EnableCarSim(std::string simfile_path) {
+  WithData([&](mock::ActorData &a) { a.carsim_file = simfile_path; return 0; });
+}
+
+void Vehicle::UseCarSimRoad(bool enabled) {
+  WithData([&](mock::ActorData &a) { a.carsim_road = enabled; return 0; });
+}
+
+void Vehicle::EnableChronoPhysics(uint64_t, float, std::string, std::string, std::string,
+                                  std::string) {
+  WithData([&](mock::ActorData &a) { a.chrono = true; return 0; });
+}
+
+rpc::VehicleFailureState Vehicle::GetFailureState() const {
+  return WithData([](mock::ActorData &a) { return a.failure_state; });
+}
+
+std::vector<geom::Transform> Vehicle::GetVehicleBoneWorldTransforms() const {
+  return WithData([](mock::ActorData &a) {
+    // The root bone, then one per wheel at its offset (cm) from the center.
+    std::vector<geom::Transform> out{a.transform};
+    const double yaw = a.transform.rotation.yaw * M_PI / 180.0;
+    for (const auto &w : a.physics.wheels) {
+      const double x = w.offset.x / 100.0, y = w.offset.y / 100.0;
+      geom::Transform t = a.transform;
+      t.location.x += static_cast<float>(x * std::cos(yaw) - y * std::sin(yaw));
+      t.location.y += static_cast<float>(x * std::sin(yaw) + y * std::cos(yaw));
+      t.location.z += static_cast<float>(w.offset.z / 100.0);
+      out.push_back(t);
+    }
+    return out;
+  });
+}
+
+namespace {
+
+// A small fixed skeleton with CARLA's pedestrian bone names; each bone sits
+// 0.1 m above its predecessor in the component space.
+const std::vector<std::string> &MockBoneNames() {
+  static const std::vector<std::string> names{
+      "crl_root",       "crl_hips__C",    "crl_spine__C",   "crl_spine01__C", "crl_neck__C",
+      "crl_Head__C",    "crl_arm__L",     "crl_foreArm__L", "crl_hand__L",    "crl_arm__R",
+      "crl_foreArm__R", "crl_hand__R",    "crl_thigh__L",   "crl_leg__L",     "crl_foot__L",
+      "crl_thigh__R",   "crl_leg__R",     "crl_foot__R"};
+  return names;
+}
+
+}  // namespace
+
+Walker::BoneControlOut Walker::GetBonesTransform() {
+  return WithData([](mock::ActorData &a) {
+    BoneControlOut out;
+    const auto &names = MockBoneNames();
+    for (size_t i = 0; i < names.size(); ++i) {
+      rpc::BoneTransformDataOut b;
+      b.bone_name = names[i];
+      b.relative = geom::Transform(geom::Location(0.0f, 0.0f, i == 0 ? 0.0f : 0.1f));
+      auto custom = a.custom_pose.find(names[i]);
+      if (a.pose_blend > 0.0f && custom != a.custom_pose.end()) b.relative = custom->second;
+      b.component = geom::Transform(geom::Location(0.0f, 0.0f, 0.1f * static_cast<float>(i)),
+                                    b.relative.rotation);
+      b.world = a.transform;
+      b.world.location.z += b.component.location.z;
+      out.bone_transforms.push_back(b);
+    }
+    return out;
+  });
+}
+
+void Walker::SetBonesTransform(const BoneControlIn &bones) {
+  WithData([&](mock::ActorData &a) {
+    for (const auto &bone : bones.bone_transforms) a.custom_pose[bone.first] = bone.second;
+    return 0;
+  });
+}
+
+void Walker::BlendPose(float blend) {
+  WithData([&](mock::ActorData &a) { a.pose_blend = blend; return 0; });
+}
+
+// The custom pose becomes the current animation pose (the mock's rest pose).
+void Walker::GetPoseFromAnimation() {
+  WithData([](mock::ActorData &a) { a.custom_pose.clear(); return 0; });
 }
 
 void Walker::ApplyControl(const Control &control) {

@@ -1,0 +1,155 @@
+# Issue #20 against a real CARLA server: Ackermann control and controller
+# settings, doors, failure state, telemetry, wheel steering, vehicle bones,
+# the CarSim / Chrono calls, the two batch commands, walker bones and poses.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+def close(a: float, b: float, tol: float = 1e-3) -> bool:
+    return abs(a - b) <= tol * max(1.0, abs(b))
+
+def spawn_vehicle(world: carla.World, bp: carla.ActorBlueprint, skip: int) -> carla.Vehicle:
+    points = world.get_map().get_spawn_points()
+    for i in range(skip, len(points)):
+        actor = world.try_spawn_actor(bp, points[i])
+        if actor is not None:
+            return unwrap(actor).as_vehicle()
+    raise carla.CarlaError("no free spawn point")
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+lib = world.get_blueprint_library()
+original = world.get_settings()
+settings = world.get_settings()
+settings.synchronous_mode = True
+settings.fixed_delta_seconds = 0.05
+world.apply_settings(settings)
+car = spawn_vehicle(world, lib.find("vehicle.lincoln.mkz"), 0)
+walker: Optional[carla.Walker] = None
+try:
+    for _ in range(20):
+        world.tick()
+
+    # Ackermann controller settings: read, apply, read back.
+    s0 = car.get_ackermann_controller_settings()
+    print("ackermann settings", s0)
+    wanted = carla.AckermannControllerSettings(0.5, 0.0, 0.3, 0.02, 0.0, 0.02)
+    car.apply_ackermann_controller_settings(wanted)
+    world.tick()
+    s1 = car.get_ackermann_controller_settings()
+    print("ackermann settings after", s1)
+    assert close(s1.speed_kp, 0.5) and close(s1.speed_kd, 0.3) and close(s1.accel_kp, 0.02)
+    car.apply_ackermann_controller_settings(s0)
+
+    # Ackermann control: the server's controller reaches the target speed.
+    car.apply_ackermann_control(carla.VehicleAckermannControl(speed=4.0))
+    for _ in range(200):
+        world.tick()
+    speed = car.get_velocity().length()
+    print("ackermann speed", speed)
+    assert abs(speed - 4.0) < 0.5, speed
+
+    # Failure state from the snapshot.
+    state = car.get_failure_state()
+    print("failure state", state)
+    assert state == carla.VehicleFailureState.NONE
+
+    # Telemetry and the vehicle's bones: in ue5-dev's LibCarla, not in 0.10.0's.
+    try:
+        t = car.get_telemetry_data()
+        print("telemetry", t, t.wheels)
+        assert len(t.wheels) == 4 and abs(t.speed) > 1.0
+    except carla.CarlaError as e:
+        assert "is not available in LibCarla" in str(e), str(e)  # CARLA 0.10.0
+        print("NOTE: get_telemetry_data is not available in LibCarla", carla.libcarla_version())
+    try:
+        bones = car.get_vehicle_bone_world_transforms()
+        print("vehicle bones", len(bones))
+        assert len(bones) > 0
+    except carla.CarlaError as e:
+        assert "is not available in LibCarla" in str(e), str(e)  # CARLA 0.10.0
+        print("NOTE: get_vehicle_bone_world_transforms is not available in LibCarla",
+              carla.libcarla_version())
+
+    # Wheel steering: the physics angle follows the control (rear wheels do not steer).
+    car.apply_control(carla.VehicleControl(steer=0.5, brake=1.0))
+    for _ in range(20):
+        world.tick()
+    fl = car.get_wheel_steer_angle(carla.VehicleWheelLocation.FL_Wheel)
+    bl = car.get_wheel_steer_angle(carla.VehicleWheelLocation.BL_Wheel)
+    print("wheel steer", fl, bl)
+    assert abs(fl) > 1.0 and abs(bl) < 0.5
+    car.set_wheel_steer_direction(carla.VehicleWheelLocation.FR_Wheel, 10.0)  # visual only
+
+    # Doors and the on-screen telemetry: asynchronous, nothing to read back.
+    car.open_door(carla.VehicleDoor.All)
+    car.show_debug_telemetry()
+    world.tick()
+    car.close_door(carla.VehicleDoor.FL)
+    car.close_door(carla.VehicleDoor.All)
+    car.show_debug_telemetry(False)
+    world.tick()
+
+    # Batch commands.
+    responses = client.apply_batch_sync([
+        carla.command.ApplyVehicleAckermannControl(car.id, carla.VehicleAckermannControl(speed=0.0)),
+        carla.command.ShowDebugTelemetry(car.id, False)], True)
+    print("batch", responses)
+    assert len(responses) == 2 and not responses[0].has_error() and not responses[1].has_error()
+    for _ in range(100):
+        world.tick()
+    assert car.get_velocity().length() < 0.5, car.get_velocity()
+
+    # CarSim / Chrono: depend on server plugins. On a throwaway vehicle; the
+    # server must keep working whether or not it supports them.
+    spare = spawn_vehicle(world, lib.find("vehicle.lincoln.mkz"), 5)
+    spare.use_carsim_road(False)
+    spare.enable_carsim("")
+    spare.enable_chrono_physics()
+    for _ in range(5):
+        world.tick()
+    print("after CarSim / Chrono: server", client.get_server_version(),
+          "spare alive", spare.is_alive)
+    spare.destroy()
+    world.tick()
+
+    # Walker bones and poses.
+    nav = world.get_random_location_from_navigation()
+    assert nav is not None, "no navigation mesh"
+    n = unwrap(nav)
+    spawned = world.try_spawn_actor(lib.filter("walker.pedestrian.*")[0],
+                                    carla.Transform(carla.Location(n.x, n.y, n.z + 1.0)))
+    assert spawned is not None, "walker spawn failed"
+    w = unwrap(spawned).as_walker()
+    walker = w
+    for _ in range(5):
+        world.tick()
+    out = w.get_bones()
+    names = [b.name for b in out.bone_transforms]
+    print("walker bones", len(names), names[:5])
+    assert len(names) > 1 and all(name != "" for name in names)
+    b1 = out.bone_transforms[1]
+    rel = b1.relative
+    w.set_bones(carla.WalkerBoneControlIn([(b1.name, carla.Transform(
+        carla.Location(rel.location.x, rel.location.y, rel.location.z + 0.1),
+        carla.Rotation(rel.rotation.pitch, rel.rotation.yaw + 30.0, rel.rotation.roll)))]))
+    w.show_pose()
+    world.tick()
+    posed = [b for b in w.get_bones().bone_transforms if b.name == b1.name][0].relative
+    print("posed", b1.name, rel, "->", posed)
+    if not (close(posed.location.z - rel.location.z, 0.1, 0.05)):
+        print("NOTE: the custom pose did not show in get_bones() right after show_pose()")
+    w.hide_pose()
+    w.blend_pose(0.5)
+    w.get_pose_from_animation()
+    world.tick()
+finally:
+    if walker is not None:
+        unwrap(walker).destroy()
+    car.destroy()
+    world.apply_settings(original)
+print("OK")
