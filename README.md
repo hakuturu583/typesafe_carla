@@ -123,6 +123,21 @@ If GitHub archive downloads are blocked by your network but git works, add
 `LD_LIBRARY_PATH`. For `build`, it also gives the executable an RPATH to the
 native library, so the result runs without the launcher.
 
+## Continuing a cloud session locally
+
+Claude Code sessions on the web can be pulled into a local terminal on any
+machine. Run this from a checkout of this repository, logged in to the same
+claude.ai account:
+
+```sh
+claude --teleport <session-id>    # or plain `claude --teleport` for a picker
+```
+
+Teleport fetches and checks out the session's branch (it must be pushed) and
+restores the conversation. The working tree must be clean; you are prompted
+to stash otherwise. It requires claude.ai login (not an API key). Project
+context for new sessions is in `CLAUDE.md`.
+
 ## Repository layout
 
 ```
