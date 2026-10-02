@@ -1,0 +1,91 @@
+# Issue #23: Client, Traffic Manager, blueprint, debug and value-type additions,
+# with their static types. Uses no compatibility path.
+# strict
+import typesafe_carla as carla
+
+def client_api(client: carla.Client):
+    maps: List[str] = client.get_available_maps()
+    files: List[str] = client.get_required_files(folder="", download=False)
+    client.request_file(files[0])
+    ok: bool = client.set_files_base_folder("/tmp/carla-files")
+    client.set_replayer_ignore_hero(True)
+    client.set_replayer_ignore_spectator(ignore_spectator=False)
+    loaded: Optional[carla.World] = client.load_world_if_different(maps[0], reset_settings=False)
+    if loaded is not None:
+        print(loaded.id)
+
+def blueprints(world: carla.World):
+    lib: carla.BlueprintLibrary = world.get_blueprint_library().filter_by_attribute("number_of_wheels", "4")
+    tags: List[str] = lib[0].tags
+    matched: bool = lib[0].match_tags("vehicle.*")
+    world.debug.clear_debug_shape()
+    world.debug.clear_debug_string()
+
+def settings(world: carla.World):
+    s: carla.WorldSettings = world.get_settings()
+    culling: float = s.max_culling_distance
+    s.tile_stream_distance = 2000.0
+    s.actor_active_distance = 1000.0
+    s.deterministic_ragdolls = True
+    s.spectator_as_ego = False
+    world.apply_settings(s)
+    world.apply_settings(carla.WorldSettings(synchronous_mode=True, max_culling_distance=100.0,
+                                             spectator_as_ego=False))
+    snap = world.get_snapshot()
+    frames: int = snap.frame_count + snap.timestamp.frame_count
+    dt: float = snap.delta_seconds + snap.elapsed_seconds + snap.platform_timestamp
+
+def traffic(client: carla.Client, vehicle: carla.Vehicle, walker: carla.Walker):
+    tm = client.get_trafficmanager()
+    tm.collision_detection(vehicle, walker, False)
+    tm.collision_detection(vehicle, vehicle, True)
+    tm.global_lane_offset(0.5)
+    tm.global_large_vehicle_wide_turn(True)
+    tm.vehicle_large_vehicle_wide_turn(vehicle, True)
+    tm.keep_slow_lane_rule_percentage(vehicle, 20.0)
+    tm.set_boundaries_respawn_dormant_vehicles(25.0, 100.0)
+    tm.set_respawn_dormant_vehicles(True)
+    tm.set_hybrid_physics_radius(50.0)
+    tm.set_osm_mode(False)
+    tm.set_path(vehicle, [carla.Location(1.0, 2.0, 0.0), carla.Location(3.0, 4.0, 0.0)])
+    tm.set_route(vehicle, ["Left", "Straight"], empty_buffer=False)
+    option, waypoint = tm.get_next_action(vehicle)
+    name: str = option
+    road: int = waypoint.road_id
+    actions: List[Tuple[str, carla.Waypoint]] = tm.get_all_actions(vehicle)
+    tm.shut_down()
+
+def values():
+    t = carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(yaw=90.0))
+    m: List[List[float]] = t.get_matrix()
+    inv: List[List[float]] = t.get_inverse_matrix()
+    right: carla.Vector3D = t.get_right_vector()
+    up: carla.Vector3D = t.get_up_vector()
+    moved: carla.Location = t.transform(carla.Location(1.0, 0.0, 0.0))
+    t.transform([carla.Location(), carla.Location(1.0, 1.0, 1.0)])
+    turned: carla.Vector3D = t.transform_vector(carla.Vector3D(1.0, 0.0, 0.0))
+    r: carla.Rotation = carla.Rotation(400.0, 0.0, 0.0).get_normalized()
+    rr: carla.Vector3D = r.get_right_vector() + r.get_up_vector()
+    bb = carla.BoundingBox(carla.Location(), carla.Vector3D(1.0, 1.0, 1.0))
+    inside: bool = bb.contains(carla.Location(0.5, 0.0, 0.0), t)
+    local: List[carla.Location] = bb.get_local_vertices()
+    corners: List[carla.Location] = bb.get_world_vertices(t)
+    unit: carla.Vector2D = carla.Vector2D(3.0, 4.0).make_unit_vector()
+    sq: float = carla.Vector2D(3.0, 4.0).squared_length()
+    q = carla.Quaternion(carla.Rotation(yaw=30.0))
+    back: carla.Rotation = (q * q.conjugate()).unit_quaternion().inverse().rotator()
+    fwd: carla.Vector3D = q.get_forward_vector()
+    n: float = q.length()
+    v: carla.Vector3D = carla.Velocity(1.0, 0.0, 0.0) + carla.Acceleration(0.0, 1.0, 0.0)
+    w = carla.AngularVelocity(carla.Vector3D(0.0, 0.0, 1.0))
+    attach: int = carla.AttachmentType.SpringArm
+    gbuffer: int = carla.GBufferTextureID.SceneDepth
+
+# Compile-only: Codon type-checks a function only when it is called.
+_client = carla.Client("localhost", 2000)
+_world = _client.get_world()
+client_api(_client)
+blueprints(_world)
+settings(_world)
+traffic(_client, _world.get_actors()[0].as_vehicle(), _world.get_actors()[1].as_walker())
+values()

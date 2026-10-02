@@ -1,0 +1,9 @@
+# BoundingBox.contains takes a world point (a Location) and the box's transform.
+# expect-error: 'Rotation' does not match expected type 'Location'
+import typesafe_carla as carla
+
+def inside(bb: carla.BoundingBox, t: carla.Transform) -> bool:
+    return bb.contains(t.rotation, t)
+
+# Compile-only: Codon type-checks a function only when it is called.
+inside(carla.BoundingBox(), carla.Transform())

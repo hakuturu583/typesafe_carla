@@ -239,3 +239,34 @@ transform_buffer:
   assign: "copy_out({}, {out}, capacity, {out}_count)"
   invalid: "NULL, 0, NULL"
   cpp: ["std::vector<carla::geom::Transform.*>"]
+# --- #23 ---
+# Any actor handle (plain or derived kind) passed as a LibCarla ActorPtr.
+actor:
+  c: tsc_actor_t
+  handle: true
+  codon: cobj
+  to_carla: 'check_actor({}, "{name}")->actor'
+  cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]
+# Arrays: (pointer, count). NULL is accepted for count 0.
+location_path:
+  c: tsc_location_t
+  c_param: "const tsc_location_t *{name}, size_t count"
+  codon: "Ptr[CVector3D], int"
+  to_carla: 'to_path({name}, count, "{name}")'
+  invalid: "NULL, 1"
+  cpp: ["std::vector<carla::geom::Location.*>"]
+# Codes of tsc_road_option_t.
+road_option_route:
+  c: uint8_t
+  c_param: "const uint8_t *{name}, size_t count"
+  codon: "Ptr[u8], int"
+  to_carla: 'to_route({name}, count, "{name}")'
+  invalid: "NULL, 1"
+  cpp: ["std::vector<unsigned char.*>"]
+# A list of output strings; the caller frees it with tsc_string_list_free.
+string_list:
+  c: tsc_string_list_t
+  struct: true
+  codon: CStringList
+  assign: "string_list_assign({out}, {})"
+  cpp: ["std::vector<std::(__cxx11::)?basic_string<char.*>.*>"]

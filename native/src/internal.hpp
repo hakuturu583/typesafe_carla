@@ -82,6 +82,9 @@ inline std::string to_string(const char *data, size_t len, const char *name) {
 
 void string_assign(tsc_string_t *out, const std::string &value);
 
+// Fills *out with copies of `values` (all or nothing; *out is zeroed first).
+void string_list_assign(tsc_string_list_t *out, const std::vector<std::string> &values);
+
 // Shared body of the entry points that return one new handle: *out is NULL
 // unless make() succeeds; make() may itself return NULL ("no such object").
 template <typename H, typename F>
@@ -315,8 +318,24 @@ inline carla::client::World &world_of(tsc_world_t *w) {
   return check_handle(w, "world", TSC_KIND_WORLD)->world;
 }
 
+// A world's DebugHelper (a cheap value: it holds the episode).
+inline carla::client::DebugHelper debug_of(tsc_world_t *w) { return world_of(w).MakeDebugHelper(); }
+
 inline const carla::client::Map &map_of(const tsc_map_t *m) {
   return *check_handle(m, "map", TSC_KIND_MAP)->map;
+}
+
+inline const carla::SharedPtr<carla::client::BlueprintLibrary> &library_of(
+    const tsc_blueprint_library_t *l) {
+  return check_handle(l, "library", TSC_KIND_BLUEPRINT_LIBRARY)->library;
+}
+
+inline carla::client::ActorBlueprint &blueprint_of(tsc_actor_blueprint_t *b) {
+  return check_handle(b, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
+}
+
+inline const carla::client::ActorBlueprint &blueprint_of(const tsc_actor_blueprint_t *b) {
+  return check_handle(b, "blueprint", TSC_KIND_ACTOR_BLUEPRINT)->blueprint;
 }
 
 inline const carla::client::Waypoint &waypoint_of(const tsc_waypoint_t *w) {
@@ -384,6 +403,11 @@ inline double check_search_distance(double distance, const char *name) {
   }
   return distance;
 }
+
+// Traffic Manager paths and routes (traffic_manager.cpp), validated; a NULL
+// array is accepted for count 0.
+carla::traffic_manager::Path to_path(const tsc_location_t *path, size_t count, const char *name);
+carla::traffic_manager::Route to_route(const uint8_t *route, size_t count, const char *name);
 
 // Fails with TSC_NOT_FOUND unless index < size; `what` names the container.
 inline void check_index(size_t index, size_t size, const char *what) {

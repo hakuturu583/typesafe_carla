@@ -9,7 +9,9 @@ from ._ffi import (tsc_abi_version, tsc_libcarla_version, tsc_libcarla_git_ref,
                    tsc_libcarla_git_commit, tsc_build_commit, tsc_backend_name,
                    tsc_live_handle_count, c_str, TSC_ABI_VERSION_MAJOR, TSC_ABI_VERSION_MINOR)
 from .errors import CarlaError, TimeoutError, ActorTypeError, VersionError
-from .geometry import Vector2D, Vector3D, Location, Rotation, Transform, BoundingBox
+from .geometry import (Vector2D, Vector3D, Location, Rotation, Transform, BoundingBox, Velocity,
+                       AngularVelocity, Acceleration, Quaternion)
+from .constants import AttachmentType, GBufferTextureID
 from .control import (VehicleControl, VehiclePhysicsControl, WheelPhysicsControl, WalkerControl,
                       VehicleLightState, TrafficLightState)
 from .blueprint import (ActorAttribute, ActorAttributeType, ActorBlueprint, BlueprintLibrary,

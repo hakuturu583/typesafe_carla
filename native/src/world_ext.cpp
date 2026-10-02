@@ -94,9 +94,9 @@ tsc_status_t tsc_weather_preset(const char *name, size_t name_len, tsc_weather_t
 tsc_status_t tsc_debug_draw_point(tsc_world_t *world, const tsc_location_t *location, double size,
                                   const tsc_color_t *color, double life_time) {
   return TSC_GUARD({
-    world_of(world).MakeDebugHelper().DrawPoint(to_carla(*require_ptr(location, "location")),
-                                                static_cast<float>(size), to_color(color),
-                                                life(life_time));
+    debug_of(world).DrawPoint(to_carla(*require_ptr(location, "location")),
+                              static_cast<float>(size), to_color(color),
+                              life(life_time));
   });
 }
 
@@ -104,10 +104,10 @@ tsc_status_t tsc_debug_draw_line(tsc_world_t *world, const tsc_location_t *begin
                                  const tsc_location_t *end, double thickness, const tsc_color_t *color,
                                  double life_time) {
   return TSC_GUARD({
-    world_of(world).MakeDebugHelper().DrawLine(to_carla(*require_ptr(begin, "begin")),
-                                               to_carla(*require_ptr(end, "end")),
-                                               static_cast<float>(thickness), to_color(color),
-                                               life(life_time));
+    debug_of(world).DrawLine(to_carla(*require_ptr(begin, "begin")),
+                             to_carla(*require_ptr(end, "end")),
+                             static_cast<float>(thickness), to_color(color),
+                             life(life_time));
   });
 }
 
@@ -115,7 +115,7 @@ tsc_status_t tsc_debug_draw_arrow(tsc_world_t *world, const tsc_location_t *begi
                                   const tsc_location_t *end, double thickness, double arrow_size,
                                   const tsc_color_t *color, double life_time) {
   return TSC_GUARD({
-    world_of(world).MakeDebugHelper().DrawArrow(
+    debug_of(world).DrawArrow(
         to_carla(*require_ptr(begin, "begin")), to_carla(*require_ptr(end, "end")),
         static_cast<float>(thickness), static_cast<float>(arrow_size), to_color(color),
         life(life_time));
@@ -126,7 +126,7 @@ tsc_status_t tsc_debug_draw_box(tsc_world_t *world, const tsc_bounding_box_t *bo
                                 const tsc_rotation_t *rotation, double thickness,
                                 const tsc_color_t *color, double life_time) {
   return TSC_GUARD({
-    world_of(world).MakeDebugHelper().DrawBox(
+    debug_of(world).DrawBox(
         to_carla(*require_ptr(box, "box")),
         to_carla(*require_ptr(rotation, "rotation")), static_cast<float>(thickness),
         to_color(color), life(life_time));
@@ -137,10 +137,10 @@ tsc_status_t tsc_debug_draw_string(tsc_world_t *world, const tsc_location_t *loc
                                    const char *text, size_t text_len, int32_t draw_shadow,
                                    const tsc_color_t *color, double life_time) {
   return TSC_GUARD({
-    world_of(world).MakeDebugHelper().DrawString(to_carla(*require_ptr(location, "location")),
-                                                 to_string(text, text_len, "text"),
-                                                 draw_shadow != 0, to_color(color),
-                                                 life(life_time));
+    debug_of(world).DrawString(to_carla(*require_ptr(location, "location")),
+                               to_string(text, text_len, "text"),
+                               draw_shadow != 0, to_color(color),
+                               life(life_time));
   });
 }
 

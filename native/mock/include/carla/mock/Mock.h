@@ -7,7 +7,9 @@
 // not a simulator.
 #pragma once
 
+#include <array>
 #include <chrono>
+#include <cmath>
 #include <functional>
 #include <limits>
 #include <cstddef>
@@ -88,6 +90,32 @@ class Transform {
   Transform() = default;
   Transform(const Location &l) : location(l) {}
   Transform(const Location &l, const Rotation &r) : location(l), rotation(r) {}
+  // Row major, with ue5-dev's rotation sign convention (CARLA 0.10.0 has the
+  // opposite sign on the pitch and roll terms).
+  std::array<float, 16> GetMatrix() const {
+    const auto r = RotationMatrix();
+    return {r[0], r[1], r[2], location.x, r[3], r[4], r[5], location.y,
+            r[6], r[7], r[8], location.z, 0.0f, 0.0f, 0.0f, 1.0f};
+  }
+  std::array<float, 16> GetInverseMatrix() const {
+    const auto r = RotationMatrix();  // the inverse rotation is the transpose
+    const float l[3] = {location.x, location.y, location.z};
+    float a[3];
+    for (int i = 0; i < 3; ++i) a[i] = -(r[i] * l[0] + r[3 + i] * l[1] + r[6 + i] * l[2]);
+    return {r[0], r[3], r[6], a[0], r[1], r[4], r[7], a[1],
+            r[2], r[5], r[8], a[2], 0.0f, 0.0f, 0.0f, 1.0f};
+  }
+
+ private:
+  std::array<float, 9> RotationMatrix() const {
+    constexpr float k = 3.14159265358979323846f / 180.0f;
+    const float cy = std::cos(rotation.yaw * k), sy = std::sin(rotation.yaw * k);
+    const float cr = std::cos(rotation.roll * k), sr = std::sin(rotation.roll * k);
+    const float cp = std::cos(rotation.pitch * k), sp = std::sin(rotation.pitch * k);
+    return {cp * cy, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr,
+            cp * sy, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr,
+            -sp,     cp * sr,                cp * cr};
+  }
 };
 
 class BoundingBox {
@@ -852,6 +880,7 @@ class ActorBlueprint {
   const std::string &GetId() const { return _id; }
   bool ContainsTag(const std::string &tag) const;
   bool MatchTags(const std::string &wildcard_pattern) const;
+  std::vector<std::string> GetTags() const { return _tags; }
   bool ContainsAttribute(const std::string &id) const { return _attributes.count(id) > 0; }
   // Throws std::out_of_range for an unknown attribute.
   const ActorAttribute &GetAttribute(const std::string &id) const;
@@ -875,6 +904,9 @@ class BlueprintLibrary : public std::enable_shared_from_this<BlueprintLibrary> {
   explicit BlueprintLibrary(std::vector<ActorBlueprint> blueprints)
       : _blueprints(std::move(blueprints)) {}
   SharedPtr<BlueprintLibrary> Filter(const std::string &wildcard_pattern) const;
+  // The mock's attributes have no recommended values: matches the value.
+  SharedPtr<BlueprintLibrary> FilterByAttribute(const std::string &name,
+                                                const std::string &value) const;
   const_pointer Find(const std::string &key) const;
   const_reference at(size_type pos) const { return _blueprints.at(pos); }
   size_type size() const { return _blueprints.size(); }
@@ -1115,6 +1147,8 @@ class DebugHelper {
                sensor::data::Color color, float life_time, bool persistent_lines = true);
   void DrawString(const geom::Location &location, const std::string &text, bool draw_shadow,
                   sensor::data::Color color, float life_time, bool persistent_lines = true);
+  void ClearDebugShape();
+  void ClearDebugString();
 
  private:
   std::shared_ptr<mock::Episode> _episode;
@@ -1157,11 +1191,31 @@ class World {
 
 namespace traffic_manager {
 
+enum class RoadOption : uint8_t {
+  Void = 0,
+  Left = 1,
+  Right = 2,
+  Straight = 3,
+  LaneFollow = 4,
+  ChangeLaneLeft = 5,
+  ChangeLaneRight = 6,
+  RoadEnd = 7
+};
+
+using ActorPtr = SharedPtr<client::Actor>;
+using ActorId = rpc::ActorId;
+using Path = std::vector<geom::Location>;
+using Route = std::vector<uint8_t>;
+using WaypointPtr = SharedPtr<client::Waypoint>;
+using Action = std::pair<RoadOption, WaypointPtr>;
+using ActionBuffer = std::vector<Action>;
+
 // Records settings; the mock's autopilot drives straight at 0.5 throttle,
-// scaled by the global percentage speed difference.
+// scaled by the global percentage speed difference. Its plan for a vehicle
+// is the imported route (or one LaneFollow), one action every 10 m ahead.
 class TrafficManager {
  public:
-  using ActorPtr = SharedPtr<client::Actor>;
+  using ActorPtr = traffic_manager::ActorPtr;
   TrafficManager(std::shared_ptr<client::mock::Episode> episode, uint16_t port)
       : _episode(std::move(episode)), _port(port) {}
   uint16_t Port() const { return _port; }
@@ -1184,6 +1238,22 @@ class TrafficManager {
   void SetAutoLaneChange(const ActorPtr &actor, bool enable);
   void SetForceLaneChange(const ActorPtr &actor, bool direction);
   void SetUpdateVehicleLights(const ActorPtr &actor, bool do_update);
+  void SetOSMMode(const bool mode_switch);
+  void SetCustomPath(const ActorPtr &actor, const Path path, const bool empty_buffer);
+  void SetImportedRoute(const ActorPtr &actor, const Route route, const bool empty_buffer);
+  void SetRespawnDormantVehicles(const bool mode_switch);
+  void SetBoundariesRespawnDormantVehicles(const float lower_bound, const float upper_bound);
+  void SetHybridPhysicsRadius(const float radius);
+  void SetGlobalLaneOffset(float const offset);
+  void SetCollisionDetection(const ActorPtr &reference_actor, const ActorPtr &other_actor,
+                             const bool detect_collision);
+  void SetLargeVehicleWideTurn(const ActorPtr &actor, const bool enable);
+  void SetGlobalLargeVehicleWideTurn(const bool enable);
+  void ShutDown();
+  // As ue5-dev: (Void, nullptr) / an empty buffer for a vehicle the Traffic
+  // Manager does not drive, or once it is shut down.
+  Action GetNextAction(const ActorId &actor_id);
+  ActionBuffer GetActionBuffer(const ActorId &actor_id);
 
  private:
   std::shared_ptr<client::mock::Episode> _episode;
@@ -1216,6 +1286,15 @@ class Client {
                          bool replay_sensors);
   void StopReplayer(bool keep_actors);
   void SetReplayerTimeFactor(double time_factor);
+  void SetReplayerIgnoreHero(bool ignore_hero);
+  void SetReplayerIgnoreSpectator(bool ignore_spectator);
+  std::vector<std::string> GetAvailableMaps() const;
+  bool SetFilesBaseFolder(const std::string &path);
+  std::vector<std::string> GetRequiredFiles(const std::string &folder = "",
+                                            const bool download = true) const;
+  void RequestFile(const std::string &name) const;
+  void LoadWorldIfDifferent(std::string map_name, bool reset_settings = true,
+                            rpc::MapLayer map_layers = rpc::MapLayer::All) const;
   World GenerateOpenDriveWorld(std::string opendrive,
                                const rpc::OpendriveGenerationParameters &params,
                                bool reset_settings = true) const;

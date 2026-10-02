@@ -35,6 +35,11 @@ Enumerations cross as `int32_t` and convert through a checking function in
 `to_light_state({})`), which rejects values outside the enumeration; `invalid`
 is such a value.
 
+`string_list` (output) is a `tsc_string_list_t`, filled by `string_list_assign`
+and freed with `tsc_string_list_free`. Arrays cross with `c_param` as a
+pointer and a count (`location_path`, `road_option_route`: `const T *{name},
+size_t count`); NULL is accepted for a count of 0.
+
 Each remaining file binds one LibCarla class:
 
 ```yaml
@@ -53,6 +58,19 @@ A function has:
 - `args`: name to type, in order (optional);
 - `out`: the result type, or `{type, name}` (optional; its default name is `out`);
 - `doc`: a comment for the header (optional).
+- `optional`: `{name, missing_in}`, for a method that a supported LibCarla
+  lacks (e.g. ue5-dev only). The call goes through `TSC_CALL_OPTIONAL` and
+  raises TSC_ERROR naming `name` (e.g.
+  `TrafficManager.global_large_vehicle_wide_turn`) where the method is
+  missing. `validate` accepts the method missing only on a libcarla build
+  whose `TSC_CARLA_GIT_REF` is in `missing_in` (e.g. `["0.10.0"]`); the mock
+  mirrors ue5-dev and must have it, so a misspelt `call` still fails. Not
+  allowed with `out`.
+
+`spec.load` rejects malformed entries with a `SpecError`: unknown keys, unknown
+types, an output-only type as an argument (or the reverse), a handle output,
+and two C parameters with the same name (e.g. two arrays whose length is
+`count`). `tests/test_bindgen.py` covers these.
 
 The spec above generates:
 
@@ -135,6 +153,20 @@ which catches a misspelt `call`:
 
 ```yaml
 is_rht: {call: IsRHT, via: waypoint_is_rht, out: bool}
+```
+
+A method that some supported LibCarla simply lacks (and that has no fallback)
+uses `optional` instead (see above): the generated code calls it through
+`TSC_CALL_OPTIONAL`, which raises TSC_ERROR where it is missing. `via` and
+`optional` exclude each other and share `validate`'s rule (`_missing_allowed`
+in clang.py): a missing method is accepted only on a real LibCarla, for
+`optional` only on a ref listed in `missing_in`, and never on the mock.
+
+```yaml
+set_global_large_vehicle_wide_turn:
+  call: SetGlobalLargeVehicleWideTurn
+  optional: {name: TrafficManager.global_large_vehicle_wide_turn, missing_in: ["0.10.0"]}
+  args: {enabled: bool}
 ```
 
 ## Commands

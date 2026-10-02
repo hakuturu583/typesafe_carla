@@ -316,4 +316,57 @@ finally:
     out("destroyed", int(vehicle.destroy()))
 # LibCarla's client cache keeps actors destroyed in this episode.
 out("destroyed_lookup", int(world.get_actor(vehicle.id) is None))
+
+# Issue #23: Client, blueprint, settings and value-type additions.
+out("available_maps", ",".join(sorted(client.get_available_maps())))
+out("required_files", ",".join(sorted(client.get_required_files(download=False))))
+# The current map's own name always matches LibCarla's comparison, whatever
+# its format ("Carla/Maps/X", "/Game/Carla/Maps/X"), so nothing reloads.
+before = client.get_world().id
+client.load_world_if_different(m.name)
+out("load_world_same", int(client.get_world().id == before))
+out("bp_filter_attr", ",".join(sorted(b.id for b in lib.filter_by_attribute("number_of_wheels", "2"))))
+mkz = lib.find("vehicle.lincoln.mkz")
+out("bp_tags", ",".join(sorted(mkz.tags)) + f";{int(mkz.match_tags('lincoln'))},{int(mkz.match_tags('*mkz'))},{int(mkz.match_tags('ford'))}")
+s23 = world.get_settings()
+out("settings_ext", f"{s23.max_culling_distance:.3f},{int(s23.deterministic_ragdolls)},{s23.tile_stream_distance:.3f},{s23.actor_active_distance:.3f},{int(s23.spectator_as_ego)}")
+snap23 = world.get_snapshot()
+out("frame_count", f"{int(snap23.frame_count == snap23.frame)},{int(snap23.timestamp.frame_count == snap23.frame)}")
+
+
+def vec(v):
+    return f"{v.x:.3f},{v.y:.3f},{v.z:.3f}"
+
+
+# Yaw-only rotations: CARLA 0.10.0 and ue5-dev agree (they differ in the sign
+# of the pitch and roll terms).
+t23 = carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(yaw=30.0))
+geometry = [",".join(f"{x:.3f}" for row in t23.get_matrix() for x in row),
+            ",".join(f"{x:.3f}" for row in t23.get_inverse_matrix() for x in row),
+            vec(t23.get_right_vector()), vec(t23.get_up_vector())]
+p23 = carla.Location(1.0, 0.0, 0.0)
+t23.transform(p23)
+v23 = carla.Vector3D(1.0, 0.0, 0.0)
+t23.transform_vector(v23)
+geometry += [vec(p23), vec(v23)]
+bb23 = carla.BoundingBox(carla.Location(0.5, 0.0, 0.0), carla.Vector3D(1.0, 2.0, 3.0))
+bb23.rotation = carla.Rotation(yaw=90.0)
+geometry += [vec(x) for x in bb23.get_local_vertices()] + [vec(x) for x in bb23.get_world_vertices(t23)]
+geometry += [str(int(bb23.contains(carla.Location(1.0, 2.0, 3.0), t23))),
+             str(int(bb23.contains(carla.Location(10.0, 2.0, 3.0), t23)))]
+out("geometry_yaw", ",".join(geometry))
+n23 = carla.Rotation(-190.0, 370.0, 540.0).get_normalized()
+u23 = carla.Vector2D(3.0, 4.0).make_unit_vector()
+out("geometry_misc", f"{n23.pitch:.3f},{n23.yaw:.3f},{n23.roll:.3f},{u23.x:.3f},{u23.y:.3f},"
+                     f"{carla.Vector2D(3.0, 4.0).squared_length():.3f}")
+# carla.Quaternion exists only in a module built from ue5-dev: "skip" otherwise
+# (compare.py then skips the key on both sides).
+if not hasattr(carla, "Quaternion"):
+    out("quaternion", "skip")
+else:
+    q23 = carla.Quaternion(carla.Rotation(10.0, 20.0, 30.0))
+    r23 = q23.rotator()
+    out("quaternion", f"{q23.x:.3f},{q23.y:.3f},{q23.z:.3f},{q23.w:.3f},{r23.pitch:.3f},{r23.yaw:.3f},"
+                      f"{r23.roll:.3f}," + vec(q23.get_forward_vector()) + "," + vec(q23.get_right_vector())
+        + "," + vec(q23.get_up_vector()))
 sys.stdout.flush()

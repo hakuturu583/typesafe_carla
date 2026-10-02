@@ -1,0 +1,11 @@
+# The extended WorldSettings fields are typed.
+# expect-error: 'str' does not match expected type 'float'
+import typesafe_carla as carla
+
+def far(world: carla.World):
+    s = world.get_settings()
+    s.tile_stream_distance = "far"
+    world.apply_settings(s)
+
+# Compile-only: Codon type-checks a function only when it is called.
+far(carla.Client("localhost", 2000).get_world())

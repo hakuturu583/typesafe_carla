@@ -2,7 +2,8 @@
 
 from ._ffi import (CColor, CVector3D, CBoundingBox, CRotation, tsc_debug_draw_point,
                    tsc_debug_draw_line, tsc_debug_draw_arrow, tsc_debug_draw_box,
-                   tsc_debug_draw_string, TSC_INVALID_ARGUMENT)
+                   tsc_debug_draw_string, TSC_INVALID_ARGUMENT, tsc_debug_clear_shapes,
+                   tsc_debug_clear_strings)
 from .errors import _check, CarlaError
 from .geometry import Location, Rotation, BoundingBox, _location_arg
 from .blueprint import Color
@@ -61,6 +62,15 @@ class DebugHelper:
         p = _loc(location, "[tsc-compat] a Vector3D passed as a Location to debug.draw_string")
         _check(tsc_debug_draw_string(self._world._h.ptr, p, text.ptr, text.len,
                                      i32(int(draw_shadow)), _color(color), life_time))
+
+    def clear_debug_shape(self):
+        """Removes the persistent shapes (LibCarla ue5-dev and a server with this
+        RPC; CarlaError with a CARLA 0.10.0 build)."""
+        _check(tsc_debug_clear_shapes(self._world._h.ptr))
+
+    def clear_debug_string(self):
+        """Removes the persistent strings (as clear_debug_shape)."""
+        _check(tsc_debug_clear_strings(self._world._h.ptr))
 
 @extend
 class World:

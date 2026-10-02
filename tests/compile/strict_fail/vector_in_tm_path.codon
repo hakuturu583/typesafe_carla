@@ -1,0 +1,9 @@
+# In strict mode TrafficManager.set_path takes Locations, not Location arithmetic.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def plan(client: carla.Client, vehicle: carla.Vehicle, here: carla.Location):
+    client.get_trafficmanager().set_path(vehicle, [here + carla.Location(10.0, 0.0, 0.0)])
+
+_world = carla.Client("localhost", 2000).get_world()
+plan(carla.Client("localhost", 2000), _world.get_actors()[0].as_vehicle(), carla.Location())

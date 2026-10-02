@@ -84,6 +84,18 @@ tsc_status_t tsc_world_tick(tsc_world_t *world, double timeout_seconds, uint64_t
 }
 
 tsc_status_t tsc_world_get_settings(tsc_world_t *world, tsc_world_settings_t *out) {
+  return tsc_world_get_settings_ext(world, out, nullptr);
+}
+
+tsc_status_t tsc_world_apply_settings(tsc_world_t *world, const tsc_world_settings_t *settings,
+                                      double timeout_seconds, uint64_t *out_frame) {
+  return tsc_world_apply_settings_ext(world, settings, nullptr, timeout_seconds, out_frame);
+}
+
+// out_ext / ext may be NULL (tsc_world_get_settings / tsc_world_apply_settings above:
+// the extended fields are then not read, or keep the server's values).
+tsc_status_t tsc_world_get_settings_ext(tsc_world_t *world, tsc_world_settings_t *out,
+                                        tsc_world_settings_ext_t *out_ext) {
   return TSC_GUARD({
     require_ptr(out, "out");
     const carla::rpc::EpisodeSettings s = world_of(world).GetSettings();
@@ -95,11 +107,20 @@ tsc_status_t tsc_world_get_settings(tsc_world_t *world, tsc_world_settings_t *ou
     out->substepping = s.substepping ? 1 : 0;
     out->max_substep_delta_time = s.max_substep_delta_time;
     out->max_substeps = s.max_substeps;
+    if (out_ext != nullptr) {
+      *out_ext = tsc_world_settings_ext_t{};
+      out_ext->max_culling_distance = s.max_culling_distance;
+      out_ext->tile_stream_distance = s.tile_stream_distance;
+      out_ext->actor_active_distance = s.actor_active_distance;
+      out_ext->deterministic_ragdolls = s.deterministic_ragdolls ? 1 : 0;
+      out_ext->spectator_as_ego = s.spectator_as_ego ? 1 : 0;
+    }
   });
 }
 
-tsc_status_t tsc_world_apply_settings(tsc_world_t *world, const tsc_world_settings_t *settings,
-                                      double timeout_seconds, uint64_t *out_frame) {
+tsc_status_t tsc_world_apply_settings_ext(tsc_world_t *world, const tsc_world_settings_t *settings,
+                                          const tsc_world_settings_ext_t *ext,
+                                          double timeout_seconds, uint64_t *out_frame) {
   return TSC_GUARD({
     require_ptr(settings, "settings");
     require_ptr(out_frame, "out_frame");
@@ -109,7 +130,7 @@ tsc_status_t tsc_world_apply_settings(tsc_world_t *world, const tsc_world_settin
     }
     if (settings->max_substeps < 1) fail(TSC_INVALID_ARGUMENT, "max_substeps must be >= 1");
     // Start from the current settings so fields this ABI does not expose
-    // (culling distance, tile streaming, ...) keep their server values.
+    // (or, without `ext`, the extended ones) keep their server values.
     carla::rpc::EpisodeSettings s = w.GetSettings();
     s.synchronous_mode = settings->synchronous_mode != 0;
     s.no_rendering_mode = settings->no_rendering_mode != 0;
@@ -121,6 +142,14 @@ tsc_status_t tsc_world_apply_settings(tsc_world_t *world, const tsc_world_settin
     s.substepping = settings->substepping != 0;
     s.max_substep_delta_time = settings->max_substep_delta_time;
     s.max_substeps = settings->max_substeps;
+    if (ext != nullptr) {
+      s.max_culling_distance = check_non_negative(ext->max_culling_distance, "max_culling_distance");
+      s.tile_stream_distance = check_non_negative(ext->tile_stream_distance, "tile_stream_distance");
+      s.actor_active_distance =
+          check_non_negative(ext->actor_active_distance, "actor_active_distance");
+      s.deterministic_ragdolls = ext->deterministic_ragdolls != 0;
+      s.spectator_as_ego = ext->spectator_as_ego != 0;
+    }
     *out_frame = w.ApplySettings(s, seconds_to_duration(timeout_seconds));
   });
 }

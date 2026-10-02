@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 3
-TSC_ABI_VERSION_MINOR = 2
+TSC_ABI_VERSION_MINOR = 3
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -36,6 +36,11 @@ TSC_KIND_BONE_LIST = 23  # issue #20
 @tuple
 class CString:
     data: cobj
+    size: int
+
+@tuple
+class CStringList:
+    items: Ptr[CString]
     size: int
 
 @tuple
@@ -75,6 +80,14 @@ class CWorldSettings:
     max_substep_delta_time: float
     max_substeps: i32
     reserved0: i32
+
+@tuple
+class CWorldSettingsExt:
+    max_culling_distance: float
+    tile_stream_distance: float
+    actor_active_distance: float
+    deterministic_ragdolls: i32
+    spectator_as_ego: i32
 
 @tuple
 class CActorAttribute:
@@ -718,6 +731,49 @@ from C import LIB.tsc_walker_get_bones(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_bone_list_size(cobj) -> int
 from C import LIB.tsc_bone_list_get(cobj, int, Ptr[CBoneTransformOut]) -> i32
 
+# Issue #23: Client, Traffic Manager, blueprint, debug and value-type gaps
+from C import LIB.tsc_string_list_free(Ptr[CStringList]) -> None
+from C import LIB.tsc_client_load_world_if_different(cobj, cobj, int, i32, Ptr[cobj]) -> i32
+# BEGIN GENERATED client_replayer from bindings/client.yaml, do not edit
+from C import LIB.tsc_client_set_replayer_ignore_hero(cobj, i32) -> i32
+from C import LIB.tsc_client_set_replayer_ignore_spectator(cobj, i32) -> i32
+# END GENERATED client_replayer
+# BEGIN GENERATED client_files from bindings/client.yaml, do not edit
+from C import LIB.tsc_client_get_available_maps(cobj, Ptr[CStringList]) -> i32
+from C import LIB.tsc_client_get_required_files(cobj, cobj, int, i32, Ptr[CStringList]) -> i32
+from C import LIB.tsc_client_request_file(cobj, cobj, int) -> i32
+from C import LIB.tsc_client_set_files_base_folder(cobj, cobj, int, Ptr[i32]) -> i32
+# END GENERATED client_files
+# BEGIN GENERATED traffic_manager_issue23 from bindings/traffic_manager.yaml, do not edit
+from C import LIB.tsc_traffic_manager_set_osm_mode(cobj, i32) -> i32
+from C import LIB.tsc_traffic_manager_set_respawn_dormant_vehicles(cobj, i32) -> i32
+from C import LIB.tsc_traffic_manager_set_boundaries_respawn_dormant_vehicles(cobj, float, float) -> i32
+from C import LIB.tsc_traffic_manager_set_hybrid_physics_radius(cobj, float) -> i32
+from C import LIB.tsc_traffic_manager_set_global_lane_offset(cobj, float) -> i32
+from C import LIB.tsc_traffic_manager_set_collision_detection(cobj, cobj, cobj, i32) -> i32
+from C import LIB.tsc_traffic_manager_shut_down(cobj) -> i32
+from C import LIB.tsc_traffic_manager_set_global_large_vehicle_wide_turn(cobj, i32) -> i32
+from C import LIB.tsc_traffic_manager_set_large_vehicle_wide_turn(cobj, cobj, i32) -> i32
+from C import LIB.tsc_traffic_manager_set_path(cobj, cobj, Ptr[CVector3D], int, i32) -> i32
+from C import LIB.tsc_traffic_manager_set_route(cobj, cobj, Ptr[u8], int, i32) -> i32
+# END GENERATED traffic_manager_issue23
+from C import LIB.tsc_traffic_manager_get_next_action(cobj, cobj, Ptr[i32], Ptr[cobj]) -> i32
+from C import LIB.tsc_traffic_manager_get_all_actions(cobj, cobj, Ptr[Ptr[u8]], Ptr[int], Ptr[cobj]) -> i32
+from C import LIB.tsc_road_options_free(Ptr[u8]) -> None
+# BEGIN GENERATED actor_blueprint_tags from bindings/blueprint.yaml, do not edit
+from C import LIB.tsc_actor_blueprint_get_tags(cobj, Ptr[CStringList]) -> i32
+from C import LIB.tsc_actor_blueprint_match_tags(cobj, cobj, int, Ptr[i32]) -> i32
+# END GENERATED actor_blueprint_tags
+from C import LIB.tsc_blueprint_library_filter_by_attribute(cobj, cobj, int, cobj, int, Ptr[cobj]) -> i32
+# BEGIN GENERATED debug_clear from bindings/debug.yaml, do not edit
+from C import LIB.tsc_debug_clear_shapes(cobj) -> i32
+from C import LIB.tsc_debug_clear_strings(cobj) -> i32
+# END GENERATED debug_clear
+from C import LIB.tsc_world_get_settings_ext(cobj, Ptr[CWorldSettings], Ptr[CWorldSettingsExt]) -> i32
+from C import LIB.tsc_world_apply_settings_ext(cobj, Ptr[CWorldSettings], Ptr[CWorldSettingsExt], float, Ptr[u64]) -> i32
+from C import LIB.tsc_transform_get_matrix(Ptr[CTransform], Ptr[float]) -> i32
+from C import LIB.tsc_transform_get_inverse_matrix(Ptr[CTransform], Ptr[float]) -> i32
+
 # --- Helpers --------------------------------------------------------------------
 
 def c_str(p: cobj) -> str:
@@ -739,6 +795,13 @@ def take_string(s: Ptr[CString]) -> str:
     """Copies an owned tsc_string_t into a Codon str and frees it."""
     result = copy_string(s[0])
     tsc_string_free(s)
+    return result
+
+def take_string_list(l: Ptr[CStringList]) -> List[str]:
+    """Copies an owned tsc_string_list_t into a list of str and frees it."""
+    v = l[0]
+    result = [copy_string(v.items[i]) for i in range(v.size)]
+    tsc_string_list_free(l)
     return result
 
 class Handle:

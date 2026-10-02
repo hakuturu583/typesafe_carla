@@ -82,4 +82,23 @@ tsc_status_t tsc_client_generate_opendrive_world(tsc_client_t *client, const cha
   });
 }
 
+// --- Issue #23 ---------------------------------------------------------------
+
+tsc_status_t tsc_client_load_world_if_different(tsc_client_t *client, const char *map_name,
+                                                 size_t map_name_len, int32_t reset_settings,
+                                                 tsc_world_t **out) {
+  return new_handle(__func__, out, [&]() -> tsc_world_t * {
+    auto &c = client_of(client);
+    const std::string name = to_string(map_name, map_name_len, "map_name");
+    if (name.empty()) fail(TSC_INVALID_ARGUMENT, "map_name must not be empty");
+    // LibCarla decides (by map name) and returns nothing; a load always
+    // starts a new episode, which is how we tell whether it loaded.
+    const auto before = c.GetWorld().GetId();
+    c.LoadWorldIfDifferent(name, reset_settings != 0);
+    auto world = c.GetWorld();
+    if (world.GetId() == before) return nullptr;
+    return new tsc_world(std::move(world));
+  });
+}
+
 }  // extern "C"

@@ -19,6 +19,15 @@ class Timestamp:
         self.delta_seconds = delta_seconds
         self.platform_timestamp = platform_timestamp
 
+    @property
+    def frame_count(self) -> int:
+        """Deprecated alias of `frame`, as in the Python API."""
+        return self.frame
+
+    @frame_count.setter
+    def frame_count(self, value: int):
+        self.frame = value
+
     def __repr__(self) -> str:
         return (f"Timestamp(frame={self.frame}, elapsed_seconds={self.elapsed_seconds}, "
                 f"delta_seconds={self.delta_seconds}, platform_timestamp={self.platform_timestamp})")
@@ -75,6 +84,23 @@ class WorldSnapshot:
     @property
     def frame(self) -> int:
         return self.timestamp.frame
+
+    @property
+    def frame_count(self) -> int:
+        """Alias of `frame`, as in the Python API."""
+        return self.frame
+
+    @property
+    def elapsed_seconds(self) -> float:
+        return self.timestamp.elapsed_seconds
+
+    @property
+    def delta_seconds(self) -> float:
+        return self.timestamp.delta_seconds
+
+    @property
+    def platform_timestamp(self) -> float:
+        return self.timestamp.platform_timestamp
 
     def find(self, actor_id: int) -> Optional[ActorSnapshot]:
         """None if the actor is not in this snapshot."""

@@ -1,0 +1,30 @@
+# Client operations: tsc_client_<name>. Functions that create handles are
+# hand-written (native/src/client*.cpp).
+class: carla::client::Client
+prefix: client
+self: {type: tsc_client_t, name: client, get: client_of}
+blocks:
+  client_replayer:
+    set_replayer_ignore_hero: {call: SetReplayerIgnoreHero, args: {ignore_hero: bool}}
+    set_replayer_ignore_spectator:
+      call: SetReplayerIgnoreSpectator
+      args: {ignore_spectator: bool}
+  client_files:
+    get_available_maps:
+      call: GetAvailableMaps
+      out: string_list
+      doc: "Map names the server can load (an RPC)."
+    get_required_files:
+      call: GetRequiredFiles
+      args: {folder: string_in, download: bool}
+      out: string_list
+      doc: "Files the map needs under `folder`; `download` fetches missing ones."
+    request_file:
+      call: RequestFile
+      args: {name: string_in}
+      doc: "Downloads one file from the server into the files base folder."
+    set_files_base_folder:
+      call: SetFilesBaseFolder
+      args: {path: string_in}
+      out: bool
+      doc: "Local folder for downloaded files (process-wide); *out is 0 for an empty path."

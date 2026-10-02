@@ -19,3 +19,33 @@ blocks:
     set_auto_lane_change: {call: SetAutoLaneChange, args: {vehicle: vehicle, enabled: bool}}
     force_lane_change: {call: SetForceLaneChange, args: {vehicle: vehicle, to_left: bool}}
     set_update_vehicle_lights: {call: SetUpdateVehicleLights, args: {vehicle: vehicle, enabled: bool}}
+  traffic_manager_issue23:
+    set_osm_mode: {call: SetOSMMode, args: {enabled: bool}}
+    set_respawn_dormant_vehicles: {call: SetRespawnDormantVehicles, args: {enabled: bool}}
+    set_boundaries_respawn_dormant_vehicles:
+      call: SetBoundariesRespawnDormantVehicles
+      args: {lower_bound: non_negative, upper_bound: non_negative}
+    set_hybrid_physics_radius: {call: SetHybridPhysicsRadius, args: {radius: non_negative}}
+    set_global_lane_offset: {call: SetGlobalLaneOffset, args: {offset: finite}}
+    set_collision_detection:
+      call: SetCollisionDetection
+      args: {reference_vehicle: vehicle, other_actor: actor, detect_collision: bool}
+      doc: "other_actor: any actor handle (a vehicle, a walker, ...)."
+    shut_down: {call: ShutDown}
+    set_global_large_vehicle_wide_turn:
+      call: SetGlobalLargeVehicleWideTurn
+      optional: {name: TrafficManager.global_large_vehicle_wide_turn, missing_in: ["0.10.0"]}
+      args: {enabled: bool}
+      doc: "Large-vehicle wide turns (LibCarla ue5-dev); TSC_ERROR without them (CARLA 0.10.0)."
+    set_large_vehicle_wide_turn:
+      call: SetLargeVehicleWideTurn
+      optional: {name: TrafficManager.vehicle_large_vehicle_wide_turn, missing_in: ["0.10.0"]}
+      args: {vehicle: vehicle, enabled: bool}
+    set_path:
+      call: SetCustomPath
+      args: {vehicle: vehicle, path: location_path, empty_buffer: bool}
+      doc: "SetCustomPath: the vehicle follows these locations."
+    set_route:
+      call: SetImportedRoute
+      args: {vehicle: vehicle, route: road_option_route, empty_buffer: bool}
+      doc: "SetImportedRoute: the vehicle follows these road options (codes of tsc_road_option_t, 0..7)."

@@ -104,6 +104,8 @@ struct Episode : std::enable_shared_from_this<Episode> {
   std::string recording;        // the active recorder file, if any
   std::map<std::string, uint64_t> recordings;  // file -> frames recorded
   float tm_global_speed_difference = 0.0f;     // percent slower than the limit
+  std::map<rpc::ActorId, std::vector<uint8_t>> tm_routes;  // SetImportedRoute
+  std::map<uint16_t, bool> tm_shut_down;       // by port
 
   double Mass(const ActorData &a) const { return a.is_vehicle ? a.physics.mass : 80.0; }
 
@@ -516,6 +518,14 @@ SharedPtr<BlueprintLibrary> BlueprintLibrary::Filter(const std::string &wildcard
   std::vector<ActorBlueprint> result;
   for (const auto &bp : _blueprints)
     if (bp.MatchTags(wildcard_pattern)) result.push_back(bp);
+  return std::make_shared<BlueprintLibrary>(std::move(result));
+}
+
+SharedPtr<BlueprintLibrary> BlueprintLibrary::FilterByAttribute(const std::string &name,
+                                                              const std::string &value) const {
+  std::vector<ActorBlueprint> result;
+  for (const auto &bp : _blueprints)
+    if (bp.ContainsAttribute(name) && bp.GetAttribute(name).GetValue() == value) result.push_back(bp);
   return std::make_shared<BlueprintLibrary>(std::move(result));
 }
 
@@ -1492,6 +1502,8 @@ void DebugHelper::DrawLine(const geom::Location &, const geom::Location &, float
 void DebugHelper::DrawArrow(const geom::Location &, const geom::Location &, float, float, sensor::data::Color, float, bool) { CountShape(_episode); }
 void DebugHelper::DrawBox(const geom::BoundingBox &, const geom::Rotation &, float, sensor::data::Color, float, bool) { CountShape(_episode); }
 void DebugHelper::DrawString(const geom::Location &, const std::string &, bool, sensor::data::Color, float, bool) { CountShape(_episode); }
+void DebugHelper::ClearDebugShape() {}
+void DebugHelper::ClearDebugString() {}
 
 std::vector<std::pair<SharedPtr<Waypoint>, SharedPtr<Waypoint>>> Map::GetTopology() const {
   std::vector<std::pair<SharedPtr<Waypoint>, SharedPtr<Waypoint>>> topology;
@@ -1663,6 +1675,42 @@ void Client::StopReplayer(bool) {}
 
 void Client::SetReplayerTimeFactor(double) {}
 
+void Client::SetReplayerIgnoreHero(bool) {}
+
+void Client::SetReplayerIgnoreSpectator(bool) {}
+
+std::vector<std::string> Client::GetAvailableMaps() const {
+  mock::Connect(_endpoint, _timeout);
+  return {"/Game/Carla/Maps/MockTown", "/Game/Carla/Maps/Town01", "/Game/Carla/Maps/Town10HD_Opt"};
+}
+
+bool Client::SetFilesBaseFolder(const std::string &path) { return !path.empty(); }
+
+// The mock map needs one file; downloading is not simulated.
+std::vector<std::string> Client::GetRequiredFiles(const std::string &folder, const bool) const {
+  mock::Connect(_endpoint, _timeout);
+  const std::string file = "MockTown/OpenDrive/MockTown.xodr";
+  if (file.rfind(folder, 0) != 0) return {};
+  return {file};
+}
+
+void Client::RequestFile(const std::string &name) const {
+  mock::Connect(_endpoint, _timeout);
+  if (name != "MockTown/OpenDrive/MockTown.xodr") {
+    throw std::runtime_error("file '" + name + "' not found on the server");
+  }
+}
+
+// As LibCarla: loads unless the current map is `map_name`, with or without
+// the "Carla/Maps/" prefix.
+void Client::LoadWorldIfDifferent(std::string map_name, bool reset_settings,
+                                  rpc::MapLayer map_layers) const {
+  const std::string current = GetWorld().GetMap()->GetName();
+  if (map_name != current && "Carla/Maps/" + map_name != current) {
+    LoadWorld(std::move(map_name), reset_settings, map_layers);
+  }
+}
+
 World Client::GenerateOpenDriveWorld(std::string opendrive, const rpc::OpendriveGenerationParameters &,
                                      bool reset_settings) const {
   if (opendrive.find("<OpenDRIVE") == std::string::npos) {
@@ -1702,6 +1750,54 @@ void TrafficManager::SetLaneOffset(const ActorPtr &, float) {}
 void TrafficManager::SetAutoLaneChange(const ActorPtr &, bool) {}
 void TrafficManager::SetForceLaneChange(const ActorPtr &, bool) {}
 void TrafficManager::SetUpdateVehicleLights(const ActorPtr &, bool) {}
+void TrafficManager::SetOSMMode(const bool) {}
+void TrafficManager::SetRespawnDormantVehicles(const bool) {}
+void TrafficManager::SetBoundariesRespawnDormantVehicles(const float, const float) {}
+void TrafficManager::SetHybridPhysicsRadius(const float) {}
+void TrafficManager::SetGlobalLaneOffset(float const) {}
+void TrafficManager::SetCollisionDetection(const ActorPtr &, const ActorPtr &, const bool) {}
+void TrafficManager::SetLargeVehicleWideTurn(const ActorPtr &, const bool) {}
+void TrafficManager::SetGlobalLargeVehicleWideTurn(const bool) {}
+
+void TrafficManager::SetCustomPath(const ActorPtr &, const Path, const bool) {}
+
+void TrafficManager::SetImportedRoute(const ActorPtr &actor, const Route route, const bool) {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  _episode->tm_routes[actor->GetId()] = route;
+}
+
+void TrafficManager::ShutDown() {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  _episode->tm_shut_down[_port] = true;
+}
+
+ActionBuffer TrafficManager::GetActionBuffer(const ActorId &actor_id) {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  if (_episode->tm_shut_down[_port]) return {};
+  auto it = _episode->actors.find(actor_id);
+  // As ue5-dev: an empty buffer for a vehicle the Traffic Manager does not
+  // drive (CARLA 0.10.0 throws std::out_of_range instead).
+  if (it == _episode->actors.end() || !it->second.autopilot) return {};
+  std::vector<uint8_t> route{static_cast<uint8_t>(RoadOption::LaneFollow)};
+  auto r = _episode->tm_routes.find(actor_id);
+  if (r != _episode->tm_routes.end() && !r->second.empty()) route = r->second;
+  const geom::Location here = it->second.transform.location;
+  const auto start = client::Map().GetWaypoint(here);
+  ActionBuffer actions;
+  for (size_t i = 0; i < route.size(); ++i) {
+    const auto next = start->GetNext(10.0 * static_cast<double>(i + 1));
+    actions.emplace_back(static_cast<RoadOption>(route[i]), next.empty() ? start : next.front());
+  }
+  return actions;
+}
+
+Action TrafficManager::GetNextAction(const ActorId &actor_id) {
+  const ActionBuffer actions = GetActionBuffer(actor_id);
+  if (actions.empty()) return Action{RoadOption::Void, nullptr};
+  for (const auto &action : actions)
+    if (action.first != RoadOption::LaneFollow) return action;
+  return actions.back();
+}
 
 }  // namespace traffic_manager
 

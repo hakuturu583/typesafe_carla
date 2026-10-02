@@ -1,0 +1,10 @@
+# TrafficManager.set_path takes locations.
+# expect-error: 'Rotation' does not match expected type 'Location'
+import typesafe_carla as carla
+
+def plan(client: carla.Client, vehicle: carla.Vehicle):
+    client.get_trafficmanager().set_path(vehicle, [carla.Rotation(yaw=90.0)])
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+plan(carla.Client("localhost", 2000), _world.get_actors()[0].as_vehicle())

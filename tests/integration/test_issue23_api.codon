@@ -1,0 +1,172 @@
+# Issue #23 against a real CARLA server: Client maps and file transfer,
+# load_world_if_different, blueprint tags and attribute filter, debug clearing,
+# the extended WorldSettings, snapshot aliases, the Traffic Manager additions
+# and the LibCarla-backed transform matrices.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+# The CARLA 0.10.0 LibCarla has no wide-turn Traffic Manager settings and no
+# debug clearing; ue5-dev has both (the server must have the clear RPCs too).
+
+def close(a: float, b: float, eps: float = 1e-4) -> bool:
+    return abs(a - b) <= eps
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(20.0)
+world = client.get_world()
+m = world.get_map()
+
+# --- Client ------------------------------------------------------------------
+maps = client.get_available_maps()
+print("available maps:", maps)
+short_name = m.name.split("/")[-1]
+assert len(maps) > 0 and any(name.endswith(short_name) for name in maps), (maps, m.name)
+before = world.id
+if m.name.startswith("Carla/Maps/"):  # LibCarla also matches the name without that prefix
+    assert client.load_world_if_different(short_name, reset_settings=False) is None
+assert client.load_world_if_different(m.name, reset_settings=False) is None
+assert client.get_world().id == before
+files = client.get_required_files(download=False)
+print("required files:", files)
+folder = "/tmp/tsc-issue23-files"
+assert client.set_files_base_folder(folder) and not client.set_files_base_folder("")
+if len(files) > 0:
+    client.request_file(files[0])
+    # LibCarla writes <base>/<LibCarla version>/<name>.
+    path = folder + "/" + carla.libcarla_version() + "/" + files[0]
+    with open(path, "rb") as f:
+        assert len(f.read()) > 0, path
+    cached = client.get_required_files(download=True)
+    assert sorted(cached) == sorted(files), (cached, files)  # now cached
+client.set_replayer_ignore_hero(False)
+client.set_replayer_ignore_spectator(True)
+
+# --- Blueprints --------------------------------------------------------------
+lib = world.get_blueprint_library()
+four = lib.filter_by_attribute("number_of_wheels", "4")
+two = lib.filter_by_attribute("number_of_wheels", "2")
+# CARLA 0.10.0 ships no two-wheelers (the official API also finds none).
+assert len(four) > 0
+for b in four:
+    assert b.get_attribute("number_of_wheels").as_int() == 4, b.id
+for b in two:
+    assert b.get_attribute("number_of_wheels").as_int() == 2, b.id
+assert len(lib.filter_by_attribute("no_such_attribute", "1")) == 0
+mkz = lib.find("vehicle.lincoln.mkz")
+tags = mkz.tags
+print("tags:", tags)
+assert "lincoln" in tags and "mkz" in tags
+for t in tags:
+    assert mkz.has_tag(t) and mkz.match_tags(t)
+assert mkz.match_tags("*mkz") and not mkz.match_tags("no_such_tag")
+
+# --- Debug -------------------------------------------------------------------
+world.debug.draw_string(carla.Location(0.0, 0.0, 2.0), "issue #23", life_time=0.0)
+for clear in (lambda: world.debug.clear_debug_shape(), lambda: world.debug.clear_debug_string()):
+    try:
+        clear()
+    except carla.CarlaError as e:
+        # A LibCarla without the method (0.10.0), or a server without the RPC.
+        print("debug clear:", e)
+        assert "is not available in LibCarla" in str(e) or "clear" in str(e) or "function" in str(e), e
+
+# --- World settings and snapshots ----------------------------------------------------
+original = world.get_settings()
+print("settings:", original)
+vehicle = world.spawn_actor(mkz, m.get_spawn_points()[0]).as_vehicle()
+tm = client.get_trafficmanager()
+try:
+    s = world.get_settings()
+    s.synchronous_mode = True
+    s.fixed_delta_seconds = 0.05
+    s.actor_active_distance = original.actor_active_distance + 100.0
+    s.tile_stream_distance = original.tile_stream_distance + 100.0
+    s.max_culling_distance = 0.0
+    world.apply_settings(s)
+    tm.set_synchronous_mode(True)
+    t = world.get_settings()
+    assert t.synchronous_mode and close(t.fixed_delta_seconds, 0.05)
+    assert close(t.actor_active_distance, s.actor_active_distance), t
+    assert close(t.tile_stream_distance, s.tile_stream_distance), t
+    assert t.spectator_as_ego == original.spectator_as_ego
+    world.tick()
+    snap = world.get_snapshot()
+    assert snap.frame_count == snap.frame and snap.timestamp.frame_count == snap.frame
+    assert close(snap.delta_seconds, 0.05) and snap.elapsed_seconds > 0.0
+
+    # --- Traffic Manager --------------------------------------------------------------
+    # No plan for a vehicle the Traffic Manager does not drive: IndexError with
+    # every LibCarla (ue5-dev returns an empty plan, 0.10.0 throws).
+    for no_plan in (lambda: tm.get_next_action(vehicle), lambda: tm.get_all_actions(vehicle)):
+        try:
+            no_plan()
+            assert False, "a vehicle the Traffic Manager does not drive has no action"
+        except IndexError:
+            pass
+    vehicle.set_autopilot(True, tm.get_port())
+    tm.set_osm_mode(False)
+    tm.set_respawn_dormant_vehicles(False)
+    tm.set_boundaries_respawn_dormant_vehicles(25.0, 100.0)
+    tm.set_hybrid_physics_radius(70.0)
+    tm.global_lane_offset(0.0)
+    tm.keep_slow_lane_rule_percentage(vehicle, 0.0)
+    tm.collision_detection(vehicle, vehicle, True)
+    for wide in (lambda: tm.global_large_vehicle_wide_turn(False),
+                 lambda: tm.vehicle_large_vehicle_wide_turn(vehicle, False)):
+        try:
+            wide()
+        except carla.CarlaError as e:
+            print("wide turn:", e)  # LibCarla 0.10.0 has no wide-turn setting
+            assert "is not available in LibCarla" in str(e), e
+    for _ in range(40):
+        world.tick()
+    option, wp = tm.get_next_action(vehicle)
+    actions = tm.get_all_actions(vehicle)
+    print("next action:", option, wp.transform.location, "of", len(actions))
+    names = ["Void", "Left", "Right", "Straight", "LaneFollow", "ChangeLaneLeft",
+             "ChangeLaneRight", "RoadEnd"]
+    assert option in names and len(actions) > 0
+    assert all(a[0] in names for a in actions)
+    assert wp.transform.location.distance(vehicle.get_location()) < 200.0
+    # A custom path along the lane ahead, then a route.
+    here = m.get_waypoint(vehicle.get_location())
+    ahead = [w.transform.location for w in unwrap(here).next_until_lane_end(10.0)[:3]]
+    if len(ahead) > 0:
+        tm.set_path(vehicle, ahead)
+    tm.set_route(vehicle, ["Straight", "Straight"], empty_buffer=False)
+    for _ in range(10):
+        world.tick()
+    print("speed under the Traffic Manager:", vehicle.get_velocity().length())
+    vehicle.set_autopilot(False, tm.get_port())
+finally:
+    tm.set_synchronous_mode(False)
+    world.apply_settings(original)
+    vehicle.destroy()
+
+# --- Transform matrices (LibCarla's) -----------------------------------------------
+tr = carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(10.0, 20.0, 30.0))
+mat = tr.get_matrix()
+inv = tr.get_inverse_matrix()
+for i in range(4):
+    for j in range(4):
+        acc = 0.0
+        for k in range(4):
+            acc += mat[i][k] * inv[k][j]
+        assert close(acc, 1.0 if i == j else 0.0), (i, j, acc)
+fwd = tr.get_forward_vector()
+assert close(fwd.x, mat[0][0]) and close(fwd.y, mat[1][0]) and close(fwd.z, mat[2][0])
+assert close(fwd.dot(tr.get_right_vector()), 0.0) and close(fwd.dot(tr.get_up_vector()), 0.0)
+assert close(fwd.cross(tr.get_right_vector()).dot(tr.get_up_vector()), 1.0) or \
+       close(fwd.cross(tr.get_right_vector()).dot(tr.get_up_vector()), -1.0)
+bb = carla.BoundingBox(carla.Location(0.5, 0.0, 0.0), carla.Vector3D(1.0, 2.0, 3.0))
+for corner in bb.get_world_vertices(tr):
+    # A point just inside each corner is contained, one beyond it is not.
+    center = tr.transform(carla.Location(0.5, 0.0, 0.0))
+    inside = carla.Location(center + (corner - center) * 0.99)
+    outside = carla.Location(center + (corner - center) * 1.01)
+    assert bb.contains(inside, tr) and not bb.contains(outside, tr)
+print("libcarla", carla.libcarla_version(), carla.libcarla_git_ref(), "forward", fwd)
+print("OK")

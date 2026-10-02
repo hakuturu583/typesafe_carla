@@ -82,6 +82,7 @@ add_library(typesafe_carla_ffi SHARED
   native/src/walker.cpp
   native/src/world.cpp
   native/src/world_ext.cpp
+  native/src/geometry.cpp
   native/src/generated/bindings.cpp
 )
 target_include_directories(typesafe_carla_ffi

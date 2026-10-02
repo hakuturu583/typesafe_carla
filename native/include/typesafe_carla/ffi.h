@@ -39,9 +39,11 @@ extern "C" {
  * 3.1: map geo-reference, XODR waypoints, landmarks as handles, lane markings,
  *      traffic light geometry (#22).
  * 3.2: vehicle Ackermann/doors/failure state/telemetry/wheel steer, walker bones
- *      and poses (#20). */
+ *      and poses (#20).
+ * 3.3: client map list/files/replayer flags, Traffic Manager actions and settings,
+ *      blueprint tags, debug clear, extended WorldSettings, transform matrices (#23). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 2
+#define TSC_ABI_VERSION_MINOR 3
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -92,6 +94,16 @@ typedef struct {
 
 /* Frees data and resets the struct. Safe on a zeroed or already freed struct. */
 TSC_API void tsc_string_free(tsc_string_t *string);
+
+/* A list of output strings (e.g. map names, blueprint tags). */
+typedef struct {
+  tsc_string_t *items;
+  size_t size;
+} tsc_string_list_t;
+
+/* Frees every item and the array, and resets the struct. Safe on a zeroed or
+ * already freed struct. */
+TSC_API void tsc_string_list_free(tsc_string_list_t *list);
 
 /* ------------------------------------------------------------------------ */
 /* Handles                                                                  */
@@ -1286,6 +1298,156 @@ TSC_API size_t tsc_bone_list_size(const tsc_bone_list_t *list);
 /* TSC_NOT_FOUND when index >= size. */
 TSC_API tsc_status_t tsc_bone_list_get(const tsc_bone_list_t *list, size_t index,
                                        tsc_bone_transform_out_t *out);
+
+/* ------------------------------------------------------------------------ */
+/* Issue #23: Client, Traffic Manager, blueprint, debug and value-type gaps  */
+/* ------------------------------------------------------------------------ */
+
+/* --- Client ------------------------------------------------------------------- */
+
+/* BEGIN GENERATED client_replayer from bindings/client.yaml, do not edit */
+TSC_API tsc_status_t tsc_client_set_replayer_ignore_hero(tsc_client_t *client, int32_t ignore_hero);
+TSC_API tsc_status_t tsc_client_set_replayer_ignore_spectator(tsc_client_t *client,
+                                                              int32_t ignore_spectator);
+/* END GENERATED client_replayer */
+/* BEGIN GENERATED client_files from bindings/client.yaml, do not edit */
+/* Map names the server can load (an RPC). */
+TSC_API tsc_status_t tsc_client_get_available_maps(tsc_client_t *client, tsc_string_list_t *out);
+/* Files the map needs under `folder`; `download` fetches missing ones. */
+TSC_API tsc_status_t tsc_client_get_required_files(tsc_client_t *client,
+                                                   const char *folder, size_t folder_len,
+                                                   int32_t download, tsc_string_list_t *out);
+/* Downloads one file from the server into the files base folder. */
+TSC_API tsc_status_t tsc_client_request_file(tsc_client_t *client,
+                                             const char *name, size_t name_len);
+/* Local folder for downloaded files (process-wide); *out is 0 for an empty path. */
+TSC_API tsc_status_t tsc_client_set_files_base_folder(tsc_client_t *client,
+                                                      const char *path, size_t path_len,
+                                                      int32_t *out);
+/* END GENERATED client_files */
+/* LibCarla's LoadWorldIfDifferent: loads `map_name` unless it is the current
+ * map (with or without the "Carla/Maps/" prefix). *out is the new world, or
+ * NULL when the map was already loaded. */
+TSC_API tsc_status_t tsc_client_load_world_if_different(tsc_client_t *client,
+                                                        const char *map_name, size_t map_name_len,
+                                                        int32_t reset_settings, tsc_world_t **out);
+
+/* --- Traffic Manager ------------------------------------------------------------ */
+
+/* BEGIN GENERATED traffic_manager_issue23 from bindings/traffic_manager.yaml, do not edit */
+TSC_API tsc_status_t tsc_traffic_manager_set_osm_mode(tsc_traffic_manager_t *tm, int32_t enabled);
+TSC_API tsc_status_t tsc_traffic_manager_set_respawn_dormant_vehicles(tsc_traffic_manager_t *tm,
+                                                                      int32_t enabled);
+TSC_API tsc_status_t tsc_traffic_manager_set_boundaries_respawn_dormant_vehicles(
+    tsc_traffic_manager_t *tm, double lower_bound, double upper_bound);
+TSC_API tsc_status_t tsc_traffic_manager_set_hybrid_physics_radius(tsc_traffic_manager_t *tm,
+                                                                   double radius);
+TSC_API tsc_status_t tsc_traffic_manager_set_global_lane_offset(tsc_traffic_manager_t *tm,
+                                                                double offset);
+/* other_actor: any actor handle (a vehicle, a walker, ...). */
+TSC_API tsc_status_t tsc_traffic_manager_set_collision_detection(tsc_traffic_manager_t *tm,
+                                                                 tsc_vehicle_t *reference_vehicle,
+                                                                 tsc_actor_t *other_actor,
+                                                                 int32_t detect_collision);
+TSC_API tsc_status_t tsc_traffic_manager_shut_down(tsc_traffic_manager_t *tm);
+/* Large-vehicle wide turns (LibCarla ue5-dev); TSC_ERROR without them (CARLA 0.10.0). */
+TSC_API tsc_status_t tsc_traffic_manager_set_global_large_vehicle_wide_turn(
+    tsc_traffic_manager_t *tm, int32_t enabled);
+TSC_API tsc_status_t tsc_traffic_manager_set_large_vehicle_wide_turn(tsc_traffic_manager_t *tm,
+                                                                     tsc_vehicle_t *vehicle,
+                                                                     int32_t enabled);
+/* SetCustomPath: the vehicle follows these locations. */
+TSC_API tsc_status_t tsc_traffic_manager_set_path(tsc_traffic_manager_t *tm, tsc_vehicle_t *vehicle,
+                                                  const tsc_location_t *path, size_t count,
+                                                  int32_t empty_buffer);
+/* SetImportedRoute: the vehicle follows these road options (codes of tsc_road_option_t, 0..7). */
+TSC_API tsc_status_t tsc_traffic_manager_set_route(tsc_traffic_manager_t *tm,
+                                                   tsc_vehicle_t *vehicle,
+                                                   const uint8_t *route, size_t count,
+                                                   int32_t empty_buffer);
+/* END GENERATED traffic_manager_issue23 */
+typedef enum {
+  TSC_ROAD_OPTION_VOID = 0,
+  TSC_ROAD_OPTION_LEFT = 1,
+  TSC_ROAD_OPTION_RIGHT = 2,
+  TSC_ROAD_OPTION_STRAIGHT = 3,
+  TSC_ROAD_OPTION_LANE_FOLLOW = 4,
+  TSC_ROAD_OPTION_CHANGE_LANE_LEFT = 5,
+  TSC_ROAD_OPTION_CHANGE_LANE_RIGHT = 6,
+  TSC_ROAD_OPTION_ROAD_END = 7
+} tsc_road_option_t;
+/* The vehicle's next action: a road option code and its waypoint.
+ * TSC_NOT_FOUND if this Traffic Manager does not drive the vehicle (yet) or is
+ * shut down, on every LibCarla (ue5-dev returns an empty plan there, 0.10.0
+ * throws). In-process Traffic Managers only: LibCarla's TrafficManagerServer
+ * binds these RPCs without a result, so a remote one cannot answer. */
+TSC_API tsc_status_t tsc_traffic_manager_get_next_action(tsc_traffic_manager_t *tm,
+                                                         tsc_vehicle_t *vehicle,
+                                                         int32_t *out_road_option,
+                                                         tsc_waypoint_t **out_waypoint);
+/* Every planned action, in order: parallel lists of road option codes
+ * (*out_road_options, `count` bytes, freed with tsc_road_options_free) and
+ * waypoints (*out_waypoints). Errors as tsc_traffic_manager_get_next_action;
+ * an empty plan is TSC_NOT_FOUND too. */
+TSC_API tsc_status_t tsc_traffic_manager_get_all_actions(tsc_traffic_manager_t *tm,
+                                                         tsc_vehicle_t *vehicle,
+                                                         uint8_t **out_road_options,
+                                                         size_t *out_count,
+                                                         tsc_waypoint_list_t **out_waypoints);
+TSC_API void tsc_road_options_free(uint8_t *road_options);
+
+/* --- Blueprints ------------------------------------------------------------------ */
+
+/* Blueprints whose attribute `name` has `value` (or recommends it). */
+TSC_API tsc_status_t tsc_blueprint_library_filter_by_attribute(
+    const tsc_blueprint_library_t *library, const char *name, size_t name_len, const char *value,
+    size_t value_len, tsc_blueprint_library_t **out);
+/* BEGIN GENERATED actor_blueprint_tags from bindings/blueprint.yaml, do not edit */
+TSC_API tsc_status_t tsc_actor_blueprint_get_tags(tsc_actor_blueprint_t *blueprint,
+                                                  tsc_string_list_t *out);
+/* Whether the id or any tag matches the shell-style wildcard pattern. */
+TSC_API tsc_status_t tsc_actor_blueprint_match_tags(tsc_actor_blueprint_t *blueprint,
+                                                    const char *pattern, size_t pattern_len,
+                                                    int32_t *out);
+/* END GENERATED actor_blueprint_tags */
+
+/* --- Debug drawing ------------------------------------------------------------------ */
+
+/* BEGIN GENERATED debug_clear from bindings/debug.yaml, do not edit */
+/* Removes the persistent debug shapes (LibCarla ue5-dev); TSC_ERROR without (0.10.0). */
+TSC_API tsc_status_t tsc_debug_clear_shapes(tsc_world_t *world);
+/* Removes the persistent debug strings; TSC_ERROR as tsc_debug_clear_shapes. */
+TSC_API tsc_status_t tsc_debug_clear_strings(tsc_world_t *world);
+/* END GENERATED debug_clear */
+
+/* --- World settings ----------------------------------------------------------------- */
+
+/* The EpisodeSettings fields tsc_world_settings_t does not carry. */
+typedef struct {
+  double max_culling_distance;
+  double tile_stream_distance;
+  double actor_active_distance;
+  int32_t deterministic_ragdolls;
+  int32_t spectator_as_ego;
+} tsc_world_settings_ext_t;
+
+TSC_API tsc_status_t tsc_world_get_settings_ext(tsc_world_t *world, tsc_world_settings_t *out,
+                                                tsc_world_settings_ext_t *out_ext);
+/* Like tsc_world_apply_settings, with the extra fields too. Fields LibCarla
+ * has beyond these keep the server's values. */
+TSC_API tsc_status_t tsc_world_apply_settings_ext(tsc_world_t *world,
+                                                  const tsc_world_settings_t *settings,
+                                                  const tsc_world_settings_ext_t *ext,
+                                                  double timeout_seconds, uint64_t *out_frame);
+
+/* --- Geometry ---------------------------------------------------------------------- */
+
+/* LibCarla's Transform::GetMatrix / GetInverseMatrix: 16 doubles, row major.
+ * The rotation convention is the linked LibCarla's (its sign on pitch and roll
+ * differs between CARLA 0.10.0 and ue5-dev). */
+TSC_API tsc_status_t tsc_transform_get_matrix(const tsc_transform_t *transform, double *out16);
+TSC_API tsc_status_t tsc_transform_get_inverse_matrix(const tsc_transform_t *transform,
+                                                      double *out16);
 
 #ifdef __cplusplus
 } /* extern "C" */

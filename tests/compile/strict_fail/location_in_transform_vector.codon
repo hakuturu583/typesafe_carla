@@ -1,0 +1,8 @@
+# In strict mode Transform.transform_vector takes a vector, not a position.
+# expect-error: strict mode: convert with location.as_vector() (Location as Vector3D is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def turn(t: carla.Transform, here: carla.Location):
+    t.transform_vector(here)
+
+turn(carla.Transform(), carla.Location())

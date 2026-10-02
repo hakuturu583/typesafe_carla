@@ -2,9 +2,10 @@
 
 from ._ffi import (Handle, CTransform, CWorldSettings, tsc_world_get_id, tsc_world_get_actors,
                    tsc_world_get_actor, tsc_world_get_blueprint_library, tsc_world_spawn_actor,
-                   tsc_world_try_spawn_actor, tsc_world_tick, tsc_world_get_settings,
-                   tsc_world_apply_settings, TSC_NOT_FOUND, tsc_world_get_map,
+                   tsc_world_try_spawn_actor, tsc_world_tick,
+                   TSC_NOT_FOUND, tsc_world_get_map,
                    tsc_world_get_snapshot, tsc_world_wait_for_tick)
+from ._ffi import CWorldSettingsExt, tsc_world_get_settings_ext, tsc_world_apply_settings_ext
 from .errors import _check, _is_actor_id
 from .geometry import Transform
 from .actor import Actor, ActorList, _make_actor
@@ -20,16 +21,31 @@ class WorldSettings:
     substepping: bool
     max_substep_delta_time: float
     max_substeps: int
+    max_culling_distance: float  # meters; 0 disables culling
+    deterministic_ragdolls: bool
+    tile_stream_distance: float  # meters (large maps)
+    actor_active_distance: float  # meters (large maps)
+    spectator_as_ego: bool  # the spectator drives large-map streaming without a hero
 
+    # Defaults as the Python API's WorldSettings() (deterministic_ragdolls is
+    # False there, True in a fresh LibCarla EpisodeSettings).
     def __init__(self, synchronous_mode: bool = False, no_rendering_mode: bool = False,
                  fixed_delta_seconds: Optional[float] = None, substepping: bool = True,
-                 max_substep_delta_time: float = 0.01, max_substeps: int = 10):
+                 max_substep_delta_time: float = 0.01, max_substeps: int = 10,
+                 max_culling_distance: float = 0.0, deterministic_ragdolls: bool = False,
+                 tile_stream_distance: float = 3000.0, actor_active_distance: float = 2000.0,
+                 spectator_as_ego: bool = True):
         self.synchronous_mode = synchronous_mode
         self.no_rendering_mode = no_rendering_mode
         self.fixed_delta_seconds = fixed_delta_seconds
         self.substepping = substepping
         self.max_substep_delta_time = max_substep_delta_time
         self.max_substeps = max_substeps
+        self.max_culling_distance = max_culling_distance
+        self.deterministic_ragdolls = deterministic_ragdolls
+        self.tile_stream_distance = tile_stream_distance
+        self.actor_active_distance = actor_active_distance
+        self.spectator_as_ego = spectator_as_ego
 
     def __repr__(self) -> str:
         return (f"WorldSettings(synchronous_mode={self.synchronous_mode}, "
@@ -37,7 +53,12 @@ class WorldSettings:
                 f"fixed_delta_seconds={self.fixed_delta_seconds}, "
                 f"substepping={self.substepping}, "
                 f"max_substep_delta_time={self.max_substep_delta_time}, "
-                f"max_substeps={self.max_substeps})")
+                f"max_substeps={self.max_substeps}, "
+                f"max_culling_distance={self.max_culling_distance}, "
+                f"deterministic_ragdolls={self.deterministic_ragdolls}, "
+                f"tile_stream_distance={self.tile_stream_distance}, "
+                f"actor_active_distance={self.actor_active_distance}, "
+                f"spectator_as_ego={self.spectator_as_ego})")
 
     def _to_c(self) -> CWorldSettings:
         fixed = self.fixed_delta_seconds
@@ -46,14 +67,21 @@ class WorldSettings:
                               fixed if fixed is not None else 0.0,
                               self.max_substep_delta_time, i32(self.max_substeps), i32(0))
 
+    def _ext_to_c(self) -> CWorldSettingsExt:
+        return CWorldSettingsExt(self.max_culling_distance, self.tile_stream_distance,
+                                 self.actor_active_distance, i32(int(self.deterministic_ragdolls)),
+                                 i32(int(self.spectator_as_ego)))
+
     @staticmethod
-    def _from_c(s: CWorldSettings) -> WorldSettings:
+    def _from_c(s: CWorldSettings, e: CWorldSettingsExt) -> WorldSettings:
         fixed: Optional[float] = None
         if int(s.has_fixed_delta_seconds) != 0:
             fixed = s.fixed_delta_seconds
         return WorldSettings(int(s.synchronous_mode) != 0, int(s.no_rendering_mode) != 0, fixed,
                              int(s.substepping) != 0, s.max_substep_delta_time,
-                             int(s.max_substeps))
+                             int(s.max_substeps), e.max_culling_distance,
+                             int(e.deterministic_ragdolls) != 0, e.tile_stream_distance,
+                             e.actor_active_distance, int(e.spectator_as_ego) != 0)
 
 def _parent_ptr(attach_to) -> cobj:
     """Handle of `attach_to`: None, any Actor subclass, or an Optional of one.
@@ -160,15 +188,18 @@ class World:
 
     def get_settings(self) -> WorldSettings:
         out = Ptr[CWorldSettings](1)
-        _check(tsc_world_get_settings(self._h.ptr, out))
-        return WorldSettings._from_c(out[0])
+        ext = Ptr[CWorldSettingsExt](1)
+        _check(tsc_world_get_settings_ext(self._h.ptr, out, ext))
+        return WorldSettings._from_c(out[0], ext[0])
 
     def apply_settings(self, settings: WorldSettings, seconds: float = 10.0) -> int:
         """Applies settings. Returns the frame id at which they take effect."""
         s = Ptr[CWorldSettings](1)
         s[0] = settings._to_c()
+        ext = Ptr[CWorldSettingsExt](1)
+        ext[0] = settings._ext_to_c()
         out = Ptr[u64](1)
-        _check(tsc_world_apply_settings(self._h.ptr, s, seconds, out))
+        _check(tsc_world_apply_settings_ext(self._h.ptr, s, ext, seconds, out))
         return int(out[0])
 
     def __repr__(self) -> str:

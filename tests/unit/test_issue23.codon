@@ -1,0 +1,215 @@
+# Issue #23 on the mock backend: Client, Traffic Manager, blueprint, debug and
+# value-type gaps. The mock's rotation convention is LibCarla ue5-dev's; the
+# expected numbers are the official ue5-dev Python module's (checked offline).
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+assert ffi.CStringList.__elemsize__ == 16 and ffi.CWorldSettingsExt.__elemsize__ == 32
+
+def close(a: float, b: float, eps: float = 1e-5) -> bool:
+    return abs(a - b) <= eps
+
+def close_v(v, x: float, y: float, z: float, eps: float = 1e-5) -> bool:
+    return close(v.x, x, eps) and close(v.y, y, eps) and close(v.z, z, eps)
+
+def raises_carla_error(fn) -> bool:
+    try:
+        fn()
+    except carla.CarlaError:
+        return True
+    return False
+
+def raises_index_error(fn) -> bool:
+    try:
+        fn()
+    except IndexError:
+        return True
+    return False
+
+client = carla.Client("localhost", 2000)
+
+# --- Client ------------------------------------------------------------------
+maps = client.get_available_maps()
+assert "/Game/Carla/Maps/Town01" in maps and len(maps) == 3
+assert client.get_required_files() == ["MockTown/OpenDrive/MockTown.xodr"]
+assert client.get_required_files("MockTown", False) == ["MockTown/OpenDrive/MockTown.xodr"]
+assert client.get_required_files("Other") == List[str]()
+assert client.set_files_base_folder("/tmp/tsc-files") and not client.set_files_base_folder("")
+client.request_file("MockTown/OpenDrive/MockTown.xodr")
+assert raises_carla_error(lambda: client.request_file("nope.xodr"))
+client.set_replayer_ignore_hero(True)
+client.set_replayer_ignore_spectator(False)
+world = client.get_world()
+first_id = world.id
+assert client.load_world_if_different("MockTown") is None  # the current map
+assert client.load_world_if_different("Carla/Maps/MockTown") is None
+assert client.get_world().id == first_id
+loaded = client.load_world_if_different("Town01", reset_settings=True)
+assert loaded is not None and loaded.id != first_id
+assert raises_carla_error(lambda: client.load_world_if_different(""))
+world = client.get_world()
+
+# --- Blueprints --------------------------------------------------------------
+lib = world.get_blueprint_library()
+four = lib.filter_by_attribute("number_of_wheels", "4")
+assert len(four) == 3 and all(bp.id.startswith("vehicle.") for bp in four)
+assert len(lib.filter_by_attribute("number_of_wheels", "2")) == 0
+assert len(lib.filter_by_attribute("no_such_attribute", "4")) == 0
+bp = lib.find("vehicle.audi.tt")
+assert sorted(bp.tags) == ["audi", "tt", "vehicle"]
+assert bp.match_tags("audi") and bp.match_tags("vehicle.audi.*") and bp.match_tags("a?di")
+assert not bp.match_tags("ford") and not bp.match_tags("")
+
+# --- Debug -------------------------------------------------------------------
+world.debug.draw_point(carla.Location(1.0, 2.0, 3.0))
+world.debug.draw_string(carla.Location(), "hello")
+world.debug.clear_debug_shape()
+world.debug.clear_debug_string()
+
+# --- World settings: the extended fields round-trip ------------------------------
+s = world.get_settings()
+assert s.max_culling_distance == 0.0 and s.deterministic_ragdolls  # LibCarla's defaults
+assert s.tile_stream_distance == 3000.0 and s.actor_active_distance == 2000.0
+assert s.spectator_as_ego
+s.max_culling_distance = 150.0
+s.deterministic_ragdolls = False
+s.tile_stream_distance = 1500.0
+s.actor_active_distance = 500.0
+s.spectator_as_ego = False
+world.apply_settings(s)
+t = world.get_settings()
+assert t.max_culling_distance == 150.0 and not t.deterministic_ragdolls
+assert t.tile_stream_distance == 1500.0 and t.actor_active_distance == 500.0
+assert not t.spectator_as_ego and not t.synchronous_mode
+fresh = carla.WorldSettings()  # the Python API's defaults
+assert not fresh.deterministic_ragdolls and fresh.tile_stream_distance == 3000.0
+bad = world.get_settings()
+bad.tile_stream_distance = -1.0
+assert raises_carla_error(lambda: world.apply_settings(bad))
+world.apply_settings(carla.WorldSettings(deterministic_ragdolls=True))
+assert world.get_settings().tile_stream_distance == 3000.0
+
+# --- Snapshot / Timestamp ----------------------------------------------------------
+world.tick()
+snap = world.get_snapshot()
+assert snap.frame_count == snap.frame and snap.frame > 0
+assert snap.elapsed_seconds == snap.timestamp.elapsed_seconds
+assert snap.delta_seconds == snap.timestamp.delta_seconds
+assert snap.platform_timestamp == snap.timestamp.platform_timestamp
+ts = carla.Timestamp(frame=7)
+assert ts.frame_count == 7
+ts.frame_count = 9
+assert ts.frame == 9
+
+# --- Traffic Manager -----------------------------------------------------------------
+tm = client.get_trafficmanager()
+vehicle = world.spawn_actor(bp, world.get_map().get_spawn_points()[0]).as_vehicle()
+walker_bp = lib.find("walker.pedestrian.0001")
+walker = world.spawn_actor(walker_bp, carla.Transform(carla.Location(5.0, 10.0, 1.0)))
+tm.global_lane_offset(0.5)
+tm.collision_detection(vehicle, walker, False)   # any actor as the other one
+tm.collision_detection(vehicle, vehicle, True)
+tm.set_osm_mode(False)
+tm.set_respawn_dormant_vehicles(True)
+tm.set_boundaries_respawn_dormant_vehicles(25.0, 100.0)
+tm.set_hybrid_physics_radius(70.0)
+tm.keep_slow_lane_rule_percentage(vehicle, 50.0)
+tm.global_large_vehicle_wide_turn(True)   # the mock mirrors ue5-dev
+tm.vehicle_large_vehicle_wide_turn(vehicle, False)
+assert raises_carla_error(lambda: tm.set_hybrid_physics_radius(-1.0))
+assert raises_carla_error(lambda: tm.set_boundaries_respawn_dormant_vehicles(-1.0, 10.0))
+assert raises_carla_error(lambda: tm.keep_slow_lane_rule_percentage(vehicle, 101.0))
+# Not driven by the Traffic Manager yet: no plan, IndexError (every LibCarla).
+assert raises_index_error(lambda: tm.get_next_action(vehicle))
+assert raises_index_error(lambda: tm.get_all_actions(vehicle))
+vehicle.set_autopilot(True)
+action, wp = tm.get_next_action(vehicle)
+assert action == "LaneFollow" and wp.road_id == 1
+assert len(tm.get_all_actions(vehicle)) == 1
+tm.set_route(vehicle, ["Straight", "Left", "LaneFollow", "RoadEnd"])
+actions = tm.get_all_actions(vehicle)
+assert [a[0] for a in actions] == ["Straight", "Left", "LaneFollow", "RoadEnd"]
+assert actions[1][1].s > actions[0][1].s  # one every 10 m ahead
+assert tm.get_next_action(vehicle)[0] == "Straight"
+assert raises_carla_error(lambda: tm.set_route(vehicle, ["Sideways"]))
+tm.set_route(vehicle, List[str](), empty_buffer=False)
+tm.set_path(vehicle, [carla.Location(10.0, 0.0, 0.0), carla.Location(20.0, 0.0, 0.0)])
+tm.set_path(vehicle, List[carla.Location]())
+assert raises_carla_error(lambda: tm.set_path(vehicle, [carla.Location(1e39, 0.0, 0.0)]))
+tm.shut_down()
+assert raises_index_error(lambda: tm.get_next_action(vehicle))  # no Traffic Manager any more
+assert raises_index_error(lambda: tm.get_all_actions(vehicle))
+vehicle.set_autopilot(False)
+walker.destroy()
+
+# --- Value types ------------------------------------------------------------------------
+tr = carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(10.0, 20.0, 30.0))
+m = tr.get_matrix()
+assert len(m) == 4 and all(len(row) == 4 for row in m)
+assert close(m[0][0], 0.9254165291786194) and close(m[2][0], -0.1736481785774231)
+assert m[0][3] == 1.0 and m[1][3] == 2.0 and m[2][3] == 3.0 and m[3] == [0.0, 0.0, 0.0, 1.0]
+inv = tr.get_inverse_matrix()
+assert close(inv[0][3], -1.0781199932098389, 1e-5) and close(inv[2][3], -2.0341057777404785, 1e-5)
+# M * M^-1 = I
+for i in range(4):
+    for j in range(4):
+        acc = 0.0
+        for k in range(4):
+            acc += m[i][k] * inv[k][j]
+        assert close(acc, 1.0 if i == j else 0.0, 1e-5)
+assert close_v(tr.get_forward_vector(), 0.925417, 0.336824, -0.173648)
+assert close_v(tr.get_right_vector(), -0.214610, 0.843493, 0.492404)
+assert close_v(tr.get_up_vector(), 0.312325, -0.418412, 0.852868)
+r = carla.Rotation(10.0, 20.0, 30.0)
+assert close_v(r.get_right_vector(), -0.214610, 0.843493, 0.492404)
+assert close_v(r.get_up_vector(), 0.312325, -0.418412, 0.852868)
+# Yaw only: the same in CARLA 0.10.0 and ue5-dev.
+assert close_v(carla.Rotation(yaw=90.0).get_forward_vector(), 0.0, 1.0, 0.0)
+p = carla.Location(1.0, 0.0, 0.0)
+out = tr.transform(p)
+assert close_v(p, 1.925416, 2.336824, 2.826352) and close_v(out, p.x, p.y, p.z)
+v = carla.Vector3D(1.0, 0.0, 0.0)
+rv = tr.transform_vector(v)
+assert close_v(v, 0.925417, 0.336824, -0.173648) and close_v(rv, v.x, v.y, v.z)
+pts = [carla.Location(1.0, 0.0, 0.0), carla.Location(0.0, 1.0, 0.0)]
+tr.transform(pts)
+assert close_v(pts[0], 1.925416, 2.336824, 2.826352)
+n = carla.Rotation(-190.0, 370.0, 540.0).get_normalized()
+assert close(n.pitch, 170.0) and close(n.yaw, 10.0) and close(n.roll, -180.0)
+n = carla.Rotation(180.0, -180.0, 0.0).get_normalized()
+assert n.pitch == -180.0 and n.yaw == -180.0 and n.roll == 0.0
+bb = carla.BoundingBox(carla.Location(0.5, 0.0, 0.0), carla.Vector3D(1.0, 2.0, 3.0),
+                       carla.Rotation(0.0, 90.0, 0.0))
+local = bb.get_local_vertices()
+assert len(local) == 8 and close_v(local[0], 2.5, -1.0, -3.0)
+world_vertices = bb.get_world_vertices(tr)
+assert len(world_vertices) == 8 and close_v(world_vertices[0], 2.591178, 3.253803, -0.485130)
+assert bb.contains(carla.Location(1.0, 2.0, 3.0), tr)
+assert not bb.contains(carla.Location(10.0, 2.0, 3.0), tr)
+q = carla.Quaternion(carla.Rotation(10.0, 20.0, 30.0))
+assert close(q.x, -0.239298) and close(q.y, 0.127679) and close(q.z, -0.144878) and close(q.w, 0.951549)
+back = q.rotator()
+assert close(back.pitch, 10.0, 1e-4) and close(back.yaw, 20.0, 1e-4) and close(back.roll, 30.0, 1e-4)
+assert close(q.length(), 1.0) and close(q.unit_quaternion().w, q.w)
+assert q.conjugate() == carla.Quaternion(-q.x, -q.y, -q.z, q.w)
+assert close(q.inverse().x, 0.239298) and carla.Quaternion(0.0, 0.0, 0.0, 0.0).inverse() == carla.Quaternion()
+assert carla.Quaternion(1.0, 2.0, 3.0, 4.0) * carla.Quaternion(0.5, 0.0, 0.0, 1.0) == carla.Quaternion(3.0, 3.5, 2.0, 3.5)
+assert close_v(carla.Quaternion(1.0, 2.0, 3.0, 4.0).get_forward_vector(), -25.0, -28.0, -10.0)
+assert close_v(q.get_forward_vector(), 0.925417, 0.336824, -0.173648)
+assert close_v(q.get_right_vector(), -0.214610, 0.843493, 0.492404)
+assert close_v(q.get_up_vector(), 0.312325, -0.418412, 0.852869)
+assert carla.Quaternion() != q
+assert carla.Vector2D(3.0, 4.0).squared_length() == 25.0
+u = carla.Vector2D(3.0, 4.0).make_unit_vector()
+assert close(u.x, 0.6) and close(u.y, 0.8)
+assert carla.Vector2D().make_unit_vector() == carla.Vector2D()
+assert carla.Vector2D(0.1, 0.0).make_unit_vector(epsilon=1.0) == carla.Vector2D(0.1, 0.0)
+vel = carla.Velocity(1.0, 2.0, 3.0)
+assert vel.length() == carla.Vector3D(1.0, 2.0, 3.0).length() and str(vel).startswith("Velocity(")
+assert carla.AngularVelocity(carla.Vector3D(1.0, 0.0, 0.0)).x == 1.0
+assert carla.Acceleration(0.0, 0.0, -9.8).z == -9.8
+vehicle.set_target_velocity(vel)  # a Velocity is a Vector3D
+assert carla.AttachmentType.Rigid == 0 and carla.AttachmentType.SpringArmGhost == 2
+assert carla.GBufferTextureID.SceneColor == 0 and carla.GBufferTextureID.CustomStencil == 12
+
+print("OK")
