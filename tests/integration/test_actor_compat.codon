@@ -3,6 +3,7 @@
 # that world.get_actor() returns, as in the CARLA Python API, and
 # ActorTypeError for the wrong kind of actor.
 import os
+import time
 import typesafe_carla as carla
 
 host = os.getenv("TSC_CARLA_HOST", "localhost")
@@ -143,9 +144,11 @@ try:
     ai.go_to_location(target)
     ai.set_max_speed(1.8)
     start = walker.get_location()
-    for _ in range(150):
+    walked = 0.0
+    deadline = time.time() + 30.0  # asynchronous: bounded by wall-clock time, not ticks
+    while walked <= 1.0 and time.time() < deadline:
         world.wait_for_tick(10.0)
-    walked = walker.get_location().distance(start)
+        walked = walker.get_location().distance(start)
     print("walker walked", walked, "m (AI controller through Actor)")
     assert walked > 1.0
     ai.stop()
