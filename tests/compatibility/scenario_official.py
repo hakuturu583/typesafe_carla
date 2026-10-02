@@ -59,6 +59,15 @@ out("waypoint_s", f"{wp.s:.3f},{wp.lane_width:.3f}")
 n = wp.next(10.0)[0].transform.location
 out("next10", f"{n.x:.3f},{n.y:.3f}")
 out("generated", len(m.generate_waypoints(20.0)))
+# Issue #10: Location derives from Vector3D (result types and Vector3D methods).
+dl = n - p0.location
+u = dl.make_unit_vector()
+cr = dl.cross(carla.Vector3D(0.0, 0.0, 1.0))
+out("location_vector_types", f"{type(dl).__name__},{type(dl * 2.0).__name__},"
+    f"{type(carla.Vector3D() + dl).__name__},{type(abs(dl)).__name__},{type(u).__name__}")
+out("location_vector", f"{dl.length():.3f},{dl.squared_length():.3f},"
+    f"{dl.dot(carla.Vector3D(1.0, 1.0, 0.0)):.3f},{cr.x:.3f},{cr.y:.3f},{u.x:.3f},{u.y:.3f},"
+    f"{n.distance_2d(p0.location):.3f},{abs(dl).x:.3f}")
 r = client.apply_batch_sync([carla.command.DestroyActor(999999)])
 out("batch_error", r[0].error)
 

@@ -1,0 +1,13 @@
+# Location arithmetic gives a Vector3D (as in CARLA 0.10.0), and a variable
+# keeps one static type: a Location local cannot be rebound to it. Write
+# `loc = carla.Location(loc + offset)` or start from a Vector3D.
+# expect-error: 'Vector3D' does not match expected type 'Location'
+import typesafe_carla as carla
+
+def lift(actor: carla.Actor) -> carla.Location:
+    loc = actor.get_location()
+    loc += carla.Location(0.0, 0.0, 1.0)
+    return loc
+
+_world = carla.Client("localhost", 2000).get_world()
+lift(_world.get_actors()[0])

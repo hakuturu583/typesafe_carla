@@ -1,0 +1,13 @@
+# A Location passed where a Vector3D is expected, and a Vector3D where a
+# Location is expected: a run-time warning, once per API (checked by tests/test_runtime.py::test_compat_warning_*).
+import typesafe_carla as carla
+
+vehicle = carla.Client("localhost", 2000).get_world().get_actors()[0]
+for i in range(3):
+    vehicle.set_target_velocity(carla.Location(float(i), 0.0, 0.0))
+assert vehicle.get_velocity() == carla.Vector3D(2.0, 0.0, 0.0)
+vehicle.add_force(carla.Location(1.0, 0.0, 0.0))
+# The other direction: a Vector3D (Location arithmetic) where a Location is expected.
+for i in range(2):
+    vehicle.set_location(vehicle.get_location() + carla.Location(0.0, 0.0, 1.0))
+print("OK")

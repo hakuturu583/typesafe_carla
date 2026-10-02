@@ -46,6 +46,12 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   LibCarla method belongs in `bindings/*.yaml` (generated), not hand-written.
   Never edit generated code (`native/src/generated/`, marked blocks in
   `ffi.h` and `_ffi.codon`).
+- A new API parameter typed `Vector3D` or `Location` is generic (no
+  annotation) and goes through `geometry._vector_arg` / `_location_arg`
+  (`_vector_or` / `_location_or` if optional), with a distinct literal
+  `"[tsc-compat] a Location passed as a Vector3D to X"` (or the reverse);
+  the helpers call `compat_shortcut`. It needs a `tests/compile/strict_fail`
+  case for the compat path.
 - The mock (`native/mock`) mirrors LibCarla UE5 signatures; keep it in sync
   with any LibCarla API the shim starts using.
 - Versions: `python/typesafe_carla/__init__.py` and
@@ -61,3 +67,15 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
 - `codon build -release` aborts (capture.cpp:618, "found multiple synthetic
   assignments for loop var") on a lambda that captures a loop variable;
   move the loop body into a function taking the variable.
+- Subclasses do not upcast inside `Optional` (`Optional[Location]` is not an
+  `Optional[Vector3D]`), and `isinstance` is exact
+  (`isinstance(location, Vector3D)` is False).
+- An argument whose type is inferred late (e.g. reached through an implicitly
+  unwrapped `Optional`) can mis-bind against a parameter annotated with a base
+  class, giving "'Vector3D' does not match expected type 'Location'". Use a
+  generic parameter plus `_upcast_vector` / `_upcast_location`. Same-name
+  methods with different signatures across a class hierarchy are dispatched
+  as virtual overrides: avoid them.
+- `-D` definitions are visible only in the main file, and `CODON_PATH` holds
+  a single directory. The strict setting reaches the library through the
+  launcher-generated `_tsc_build_config` module.

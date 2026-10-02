@@ -211,8 +211,9 @@ try:
     # --- Debug drawing ------------------------------------------------------------------------------------
     here = car.get_location()
     world.debug.draw_point(here, 0.2, carla.Color(0, 255, 0), 1.0)
-    world.debug.draw_line(here, here + carla.Location(0.0, 0.0, 3.0), 0.05, carla.Color(0, 0, 255), 1.0)
-    world.debug.draw_arrow(here, here + carla.Location(3.0, 0.0, 0.0), life_time=1.0)
+    world.debug.draw_line(here, carla.Location(here + carla.Vector3D(0.0, 0.0, 3.0)), 0.05,
+                          carla.Color(0, 0, 255), 1.0)
+    world.debug.draw_arrow(here, carla.Location(here + carla.Vector3D(3.0, 0.0, 0.0)), life_time=1.0)
     world.debug.draw_box(car.bounding_box, car.get_transform().rotation, life_time=1.0)
     world.debug.draw_string(here, "typesafe_carla", True, carla.Color(255, 255, 0), 1.0)
 finally:

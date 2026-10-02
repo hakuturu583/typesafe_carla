@@ -117,6 +117,48 @@ if left:
 world.try_spawn_actor(bp, transform).destroy()   # raises ValueError if it is None
 ```
 
+As in the Python API, `Location` derives from `Vector3D`: it has `length()`,
+`dot()`, `cross()`, `make_unit_vector()`, `distance_2d()` and the rest, and
+its arithmetic is Vector3D's: `Location - Location` is a `Vector3D`, as in the
+CARLA 0.10.0 Python API. A `Location` is accepted where the API
+takes a `Vector3D` (a velocity, force, impulse or direction), but the program
+prints a one-time warning, because a position passed as a velocity is usually
+a mistake. A displacement is already a `Vector3D`; convert a `Location`
+explicitly to keep the program warning-free:
+
+```python
+vehicle.set_target_velocity(target - vehicle.get_location())   # Vector3D: fine
+vehicle.set_target_velocity(target)                             # Location: warns
+vehicle.set_target_velocity(target.as_vector())                 # explicit: fine
+```
+
+The reverse also holds, as in the Python API: a `Vector3D` (for example
+`loc + offset`) is accepted where the API takes a `Location` (`Transform`,
+`set_location`, `get_waypoint`, the debug drawing functions, ...), with the
+same kind of warning. Convert it with `carla.Location(v)` to keep the program
+warning-free:
+
+```python
+carla.Transform(carla.Location(spawn.location + offset), spawn.rotation)
+```
+
+Assignments do not convert. Once `loc` is a `Location` variable,
+`loc += offset` or `loc = loc + offset` (in a loop, or in one branch of an
+`if`) is a compile error (`'Vector3D' does not match expected type
+'Location'`), and so is `t.location = loc + offset`. Write
+`loc = carla.Location(loc + offset)`, or keep a vector and convert at the end:
+
+```python
+pos = actor.get_location().as_vector()
+for step in range(10):
+    pos += offset
+actor.set_location(carla.Location(pos))
+```
+
+As with the other compatibility paths, the launcher also warns at compile
+time, `TYPESAFE_CARLA_COMPAT_WARNINGS=0` silences the warnings, and
+`typesafe-codon --strict` turns them into compile errors.
+
 The README covers the API surface and the Codon-specific caveats: exceptions
 do not form a hierarchy, `Optional` is unwrapped implicitly (with one gap where
 an explicit `unwrap()` is needed), and only called functions are type-checked.

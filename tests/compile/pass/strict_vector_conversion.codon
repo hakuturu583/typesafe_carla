@@ -1,0 +1,30 @@
+# strict
+# In strict mode, explicit conversions and geometry on Locations still compile.
+# Location - Location is a Vector3D (as in the CARLA 0.10.0 Python API), so a
+# displacement goes straight to a velocity.
+import typesafe_carla as carla
+
+def push(actor: carla.Actor, other: carla.Actor):
+    offset = other.get_location() - actor.get_location()
+    actor.set_target_velocity(offset)
+    actor.set_target_velocity(actor.get_location().as_vector())
+    actor.add_force(carla.Vector3D(1.0, 0.0, 0.0))
+    batch = [carla.command.ApplyTargetVelocity(actor.id, offset),
+             carla.command.ApplyImpulse(actor.id, actor.get_velocity())]
+    walk = carla.WalkerControl(offset.make_unit_vector(), 1.4)
+    box = carla.BoundingBox(carla.Location(), carla.Vector3D(1.0, 1.0, 1.0))
+    d: float = offset.length() + offset.distance(carla.Location())
+    phys = carla.VehiclePhysicsControl(center_of_mass=carla.Location(offset))
+    det = carla.LidarDetection(carla.Location(offset), 0.5)
+    v: carla.Vector3D = carla.Vector3D(actor.get_location())
+    actor.set_location(carla.Location(actor.get_location() + carla.Vector3D(0.0, 0.0, 1.0)))
+
+def draw(world: carla.World, here: carla.Location):
+    world.debug.draw_line(here, carla.Location(here + carla.Vector3D(0.0, 0.0, 3.0)))
+    wp = world.get_map().get_waypoint(carla.Location(here + carla.Vector3D(1.0, 0.0, 0.0)))
+    cmd = carla.command.ApplyLocation(1, carla.Location(here + carla.Vector3D(1.0, 0.0, 0.0)))
+    box = carla.BoundingBox(carla.Location(here + carla.Vector3D(1.0, 0.0, 0.0)), here.as_vector())
+
+_world = carla.Client("localhost", 2000).get_world()
+draw(_world, carla.Location())
+push(_world.get_actors()[0], _world.get_actors()[0])

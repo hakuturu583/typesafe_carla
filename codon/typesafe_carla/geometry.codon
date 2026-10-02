@@ -1,33 +1,118 @@
 # Geometry value types. Plain Codon classes; copied across the C ABI.
 
 from ._ffi import CVector2D, CVector3D, CRotation, CTransform, CBoundingBox
+from ._strict import compat_shortcut
 
 class Vector3D:
+    """A 3D vector (velocity, force, direction, ...), as carla.Vector3D.
+
+    Location derives from it, as in the CARLA Python API, so a Location is
+    accepted wherever a Vector3D is.
+    """
     x: float
     y: float
     z: float
+
+    # Methods that take another vector use a generic `other` converted by
+    # _upcast_vector: a Vector3D or a Location (or anything else, which fails
+    # with "'T' does not match expected type 'Vector3D'"). A `other: Vector3D`
+    # annotation, or Location overloads, would break arguments whose type
+    # Codon infers late, e.g. `wp.transform.location` with `wp` an
+    # Optional[Waypoint] ("'Vector3D' does not match expected type 'Location'"),
+    # and overloads across the hierarchy are dispatched as virtual overrides.
 
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
         self.x = x
         self.y = y
         self.z = z
 
+    def __init__(self, v: Vector3D):
+        """A copy of `v` (a Vector3D or a Location), as Vector3D(location) in Python."""
+        self.x = v.x
+        self.y = v.y
+        self.z = v.z
+
     def length(self) -> float:
-        return (self.x * self.x + self.y * self.y + self.z * self.z) ** 0.5
+        return self.squared_length() ** 0.5
 
-    def __add__(self, other: Vector3D) -> Vector3D:
-        return Vector3D(self.x + other.x, self.y + other.y, self.z + other.z)
+    def squared_length(self) -> float:
+        return self.x * self.x + self.y * self.y + self.z * self.z
 
-    def __sub__(self, other: Vector3D) -> Vector3D:
-        return Vector3D(self.x - other.x, self.y - other.y, self.z - other.z)
+    def dot(self, other) -> float:
+        other = _upcast_vector(other)
+        return self.x * other.x + self.y * other.y + self.z * other.z
+
+    def dot_2d(self, other) -> float:
+        other = _upcast_vector(other)
+        return self.x * other.x + self.y * other.y
+
+    def cross(self, other) -> Vector3D:
+        other = _upcast_vector(other)
+        return Vector3D(self.y * other.z - self.z * other.y,
+                        self.z * other.x - self.x * other.z,
+                        self.x * other.y - self.y * other.x)
+
+    def make_unit_vector(self) -> Vector3D:
+        """This vector scaled to length 1; a zero vector stays zero (as in CARLA 0.10.0)."""
+        n = self.length()
+        if n == 0.0:
+            return Vector3D()
+        return Vector3D(self.x / n, self.y / n, self.z / n)
+
+    def distance(self, other) -> float:
+        return self.distance_squared(other) ** 0.5
+
+    def distance_squared(self, other) -> float:
+        other = _upcast_vector(other)
+        dx = self.x - other.x
+        dy = self.y - other.y
+        dz = self.z - other.z
+        return dx * dx + dy * dy + dz * dz
+
+    def distance_2d(self, other) -> float:
+        return self.distance_squared_2d(other) ** 0.5
+
+    def distance_squared_2d(self, other) -> float:
+        other = _upcast_vector(other)
+        dx = self.x - other.x
+        dy = self.y - other.y
+        return dx * dx + dy * dy
+
+    def get_vector_angle(self, other) -> float:
+        """The angle to `other`, in radians (NaN if either is zero, as in CARLA 0.10.0)."""
+        other = _upcast_vector(other)
+        from math import acos, nan
+        n = self.length() * other.length()
+        if n == 0.0:
+            return nan
+        c = self.dot(other) / n
+        return acos(max(-1.0, min(1.0, c)))
+
+    def __add__(self, other) -> Vector3D:
+        o = _upcast_vector(other)
+        return Vector3D(self.x + o.x, self.y + o.y, self.z + o.z)
+
+    def __sub__(self, other) -> Vector3D:
+        o = _upcast_vector(other)
+        return Vector3D(self.x - o.x, self.y - o.y, self.z - o.z)
 
     def __mul__(self, k: float) -> Vector3D:
         return Vector3D(self.x * k, self.y * k, self.z * k)
 
-    def __eq__(self, other: Vector3D) -> bool:
+    def __rmul__(self, k: float) -> Vector3D:
+        return self * k
+
+    def __truediv__(self, k: float) -> Vector3D:
+        return Vector3D(self.x / k, self.y / k, self.z / k)
+
+    def __abs__(self) -> Vector3D:
+        return Vector3D(abs(self.x), abs(self.y), abs(self.z))
+
+    def __eq__(self, other) -> bool:
+        other = _upcast_vector(other)
         return self.x == other.x and self.y == other.y and self.z == other.z
 
-    def __ne__(self, other: Vector3D) -> bool:
+    def __ne__(self, other) -> bool:
         return not (self == other)
 
     def __repr__(self) -> str:
@@ -67,56 +152,100 @@ class Vector2D:
     def _from_c(v: CVector2D) -> Vector2D:
         return Vector2D(v.x, v.y)
 
-class Location:
+class Location(Vector3D):
     """A point in world space, in meters.
 
-    Unlike the CARLA Python API, Location is not a Vector3D subclass: a
-    position cannot be passed where a velocity is expected. Convert with
-    as_vector() / Location.from_vector() when that is really intended.
+    As in the CARLA Python API (0.10.0), Location derives from Vector3D: it has
+    all of Vector3D's methods and is accepted wherever a Vector3D is. Its
+    arithmetic is Vector3D's, so `+`, `-`, `*`, `/` and abs() give a Vector3D
+    (Location - Location is a Vector3D, as in Python).
+    API parameters that take a Location also accept a Vector3D (a compat
+    path, as in Python); convert explicitly with Location(v) or
+    Location.from_vector(v).
     """
-    x: float
-    y: float
-    z: float
 
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
-        self.x = x
-        self.y = y
-        self.z = z
+        super().__init__(x, y, z)
+
+    def __init__(self, v: Vector3D):
+        super().__init__(v.x, v.y, v.z)
 
     @staticmethod
-    def from_vector(v: Vector3D) -> Location:
-        return Location(v.x, v.y, v.z)
+    def from_vector(v) -> Location:
+        """v: Vector3D or Location (generic, so late-inferred arguments bind)."""
+        o = _upcast_vector(v)
+        return Location(o.x, o.y, o.z)
 
     def as_vector(self) -> Vector3D:
         return Vector3D(self.x, self.y, self.z)
 
-    def distance(self, other: Location) -> float:
-        dx = self.x - other.x
-        dy = self.y - other.y
-        dz = self.z - other.z
-        return (dx * dx + dy * dy + dz * dz) ** 0.5
-
-    def __add__(self, offset: Location) -> Location:
-        return Location(self.x + offset.x, self.y + offset.y, self.z + offset.z)
-
-    def __sub__(self, other: Location) -> Location:
-        return Location(self.x - other.x, self.y - other.y, self.z - other.z)
-
-    def __eq__(self, other: Location) -> bool:
-        return self.x == other.x and self.y == other.y and self.z == other.z
-
-    def __ne__(self, other: Location) -> bool:
-        return not (self == other)
-
     def __repr__(self) -> str:
         return f"Location(x={self.x}, y={self.y}, z={self.z})"
-
-    def _to_c(self) -> CVector3D:
-        return CVector3D(self.x, self.y, self.z)
 
     @staticmethod
     def _from_c(v: CVector3D) -> Location:
         return Location(v.x, v.y, v.z)
+
+def _vector_arg(v, what: Literal[str]) -> Vector3D:
+    """An API argument documented as Vector3D: a Vector3D, or a Location.
+
+    A Location is a Vector3D (as in the Python API), but API parameters that
+    take a vector (velocity, force, impulse, direction, ...) check for it
+    statically: in strict mode it is a compile error, otherwise a one-time
+    warning naming `what` (a "[tsc-compat] ..." literal). Only this branch
+    realizes the literal, so programs that never pass a Location get neither.
+    Other types fail to compile with "'T' does not match expected type 'Vector3D'".
+    """
+    if isinstance(v, Optional):
+        return _vector_arg(v.__val__(), what)
+    elif isinstance(v, Location):
+        compat_shortcut("Location as Vector3D", what, "convert with location.as_vector()")
+        return v.as_vector()
+    else:
+        return _upcast_vector(v)
+
+def _vector_or(v, default: Vector3D, what: Literal[str]) -> Vector3D:
+    """_vector_arg for an optional parameter: `v` may be None (gives `default`).
+
+    (A plain Optional[Vector3D] parameter would not accept a Location: Codon
+    does not upcast inside Optional.)
+    """
+    if v is None:
+        return default
+    else:
+        return _vector_arg(v, what)
+
+def _upcast_vector(v: Vector3D) -> Vector3D:
+    return v
+
+def _location_arg(v, what: Literal[str]) -> Location:
+    """An API argument documented as Location: a Location, or a Vector3D.
+
+    The CARLA Python API converts a Vector3D to a Location implicitly (e.g.
+    `carla.Transform(loc + offset, rot)`, where `loc + offset` is a Vector3D).
+    Here that is a compile error in strict mode, otherwise a one-time warning
+    naming `what` (a "[tsc-compat] ..." literal, realized only on this branch).
+    Other types fail with "'T' does not match expected type 'Location'".
+    """
+    if isinstance(v, Optional):
+        return _location_arg(v.__val__(), what)
+    elif isinstance(v, Location):
+        return v
+    elif isinstance(v, Vector3D):
+        compat_shortcut("Vector3D as Location", what, "convert with carla.Location(v)")
+        return Location(v)
+    else:
+        return _upcast_location(v)
+
+def _location_or(v, what: Literal[str]) -> Location:
+    """_location_arg for an optional parameter: None gives Location()."""
+    if v is None:
+        return Location()
+    else:
+        return _location_arg(v, what)
+
+def _upcast_location(v: Location) -> Location:
+    return v
 
 class Rotation:
     """Orientation in degrees (Unreal convention: pitch, yaw, roll)."""
@@ -155,9 +284,10 @@ class Transform:
     location: Location
     rotation: Rotation
 
-    def __init__(self, location: Optional[Location] = None,
-                 rotation: Optional[Rotation] = None):
-        self.location = location if location is not None else Location()
+    def __init__(self, location = None, rotation: Optional[Rotation] = None):
+        """location: Optional[Location] (a Vector3D is accepted as in the Python API)."""
+        self.location = _location_or(
+            location, "[tsc-compat] a Vector3D passed as a Location to Transform(location=...)")
         self.rotation = rotation if rotation is not None else Rotation()
 
     def get_forward_vector(self) -> Vector3D:
@@ -185,10 +315,13 @@ class BoundingBox:
     extent: Vector3D
     rotation: Rotation
 
-    def __init__(self, location: Optional[Location] = None, extent: Optional[Vector3D] = None,
-                 rotation: Optional[Rotation] = None):
-        self.location = location if location is not None else Location()
-        self.extent = extent if extent is not None else Vector3D()
+    def __init__(self, location = None, extent = None, rotation: Optional[Rotation] = None):
+        """location: Optional[Location], extent: Optional[Vector3D] (each accepts the
+        other type as in the Python API)."""
+        self.location = _location_or(
+            location, "[tsc-compat] a Vector3D passed as a Location to BoundingBox(location=...)")
+        self.extent = _vector_or(extent, Vector3D(),
+                                 "[tsc-compat] a Location passed as a Vector3D to BoundingBox(extent=...)")
         self.rotation = rotation if rotation is not None else Rotation()
 
     def __eq__(self, other: BoundingBox) -> bool:

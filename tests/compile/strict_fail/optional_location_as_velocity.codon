@@ -1,0 +1,9 @@
+# In strict mode an Optional[Location] is not a velocity either.
+# expect-error: strict mode: convert with location.as_vector() (Location as Vector3D is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def push(actor: carla.Actor, o: Optional[carla.Location]):
+    actor.set_target_velocity(o)
+
+_world = carla.Client("localhost", 2000).get_world()
+push(_world.get_actors()[0], carla.Location())

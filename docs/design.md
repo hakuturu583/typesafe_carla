@@ -244,10 +244,12 @@ Codon only holds `Ptr[tsc_vehicle]` or an equivalent opaque pointer.
 Small immutable/value-like CARLA types should be represented as Codon-native classes.
 
 ```python
-class Location:
+class Vector3D:
     x: float
     y: float
     z: float
+class Location(Vector3D):  # as in the Python API (issue #10)
+    ...
 class Rotation:
     pitch: float
     yaw: float
@@ -255,10 +257,6 @@ class Rotation:
 class Transform:
     location: Location
     rotation: Rotation
-class Vector3D:
-    x: float
-    y: float
-    z: float
 class VehicleControl:
     throttle: float
     steer: float

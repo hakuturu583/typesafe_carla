@@ -238,9 +238,19 @@ Deliberate differences, all in favour of static checking:
   method is a compile error in every mode (`vehicle.listen()`: "Vehicle has
   no method listen()"), as in the Python API, where `carla.Vehicle` has no
   `listen`.
-* **`Location` is not a `Vector3D`.** A position cannot be passed where a
-  velocity is expected (`set_target_velocity(actor.get_location())` fails to
-  compile). Convert explicitly with `as_vector()` / `Location.from_vector()`.
+* **A `Vector3D` does not become a `Location` on assignment.** As in CARLA
+  0.10.0, `Location` arithmetic gives a `Vector3D`, and the Python API
+  converts it back implicitly. API parameters do the same here (with a
+  warning; see docs/usage.md). Assignments cannot convert, because Codon has
+  no hook for it and a variable keeps one static type. These do not compile,
+  each with `'Vector3D' does not match expected type 'Location'`:
+  - a field: `t.location = loc + offset`;
+  - a rebound local: `loc = actor.get_location()` followed by
+    `loc += offset`, `loc = loc + offset` in a loop, or a conditional
+    `loc = loc + offset`.
+
+  Write `loc = carla.Location(loc + offset)`, or start from a vector
+  (`pos = actor.get_location().as_vector()`, then `pos += offset`).
 * **Attribute values are typed.** `ActorAttribute.as_int()` raises when the
   attribute is not an int; `str(attribute)` gives the raw value.
 * **Sensor callbacks run at dispatch points, not on CARLA's threads.**
@@ -268,7 +278,13 @@ Deliberate differences, all in favour of static checking:
   `center_of_mass`) stay `Location`.
 * **Float precision.** Values cross into LibCarla as float32, as they do in
   the Python API, so `get_control().throttle` after setting `0.2` is
-  `0.2000000029802322`.
+  `0.2000000029802322`. `Vector3D` and `Location` arithmetic runs in double
+  precision here and in float32 in the Python API. Results can differ in the
+  last digits. Near the edges they can differ outright:
+  `get_vector_angle` clamps the cosine to [-1, 1], so nearly parallel vectors
+  give 0 rather than NaN; and a vector tiny enough to underflow in float32
+  becomes a zero vector in `make_unit_vector()` in Python, but a unit vector
+  here.
 
 **Not a difference: lookups that can miss return `None`, as in Python.**
 `World.get_actor`, `World.try_spawn_actor`, `ActorList.find`,
@@ -335,7 +351,21 @@ These affect how the design's guarantees should be read:
    'Optional[Waypoint]'`, even after an `is not None` check. Unannotated
    code is not affected. Unwrap explicitly with Codon's `unwrap()`:
    `unwrap(wp).get_left_lane()` or `unwrap(wp.get_left_lane())`.
-6. Float format specifiers (`f"{x:.6f}"`) need an installed `en_US` locale in
+6. **Subclass values do not upcast inside `Optional`, `isinstance` is exact,
+   and arguments typed late bind badly.** `Location` derives from `Vector3D`,
+   but Codon rejects an `Optional[Location]` for an `Optional[Vector3D]`
+   parameter, and `isinstance(location, Vector3D)` is `False`. An argument
+   reached through an implicitly unwrapped `Optional` can be bound to a
+   `Vector3D` parameter before Codon knows that it is a `Location`. The vector
+   and location parameters of the API (and of `Vector3D`'s methods) are
+   therefore generic and checked statically. This is also what lets a
+   `Location` passed as a `Vector3D`, or a `Vector3D` passed as a `Location`
+   (both implicit in the Python API), warn, or fail in strict mode. Other
+   types still fail with `'Rotation' does not match expected type 'Vector3D'`.
+7. **`-D` defines are visible only in the main file**, not in imported
+   modules. The launcher passes the strict-mode setting to the library
+   through a generated module (`_tsc_build_config`) instead.
+8. Float format specifiers (`f"{x:.6f}"`) need an installed `en_US` locale in
    Codon 0.19.3, so `repr`s use plain `str(float)`.
 
 ## License

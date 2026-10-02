@@ -1,0 +1,38 @@
+# As in the CARLA 0.10.0 Python API, a Vector3D (e.g. Location arithmetic) is
+# converted to a Location where the API takes one, with a one-time warning at
+# run time (a compile error under `# strict`, see fail/strict_vector_as_location).
+import typesafe_carla as carla
+
+def place(world: carla.World, actor: carla.Actor):
+    here = actor.get_location()
+    up = here + carla.Location(0.0, 0.0, 1.0)          # a Vector3D
+    t = carla.Transform(up, carla.Rotation())
+    t2 = carla.Transform(location=up)
+    box = carla.BoundingBox(up, carla.Vector3D(1.0, 1.0, 1.0))
+    actor.set_location(up)
+    wp = world.get_map().get_waypoint(up)
+    world.debug.draw_point(up)
+    world.debug.draw_line(here, up)
+    world.debug.draw_arrow(up, here + carla.Vector3D(1.0, 0.0, 0.0))
+    world.debug.draw_string(up, "up")
+    cmd = carla.command.ApplyLocation(actor.id, up)
+    o: Optional[carla.Vector3D] = up
+    t3 = carla.Transform(o)
+    actor.set_location(o)                              # an Optional[Vector3D]
+    phys = carla.VehiclePhysicsControl(center_of_mass=up)
+    wheel = carla.WheelPhysicsControl(location=up, old_location=up)
+    det = carla.LidarDetection(up, 0.5)
+    # Explicit conversions keep the program warning-free.
+    t4 = carla.Transform(carla.Location(up), carla.Rotation())
+    actor.set_location(carla.Location.from_vector(up))
+    # Rebinding: convert back explicitly, or keep a vector.
+    loc = actor.get_location()
+    for _ in range(3):
+        loc = carla.Location(loc + carla.Vector3D(0.0, 0.0, 1.0))
+    pos = actor.get_location().as_vector()
+    pos += carla.Vector3D(0.0, 0.0, 1.0)
+    actor.set_location(carla.Location(pos))
+    t.location = carla.Location(t.location + carla.Vector3D(1.0, 0.0, 0.0))
+
+_world = carla.Client("localhost", 2000).get_world()
+place(_world, _world.get_actors()[0])

@@ -12,7 +12,7 @@ from ._ffi import (CLandmark, CBoundingBox, tsc_map_get_topology, tsc_map_get_cr
                    tsc_junction_get_id, tsc_junction_get_bounding_box, tsc_junction_get_waypoints,
                    copy_string)
 from .errors import _check
-from .geometry import Location, Transform, BoundingBox
+from .geometry import Location, Transform, BoundingBox, _location_arg
 
 class LaneType:
     """OpenDRIVE lane types (bit flags, as carla.LaneType)."""
@@ -165,11 +165,14 @@ class Map:
         _check(tsc_map_get_spawn_points(self._h.ptr, buf, n, count))
         return [Transform._from_c(buf[i]) for i in range(min(n, count[0]))]
 
-    def get_waypoint(self, location: Location, project_to_road: bool = True,
+    def get_waypoint(self, location, project_to_road: bool = True,
                      lane_type: int = LaneType.Driving) -> Optional[Waypoint]:
-        """None when no lane of `lane_type` matches."""
+        """None when no lane of `lane_type` matches.
+
+        location: Location (a Vector3D is accepted as in the Python API)."""
         loc = Ptr[CVector3D](1)
-        loc[0] = location._to_c()
+        loc[0] = _location_arg(
+            location, "[tsc-compat] a Vector3D passed as a Location to Map.get_waypoint")._to_c()
         out = Ptr[cobj](1)
         _check(tsc_map_get_waypoint(self._h.ptr, loc, i32(int(project_to_road)), i32(lane_type),
                                     out))

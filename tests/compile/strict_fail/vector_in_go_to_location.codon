@@ -1,0 +1,11 @@
+# In strict mode WalkerAIController.go_to_location takes a Location.
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def walk(ai: carla.WalkerAIController, here: carla.Location):
+    ai.go_to_location(here + carla.Vector3D(2.0, 0.0, 0.0))
+
+world = carla.Client("localhost", 2000).get_world()
+walker = world.get_actors()[0]
+walk(world.spawn_actor(world.get_blueprint_library().find("controller.ai.walker"), carla.Transform(),
+                       attach_to=walker).as_walker_ai_controller(), carla.Location())

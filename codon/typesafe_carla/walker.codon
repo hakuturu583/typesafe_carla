@@ -14,7 +14,7 @@ from ._ffi import (Handle, CVector3D, CWalkerControl, TSC_KIND_WALKER,
                    tsc_walker_ai_controller_set_max_speed,
                    tsc_world_get_random_location_from_navigation)
 from .errors import _check
-from .geometry import Location
+from .geometry import Location, _location_arg
 from .control import WalkerControl
 from .actor import Actor
 from .world import World
@@ -48,9 +48,12 @@ class WalkerAIController(Actor):
     def stop(self):
         _check(tsc_walker_ai_controller_stop(self._h.ptr))
 
-    def go_to_location(self, destination: Location):
+    def go_to_location(self, destination):
+        """destination: Location (a Vector3D is accepted as in the Python API)."""
         p = Ptr[CVector3D](1)
-        p[0] = destination._to_c()
+        p[0] = _location_arg(
+            destination,
+            "[tsc-compat] a Vector3D passed as a Location to WalkerAIController.go_to_location")._to_c()
         _check(tsc_walker_ai_controller_go_to_location(self._h.ptr, p))
 
     def set_max_speed(self, speed: float):

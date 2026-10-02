@@ -1,5 +1,5 @@
-# A position is not a velocity.
-# expect-error: 'Location' does not match expected type 'Vector3D'
+# In strict mode a position is not a velocity.
+# expect-error: strict mode: convert with location.as_vector() (Location as Vector3D is a Python-API compatibility shortcut)
 import typesafe_carla as carla
 
 def push(actor: carla.Actor):

@@ -1,0 +1,8 @@
+# In strict mode WalkerControl's direction is not a position.
+# expect-error: strict mode: convert with location.as_vector() (Location as Vector3D is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def walk(target: carla.Location) -> carla.WalkerControl:
+    return carla.WalkerControl(target, 1.4)
+
+walk(carla.Location(1.0, 0.0, 0.0))

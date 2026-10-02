@@ -1,0 +1,8 @@
+# WalkerControl's optional direction accepts a Vector3D or a Location only.
+# expect-error: 'Rotation' does not match expected type 'Vector3D'
+import typesafe_carla as carla
+
+def walk(r: carla.Rotation) -> carla.WalkerControl:
+    return carla.WalkerControl(r, 1.4)
+
+walk(carla.Rotation())

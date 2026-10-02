@@ -26,8 +26,9 @@ try:
     spawned.append(ego.id)
     # A parked car 15 m ahead of the ego vehicle, to drive into.
     fwd = points[0].get_forward_vector()
-    obstacle_at = carla.Transform(points[0].location + carla.Location(fwd.x * 15.0, fwd.y * 15.0, 0.0),
-                                  points[0].rotation)
+    obstacle_at = carla.Transform(
+        carla.Location(points[0].location + carla.Vector3D(fwd.x * 15.0, fwd.y * 15.0, 0.0)),
+        points[0].rotation)
     obstacle = world.spawn_actor(lib.find("vehicle.lincoln.mkz"), obstacle_at)
     spawned.append(obstacle.id)
 

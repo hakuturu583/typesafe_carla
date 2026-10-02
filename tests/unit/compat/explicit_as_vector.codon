@@ -1,0 +1,10 @@
+# The explicit conversion: no warning (checked by tests/test_runtime.py).
+import typesafe_carla as carla
+
+vehicle = carla.Client("localhost", 2000).get_world().get_actors()[0]
+here = vehicle.get_location()
+vehicle.set_target_velocity(carla.Location(1.0, 0.0, 0.0) - carla.Location())  # a Vector3D
+assert vehicle.get_velocity() == carla.Vector3D(1.0, 0.0, 0.0)
+vehicle.add_force(here.as_vector())
+vehicle.set_location(carla.Location(here + carla.Location(0.0, 0.0, 1.0)))
+print("OK")
