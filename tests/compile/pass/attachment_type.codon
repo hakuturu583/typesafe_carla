@@ -1,0 +1,24 @@
+# World.spawn_actor / try_spawn_actor take an attachment_type (issue #34), as
+# the Python API: spawn_actor(blueprint, transform, attach_to=None,
+# attachment_type=carla.AttachmentType.Rigid).
+import typesafe_carla as carla
+
+def spawn(world: carla.World, vehicle: carla.Vehicle):
+    lib = world.get_blueprint_library()
+    bp = lib.find("sensor.camera.rgb")
+    t = carla.Transform(carla.Location(-5.0, 0.0, 3.0))
+    arm: carla.Actor = world.spawn_actor(bp, t, vehicle, carla.AttachmentType.SpringArm)
+    ghost: carla.Sensor = world.spawn_actor(bp, t, attach_to=vehicle,
+                                            attachment_type=carla.AttachmentType.SpringArmGhost).as_sensor()
+    rigid: Optional[carla.Actor] = world.try_spawn_actor(bp, t, attach_to=vehicle,
+                                                         attachment_type=carla.AttachmentType.Rigid)
+    maybe_parent: Optional[carla.Vehicle] = vehicle
+    world.try_spawn_actor(bp, t, attach_to=maybe_parent, attachment_type=carla.AttachmentType.SpringArm)
+    kind: carla.AttachmentType = carla.AttachmentType.SpringArm
+    n: int = int(kind)
+    same: bool = kind == carla.AttachmentType.SpringArm
+    s: str = str(kind)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+spawn(_world, _world.get_actors()[0].as_vehicle())

@@ -1,14 +1,28 @@
-# Integer enumerations of the Python API that no typesafe_carla call takes yet.
-# The values are the official module's (CARLA 0.10.0 / ue5-dev).
+# Enumerations of the Python API. The values are the official module's
+# (CARLA 0.10.0 / ue5-dev).
 
+@tuple
 class AttachmentType:
-    """How a spawned actor attaches to its parent (carla.AttachmentType).
+    """How a spawned actor attaches to its parent (carla.AttachmentType), for
+    World.spawn_actor / try_spawn_actor's attachment_type.
 
-    World.spawn_actor does not take an attachment type yet: attachments are Rigid.
+    A distinct type, as the Python API's enum: passing an int is a compile error.
     """
-    Rigid: ClassVar[int] = 0
-    SpringArm: ClassVar[int] = 1
-    SpringArmGhost: ClassVar[int] = 2
+    value: int
+    Rigid: ClassVar[AttachmentType] = AttachmentType(0)
+    SpringArm: ClassVar[AttachmentType] = AttachmentType(1)
+    SpringArmGhost: ClassVar[AttachmentType] = AttachmentType(2)
+
+    def __int__(self) -> int:
+        return self.value
+
+    def __repr__(self) -> str:
+        names = ["Rigid", "SpringArm", "SpringArmGhost"]
+        if 0 <= self.value < len(names):
+            return names[self.value]
+        return f"AttachmentType({self.value})"
+
+# Integer constants that no typesafe_carla call takes yet.
 
 class GBufferTextureID:
     """Unreal G-buffer textures of a camera (carla.GBufferTextureID), for

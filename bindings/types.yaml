@@ -211,6 +211,13 @@ ackermann_controller_settings:
   to_carla: "to_carla({})"
   from_carla: "from_carla({})"
   cpp: ["carla::rpc::AckermannControllerSettings"]
+# tsc_attachment_type_t; out-of-range values are rejected.
+attachment_type:
+  c: int32_t
+  codon: i32
+  to_carla: 'to_enum<carla::rpc::AttachmentType>({}, TSC_ATTACHMENT_RIGID, TSC_ATTACHMENT_SPRING_ARM_GHOST, "attachment type")'
+  invalid: 99
+  cpp: ["carla::rpc::AttachmentType"]
 # tsc_vehicle_door_t; out-of-range values are rejected.
 vehicle_door:
   c: int32_t

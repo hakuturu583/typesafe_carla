@@ -1,0 +1,12 @@
+# An attachment type is a carla.AttachmentType, not an int (as in the Python
+# API, which rejects an int for attachment_type).
+# expect-error: 'int' does not match expected type 'AttachmentType'
+import typesafe_carla as carla
+
+def spawn(world: carla.World, vehicle: carla.Vehicle):
+    world.spawn_actor(world.get_blueprint_library().find("sensor.camera.rgb"), carla.Transform(),
+                      attach_to=vehicle, attachment_type=1)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_world = carla.Client("localhost", 2000).get_world()
+spawn(_world, _world.get_actors()[0].as_vehicle())

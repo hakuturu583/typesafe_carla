@@ -78,7 +78,7 @@ def values():
     n: float = q.length()
     v: carla.Vector3D = carla.Velocity(1.0, 0.0, 0.0) + carla.Acceleration(0.0, 1.0, 0.0)
     w = carla.AngularVelocity(carla.Vector3D(0.0, 0.0, 1.0))
-    attach: int = carla.AttachmentType.SpringArm
+    attach: carla.AttachmentType = carla.AttachmentType.SpringArm
     gbuffer: int = carla.GBufferTextureID.SceneDepth
 
 # Compile-only: Codon type-checks a function only when it is called.

@@ -669,6 +669,30 @@ static void test_mock_sensors(void) {
   tsc_sensor_t *camera = NULL;
   CHECK_OK(tsc_world_spawn_actor(world, bp, &at, vehicle, &actor));
   CHECK(tsc_handle_kind(H(actor)) == TSC_KIND_SENSOR);
+
+  /* Attachment types (issue #34): SpringArm attaches; out-of-range values fail,
+   * from try_spawn too, and leave the output NULL. */
+  {
+    tsc_actor_t *arm = NULL, *arm_parent = NULL, *bad = (tsc_actor_t *)0x1;
+    uint32_t vehicle_id = 0, parent_id = 1;
+    int32_t destroyed = 0;
+    CHECK_OK(tsc_world_spawn_actor_attached(world, bp, &at, vehicle, TSC_ATTACHMENT_SPRING_ARM,
+                                            &arm));
+    CHECK_OK(tsc_actor_get_parent(arm, &arm_parent));
+    CHECK(arm_parent != NULL);
+    CHECK_OK(tsc_actor_get_id(vehicle, &vehicle_id));
+    CHECK_OK(tsc_actor_get_id(arm_parent, &parent_id));
+    CHECK(parent_id == vehicle_id);
+    CHECK(tsc_world_spawn_actor_attached(world, bp, &at, vehicle, 3, &bad) ==
+              TSC_INVALID_ARGUMENT && bad == NULL);
+    bad = (tsc_actor_t *)0x1;
+    CHECK(tsc_world_try_spawn_actor_attached(world, bp, &at, vehicle, -1, &bad) ==
+              TSC_INVALID_ARGUMENT && bad == NULL);
+    CHECK_OK(tsc_actor_destroy(arm, &destroyed));
+    CHECK(destroyed == 1);
+    tsc_handle_release(H(arm_parent));
+    tsc_handle_release(H(arm));
+  }
   CHECK_OK(tsc_actor_as_sensor(actor, &camera));
   tsc_sensor_t *not_sensor = (tsc_sensor_t *)0x1;
   CHECK(tsc_actor_as_sensor(vehicle, &not_sensor) == TSC_TYPE_ERROR && not_sensor == NULL);
