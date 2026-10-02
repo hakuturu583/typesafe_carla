@@ -45,9 +45,11 @@ extern "C" {
  * 3.4: actor state/attributes/parent/tags, physics at a location, skeleton queries,
  *      textures, TrafficSign (#19).
  * 3.5: world spectator, traffic light/sign queries, environment objects, ray casts,
- *      map layers, IMU gravity, textures, on_tick, light manager (#21). */
+ *      map layers, IMU gravity, textures, on_tick, light manager (#21).
+ * 3.6: sensor data frame_number, image convert/save, point cloud save, collision
+ *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 5
+#define TSC_ABI_VERSION_MINOR 6
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -633,7 +635,14 @@ typedef enum {
   TSC_SENSOR_DATA_LIDAR = 2,
   TSC_SENSOR_DATA_GNSS = 3,
   TSC_SENSOR_DATA_IMU = 4,
-  TSC_SENSOR_DATA_COLLISION = 5
+  TSC_SENSOR_DATA_COLLISION = 5,
+  /* ABI 3.6 (issue #24) */
+  TSC_SENSOR_DATA_RADAR = 6,
+  TSC_SENSOR_DATA_SEMANTIC_LIDAR = 7,
+  TSC_SENSOR_DATA_LANE_INVASION = 8,
+  TSC_SENSOR_DATA_OBSTACLE = 9,
+  TSC_SENSOR_DATA_DVS = 10,
+  TSC_SENSOR_DATA_OPTICAL_FLOW = 11
 } tsc_sensor_data_type_t;
 
 /* Checked downcast. TSC_TYPE_ERROR if the actor is not a sensor. */
@@ -691,7 +700,8 @@ typedef struct {
   size_t point_count;
 } tsc_lidar_t;
 TSC_API tsc_status_t tsc_sensor_data_as_lidar(const tsc_sensor_data_t *data, tsc_lidar_t *out);
-/* Points produced by one channel. */
+/* Points produced by one channel, of a LiDAR or (ABI 3.6) semantic LiDAR
+ * measurement. */
 TSC_API tsc_status_t tsc_lidar_channel_point_count(const tsc_sensor_data_t *data, uint32_t channel,
                                                    uint32_t *out);
 
@@ -716,6 +726,119 @@ typedef struct {
 } tsc_collision_t;
 TSC_API tsc_status_t tsc_sensor_data_as_collision(const tsc_sensor_data_t *data,
                                                   tsc_collision_t *out);
+
+/* ------------------------------------------------------------------------ */
+/* Issue #24: more measurement types, image conversion, saving (ABI 3.6)    */
+/* ------------------------------------------------------------------------ */
+
+/* Collision events: the actors, as handles of the most derived kind. */
+/* BEGIN GENERATED collision_event from bindings/collision_event.yaml, do not edit */
+/* The sensor's parent; *out = NULL (TSC_OK) when LibCarla gives none. */
+TSC_API tsc_status_t tsc_collision_event_get_actor(const tsc_sensor_data_t *data,
+                                                   tsc_actor_t **out);
+/* *out = NULL (TSC_OK) when LibCarla gives none. */
+TSC_API tsc_status_t tsc_collision_event_get_other_actor(const tsc_sensor_data_t *data,
+                                                         tsc_actor_t **out);
+/* END GENERATED collision_event */
+
+/* The Python API's carla.ColorConverter. */
+typedef enum {
+  TSC_COLOR_CONVERTER_RAW = 0,
+  TSC_COLOR_CONVERTER_DEPTH = 1,
+  TSC_COLOR_CONVERTER_LOGARITHMIC_DEPTH = 2,
+  TSC_COLOR_CONVERTER_CITYSCAPES_PALETTE = 3
+} tsc_color_converter_t;
+
+/* Converts an image's pixels in place (Image.convert), with the formulas of
+ * LibCarla's image::ColorConverter: Depth and LogarithmicDepth give gray
+ * BGRA pixels (alpha 255), CityScapesPalette maps the red channel (the
+ * semantic tag) to the palette. RAW leaves the pixels unchanged. Existing
+ * views of the pixels see the change. */
+TSC_API tsc_status_t tsc_image_convert(tsc_sensor_data_t *data, int32_t color_converter);
+/* Writes the image, converted with color_converter (the image itself is not
+ * changed), as a PNG: 8-bit gray for Depth and LogarithmicDepth, 8-bit RGBA
+ * otherwise. As in LibCarla's ImageIO (built with PNG support only), the
+ * path's extension is replaced by ".png" unless it is already ".png", and
+ * missing directories are created. *out_path receives the path written. */
+TSC_API tsc_status_t tsc_image_save_to_disk(const tsc_sensor_data_t *data, const char *path,
+                                            size_t path_len, int32_t color_converter,
+                                            tsc_string_t *out_path);
+/* Writes a LiDAR or semantic LiDAR measurement as ASCII PLY with LibCarla's
+ * pointcloud::PointCloudIO (extension forced to ".ply", directories created).
+ * *out_path receives the path written. */
+TSC_API tsc_status_t tsc_point_cloud_save_to_disk(const tsc_sensor_data_t *data, const char *path,
+                                                  size_t path_len, tsc_string_t *out_path);
+
+/* Radar: a zero-copy view of LibCarla's detections. */
+typedef struct {
+  float velocity; /* m/s, towards the sensor is negative */
+  float azimuth;  /* rad */
+  float altitude; /* rad */
+  float depth;    /* m */
+} tsc_radar_detection_t;
+typedef struct {
+  const tsc_radar_detection_t *detections;
+  size_t detection_count;
+} tsc_radar_t;
+TSC_API tsc_status_t tsc_sensor_data_as_radar(const tsc_sensor_data_t *data, tsc_radar_t *out);
+
+/* Semantic LiDAR: a zero-copy view of LibCarla's detections (24 bytes each).
+ * Per-channel counts: tsc_lidar_channel_point_count. */
+typedef struct {
+  float x, y, z;
+  float cos_inc_angle;
+  uint32_t object_idx;
+  uint32_t object_tag;
+} tsc_semantic_lidar_detection_t;
+typedef struct {
+  uint32_t channels;
+  uint32_t reserved0;
+  double horizontal_angle; /* radians */
+  const tsc_semantic_lidar_detection_t *points;
+  size_t point_count;
+} tsc_semantic_lidar_t;
+TSC_API tsc_status_t tsc_sensor_data_as_semantic_lidar(const tsc_sensor_data_t *data,
+                                                       tsc_semantic_lidar_t *out);
+
+/* Obstacle detection. */
+/* BEGIN GENERATED obstacle_detection from bindings/obstacle_detection_event.yaml, do not edit */
+/* Distance to the obstacle, in meters. */
+TSC_API tsc_status_t tsc_obstacle_detection_get_distance(const tsc_sensor_data_t *data,
+                                                         double *out);
+/* The sensor's parent; *out = NULL (TSC_OK) when LibCarla gives none. */
+TSC_API tsc_status_t tsc_obstacle_detection_get_actor(const tsc_sensor_data_t *data,
+                                                      tsc_actor_t **out);
+/* The obstacle; *out = NULL (TSC_OK) when LibCarla gives none. */
+TSC_API tsc_status_t tsc_obstacle_detection_get_other_actor(const tsc_sensor_data_t *data,
+                                                            tsc_actor_t **out);
+/* END GENERATED obstacle_detection */
+
+/* DVS camera: a zero-copy view of LibCarla's packed events, 13 bytes each,
+ * little-endian and unaligned: {uint16 x; uint16 y; int64 t (ns); uint8 pol}. */
+#define TSC_DVS_EVENT_SIZE 13
+typedef struct {
+  uint32_t width;
+  uint32_t height;
+  double fov;
+  const uint8_t *events;
+  size_t event_count;
+} tsc_dvs_t;
+TSC_API tsc_status_t tsc_sensor_data_as_dvs(const tsc_sensor_data_t *data, tsc_dvs_t *out);
+
+/* Optical flow camera: a zero-copy view of {float x, y} per pixel, row-major. */
+typedef struct {
+  uint32_t width;
+  uint32_t height;
+  double fov;
+  const float *pixels;
+  size_t pixel_count;
+} tsc_optical_flow_t;
+TSC_API tsc_status_t tsc_sensor_data_as_optical_flow(const tsc_sensor_data_t *data,
+                                                     tsc_optical_flow_t *out);
+/* OpticalFlowImage.get_color_coded_flow: BGRA, 4 bytes per pixel (alpha 0,
+ * as in the Python API), into out, which must hold 4 * width * height bytes. */
+TSC_API tsc_status_t tsc_optical_flow_color_coded(const tsc_sensor_data_t *data, uint8_t *out,
+                                                  size_t capacity);
 
 /* ------------------------------------------------------------------------ */
 /* Milestone 4: broader CARLA coverage (ABI 2.0)                            */
@@ -967,6 +1090,15 @@ typedef struct {
   int32_t reserved0;
   double width;
 } tsc_lane_marking_t;
+
+/* Lane-invasion events (issue #24; after tsc_lane_marking_t). */
+/* BEGIN GENERATED lane_invasion_event from bindings/lane_invasion_event.yaml, do not edit */
+/* LibCarla never gives these client-side events an episode, so this fails (TSC_ERROR) on 0.10.0 and ue5-dev. */
+TSC_API tsc_status_t tsc_lane_invasion_event_get_actor(const tsc_sensor_data_t *data,
+                                                       tsc_actor_t **out);
+TSC_API tsc_status_t tsc_lane_invasion_event_get_crossed_lane_markings(
+    const tsc_sensor_data_t *data, tsc_lane_marking_t *out, size_t capacity, size_t *out_count);
+/* END GENERATED lane_invasion_event */
 
 /* --- Issue #22: geo-reference, XODR waypoints, landmarks, traffic light geometry --- */
 

@@ -27,7 +27,9 @@ EXACT = ("server_version", "vehicle_blueprints", "color_type", "wheels", "type_i
          "walker_bones", "available_maps", "required_files", "load_world_same",
          "bp_filter_attr", "bp_tags", "frame_count", "actor_identity", "actor_parent",
          "traffic_signs", "skeleton", "i21_spectator", "i21_environment", "i21_traffic_lights",
-         "i21_landmark_lookup", "i21_vehicle_light_states", "i21_projections")
+         "i21_landmark_lookup", "i21_vehicle_light_states", "i21_projections",
+         "frame_number", "sensor_types", "image_saved", "palette", "semantic_lidar", "lidar_ply",
+         "radar_view")
 NUMERIC = {"i21_object_names": 5.0, "settled": 0.05, "driven": 0.5, "speed": 0.3, "spawn0": 0.001, "waypoint_s": 0.001,
            "next10": 0.001, "bbox": 0.001, "physics": 0.001, "physics_all": 0.001,
            "gnss": 0.0000005, "imu_compass": 0.01, "location_vector": 0.002,
@@ -35,7 +37,7 @@ NUMERIC = {"i21_object_names": 5.0, "settled": 0.05, "driven": 0.5, "speed": 0.3
            "light_trigger": 0.002, "wheel_steer": 0.5, "ackermann_speed": 0.3,
            "walker_pose": 0.01, "settings_ext": 0.001, "geometry_yaw": 0.002,
            "geometry_misc": 0.002, "quaternion": 0.002, "trigger_extent": 0.001,
-           "constant_velocity": 0.3, "i21_ground": 0.01}
+           "constant_velocity": 0.3, "i21_ground": 0.01, "depth_log_mean": 1.0}
 
 
 def parse(text: str) -> dict[str, str]:
@@ -83,6 +85,13 @@ def main() -> int:
                                                 for x, y in zip(xs, ys))
             except ValueError:
                 ok = False
+        elif key == "palette":
+            # tag:color pairs seen in one rendered frame: which tags are visible
+            # differs between runs, so compare the colors of the shared tags.
+            pa = dict(p.split(":", 1) for p in a.split(";") if ":" in p)
+            pb = dict(p.split(":", 1) for p in b.split(";") if ":" in p)
+            common = pa.keys() & pb.keys()
+            ok = len(common) >= 3 and all(pa[t] == pb[t] for t in common)
         else:
             ok = a == b
         failures += not ok

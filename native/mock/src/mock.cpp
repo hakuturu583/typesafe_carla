@@ -1,11 +1,14 @@
 // Implementation of the in-memory mock LibCarla (see carla/mock/Mock.h).
 #include "carla/mock/Mock.h"
+#include "carla/mock/SensorDataExt.h"
+#include "carla/FileSystem.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 
 namespace carla {
 namespace client {
@@ -101,6 +104,9 @@ struct Episode : std::enable_shared_from_this<Episode> {
   struct Listener {
     const Sensor *owner;
     std::function<void(SharedPtr<sensor::SensorData>)> callback;
+    // Lane invasion: the parent's position at the previous accepted tick
+    // (LibCarla's LaneInvasionCallback::_bounds); reset by Listen().
+    std::optional<geom::Location> lane_previous;
   };
   std::map<rpc::ActorId, Listener> listeners;
   rpc::WeatherParameters weather = rpc::WeatherParameters::ClearNoon;
@@ -415,6 +421,16 @@ ActorBlueprint VehicleBlueprint(const std::string &id, const std::string &color)
        ActorAttribute("base_mass", rpc::ActorAttributeType::Float, "1500.0", false)});
 }
 
+ActorBlueprint CameraBlueprint(const std::string &id, std::vector<std::string> tags,
+                               std::vector<ActorAttribute> extra = {}) {
+  std::vector<ActorAttribute> attributes{
+      ActorAttribute("image_size_x", rpc::ActorAttributeType::Int, "800", true),
+      ActorAttribute("image_size_y", rpc::ActorAttributeType::Int, "600", true),
+      ActorAttribute("fov", rpc::ActorAttributeType::Float, "90.0", true)};
+  attributes.insert(attributes.end(), extra.begin(), extra.end());
+  return ActorBlueprint(id, std::move(tags), std::move(attributes));
+}
+
 std::vector<ActorBlueprint> DefaultBlueprints() {
   return {
       VehicleBlueprint("vehicle.tesla.model3", "17,37,103"),
@@ -424,11 +440,8 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
                      {ActorAttribute("role_name", rpc::ActorAttributeType::String, "pedestrian", true),
                       ActorAttribute("speed", rpc::ActorAttributeType::Float, "1.4", true),
                       ActorAttribute("is_invincible", rpc::ActorAttributeType::Bool, "true", true)}),
-      ActorBlueprint("sensor.camera.rgb", {"sensor", "camera", "rgb"},
-                     {ActorAttribute("image_size_x", rpc::ActorAttributeType::Int, "800", true),
-                      ActorAttribute("image_size_y", rpc::ActorAttributeType::Int, "600", true),
-                      ActorAttribute("fov", rpc::ActorAttributeType::Float, "90.0", true),
-                      ActorAttribute("role_name", rpc::ActorAttributeType::String, "front", true)}),
+      CameraBlueprint("sensor.camera.rgb", {"sensor", "camera", "rgb"},
+                      {ActorAttribute("role_name", rpc::ActorAttributeType::String, "front", true)}),
       ActorBlueprint("sensor.lidar.ray_cast", {"sensor", "lidar", "ray_cast"},
                      {ActorAttribute("channels", rpc::ActorAttributeType::Int, "32", true),
                       ActorAttribute("range", rpc::ActorAttributeType::Float, "10.0", true),
@@ -437,6 +450,27 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
       ActorBlueprint("sensor.other.gnss", {"sensor", "other", "gnss"}, {}),
       ActorBlueprint("sensor.other.imu", {"sensor", "other", "imu"}, {}),
       ActorBlueprint("sensor.other.collision", {"sensor", "other", "collision"}, {}),
+      // Issue #24: more sensor kinds.
+      CameraBlueprint("sensor.camera.depth", {"sensor", "camera", "depth"}),
+      CameraBlueprint("sensor.camera.semantic_segmentation",
+                      {"sensor", "camera", "semantic_segmentation"}),
+      CameraBlueprint("sensor.camera.dvs", {"sensor", "camera", "dvs"}),
+      CameraBlueprint("sensor.camera.optical_flow", {"sensor", "camera", "optical_flow"}),
+      ActorBlueprint("sensor.other.radar", {"sensor", "other", "radar"},
+                     {ActorAttribute("horizontal_fov", rpc::ActorAttributeType::Float, "30", true),
+                      ActorAttribute("vertical_fov", rpc::ActorAttributeType::Float, "30", true),
+                      ActorAttribute("range", rpc::ActorAttributeType::Float, "100", true),
+                      ActorAttribute("points_per_second", rpc::ActorAttributeType::Int, "1500", true)}),
+      ActorBlueprint("sensor.lidar.ray_cast_semantic", {"sensor", "lidar", "ray_cast_semantic"},
+                     {ActorAttribute("channels", rpc::ActorAttributeType::Int, "32", true),
+                      ActorAttribute("range", rpc::ActorAttributeType::Float, "10.0", true),
+                      ActorAttribute("points_per_second", rpc::ActorAttributeType::Int, "56000", true),
+                      ActorAttribute("rotation_frequency", rpc::ActorAttributeType::Float, "10.0", true)}),
+      ActorBlueprint("sensor.other.lane_invasion", {"sensor", "other", "lane_invasion"}, {}),
+      ActorBlueprint("sensor.other.obstacle", {"sensor", "other", "obstacle"},
+                     {ActorAttribute("distance", rpc::ActorAttributeType::Float, "5", true),
+                      ActorAttribute("hit_radius", rpc::ActorAttributeType::Float, "0.5", true),
+                      ActorAttribute("only_dynamics", rpc::ActorAttributeType::Bool, "false", true)}),
       ActorBlueprint("controller.ai.walker", {"controller", "ai", "walker"}, {}),
       ActorBlueprint("static.prop.trafficcone01", {"static", "prop", "trafficcone01"},
                      {ActorAttribute("role_name", rpc::ActorAttributeType::String, "prop", true),
@@ -1058,6 +1092,22 @@ void Client::ApplyBatch(std::vector<rpc::Command> commands, bool do_tick_cue) co
 // ---------------------------------------------------------------------------
 // Sensors
 
+}  // namespace client
+
+void FileSystem::ValidateFilePath(std::string &filepath, const std::string &ext) {
+  namespace fs = std::filesystem;
+  fs::path path(filepath);
+  if (!ext.empty() && path.extension() != ext) path.replace_extension(ext);
+  // As ue5-dev (the default ref; 0.10.0 omits fs::absolute). With either, a
+  // bare file name ("out.png") has an empty parent path, which libstdc++'s
+  // absolute() / create_directories() reject, so it raises there too.
+  auto parent = fs::absolute(path.parent_path());
+  if (!fs::exists(parent)) fs::create_directories(parent);
+  filepath = path.string();
+}
+
+namespace client {
+
 rpc::ActorDescription ActorBlueprint::MakeActorDescription() const {
   rpc::ActorDescription d;
   d.id = _id;
@@ -1100,57 +1150,190 @@ double AttributeDouble(const ActorData &a, const std::string &key, double fallba
   return it == a.attributes.end() ? fallback : std::strtod(it->second.c_str(), nullptr);
 }
 
+// A mock LiDAR sweep: `per_channel` points evenly around each channel's ring
+// at the sensor's range, made by make(location, channel, elevation).
+template <typename Point, typename Make>
+std::vector<Point> LidarSweep(const ActorData &a, uint32_t channels, uint32_t per_channel,
+                              Make make) {
+  const float range = static_cast<float>(AttributeDouble(a, "range", 10.0));
+  std::vector<Point> points;
+  points.reserve(size_t{channels} * per_channel);
+  for (uint32_t c = 0; c < channels; ++c) {
+    const double elevation = (static_cast<double>(c) / std::max(1u, channels - 1) - 0.5) * 0.5;
+    for (uint32_t i = 0; i < per_channel; ++i) {
+      const double azimuth = 2.0 * M_PI * i / per_channel;
+      points.push_back(
+          make(geom::Location(static_cast<float>(range * std::cos(azimuth) * std::cos(elevation)),
+                              static_cast<float>(range * std::sin(azimuth) * std::cos(elevation)),
+                              static_cast<float>(range * std::sin(elevation))),
+               c, elevation));
+    }
+  }
+  return points;
+}
+
 }  // namespace
 
 std::vector<Delivery> Episode::SenseLocked() {
   std::vector<Delivery> out;
   const double timestamp = static_cast<double>(frame) * DeltaSeconds();
   auto self = shared_from_this();
-  for (const auto &entry : listeners) {
+  for (auto &entry : listeners) {
     auto it = actors.find(entry.first);
     if (it == actors.end()) continue;
     const ActorData &a = it->second;
     auto callback = entry.second.callback;
     SharedPtr<sensor::SensorData> data;
     namespace sd = sensor::data;
-    if (a.type_id == "sensor.camera.rgb") {
-      const auto w = static_cast<size_t>(AttributeInt(a, "image_size_x", 800));
-      const auto h = static_cast<size_t>(AttributeInt(a, "image_size_y", 600));
-      const auto fov = static_cast<float>(AttributeDouble(a, "fov", 90.0));
+    const bool is_camera = a.type_id.rfind("sensor.camera.", 0) == 0;
+    const auto w = is_camera ? static_cast<size_t>(AttributeInt(a, "image_size_x", 800)) : 0;
+    const auto h = is_camera ? static_cast<size_t>(AttributeInt(a, "image_size_y", 600)) : 0;
+    const auto fov = is_camera ? static_cast<float>(AttributeDouble(a, "fov", 90.0)) : 0.0f;
+    if (a.type_id == "sensor.camera.rgb" || a.type_id == "sensor.camera.depth" ||
+        a.type_id == "sensor.camera.semantic_segmentation") {
+      const bool semantic = a.type_id == "sensor.camera.semantic_segmentation";
       // The pixels are filled in the delivery, outside the episode lock.
-      out.push_back([cb = std::move(callback), f = frame, timestamp, t = a.transform, w, h, fov]() {
+      out.push_back([cb = std::move(callback), f = frame, timestamp, t = a.transform, w, h, fov,
+                     semantic]() {
         auto image = std::make_shared<sd::Image>(f, timestamp, t, w, h, fov);
-        // A gradient that changes with the frame: B = x, G = y, R = frame.
+        // RGB and depth: a gradient that changes with the frame: B = x, G = y,
+        // R = frame. Semantic segmentation: the tag (R) is x mod 29, G = B = 0.
         for (size_t y = 0; y < h; ++y) {
           for (size_t x = 0; x < w; ++x) {
-            image->data()[y * w + x] = sd::Color(static_cast<uint8_t>(f), static_cast<uint8_t>(y),
-                                                 static_cast<uint8_t>(x), 255u);
+            image->data()[y * w + x] =
+                semantic ? sd::Color(static_cast<uint8_t>(x % 29), 0u, 0u, 255u)
+                         : sd::Color(static_cast<uint8_t>(f), static_cast<uint8_t>(y),
+                                     static_cast<uint8_t>(x), 255u);
           }
         }
         cb(std::move(image));
       });
       continue;
-    } else if (a.type_id == "sensor.lidar.ray_cast") {
+    } else if (a.type_id == "sensor.camera.optical_flow") {
+      out.push_back([cb = std::move(callback), f = frame, timestamp, t = a.transform, w, h, fov]() {
+        auto image = std::make_shared<sd::OpticalFlowImage>(f, timestamp, t, w, h, fov);
+        // Flow pointing away from the image centre, scaled by the frame size.
+        for (size_t y = 0; y < h; ++y) {
+          for (size_t x = 0; x < w; ++x) {
+            image->data()[y * w + x] = sd::OpticalFlowPixel(
+                (static_cast<float>(x) - static_cast<float>(w) / 2.0f) / static_cast<float>(w),
+                (static_cast<float>(y) - static_cast<float>(h) / 2.0f) / static_cast<float>(h));
+          }
+        }
+        cb(std::move(image));
+      });
+      continue;
+    } else if (a.type_id == "sensor.camera.dvs") {
+      // One event per diagonal pixel (up to 100), alternating polarity.
+      std::vector<sd::DVSEvent> events;
+      const auto n = static_cast<uint32_t>(std::min<size_t>({w, h, 100u}));
+      for (uint32_t i = 0; i < n; ++i) {
+        events.emplace_back(static_cast<uint16_t>(i), static_cast<uint16_t>(i),
+                            static_cast<int64_t>(frame) * 1000000 + i, (i + frame) % 2 == 0);
+      }
+      data = std::make_shared<sd::DVSEventArray>(frame, timestamp, a.transform,
+                                                 static_cast<uint32_t>(w),
+                                                 static_cast<uint32_t>(h), fov, std::move(events));
+    } else if (a.type_id == "sensor.other.radar") {
+      // Ten detections straight ahead, approaching at 0..9 m/s.
+      std::vector<sd::RadarDetection> detections;
+      for (int i = 0; i < 10; ++i) {
+        detections.push_back(sd::RadarDetection{-1.0f * static_cast<float>(i),
+                                                0.05f * static_cast<float>(i - 5),
+                                                0.01f * static_cast<float>(i),
+                                                5.0f + static_cast<float>(i)});
+      }
+      data = std::make_shared<sd::RadarMeasurement>(frame, timestamp, a.transform,
+                                                    std::move(detections));
+    } else if (a.type_id == "sensor.lidar.ray_cast_semantic") {
       const auto channels = static_cast<uint32_t>(AttributeInt(a, "channels", 32));
-      const float range = static_cast<float>(AttributeDouble(a, "range", 10.0));
-      constexpr uint32_t kPerChannel = 100;
-      std::vector<uint32_t> per_channel(channels, kPerChannel);
-      std::vector<sd::LidarDetection> points;
-      points.reserve(size_t{channels} * kPerChannel);
-      for (uint32_t c = 0; c < channels; ++c) {
-        const double elevation = (static_cast<double>(c) / std::max(1u, channels - 1) - 0.5) * 0.5;
-        for (uint32_t i = 0; i < kPerChannel; ++i) {
-          const double azimuth = 2.0 * M_PI * i / kPerChannel;
-          sd::LidarDetection d;
-          d.point = geom::Location(static_cast<float>(range * std::cos(azimuth) * std::cos(elevation)),
-                                   static_cast<float>(range * std::sin(azimuth) * std::cos(elevation)),
-                                   static_cast<float>(range * std::sin(elevation)));
-          d.intensity = 1.0f - static_cast<float>(c) / static_cast<float>(channels);
-          points.push_back(d);
+      constexpr uint32_t kPerChannel = 10;
+      auto points = LidarSweep<sd::SemanticLidarDetection>(
+          a, channels, kPerChannel, [&](geom::Location p, uint32_t c, double elevation) {
+            return sd::SemanticLidarDetection(p, static_cast<float>(std::cos(elevation)),
+                                              a.parent.value_or(0u), c % 29u);
+          });
+      data = std::make_shared<sd::SemanticLidarMeasurement>(
+          frame, timestamp, a.transform, 0.0f, std::vector<uint32_t>(channels, kPerChannel),
+          std::move(points));
+    } else if (a.type_id == "sensor.other.lane_invasion" && a.parent) {
+      // As LibCarla's client-side LaneInvasionCallback::Tick: the first tick
+      // only records the position, a tick without motion (< 10 eps) is
+      // skipped, and otherwise the markings crossed between the previous and
+      // the current position are reported. The mock's markings are the lines
+      // at y = -1.75 (outer edge, solid), 1.75 (between the lanes, broken)
+      // and 5.25 (outer edge, solid); the parent is treated as a point.
+      auto parent = actors.find(*a.parent);
+      if (parent == actors.end()) continue;
+      const geom::Location now = parent->second.transform.location;
+      auto &previous = entry.second.lane_previous;
+      if (!previous) {
+        previous = now;
+        continue;
+      }
+      const float dx = now.x - previous->x, dy = now.y - previous->y, dz = now.z - previous->z;
+      if (std::sqrt(dx * dx + dy * dy + dz * dz) < 10.0f * std::numeric_limits<float>::epsilon()) {
+        continue;
+      }
+      const double y0 = previous->y, y1 = now.y;
+      previous = now;
+      using LM = road::element::LaneMarking;
+      std::vector<LM> crossed;
+      const double centre = LaneY(-1) + kLaneWidth / 2.0;
+      for (double line : {LaneY(-1) - kLaneWidth / 2.0, centre, LaneY(-2) + kLaneWidth / 2.0}) {
+        if ((y0 < line) == (y1 < line)) continue;
+        if (line == centre) {
+          crossed.emplace_back(LM::Type::Broken, LM::Color::Standard, LM::LaneChange::Both, 0.15);
+        } else {
+          crossed.emplace_back(LM::Type::Solid, LM::Color::Standard, LM::LaneChange::None, 0.15);
         }
       }
+      if (crossed.empty()) continue;
+      const rpc::ActorId parent_id = parent->second.id;
+      data = std::make_shared<sd::LaneInvasionEvent>(frame, timestamp, a.transform, parent_id,
+                                                     std::move(crossed));
+    } else if (a.type_id == "sensor.other.obstacle" && a.parent) {
+      // The nearest other vehicle within `distance` of the parent.
+      auto parent = actors.find(*a.parent);
+      if (parent == actors.end()) continue;
+      const double max_distance = AttributeDouble(a, "distance", 5.0);
+      const auto &p = parent->second.transform.location;
+      std::optional<rpc::ActorId> nearest;
+      double best = max_distance;
+      for (const auto &other_entry : actors) {
+        const ActorData &other = other_entry.second;
+        if (other.id == parent->second.id || !other.is_vehicle) continue;
+        const auto &o = other.transform.location;
+        const double d = std::sqrt((p.x - o.x) * (p.x - o.x) + (p.y - o.y) * (p.y - o.y) +
+                                   (p.z - o.z) * (p.z - o.z));
+        if (d < best) {
+          best = d;
+          nearest = other.id;
+        }
+      }
+      if (!nearest) continue;
+      const rpc::ActorId self_id = parent->second.id;
+      out.push_back([self, callback, self_id, other_id = *nearest, t = a.transform, f = frame,
+                     timestamp, best]() {
+        const World world(self);
+        callback(std::make_shared<sd::ObstacleDetectionEvent>(
+            f, timestamp, t, world.GetActor(self_id), world.GetActor(other_id),
+            static_cast<float>(best)));
+      });
+      continue;
+    } else if (a.type_id == "sensor.lidar.ray_cast") {
+      const auto channels = static_cast<uint32_t>(AttributeInt(a, "channels", 32));
+      constexpr uint32_t kPerChannel = 100;
+      auto points = LidarSweep<sd::LidarDetection>(
+          a, channels, kPerChannel, [&](geom::Location p, uint32_t c, double) {
+            sd::LidarDetection d;
+            d.point = p;
+            d.intensity = 1.0f - static_cast<float>(c) / static_cast<float>(channels);
+            return d;
+          });
       data = std::make_shared<sd::LidarMeasurement>(frame, timestamp, a.transform, 0.0f,
-                                                    std::move(per_channel), std::move(points));
+                                                    std::vector<uint32_t>(channels, kPerChannel),
+                                                    std::move(points));
     } else if (a.type_id == "sensor.other.gnss") {
       // Flat-earth reference at (0, 0): ~111 km per degree, CARLA's y points south.
       data = std::make_shared<sd::GnssMeasurement>(frame, timestamp, a.transform,
@@ -2042,13 +2225,5 @@ Location GeoProjection::GeoLocationToTransform(const GeoLocation &geolocation) c
 }
 
 }  // namespace geom
-
-void FileSystem::ValidateFilePath(std::string &filepath, const std::string &ext) {
-  std::filesystem::path path(filepath);
-  if (!ext.empty() && path.extension() != ext) path.replace_extension(ext);
-  auto parent = path.parent_path();
-  if (!parent.empty() && !std::filesystem::exists(parent)) std::filesystem::create_directories(parent);
-  filepath = path.string();
-}
 
 }  // namespace carla

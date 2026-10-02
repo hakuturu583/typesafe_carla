@@ -8,7 +8,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**285 of 344 methods bound (82%), 140 of them generated.**
+**310 of 378 methods bound (82%), 147 of them generated.**
 
 | class | bound |
 |---|---|
@@ -32,6 +32,16 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `carla::client::DebugHelper` | 5 / 5 |
 | `carla::client::LightManager` | 10 / 18 |
 | `carla::traffic_manager::TrafficManager` | 31 / 45 |
+| `carla::sensor::SensorData` | 3 / 3 |
+| `carla::sensor::data::LidarMeasurement` | 2 / 3 |
+| `carla::sensor::data::SemanticLidarMeasurement` | 2 / 3 |
+| `carla::sensor::data::RadarMeasurement` | 1 / 1 |
+| `carla::sensor::data::GnssMeasurement` | 3 / 4 |
+| `carla::sensor::data::IMUMeasurement` | 3 / 3 |
+| `carla::sensor::data::CollisionEvent` | 3 / 3 |
+| `carla::sensor::data::ObstacleDetectionEvent` | 3 / 3 |
+| `carla::sensor::data::LaneInvasionEvent` | 2 / 2 |
+| `carla::sensor::data::DVSEventArray` | 3 / 9 |
 
 ## Methods
 
@@ -478,3 +488,87 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `UpdateImportedRoute` | — |
 | `UpdateUploadPath` | — |
 | `operator=` | — |
+
+### `carla::sensor::SensorData`
+
+| method | binding |
+|---|---|
+| `GetFrame` | hand-written |
+| `GetSensorTransform` | hand-written |
+| `GetTimestamp` | hand-written |
+
+### `carla::sensor::data::LidarMeasurement`
+
+| method | binding |
+|---|---|
+| `GetChannelCount` | hand-written |
+| `GetHorizontalAngle` | hand-written |
+| `GetPointCount` | — |
+
+### `carla::sensor::data::SemanticLidarMeasurement`
+
+| method | binding |
+|---|---|
+| `GetChannelCount` | hand-written |
+| `GetHorizontalAngle` | hand-written |
+| `GetPointCount` | — |
+
+### `carla::sensor::data::RadarMeasurement`
+
+| method | binding |
+|---|---|
+| `GetDetectionAmount` | hand-written |
+
+### `carla::sensor::data::GnssMeasurement`
+
+| method | binding |
+|---|---|
+| `GetAltitude` | hand-written |
+| `GetGeoLocation` | — |
+| `GetLatitude` | hand-written |
+| `GetLongitude` | hand-written |
+
+### `carla::sensor::data::IMUMeasurement`
+
+| method | binding |
+|---|---|
+| `GetAccelerometer` | hand-written |
+| `GetCompass` | hand-written |
+| `GetGyroscope` | hand-written |
+
+### `carla::sensor::data::CollisionEvent`
+
+| method | binding |
+|---|---|
+| `GetActor` | generated |
+| `GetNormalImpulse` | hand-written |
+| `GetOtherActor` | generated |
+
+### `carla::sensor::data::ObstacleDetectionEvent`
+
+| method | binding |
+|---|---|
+| `GetActor` | generated |
+| `GetDistance` | generated |
+| `GetOtherActor` | generated |
+
+### `carla::sensor::data::LaneInvasionEvent`
+
+| method | binding |
+|---|---|
+| `GetActor` | generated |
+| `GetCrossedLaneMarkings` | generated |
+
+### `carla::sensor::data::DVSEventArray`
+
+| method | binding |
+|---|---|
+| `GetFOVAngle` | hand-written |
+| `GetHeight` | hand-written |
+| `GetWidth` | hand-written |
+| `ToArray` | — |
+| `ToArrayPol` | — |
+| `ToArrayT` | — |
+| `ToArrayX` | — |
+| `ToArrayY` | — |
+| `ToImage` | — |

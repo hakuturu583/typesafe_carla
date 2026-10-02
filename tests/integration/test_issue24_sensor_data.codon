@@ -1,0 +1,313 @@
+# Issue #24 against a real CARLA server: frame_number, Image.convert /
+# save_to_disk, point-cloud files, event actors, and the radar, semantic
+# LiDAR, lane-invasion, obstacle, DVS and optical-flow measurements, polled
+# and through callbacks.
+import os
+import typesafe_carla as carla
+
+from C import unlink(cobj) -> i32
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+TMP = os.getenv("TMPDIR", "/tmp") + "/tsc_issue24_integration"
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+lib = world.get_blueprint_library()
+points = world.get_map().get_spawn_points()
+
+original = world.get_settings()
+settings = world.get_settings()
+settings.synchronous_mode = True
+settings.fixed_delta_seconds = 0.05
+world.apply_settings(settings)
+
+def read_file(path: str) -> str:
+    with open(path, "rb") as f:
+        return f.read()
+
+def byte_at(s: str, i: int) -> int:
+    return int(s.ptr[i])
+
+def be32(s: str, i: int) -> int:
+    return (byte_at(s, i) << 24) | (byte_at(s, i + 1) << 16) | (byte_at(s, i + 2) << 8) | byte_at(s, i + 3)
+
+def png_pixels(path: str) -> Tuple[int, int, int, List[int]]:
+    """(width, height, color type, pixel bytes) of a PNG written with stored
+    deflate blocks, as Image.save_to_disk writes them."""
+    s = read_file(path)
+    assert s[:8] == "\x89PNG\r\n\x1a\n" and s[12:16] == "IHDR"
+    width, height, color_type = be32(s, 16), be32(s, 20), byte_at(s, 25)
+    pos = 8
+    z = List[int]()
+    while pos < len(s):
+        n = be32(s, pos)
+        if s[pos + 4:pos + 8] == "IDAT":
+            for i in range(n):
+                z.append(byte_at(s, pos + 8 + i))
+        pos += 12 + n
+    raw = List[int]()
+    i = 2
+    while True:
+        final = z[i] & 1
+        n = z[i + 1] | (z[i + 2] << 8)
+        raw.extend(z[i + 5:i + 5 + n])
+        i += 5 + n
+        if final:
+            break
+    row = width * (1 if color_type == 0 else 4)
+    pixels = List[int]()
+    for y in range(height):
+        pixels.extend(raw[y * (row + 1) + 1:(y + 1) * (row + 1)])
+    return (width, height, color_type, pixels)
+
+# CARLA 0.10.0's CityScapes palette (ue5-dev adds tag 29, rock).
+PALETTE = [(0, 0, 0), (128, 64, 128), (244, 35, 232), (70, 70, 70), (102, 102, 156),
+           (190, 153, 153), (153, 153, 153), (250, 170, 30), (220, 220, 0), (107, 142, 35),
+           (152, 251, 152), (70, 130, 180), (220, 20, 60), (255, 0, 0), (0, 0, 142), (0, 0, 70),
+           (0, 60, 100), (0, 80, 100), (0, 0, 230), (119, 11, 32), (110, 190, 160),
+           (170, 120, 50), (55, 90, 80), (45, 60, 150), (157, 234, 50), (81, 0, 81),
+           (150, 100, 100), (230, 150, 140), (180, 165, 180)]
+
+def camera(id: str, w: int, h: int, parent: carla.Vehicle) -> carla.Sensor:
+    bp = lib.find(id)
+    bp.set_attribute("image_size_x", str(w))
+    bp.set_attribute("image_size_y", str(h))
+    return world.spawn_actor(bp, carla.Transform(carla.Location(1.5, 0.0, 2.0)),
+                             attach_to=parent).as_sensor()
+
+def first_data(s: carla.Sensor, ticks: int = 40) -> carla.SensorData:
+    """The first measurement within `ticks` synchronous ticks (event sensors
+    report only when something happens)."""
+    for _ in range(ticks):
+        d = s.poll()
+        if d is not None:
+            return d
+        world.tick()
+    return s.wait_for_data(10.0)
+
+spawned = List[carla.Actor]()
+try:
+    ego = world.spawn_actor(lib.find("vehicle.lincoln.mkz"), points[0]).as_vehicle()
+    spawned.append(ego)
+    fwd = points[0].get_forward_vector()
+    ahead = carla.Transform(
+        carla.Location(points[0].location + carla.Vector3D(fwd.x * 12.0, fwd.y * 12.0, 0.0)),
+        points[0].rotation)
+    obstacle = world.spawn_actor(lib.find("vehicle.lincoln.mkz"), ahead)
+    spawned.append(obstacle)
+    for _ in range(10):
+        world.tick()  # settle
+
+    # --- Cameras: depth (Depth / LogarithmicDepth), semantic segmentation.
+    depth = camera("sensor.camera.depth", 64, 48, ego)
+    seg = camera("sensor.camera.semantic_segmentation", 64, 48, ego)
+    spawned.append(depth)
+    spawned.append(seg)
+    depth.listen()
+    seg.listen()
+    frame = world.tick()
+    depth_data = depth.wait_for_data(10.0)
+    assert depth_data.frame_number == depth_data.frame
+    image = depth_data.as_image()
+    assert image.frame_number == image.frame and len(image) == 64 * 48
+    path = image.save_to_disk(TMP + "/depth/frame.jpg", carla.ColorConverter.Depth)
+    assert path == TMP + "/depth/frame.png", path
+    w, h, color_type, gray = png_pixels(path)
+    assert (w, h, color_type) == (64, 48, 0)
+    log_path = image.save_to_disk(TMP + "/depth/log.png", carla.ColorConverter.LogarithmicDepth)
+    _, _, _, log_gray = png_pixels(log_path)
+    raw_path = image.save_to_disk(TMP + "/depth/raw.png")
+    _, _, raw_type, rgba = png_pixels(raw_path)
+    assert raw_type == 6 and rgba[0:4] == [image[0].r, image[0].g, image[0].b, image[0].a]
+    image.convert(carla.ColorConverter.Depth)  # in place, same formula as the saved file
+    assert [c.r for c in image] == gray and all(c.r == c.g == c.b and c.a == 255 for c in image)
+    assert max(gray) > 0  # something within range
+    image2 = depth_data.as_image()  # the same, converted buffer
+    assert image2[5].r == gray[5]
+    print("depth", min(gray), max(gray), "log", min(log_gray), max(log_gray))
+
+    tags = seg.wait_for_data(10.0).as_image()
+    original_tags = [c.r for c in tags]
+    seg_path = tags.save_to_disk(TMP + "/seg.png", carla.ColorConverter.CityScapesPalette)
+    tags.convert(carla.ColorConverter.CityScapesPalette)
+    _, _, _, seg_rgba = png_pixels(seg_path)
+    for i, tag in enumerate(original_tags):
+        c = tags[i]
+        if tag < len(PALETTE):
+            assert (c.r, c.g, c.b) == PALETTE[tag], f"tag {tag}: {c}"
+        assert seg_rgba[4 * i:4 * i + 4] == [c.r, c.g, c.b, 255]
+    print("semantic tags", sorted(set(original_tags)))
+    for p in (path, log_path, raw_path, seg_path):
+        unlink(p.c_str())
+    depth.stop()
+    seg.stop()
+
+    # --- LiDAR and semantic LiDAR: PLY files.
+    lidar_bp = lib.find("sensor.lidar.ray_cast")
+    lidar_bp.set_attribute("channels", "16")
+    lidar = world.spawn_actor(lidar_bp, carla.Transform(carla.Location(0.0, 0.0, 2.4)),
+                              attach_to=ego).as_sensor()
+    sem_bp = lib.find("sensor.lidar.ray_cast_semantic")
+    sem_bp.set_attribute("channels", "16")
+    semantic = world.spawn_actor(sem_bp, carla.Transform(carla.Location(0.0, 0.0, 2.4)),
+                                 attach_to=ego).as_sensor()
+    spawned.append(lidar)
+    spawned.append(semantic)
+    lidar.listen()
+    semantic.listen()
+    world.tick()
+    world.tick()
+    sweep = lidar.wait_for_data(10.0).as_lidar()
+    ply = sweep.save_to_disk(TMP + "/cloud.txt")
+    assert ply == TMP + "/cloud.ply"
+    lines = read_file(ply).split("\n")
+    assert lines[0] == "ply" and lines[2] == f"element vertex {len(sweep)}" and lines[7] == "end_header"
+    assert len(lines) == len(sweep) + 9
+    unlink(ply.c_str())
+    sem = semantic.wait_for_data(10.0).as_semantic_lidar()
+    assert sem.channels == 16 and sum(sem.get_point_count(c) for c in range(16)) == len(sem)
+    assert sem.raw_size() == 24 * len(sem) and len(sem) > 0
+    tagged = 0
+    for d in sem:
+        assert -1.0001 <= d.cos_inc_angle <= 1.0001
+        tagged += int(d.object_tag != 0)
+    assert tagged > 0
+    hits_obstacle = any(d.object_idx == obstacle.id for d in sem)
+    sem_ply = sem.save_to_disk(TMP + "/semantic")
+    sem_lines = read_file(sem_ply).split("\n")
+    assert sem_lines[8] == "property uint32 ObjTag" and len(sem_lines) == len(sem) + 11
+    unlink(sem_ply.c_str())
+    print("semantic lidar", len(sem), "points, obstacle hit:", hits_obstacle)
+    lidar.stop()
+    semantic.stop()
+
+    # --- Radar, obstacle detector, DVS and optical flow (when the server has them).
+    radar = world.spawn_actor(lib.find("sensor.other.radar"),
+                              carla.Transform(carla.Location(2.5, 0.0, 1.0)), attach_to=ego).as_sensor()
+    obs_bp = lib.find("sensor.other.obstacle")
+    obs_bp.set_attribute("distance", "30")
+    if obs_bp.has_attribute("only_dynamics"):
+        obs_bp.set_attribute("only_dynamics", "true")
+    obstacle_sensor = world.spawn_actor(obs_bp, carla.Transform(carla.Location(2.5, 0.0, 1.0)),
+                                        attach_to=ego).as_sensor()
+    spawned.append(radar)
+    spawned.append(obstacle_sensor)
+    radar.listen()
+    obstacle_sensor.listen()
+    optional_cams = List[carla.Sensor]()
+    for id in ("sensor.camera.dvs", "sensor.camera.optical_flow"):
+        if len(lib.filter(id)) > 0:
+            s = camera(id, 32, 24, ego)
+            spawned.append(s)
+            s.listen()
+            optional_cams.append(s)
+        else:
+            print(id, "not in this server's blueprint library")
+    world.tick()
+    scan = first_data(radar).as_radar()
+    assert scan.get_detection_count() == len(scan) and scan.raw_size() == 16 * len(scan)
+    for d in scan:
+        assert 0.0 <= d.depth <= 100.5 and abs(d.azimuth) < 1.0 and abs(d.altitude) < 1.0
+    print("radar", len(scan), "detections")
+    found = first_data(obstacle_sensor).as_obstacle()
+    assert 0.0 < found.distance < 30.0
+    # As in the official API, `actor` is the obstacle sensor itself.
+    assert found.actor is not None and found.actor.id == obstacle_sensor.id
+    assert found.other_actor is not None and found.other_actor.id == obstacle.id
+    print("obstacle at", found.distance)
+    for s in optional_cams:
+        # A DVS camera reports only brightness changes, so a still scene on a
+        # real server can produce nothing at all; poll a while, then move on.
+        maybe: Optional[carla.SensorData] = None
+        for _ in range(40):
+            maybe = s.poll()
+            if maybe is not None:
+                break
+            world.tick()
+        if maybe is None:
+            print("NOTE:", s.type_id, "produced no data in 40 ticks")
+            s.stop()
+            continue
+        data = unwrap(maybe)
+        if data.type == carla.SensorDataType.DVS:
+            events = data.as_dvs()
+            assert events.width == 32 and events.height == 24
+            assert len(events.to_array()) == len(events) and len(events.to_image()) == 32 * 24
+            for e in events:
+                assert 0 <= e.x < 32 and 0 <= e.y < 24
+            print("dvs", len(events), "events")
+        else:
+            flow = data.as_optical_flow()
+            assert len(flow) == 32 * 24 and flow.raw_size() == 8 * 32 * 24
+            coded = flow.get_color_coded_flow()
+            assert len(coded) == 4 * 32 * 24 and coded.width == 32
+            print("optical flow", flow[0], coded.pixel(0, 0))
+        s.stop()
+    radar.stop()
+    obstacle_sensor.stop()
+
+    # --- Collision (polled) and lane invasion (callback) while driving.
+    collision = world.spawn_actor(lib.find("sensor.other.collision"), carla.Transform(),
+                                  attach_to=ego).as_sensor()
+    lane = world.spawn_actor(lib.find("sensor.other.lane_invasion"), carla.Transform(),
+                             attach_to=ego).as_sensor()
+    spawned.append(collision)
+    spawned.append(lane)
+    collision.listen()
+    crossed = List[int]()
+    actor_errors = List[str]()
+
+    def on_invasion(data: carla.SensorData):
+        event = data.as_lane_invasion()
+        for m in event.crossed_lane_markings:
+            crossed.append(m.type)
+        try:
+            event.actor
+        except carla.CarlaError as e:
+            actor_errors.append(e.message)
+    lane.listen(on_invasion)
+    ego.apply_control(carla.VehicleControl(throttle=0.8))
+    hit = Optional[carla.CollisionEvent]()
+    for _ in range(200):
+        world.tick()
+        d = collision.poll()
+        if d is not None:
+            hit = d.as_collision()
+            break
+    assert hit is not None, "no collision with the parked car"
+    assert hit.actor is not None and hit.actor.id == ego.id
+    assert hit.other_actor is not None and hit.other_actor.id == obstacle.id == hit.other_actor_id
+    print("collision", hit)
+    collision.stop()
+    obstacle.destroy()
+    spawned.remove(obstacle)
+    # Steer across the lane markings.
+    ego.apply_control(carla.VehicleControl(throttle=0.6, steer=0.4))
+    for _ in range(200):
+        world.tick()
+        if len(crossed) > 0:
+            break
+    ego.apply_control(carla.VehicleControl(brake=1.0))
+    world.tick()
+    carla.dispatch_sensor_callbacks()
+    assert len(crossed) > 0, "no lane invasion"
+    assert all(0 <= t <= 10 for t in crossed)
+    # LibCarla never gives client-side lane-invasion events an episode, so
+    # their actor always raises, as the Python API's does.
+    # LaneInvasionEvent.actor raises (the event has no episode); the message
+    # LibCarla gives depends on the build ("destroyed actor" or a bare
+    # std::exception), so only the failure itself is checked.
+    assert len(actor_errors) > 0, actor_errors
+    print("lane invasion: marking types", crossed)
+    lane.stop()
+finally:
+    world.apply_settings(original)
+    for a in spawned:
+        if a.is_sensor():
+            a.as_sensor().stop()
+    for a in reversed(spawned):
+        a.destroy()
+print("OK")

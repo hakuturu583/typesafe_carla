@@ -55,6 +55,14 @@
 #include <carla/sensor/data/IMUMeasurement.h>
 #include <carla/sensor/data/Image.h>
 #include <carla/sensor/data/LidarMeasurement.h>
+#include <carla/sensor/data/DVSEventArray.h>
+#include <carla/sensor/data/LaneInvasionEvent.h>
+#include <carla/sensor/data/ObstacleDetectionEvent.h>
+#include <carla/sensor/data/RadarMeasurement.h>
+#include <carla/sensor/data/SemanticLidarMeasurement.h>
+#include <carla/FileSystem.h>
+#include <carla/image/CityScapesPalette.h>
+#include <carla/pointcloud/PointCloudIO.h>
 #include <carla/rpc/VehicleControl.h>
 
 // Geo projections (geom::GeoProjection, Map::GetGeoProjection) are newer than

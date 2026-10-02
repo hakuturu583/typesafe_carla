@@ -461,6 +461,33 @@ inline void check_index(size_t index, size_t size, const char *what) {
   }
 }
 
+// The measurement behind a sensor data handle (sensor.cpp, generated code).
+inline const carla::sensor::SensorData &sensor_data_of(const tsc_sensor_data_t *d) {
+  return *check_handle(d, "data", TSC_KIND_SENSOR_DATA)->data;
+}
+
+// The measurement as T, or TSC_TYPE_ERROR naming `what` ("an image").
+template <typename T>
+const T &sensor_data_as(const tsc_sensor_data_t *d, const char *what) {
+  auto typed = dynamic_cast<const T *>(&sensor_data_of(d));
+  if (typed == nullptr) fail(TSC_TYPE_ERROR, std::string("sensor data is not ") + what);
+  return *typed;
+}
+
+// The event measurements bound by the generated code (bindings/*_event.yaml).
+inline const carla::sensor::data::CollisionEvent &collision_event_of(const tsc_sensor_data_t *d) {
+  return sensor_data_as<carla::sensor::data::CollisionEvent>(d, "a collision event");
+}
+inline const carla::sensor::data::ObstacleDetectionEvent &obstacle_event_of(
+    const tsc_sensor_data_t *d) {
+  return sensor_data_as<carla::sensor::data::ObstacleDetectionEvent>(
+      d, "an obstacle-detection event");
+}
+inline const carla::sensor::data::LaneInvasionEvent &lane_invasion_event_of(
+    const tsc_sensor_data_t *d) {
+  return sensor_data_as<carla::sensor::data::LaneInvasionEvent>(d, "a lane-invasion event");
+}
+
 // Wraps a LibCarla actor in the most derived handle kind we support.
 tsc_actor *make_actor_handle(const carla::SharedPtr<carla::client::Actor> &actor);
 

@@ -77,6 +77,7 @@ add_library(typesafe_carla_ffi SHARED
   native/src/map_ext.cpp
   native/src/map_road.cpp
   native/src/sensor.cpp
+  native/src/sensor_image.cpp
   native/src/snapshot.cpp
   native/src/traffic_manager.cpp
   native/src/vehicle.cpp
@@ -228,6 +229,18 @@ if(TSC_BUILD_TESTS AND NOT SKBUILD)
   endif()
   add_test(NAME test_generated COMMAND test_generated)
   set_tests_properties(test_generated PROPERTIES LABELS "${TSC_BACKEND}")
+
+  # The shim's image converters, bit for bit against LibCarla's ImageConverter
+  # (Boost.GIL). Needs real LibCarla headers, so libcarla builds only.
+  if(TSC_BACKEND STREQUAL "libcarla")
+    add_executable(test_image_converter tests/native/test_image_converter.cpp
+                   native/src/sensor_image.cpp)
+    target_include_directories(test_image_converter PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}/native/include" "${CMAKE_CURRENT_SOURCE_DIR}/native/src")
+    target_link_libraries(test_image_converter PRIVATE carla-client)
+    add_test(NAME test_image_converter COMMAND test_image_converter)
+    set_tests_properties(test_image_converter PROPERTIES LABELS "${TSC_BACKEND}")
+  endif()
 endif()
 
 # ---------------------------------------------------------------------------

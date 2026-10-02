@@ -1,0 +1,12 @@
+# A radar detection is polar (velocity, azimuth, altitude, depth): it has no point.
+# expect-error: 'RadarDetection' object has no attribute 'point'
+import typesafe_carla as carla
+
+def nearest(radar: carla.Sensor) -> float:
+    best = 1e9
+    for d in radar.wait_for_data(1.0).as_radar():
+        best = min(best, d.point.x)
+    return best
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(nearest(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()))

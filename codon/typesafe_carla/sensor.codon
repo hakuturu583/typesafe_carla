@@ -21,7 +21,9 @@
 #
 # Typed measurements keep their SensorData (and so the native buffer) alive.
 
-from ._ffi import (Handle, CSensorDataInfo, CImage, CLidar, CLidarPoint, CGnss, CImu, CCollision,
+from ._ffi import (Handle, CString, CSensorDataInfo, CImage, CLidar, CLidarPoint, CGnss, CImu,
+                   CCollision, CRadar, CRadarDetection, CSemanticLidar, CSemanticLidarDetection,
+                   CLaneMarking, CDvs, COpticalFlow, COpticalFlowPixel,
                    TSC_KIND_SENSOR, tsc_handle_kind, tsc_actor_as_sensor, tsc_sensor_listen,
                    tsc_sensor_stop, tsc_sensor_is_listening, tsc_sensor_dropped_count,
                    tsc_sensor_pending_count,
@@ -29,11 +31,21 @@ from ._ffi import (Handle, CSensorDataInfo, CImage, CLidar, CLidarPoint, CGnss, 
                    tsc_sensor_data_as_image, tsc_sensor_data_as_lidar,
                    tsc_lidar_channel_point_count, tsc_sensor_data_as_gnss,
                    tsc_sensor_data_as_imu, tsc_sensor_data_as_collision,
-                   TSC_INVALID_ARGUMENT, TSC_ERROR)
+                   tsc_collision_event_get_actor, tsc_collision_event_get_other_actor,
+                   tsc_obstacle_detection_get_actor, tsc_obstacle_detection_get_other_actor,
+                   tsc_lane_invasion_event_get_actor,
+                   tsc_lane_invasion_event_get_crossed_lane_markings, tsc_image_convert,
+                   tsc_image_save_to_disk, tsc_point_cloud_save_to_disk, tsc_sensor_data_as_radar,
+                   tsc_sensor_data_as_semantic_lidar,
+                   tsc_obstacle_detection_get_distance, tsc_sensor_data_as_dvs,
+                   tsc_sensor_data_as_optical_flow, tsc_optical_flow_color_coded, take_string,
+                   TSC_DVS_EVENT_SIZE, TSC_INVALID_ARGUMENT, TSC_ERROR)
 from .errors import _check, CarlaError, _normalize_index
 from .geometry import Location, Transform, Vector3D, _location_arg
 from .blueprint import Color
-from .actor import Actor
+from .actor import Actor, _make_actor
+from .lane_marking import LaneMarking
+from .map import _read_buffer
 from ._callbacks import (_register_callback, _unregister_callback, _find_callback, _pop,
                          dispatch_sensor_callbacks)
 
@@ -44,6 +56,19 @@ class SensorDataType:
     Gnss: ClassVar[int] = 3
     Imu: ClassVar[int] = 4
     Collision: ClassVar[int] = 5
+    Radar: ClassVar[int] = 6
+    SemanticLidar: ClassVar[int] = 7
+    LaneInvasion: ClassVar[int] = 8
+    Obstacle: ClassVar[int] = 9
+    DVS: ClassVar[int] = 10
+    OpticalFlow: ClassVar[int] = 11
+
+class ColorConverter:
+    """carla.ColorConverter, for Image.convert and Image.save_to_disk."""
+    Raw: ClassVar[int] = 0
+    Depth: ClassVar[int] = 1
+    LogarithmicDepth: ClassVar[int] = 2
+    CityScapesPalette: ClassVar[int] = 3
 
 class SensorData:
     """One measurement. Convert with as_image(), as_lidar(), ... (checked)."""
@@ -59,6 +84,11 @@ class SensorData:
     @property
     def frame(self) -> int:
         return int(self._info.frame)
+
+    @property
+    def frame_number(self) -> int:
+        """Same as frame (the Python API keeps it as a deprecated alias)."""
+        return self.frame
 
     @property
     def timestamp(self) -> float:
@@ -78,6 +108,18 @@ class SensorData:
     def __repr__(self) -> str:
         return f"SensorData(frame={self.frame}, type={self.type})"
 
+def _event_actor(fn, data: SensorData) -> Optional[Actor]:
+    """Calls a generated tsc_<event>_get_(other_)actor function."""
+    out = Ptr[cobj](1)
+    _check(fn(data._h.ptr, out))
+    if out[0] == cobj():
+        return None
+    return _make_actor(out[0])
+
+def _saved_path(status: i32, out: Ptr[CString]) -> str:
+    _check(status)
+    return take_string(out)
+
 class _Measurement:
     """A typed view of a SensorData, which it keeps alive."""
     data: SensorData
@@ -87,20 +129,90 @@ class _Measurement:
         return self.data.frame
 
     @property
+    def frame_number(self) -> int:
+        """Same as frame (deprecated alias in the Python API)."""
+        return self.data.frame
+
+    @property
     def timestamp(self) -> float:
         return self.data.timestamp
 
-class Image(_Measurement):
-    """Camera image: BGRA, 4 bytes per pixel, row-major."""
+    @property
+    def transform(self) -> Transform:
+        return self.data.transform
+
+class _ArrayMeasurement[T]:
+    """A measurement that is an array of T in LibCarla's buffer, viewed
+    without copying (design section 16): valid while the measurement is
+    alive. Subclasses define _item(T) (the Python-API element) and _WHAT.
+
+    Not derived from _Measurement: in Codon 0.19, the methods of a generic
+    class that derives from a non-generic one read the wrong fields of its
+    subclasses, so the four accessors are repeated here."""
+    data: SensorData
+    _items: Ptr[T]
+    _count: int
+
+    @property
+    def frame(self) -> int:
+        return self.data.frame
+
+    @property
+    def frame_number(self) -> int:
+        """Same as frame (deprecated alias in the Python API)."""
+        return self.data.frame
+
+    @property
+    def timestamp(self) -> float:
+        return self.data.timestamp
+
+    @property
+    def transform(self) -> Transform:
+        return self.data.transform
+
+    def __len__(self) -> int:
+        return self._count
+
+    def __getitem__(self: S, index: int, S: type):
+        return self._item(self._items[_normalize_index(index, self._count, S._WHAT)])
+
+    def __iter__(self: S, S: type):
+        for i in range(self._count):
+            yield self._item(self._items[i])
+
+    def raw_data(self) -> Ptr[u8]:
+        """Zero-copy view of the bytes, valid while this measurement is alive."""
+        return Ptr[u8](self._items.as_byte())
+
+    def raw_size(self) -> int:
+        """Size of raw_data() in bytes."""
+        return self._count * T.__elemsize__
+
+@tuple
+class _CBgra:
+    b: u8
+    g: u8
+    r: u8
+    a: u8
+
+def _bgra_color(p: _CBgra) -> Color:
+    return Color(int(p.r), int(p.g), int(p.b), int(p.a))
+
+def _pixel_at(pixels: Ptr[_CBgra], width: int, height: int, x: int, y: int) -> Color:
+    if x < 0 or x >= width or y < 0 or y >= height:
+        raise IndexError(f"pixel ({x}, {y}) outside {width}x{height}")
+    return _bgra_color(pixels[y * width + x])
+
+class Image(_ArrayMeasurement[_CBgra]):
+    """Camera image: BGRA, 4 bytes per pixel, row-major. Indexing gives Colors."""
+    _WHAT: ClassVar[str] = "pixel"
     _c: CImage
 
     def __init__(self, data: SensorData, c: CImage):
         self.data = data
         self._c = c
-
-    @property
-    def transform(self) -> Transform:
-        return self.data.transform
+        self._items = Ptr[_CBgra](c.data.as_byte())
+        self._count = int(c.width) * int(c.height)
 
     @property
     def width(self) -> int:
@@ -114,18 +226,24 @@ class Image(_Measurement):
     def fov(self) -> float:
         return self._c.fov
 
-    def raw_data(self) -> Ptr[u8]:
-        """Zero-copy view of the pixels, valid while this Image is alive."""
-        return self._c.data
-
-    def raw_size(self) -> int:
-        return self._c.size
+    def _item(self, p: _CBgra) -> Color:
+        return _bgra_color(p)
 
     def pixel(self, x: int, y: int) -> Color:
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise IndexError(f"pixel ({x}, {y}) outside {self.width}x{self.height}")
-        p = self._c.data + 4 * (y * self.width + x)
-        return Color(int(p[2]), int(p[1]), int(p[0]), int(p[3]))
+        return _pixel_at(self._items, self.width, self.height, x, y)
+
+    def convert(self, color_converter: int):
+        """Converts the pixels in place (a ColorConverter value), like the
+        Python API; raw_data() views see the change."""
+        _check(tsc_image_convert(self.data._h.ptr, i32(color_converter)))
+
+    def save_to_disk(self, path: str, color_converter: int = ColorConverter.Raw) -> str:
+        """Writes a PNG (the image itself is not converted); returns the path
+        written. As in LibCarla's PNG-only build, another extension is
+        replaced by .png; missing directories are created."""
+        out = Ptr[CString](1)
+        return _saved_path(tsc_image_save_to_disk(self.data._h.ptr, path.ptr, path.len,
+                                                  i32(color_converter), out), out)
 
     def __repr__(self) -> str:
         return f"Image(frame={self.frame}, size={self.width}x{self.height}, fov={self.fov})"
@@ -134,7 +252,7 @@ class LidarDetection:
     point: Location
     intensity: float
 
-    def __init__(self, point, intensity: float):
+    def __init__(self, point = Location(), intensity: float = 0.0):
         """point: Location (a Vector3D is accepted as in the Python API)."""
         self.point = _location_arg(
             point, "[tsc-compat] a Vector3D passed as a Location to LidarDetection(point)")
@@ -143,17 +261,27 @@ class LidarDetection:
     def __repr__(self) -> str:
         return f"LidarDetection({self.point}, intensity={self.intensity})"
 
-class LidarMeasurement(_Measurement):
+def _channel_point_count(data: SensorData, channels: int, channel: int) -> int:
+    if channel < 0 or channel >= channels:
+        raise IndexError(f"channel {channel} out of range for {channels} channels")
+    out = Ptr[u32](1)
+    _check(tsc_lidar_channel_point_count(data._h.ptr, u32(channel), out))
+    return int(out[0])
+
+def _save_point_cloud(data: SensorData, path: str) -> str:
+    out = Ptr[CString](1)
+    return _saved_path(tsc_point_cloud_save_to_disk(data._h.ptr, path.ptr, path.len, out), out)
+
+class LidarMeasurement(_ArrayMeasurement[CLidarPoint]):
     """A LiDAR sweep. Points are a zero-copy view of float32 {x, y, z, intensity}."""
+    _WHAT: ClassVar[str] = "lidar point"
     _c: CLidar
 
     def __init__(self, data: SensorData, c: CLidar):
         self.data = data
         self._c = c
-
-    @property
-    def transform(self) -> Transform:
-        return self.data.transform
+        self._items = c.points
+        self._count = c.point_count
 
     @property
     def channels(self) -> int:
@@ -164,32 +292,316 @@ class LidarMeasurement(_Measurement):
         return self._c.horizontal_angle
 
     def get_point_count(self, channel: int) -> int:
-        if channel < 0 or channel >= self.channels:
-            raise IndexError(f"channel {channel} out of range for {self.channels} channels")
-        out = Ptr[u32](1)
-        _check(tsc_lidar_channel_point_count(self.data._h.ptr, u32(channel), out))
-        return int(out[0])
+        return _channel_point_count(self.data, self.channels, channel)
 
     def raw_points(self) -> Ptr[CLidarPoint]:
         """Zero-copy view, valid while this measurement is alive."""
-        return self._c.points
+        return self._items
 
-    def __len__(self) -> int:
-        return self._c.point_count
+    def save_to_disk(self, path: str) -> str:
+        """Writes the points as ASCII PLY (LibCarla's PointCloudIO); returns the path written."""
+        return _save_point_cloud(self.data, path)
 
-    def _get(self, i: int) -> LidarDetection:
-        p = self._c.points[i]
+    def _item(self, p: CLidarPoint) -> LidarDetection:
         return LidarDetection(Location(float(p.x), float(p.y), float(p.z)), float(p.intensity))
-
-    def __getitem__(self, index: int) -> LidarDetection:
-        return self._get(_normalize_index(index, len(self), "lidar point"))
-
-    def __iter__(self) -> Generator[LidarDetection]:
-        for i in range(len(self)):
-            yield self._get(i)
 
     def __repr__(self) -> str:
         return f"LidarMeasurement(frame={self.frame}, channels={self.channels}, points={len(self)})"
+
+class SemanticLidarDetection:
+    point: Location
+    cos_inc_angle: float
+    object_idx: int  # id of the actor hit (0 for the static scene)
+    object_tag: int  # semantic tag of the object hit
+
+    def __init__(self, point = Location(), cos_inc_angle: float = 0.0, object_idx: int = 0,
+                 object_tag: int = 0):
+        """point: Location (a Vector3D is accepted as in the Python API)."""
+        self.point = _location_arg(
+            point, "[tsc-compat] a Vector3D passed as a Location to SemanticLidarDetection(point)")
+        self.cos_inc_angle = cos_inc_angle
+        self.object_idx = object_idx
+        self.object_tag = object_tag
+
+    def __repr__(self) -> str:
+        return (f"SemanticLidarDetection({self.point}, cos_inc_angle={self.cos_inc_angle}, "
+                f"object_idx={self.object_idx}, object_tag={self.object_tag})")
+
+class SemanticLidarMeasurement(_ArrayMeasurement[CSemanticLidarDetection]):
+    """A semantic LiDAR sweep: a zero-copy view of LibCarla's detections."""
+    _WHAT: ClassVar[str] = "semantic lidar point"
+    _c: CSemanticLidar
+
+    def __init__(self, data: SensorData, c: CSemanticLidar):
+        self.data = data
+        self._c = c
+        self._items = c.points
+        self._count = c.point_count
+
+    @property
+    def channels(self) -> int:
+        return int(self._c.channels)
+
+    @property
+    def horizontal_angle(self) -> float:
+        return self._c.horizontal_angle
+
+    def get_point_count(self, channel: int) -> int:
+        return _channel_point_count(self.data, self.channels, channel)
+
+    def save_to_disk(self, path: str) -> str:
+        """Writes the points as ASCII PLY (LibCarla's PointCloudIO); returns the path written."""
+        return _save_point_cloud(self.data, path)
+
+    def _item(self, p: CSemanticLidarDetection) -> SemanticLidarDetection:
+        return SemanticLidarDetection(Location(float(p.x), float(p.y), float(p.z)),
+                                      float(p.cos_inc_angle), int(p.object_idx),
+                                      int(p.object_tag))
+
+    def __repr__(self) -> str:
+        return (f"SemanticLidarMeasurement(frame={self.frame}, channels={self.channels}, "
+                f"points={len(self)})")
+
+class RadarDetection:
+    velocity: float  # m/s
+    azimuth: float  # rad
+    altitude: float  # rad
+    depth: float  # m
+
+    def __init__(self, velocity: float = 0.0, azimuth: float = 0.0, altitude: float = 0.0,
+                 depth: float = 0.0):
+        self.velocity = velocity
+        self.azimuth = azimuth
+        self.altitude = altitude
+        self.depth = depth
+
+    def __repr__(self) -> str:
+        return (f"RadarDetection(velocity={self.velocity}, azimuth={self.azimuth}, "
+                f"altitude={self.altitude}, depth={self.depth})")
+
+class RadarMeasurement(_ArrayMeasurement[CRadarDetection]):
+    """Radar detections: a zero-copy view of LibCarla's array."""
+    _WHAT: ClassVar[str] = "radar detection"
+
+    def __init__(self, data: SensorData, c: CRadar):
+        self.data = data
+        self._items = c.detections
+        self._count = c.detection_count
+
+    def get_detection_count(self) -> int:
+        return self._count
+
+    def _item(self, p: CRadarDetection) -> RadarDetection:
+        return RadarDetection(float(p.velocity), float(p.azimuth), float(p.altitude),
+                              float(p.depth))
+
+    def __repr__(self) -> str:
+        return f"RadarMeasurement(frame={self.frame}, point_count={len(self)})"
+
+class DVSEvent:
+    x: int
+    y: int
+    t: int  # ns
+    pol: bool  # True: brightness increased
+
+    def __init__(self, x: int = 0, y: int = 0, t: int = 0, pol: bool = False):
+        self.x = x
+        self.y = y
+        self.t = t
+        self.pol = pol
+
+    def __repr__(self) -> str:
+        return f"DVSEvent(x={self.x}, y={self.y}, t={self.t}, pol={self.pol})"
+
+@tuple
+class _CDvsEvent:
+    """One packed LibCarla DVSEvent (TSC_DVS_EVENT_SIZE = 13 bytes, unaligned):
+    little-endian u16 x, u16 y, i64 t, then the polarity byte."""
+    b0: u8
+    b1: u8
+    b2: u8
+    b3: u8
+    b4: u8
+    b5: u8
+    b6: u8
+    b7: u8
+    b8: u8
+    b9: u8
+    b10: u8
+    b11: u8
+    b12: u8
+
+class DVSEventArray(_ArrayMeasurement[_CDvsEvent]):
+    """DVS camera events: a zero-copy view of LibCarla's packed array."""
+    _WHAT: ClassVar[str] = "DVS event"
+    _c: CDvs
+
+    def __init__(self, data: SensorData, c: CDvs):
+        self.data = data
+        self._c = c
+        self._items = Ptr[_CDvsEvent](c.events)
+        self._count = c.event_count
+
+    @property
+    def width(self) -> int:
+        return int(self._c.width)
+
+    @property
+    def height(self) -> int:
+        return int(self._c.height)
+
+    @property
+    def fov(self) -> float:
+        return self._c.fov
+
+    def _le(self, i: int, offset: int, size: int) -> int:
+        """Little-endian field of event i, read from its packed bytes."""
+        p = Ptr[u8](self._items.as_byte()) + i * TSC_DVS_EVENT_SIZE + offset
+        v = 0
+        for k in range(size):
+            v |= int(p[k]) << (8 * k)
+        return v
+
+    def _x(self, i: int) -> int:
+        return self._le(i, 0, 2)
+
+    def _y(self, i: int) -> int:
+        return self._le(i, 2, 2)
+
+    def _t(self, i: int) -> int:
+        return self._le(i, 4, 8)
+
+    def _pol(self, i: int) -> int:
+        """+1 / -1, as the Python API's to_array_pol."""
+        return 1 if self._le(i, 12, 1) != 0 else -1
+
+    def _column(self, field) -> List[int]:
+        out = List[int](self._count)
+        for i in range(self._count):
+            out.append(field(i))
+        return out
+
+    def _item(self, e: _CDvsEvent) -> DVSEvent:
+        t = 0
+        for k, byte_ in enumerate((e.b4, e.b5, e.b6, e.b7, e.b8, e.b9, e.b10, e.b11)):
+            t |= int(byte_) << (8 * k)
+        return DVSEvent(int(e.b0) | (int(e.b1) << 8), int(e.b2) | (int(e.b3) << 8), t,
+                        int(e.b12) != 0)
+
+    def to_image(self) -> List[Color]:
+        """width * height Colors: blue where an event of positive polarity
+        occurred, red for negative, (0, 0, 0, 0) elsewhere (as LibCarla)."""
+        w = self.width
+        img = [Color(0, 0, 0, 0) for _ in range(w * self.height)]
+        for i in range(self._count):
+            c = img[w * self._y(i) + self._x(i)]
+            if self._pol(i) > 0:
+                c.b = 255
+            else:
+                c.r = 255
+        return img
+
+    def to_array(self) -> List[List[int]]:
+        """[x, y, t, pol] per event, pol as +1 / -1."""
+        out = List[List[int]](self._count)
+        for i in range(self._count):
+            out.append([self._x(i), self._y(i), self._t(i), self._pol(i)])
+        return out
+
+    def to_array_x(self) -> List[int]:
+        return self._column(self._x)
+
+    def to_array_y(self) -> List[int]:
+        return self._column(self._y)
+
+    def to_array_t(self) -> List[int]:
+        return self._column(self._t)
+
+    def to_array_pol(self) -> List[int]:
+        """+1 / -1 per event."""
+        return self._column(self._pol)
+
+    def __repr__(self) -> str:
+        return (f"DVSEventArray(frame={self.frame}, dimensions={self.width}x{self.height}, "
+                f"number_of_events={len(self)})")
+
+class OpticalFlowPixel:
+    x: float
+    y: float
+
+    def __init__(self, x: float = 0.0, y: float = 0.0):
+        self.x = x
+        self.y = y
+
+    def __repr__(self) -> str:
+        return f"OpticalFlowPixel(x={self.x}, y={self.y})"
+
+class FakeImage:
+    """The image OpticalFlowImage.get_color_coded_flow() returns (named as in
+    the Python API): BGRA, 4 bytes per pixel, owned by this object."""
+    width: int
+    height: int
+    fov: float
+    _data: Ptr[u8]
+
+    def __init__(self, width: int, height: int, fov: float, data: Ptr[u8]):
+        self.width = width
+        self.height = height
+        self.fov = fov
+        self._data = data
+
+    def raw_data(self) -> Ptr[u8]:
+        return self._data
+
+    def raw_size(self) -> int:
+        return 4 * self.width * self.height
+
+    def __len__(self) -> int:
+        return self.raw_size()
+
+    def __getitem__(self, index: int) -> int:
+        """One byte, as the Python API's FakeImage indexes its bytes."""
+        return int(self._data[_normalize_index(index, len(self), "byte")])
+
+    def pixel(self, x: int, y: int) -> Color:
+        return _pixel_at(Ptr[_CBgra](self._data.as_byte()), self.width, self.height, x, y)
+
+class OpticalFlowImage(_ArrayMeasurement[COpticalFlowPixel]):
+    """Optical flow: a zero-copy view of float32 {x, y} per pixel, row-major."""
+    _WHAT: ClassVar[str] = "pixel"
+    _c: COpticalFlow
+
+    def __init__(self, data: SensorData, c: COpticalFlow):
+        self.data = data
+        self._c = c
+        self._items = c.pixels
+        self._count = c.pixel_count
+
+    @property
+    def width(self) -> int:
+        return int(self._c.width)
+
+    @property
+    def height(self) -> int:
+        return int(self._c.height)
+
+    @property
+    def fov(self) -> float:
+        return self._c.fov
+
+    def _item(self, p: COpticalFlowPixel) -> OpticalFlowPixel:
+        return OpticalFlowPixel(float(p.x), float(p.y))
+
+    def get_color_coded_flow(self) -> FakeImage:
+        """The flow as a BGRA image (hue: direction, value: magnitude), with
+        the Python API's formula; alpha is 0, as there."""
+        n = 4 * self._count
+        buf = Ptr[u8](n)
+        _check(tsc_optical_flow_color_coded(self.data._h.ptr, buf, n))
+        return FakeImage(self.width, self.height, self.fov, buf)
+
+    def __repr__(self) -> str:
+        return f"OpticalFlowImage(frame={self.frame}, size={self.width}x{self.height})"
 
 class GnssMeasurement(_Measurement):
     latitude: float
@@ -232,9 +644,62 @@ class CollisionEvent(_Measurement):
         self.other_actor_id = int(c.other_actor_id)
         self.normal_impulse = Vector3D._from_c(c.normal_impulse)
 
+    @property
+    def actor(self) -> Optional[Actor]:
+        """The actor the sensor is attached to (None if LibCarla gives none)."""
+        return _event_actor(tsc_collision_event_get_actor, self.data)
+
+    @property
+    def other_actor(self) -> Optional[Actor]:
+        """The actor collided with; None when LibCarla gives none."""
+        return _event_actor(tsc_collision_event_get_other_actor, self.data)
+
     def __repr__(self) -> str:
         return (f"CollisionEvent(frame={self.frame}, actor_id={self.actor_id}, "
                 f"other_actor_id={self.other_actor_id}, normal_impulse={self.normal_impulse})")
+
+class ObstacleDetectionEvent(_Measurement):
+    distance: float  # m
+
+    def __init__(self, data: SensorData, distance: float):
+        self.data = data
+        self.distance = distance
+
+    @property
+    def actor(self) -> Optional[Actor]:
+        """The actor the sensor is attached to (None if LibCarla gives none)."""
+        return _event_actor(tsc_obstacle_detection_get_actor, self.data)
+
+    @property
+    def other_actor(self) -> Optional[Actor]:
+        """The obstacle; None when LibCarla gives none."""
+        return _event_actor(tsc_obstacle_detection_get_other_actor, self.data)
+
+    def __repr__(self) -> str:
+        return f"ObstacleDetectionEvent(frame={self.frame}, distance={self.distance})"
+
+class LaneInvasionEvent(_Measurement):
+    crossed_lane_markings: List[LaneMarking]
+
+    def __init__(self, data: SensorData, markings: List[LaneMarking]):
+        self.data = data
+        self.crossed_lane_markings = markings
+
+    @property
+    def actor(self) -> Actor:
+        """LibCarla's LaneInvasionEvent::GetActor(). Lane invasion is computed
+        on the client, and LibCarla (0.10.0, ue5-dev) never gives these events
+        an episode, so this raises CarlaError ("trying to operate on a
+        destroyed actor ...") exactly like the Python API's RuntimeError. The
+        parent is the lane-invasion sensor's parent actor."""
+        a = _event_actor(tsc_lane_invasion_event_get_actor, self.data)
+        if a is None:
+            raise CarlaError("LaneInvasionEvent: no parent actor", TSC_ERROR)
+        return a
+
+    def __repr__(self) -> str:
+        return (f"LaneInvasionEvent(frame={self.frame}, "
+                f"crossed_lane_markings={self.crossed_lane_markings})")
 
 @extend
 class SensorData:
@@ -262,6 +727,36 @@ class SensorData:
         out = Ptr[CCollision](1)
         _check(tsc_sensor_data_as_collision(self._h.ptr, out))
         return CollisionEvent(self, out[0])
+
+    def as_radar(self) -> RadarMeasurement:
+        out = Ptr[CRadar](1)
+        _check(tsc_sensor_data_as_radar(self._h.ptr, out))
+        return RadarMeasurement(self, out[0])
+
+    def as_semantic_lidar(self) -> SemanticLidarMeasurement:
+        out = Ptr[CSemanticLidar](1)
+        _check(tsc_sensor_data_as_semantic_lidar(self._h.ptr, out))
+        return SemanticLidarMeasurement(self, out[0])
+
+    def as_dvs(self) -> DVSEventArray:
+        out = Ptr[CDvs](1)
+        _check(tsc_sensor_data_as_dvs(self._h.ptr, out))
+        return DVSEventArray(self, out[0])
+
+    def as_optical_flow(self) -> OpticalFlowImage:
+        out = Ptr[COpticalFlow](1)
+        _check(tsc_sensor_data_as_optical_flow(self._h.ptr, out))
+        return OpticalFlowImage(self, out[0])
+
+    def as_obstacle(self) -> ObstacleDetectionEvent:
+        out = Ptr[float](1)
+        _check(tsc_obstacle_detection_get_distance(self._h.ptr, out))
+        return ObstacleDetectionEvent(self, out[0])
+
+    def as_lane_invasion(self) -> LaneInvasionEvent:
+        buf, n = _read_buffer(tsc_lane_invasion_event_get_crossed_lane_markings, self._h.ptr,
+                              CLaneMarking, 4)
+        return LaneInvasionEvent(self, [LaneMarking._from_c(buf[i]) for i in range(n)])
 
 class _CallbackThunk[F]:
     """Adapts any callable taking a SensorData (function, bound method, lambda,
@@ -376,6 +871,10 @@ class Sensor(Actor):
 
     def __repr__(self) -> str:
         return f"Sensor(id={self.id}, type={self.type_id})"
+
+# The Python API's carla.LaneInvasionSensor is a client-side Sensor subclass
+# with nothing of its own; here it is the same type as Sensor.
+LaneInvasionSensor = Sensor
 
 @extend
 class Actor:

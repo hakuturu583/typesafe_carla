@@ -1,0 +1,9 @@
+# Point clouds have no color converter (as in the Python API).
+# expect-error: save_to_disk() takes 2 arguments (3 given)
+import typesafe_carla as carla
+
+def save(lidar: carla.Sensor) -> str:
+    return lidar.wait_for_data(1.0).as_lidar().save_to_disk("x.ply", carla.ColorConverter.Raw)
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(save(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()))

@@ -18,6 +18,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <variant>
@@ -1502,28 +1503,59 @@ struct Color {
   uint8_t a = 0u;
 };
 
-class Image : public SensorData {
+// LibCarla: Image = ImageTmpl<Color>, OpticalFlowImage = ImageTmpl<OpticalFlowPixel>.
+template <typename PixelT>
+class ImageTmpl : public SensorData {
  public:
-  Image(size_t frame, double timestamp, const geom::Transform &t, size_t width, size_t height,
-        float fov)
+  using pixel_type = PixelT;
+  ImageTmpl(size_t frame, double timestamp, const geom::Transform &t, size_t width, size_t height,
+            float fov)
       : SensorData(frame, timestamp, t), _width(width), _height(height), _fov(fov),
         _pixels(width * height) {}
   size_t GetWidth() const { return _width; }
   size_t GetHeight() const { return _height; }
   float GetFOVAngle() const { return _fov; }
-  const Color *data() const { return _pixels.data(); }
-  Color *data() { return _pixels.data(); }
+  const PixelT *data() const { return _pixels.data(); }
+  PixelT *data() { return _pixels.data(); }
   size_t size() const { return _pixels.size(); }
+  auto begin() const { return _pixels.begin(); }
+  auto end() const { return _pixels.end(); }
 
  private:
   size_t _width, _height;
   float _fov;
-  std::vector<Color> _pixels;
+  std::vector<PixelT> _pixels;
 };
 
-struct LidarDetection {
+using Image = ImageTmpl<Color>;
+
+struct OpticalFlowPixel {
+  OpticalFlowPixel() = default;
+  OpticalFlowPixel(float in_x, float in_y) : x(in_x), y(in_y) {}
+  float x = 0;
+  float y = 0;
+};
+
+using OpticalFlowImage = ImageTmpl<OpticalFlowPixel>;
+
+class LidarDetection {
+ public:
   geom::Location point;
   float intensity = 0.0f;
+
+  LidarDetection() = default;
+  LidarDetection(geom::Location p, float i) : point(p), intensity(i) {}
+
+  void WritePlyHeaderInfo(std::ostream &out) const {
+    out << "property float32 x\n"
+           "property float32 y\n"
+           "property float32 z\n"
+           "property float32 I";
+  }
+
+  void WriteDetection(std::ostream &out) const {
+    out << point.x << ' ' << point.y << ' ' << point.z << ' ' << intensity;
+  }
 };
 
 class LidarMeasurement : public SensorData {
@@ -1537,6 +1569,8 @@ class LidarMeasurement : public SensorData {
   uint32_t GetPointCount(size_t channel) const { return _per_channel.at(channel); }
   const LidarDetection *data() const { return _points.data(); }
   size_t size() const { return _points.size(); }
+  auto begin() const { return _points.begin(); }
+  auto end() const { return _points.end(); }
 
  private:
   float _angle;

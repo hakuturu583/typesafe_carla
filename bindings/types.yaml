@@ -432,3 +432,12 @@ optional_labelled_point:
   assign: "assign_optional({}, has_value, {out})"
   invalid: "NULL, NULL"
   cpp: ["(boost|std)::optional<carla::rpc::LabelledPoint>"]
+# --- #24 ---
+# Output buffer of lane markings, two-call pattern (see bounding_box_buffer).
+lane_marking_buffer:
+  c: tsc_lane_marking_t
+  c_param: "tsc_lane_marking_t *{name}, size_t capacity, size_t *{name}_count"
+  codon: "Ptr[CLaneMarking], int, Ptr[int]"
+  assign: "copy_out({}, {out}, capacity, {out}_count)"
+  invalid: "NULL, 0, NULL"
+  cpp: ["std::vector<carla::road::element::LaneMarking.*>"]

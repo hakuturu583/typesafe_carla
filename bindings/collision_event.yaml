@@ -1,0 +1,9 @@
+# Collision events (issue #24): tsc_collision_event_<name>, on a sensor data
+# handle holding a carla::sensor::data::CollisionEvent (TSC_TYPE_ERROR otherwise).
+class: carla::sensor::data::CollisionEvent
+prefix: collision_event
+self: {type: const tsc_sensor_data_t, name: data, get: collision_event_of}
+blocks:
+  collision_event:
+    get_actor: {call: GetActor, out: actor_handle, doc: "The sensor's parent; *out = NULL (TSC_OK) when LibCarla gives none."}
+    get_other_actor: {call: GetOtherActor, out: actor_handle, doc: "*out = NULL (TSC_OK) when LibCarla gives none."}

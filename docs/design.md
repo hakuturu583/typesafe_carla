@@ -655,6 +655,16 @@ For structured data, `lidar.points()` can return a typed view over native memory
 
 The associated SensorData object must remain alive while the view is used.
 
+Implemented views (issue #24 added the last four): `Image` (BGRA bytes),
+`LidarMeasurement` ({x, y, z, intensity} floats), `SemanticLidarMeasurement`
+({x, y, z, cos_inc_angle} floats + {object_idx, object_tag} uint32),
+`RadarMeasurement` ({velocity, azimuth, altitude, depth} floats),
+`DVSEventArray` (packed 13-byte events, decoded on access) and
+`OpticalFlowImage` ({x, y} floats). In Codon they share one generic base,
+`_ArrayMeasurement[T]`: `len`, indexing and iteration convert one element at a
+time into the Python API's element class; `raw_data()` / `raw_size()` expose
+the bytes. `Image.convert` changes the buffer in place, as in the Python API.
+
 ## 17. Threading
 
 Rules:

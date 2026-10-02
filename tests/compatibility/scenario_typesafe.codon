@@ -3,6 +3,8 @@ import os
 import time
 import typesafe_carla as carla
 
+from C import unlink(cobj) -> i32
+
 host = os.getenv("TSC_CARLA_HOST", "localhost")
 port = int(os.getenv("TSC_CARLA_PORT", "2000"))
 
@@ -227,6 +229,60 @@ try:
     out("lidar_channels", str(sweep.channels))
     out("gnss", fmt7(fix.latitude) + "," + fmt7(fix.longitude) + "," + fmt(fix.altitude))
     out("imu_compass", fmt(imu.compass))
+    for s in sensors:
+        s.stop()
+        s.destroy()
+    # Issue #24: more measurement types, conversion and files.
+    out("frame_number", str(int(image.frame_number == image.frame)))
+    new_ids = ["sensor.other.radar", "sensor.lidar.ray_cast_semantic", "sensor.other.lane_invasion",
+               "sensor.other.obstacle", "sensor.camera.dvs", "sensor.camera.optical_flow",
+               "sensor.camera.depth", "sensor.camera.semantic_segmentation"]
+    out("sensor_types", ",".join([str(int(len(lib.filter(i)) > 0)) for i in new_ids]))
+    tmp = os.getenv("TMPDIR", "/tmp") + "/tsc_compat_typesafe"
+    bps24 = List[carla.ActorBlueprint]()
+    for i in ("sensor.camera.depth", "sensor.camera.semantic_segmentation"):
+        b = lib.find(i)
+        b.set_attribute("image_size_x", "32")
+        b.set_attribute("image_size_y", "24")
+        bps24.append(b)
+    sem_bp = lib.find("sensor.lidar.ray_cast_semantic")
+    sem_bp.set_attribute("channels", "16")
+    bps24 += [sem_bp, lidar_bp, lib.find("sensor.other.radar")]
+    sensors = [world.spawn_actor(b, carla.Transform(carla.Location(0.0, 0.0, 2.0)),
+                                 attach_to=vehicle).as_sensor() for b in bps24]
+    for s in sensors:
+        s.listen()
+    world.tick()
+    depth = sensors[0].wait_for_data(20.0).as_image()
+    seg = sensors[1].wait_for_data(20.0).as_image()
+    sem = sensors[2].wait_for_data(20.0).as_semantic_lidar()
+    sweep = sensors[3].wait_for_data(20.0).as_lidar()
+    radar = sensors[4].wait_for_data(20.0).as_radar()
+    saved = depth.save_to_disk(tmp + "/depth.jpg", carla.ColorConverter.Depth)
+    out("image_saved", saved.split("/")[-1])
+    unlink(saved.c_str())
+    depth.convert(carla.ColorConverter.LogarithmicDepth)
+    out("depth_log_mean", fmt(float(sum(c.r for c in depth)) / float(len(depth))))
+    tags = [c.r for c in seg]
+    seg.convert(carla.ColorConverter.CityScapesPalette)
+    pair_set = Set[str]()
+    for i, c in enumerate(seg):
+        pair_set.add(f"{tags[i]}:{c.r},{c.g},{c.b},{c.a}")
+    out("palette", ";".join(sorted(list(pair_set))))
+    out("semantic_lidar", str(sem.channels) + "," +
+        str(int(sum(sem.get_point_count(c) for c in range(sem.channels)) == len(sem))) + "," +
+        str(int(sem.raw_size() == 24 * len(sem))))
+    ply = sweep.save_to_disk(tmp + "/cloud.txt")
+    header = List[str]()
+    with open(ply) as f:
+        for line in f:
+            if len(header) < 8:
+                header.append(line.strip())
+    unlink(ply.c_str())
+    header[2] = header[2].rsplit(" ", 1)[0] + (" N" if header[2].endswith(" " + str(len(sweep))) else " ?")
+    out("lidar_ply", ply.split("/")[-1] + ";" + ";".join(header))
+    out("radar_view", str(int(radar.get_detection_count() == len(radar))) + "," +
+        str(int(radar.raw_size() == 16 * len(radar))))
     for s in sensors:
         s.stop()
         s.destroy()
