@@ -69,11 +69,17 @@ assert ahead > 0
 
 lights = [a.as_traffic_light() for a in world.get_actors() if a.is_traffic_light()]
 world.freeze_all_traffic_lights(True)
-world.wait_for_tick(10.0)
+for _ in range(10):  # is_frozen() reads the snapshot: the client sees it a few ticks later
+    world.wait_for_tick(10.0)
+    if all(l.is_frozen() for l in lights):
+        break
 assert all(l.is_frozen() for l in lights)
 world.freeze_all_traffic_lights(False)
 world.reset_all_traffic_lights()
-world.wait_for_tick(10.0)
+for _ in range(10):
+    world.wait_for_tick(10.0)
+    if not any(l.is_frozen() for l in lights):
+        break
 assert not any(l.is_frozen() for l in lights)
 
 # --- Vehicle light states -----------------------------------------------------------------------

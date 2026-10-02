@@ -1,6 +1,7 @@
 # Milestone 1 against a real CARLA server: map and waypoints, snapshots,
 # physics control, bounding boxes and batch commands.
 import os
+import time
 import typesafe_carla as carla
 
 host = os.getenv("TSC_CARLA_HOST", "localhost")
@@ -73,14 +74,18 @@ ids = [r.actor_id for r in responses[:4] if not r.has_error()]
 assert len(ids) == 4, responses
 try:
     starts = [world.get_actor(i).get_location() for i in ids]
-    for _ in range(300):  # a few seconds of asynchronous simulation (TM start-up included)
+    # Asynchronous mode: the Traffic Manager's start-up and the server's frame
+    # rate vary, so a fixed tick count is not enough time on a fast server.
+    # Wait (bounded by wall-clock time) until three of the four have driven.
+    dists = [0.0] * 4
+    deadline = time.time() + 60.0
+    while True:
         world.wait_for_tick(10.0)
-    moved = 0
-    for k in range(4):
-        dist = world.get_actor(ids[k]).get_location().distance(starts[k])
-        print("autopilot vehicle", ids[k], "moved", dist)
-        if dist > 3.0:
-            moved += 1
+        dists = [world.get_actor(ids[k]).get_location().distance(starts[k]) for k in range(4)]
+        if sum(1 for d in dists if d > 3.0) >= 3 or time.time() > deadline:
+            break
+    print("autopilot vehicles", ids, "moved", dists)
+    moved = sum(1 for d in dists if d > 3.0)
     assert moved >= 3, "Traffic Manager did not drive the batch-spawned vehicles"
 
     # Physics control round trip on a real vehicle.
