@@ -296,6 +296,25 @@ inline carla::client::Vehicle &vehicle_of(tsc_vehicle_t *v) {
   return actor_as<carla::client::Vehicle>(v, "vehicle", TSC_KIND_VEHICLE);
 }
 
+inline carla::client::TrafficLight &light_of(tsc_traffic_light_t *t) {
+  return actor_as<carla::client::TrafficLight>(t, "traffic_light", TSC_KIND_TRAFFIC_LIGHT);
+}
+
+inline carla::client::WalkerAIController &controller_of(tsc_walker_ai_controller_t *c) {
+  return actor_as<carla::client::WalkerAIController>(c, "controller",
+                                                     TSC_KIND_WALKER_AI_CONTROLLER);
+}
+
+inline carla::traffic_manager::TrafficManager &tm_of(tsc_traffic_manager_t *t) {
+  return check_handle(t, "traffic_manager", TSC_KIND_TRAFFIC_MANAGER)->tm;
+}
+
+// A vehicle handle as the Traffic Manager takes it.
+inline carla::SharedPtr<carla::client::Actor> vehicle_ptr(tsc_vehicle_t *v,
+                                                          const char *name = "vehicle") {
+  return check_handle(v, name, TSC_KIND_VEHICLE)->actor;
+}
+
 // Fails with TSC_NOT_FOUND unless index < size; `what` names the container.
 inline void check_index(size_t index, size_t size, const char *what) {
   if (index >= size) {
@@ -350,10 +369,18 @@ void copy_out(const Vec &values, Out *out, size_t capacity, size_t *out_count) {
   for (size_t i = 0; i < values.size() && i < capacity; ++i) out[i] = from_carla(values[i]);
 }
 
-// Fails with `message` unless v is finite and non-negative (NaN fails too).
-inline double check_non_negative(double v, const char *message) {
-  if (!(v >= 0.0) || !std::isfinite(v)) fail(TSC_INVALID_ARGUMENT, message);
-  return v;
+// LibCarla's float parameters: `name` must be finite (and non-negative; NaN
+// fails too).
+inline float check_finite(double v, const char *name) {
+  if (!std::isfinite(v)) fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite");
+  return static_cast<float>(v);
+}
+
+inline float check_non_negative(double v, const char *name) {
+  if (!(v >= 0.0) || !std::isfinite(v)) {
+    fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be finite and non-negative");
+  }
+  return static_cast<float>(v);
 }
 
 inline carla::rpc::TrafficLightState to_light_state(int32_t state) {
@@ -366,8 +393,8 @@ inline carla::rpc::TrafficLightState to_light_state(int32_t state) {
 // Direct and batch walker control go through here.
 inline carla::rpc::WalkerControl to_carla_walker_control(const tsc_vector3d_t &direction,
                                                          double speed, bool jump) {
-  check_non_negative(speed, "walker speed must be a finite, non-negative number of m/s");
-  return carla::rpc::WalkerControl(to_carla_vector(direction), static_cast<float>(speed), jump);
+  return carla::rpc::WalkerControl(to_carla_vector(direction),
+                                   check_non_negative(speed, "walker speed"), jump);
 }
 
 // Validates ranges (NaN fails too): direct and batch control go through here.

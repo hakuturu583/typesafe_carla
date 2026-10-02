@@ -37,6 +37,10 @@ jobs:
       - run: uv run typesafe-codon info
       - name: Compile-pass, compile-fail, runtime and launcher tests
         run: uv run pytest -v
+      # The binding spec (bindings/*.yaml) against the mock's LibCarla mirror.
+      # libclang finds clang's builtin headers through the runner's clang.
+      - name: Binding spec vs mock headers
+        run: uv run python -m tools.bindgen validate --build-dir build
 
   libcarla:
     # The shim compiled and linked against real LibCarla built from CARLA
@@ -52,9 +56,18 @@ jobs:
         run: cmake -S . -B build -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF=${{ matrix.carla_ref }}
       - name: Build
         # A bare -j means unlimited jobs; LibCarla/Boost TUs need ~1-2 GB each.
-        run: cmake --build build -j "$(nproc)" --target typesafe_carla_ffi test_ffi
+        run: cmake --build build -j "$(nproc)" --target typesafe_carla_ffi test_ffi test_generated
       - name: Native ABI tests
         run: ctest --test-dir build --output-on-failure
+      - uses: astral-sh/setup-uv@v6
+      # --no-project: only the generator's dependencies, not a second
+      # LibCarla build of the package.
+      - name: Binding spec vs LibCarla headers
+        run: uv run --no-project --with pyyaml --with libclang==18.1.1 python -m tools.bindgen validate --build-dir build
+      - name: LibCarla API coverage report
+        run: |
+          uv run --no-project --with pyyaml --with libclang==18.1.1 python -m tools.bindgen coverage --build-dir build -o coverage.md
+          cat coverage.md >> "$GITHUB_STEP_SUMMARY"
 
   wheel:
     # The wheel used from a clean environment outside the checkout, so nothing

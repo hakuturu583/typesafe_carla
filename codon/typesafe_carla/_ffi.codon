@@ -335,6 +335,7 @@ from C import LIB.tsc_actor_list_size(cobj) -> int
 from C import LIB.tsc_actor_list_get(cobj, int, Ptr[cobj]) -> i32
 from C import LIB.tsc_actor_list_filter(cobj, cobj, int, Ptr[cobj]) -> i32
 
+# BEGIN GENERATED actor from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_get_id(cobj, Ptr[u32]) -> i32
 from C import LIB.tsc_actor_get_type_id(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_actor_is_alive(cobj, Ptr[i32]) -> i32
@@ -346,12 +347,15 @@ from C import LIB.tsc_actor_get_velocity(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_actor_set_target_velocity(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_actor_get_acceleration(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_actor_get_angular_velocity(cobj, Ptr[CVector3D]) -> i32
+# END GENERATED actor
 from C import LIB.tsc_actor_destroy(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_as_vehicle(cobj, Ptr[cobj]) -> i32
 
 from C import LIB.tsc_vehicle_apply_control(cobj, Ptr[CVehicleControl]) -> i32
 from C import LIB.tsc_vehicle_get_control(cobj, Ptr[CVehicleControl]) -> i32
+# BEGIN GENERATED vehicle from bindings/vehicle.yaml, do not edit
 from C import LIB.tsc_vehicle_set_autopilot(cobj, i32, u16) -> i32
+# END GENERATED vehicle
 
 from C import LIB.tsc_blueprint_library_size(cobj) -> int
 from C import LIB.tsc_blueprint_library_get(cobj, int, Ptr[cobj]) -> i32
@@ -364,7 +368,9 @@ from C import LIB.tsc_actor_blueprint_get_attribute(cobj, cobj, int, Ptr[CActorA
 from C import LIB.tsc_actor_blueprint_set_attribute(cobj, cobj, int, cobj, int) -> i32
 
 # ABI 1.2 (Milestone 1)
+# BEGIN GENERATED actor_bounding_box from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_get_bounding_box(cobj, Ptr[CBoundingBox]) -> i32
+# END GENERATED actor_bounding_box
 from C import LIB.tsc_world_get_snapshot(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_wait_for_tick(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_snapshot_get_id(cobj, Ptr[u64]) -> i32
@@ -409,6 +415,7 @@ from C import LIB.tsc_sensor_data_as_imu(cobj, Ptr[CImu]) -> i32
 from C import LIB.tsc_sensor_data_as_collision(cobj, Ptr[CCollision]) -> i32
 
 # ABI 2.0 (Milestone 4)
+# BEGIN GENERATED actor_physics from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_set_target_angular_velocity(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_actor_add_impulse(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_actor_add_force(cobj, Ptr[CVector3D]) -> i32
@@ -416,28 +423,35 @@ from C import LIB.tsc_actor_add_angular_impulse(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_actor_add_torque(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_actor_set_simulate_physics(cobj, i32) -> i32
 from C import LIB.tsc_actor_set_enable_gravity(cobj, i32) -> i32
+# END GENERATED actor_physics
 from C import LIB.tsc_actor_as_walker(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_actor_as_walker_ai_controller(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_actor_as_traffic_light(cobj, Ptr[cobj]) -> i32
+# BEGIN GENERATED vehicle_lights from bindings/vehicle.yaml, do not edit
 from C import LIB.tsc_vehicle_set_light_state(cobj, u32) -> i32
 from C import LIB.tsc_vehicle_get_light_state(cobj, Ptr[u32]) -> i32
 from C import LIB.tsc_vehicle_get_speed_limit(cobj, Ptr[float]) -> i32
 from C import LIB.tsc_vehicle_get_traffic_light_state(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_vehicle_is_at_traffic_light(cobj, Ptr[i32]) -> i32
+# END GENERATED vehicle_lights
 from C import LIB.tsc_vehicle_get_traffic_light(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_traffic_light_get_info(cobj, Ptr[CTrafficLightInfo]) -> i32
+# BEGIN GENERATED traffic_light from bindings/traffic_light.yaml, do not edit
 from C import LIB.tsc_traffic_light_set_state(cobj, i32) -> i32
 from C import LIB.tsc_traffic_light_set_green_time(cobj, float) -> i32
 from C import LIB.tsc_traffic_light_set_yellow_time(cobj, float) -> i32
 from C import LIB.tsc_traffic_light_set_red_time(cobj, float) -> i32
 from C import LIB.tsc_traffic_light_freeze(cobj, i32) -> i32
 from C import LIB.tsc_traffic_light_reset_group(cobj) -> i32
+# END GENERATED traffic_light
 from C import LIB.tsc_walker_apply_control(cobj, Ptr[CWalkerControl]) -> i32
 from C import LIB.tsc_walker_get_control(cobj, Ptr[CWalkerControl]) -> i32
+# BEGIN GENERATED walker_ai_controller from bindings/walker_ai_controller.yaml, do not edit
 from C import LIB.tsc_walker_ai_controller_start(cobj) -> i32
 from C import LIB.tsc_walker_ai_controller_stop(cobj) -> i32
 from C import LIB.tsc_walker_ai_controller_go_to_location(cobj, Ptr[CVector3D]) -> i32
 from C import LIB.tsc_walker_ai_controller_set_max_speed(cobj, float) -> i32
+# END GENERATED walker_ai_controller
 from C import LIB.tsc_world_get_random_location_from_navigation(cobj, Ptr[CVector3D], Ptr[i32]) -> i32
 from C import LIB.tsc_world_get_weather(cobj, Ptr[CWeather]) -> i32
 from C import LIB.tsc_world_set_weather(cobj, Ptr[CWeather]) -> i32
@@ -469,16 +483,20 @@ from C import LIB.tsc_junction_get_id(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_junction_get_bounding_box(cobj, Ptr[CBoundingBox]) -> i32
 from C import LIB.tsc_junction_get_waypoints(cobj, i32, Ptr[cobj]) -> i32
 from C import LIB.tsc_client_get_traffic_manager(cobj, u16, Ptr[cobj]) -> i32
+# BEGIN GENERATED traffic_manager from bindings/traffic_manager.yaml, do not edit
 from C import LIB.tsc_traffic_manager_get_port(cobj, Ptr[u16]) -> i32
 from C import LIB.tsc_traffic_manager_set_synchronous_mode(cobj, i32) -> i32
 from C import LIB.tsc_traffic_manager_set_random_device_seed(cobj, u64) -> i32
 from C import LIB.tsc_traffic_manager_set_hybrid_physics_mode(cobj, i32) -> i32
 from C import LIB.tsc_traffic_manager_set_global_percentage_speed_difference(cobj, float) -> i32
 from C import LIB.tsc_traffic_manager_set_global_distance_to_leading_vehicle(cobj, float) -> i32
+# END GENERATED traffic_manager
 from C import LIB.tsc_traffic_manager_set_vehicle_value(cobj, cobj, i32, float) -> i32
+# BEGIN GENERATED traffic_manager_vehicle from bindings/traffic_manager.yaml, do not edit
 from C import LIB.tsc_traffic_manager_set_auto_lane_change(cobj, cobj, i32) -> i32
 from C import LIB.tsc_traffic_manager_force_lane_change(cobj, cobj, i32) -> i32
 from C import LIB.tsc_traffic_manager_set_update_vehicle_lights(cobj, cobj, i32) -> i32
+# END GENERATED traffic_manager_vehicle
 
 # --- Helpers --------------------------------------------------------------------
 

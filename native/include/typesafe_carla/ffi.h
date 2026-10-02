@@ -252,6 +252,7 @@ TSC_API tsc_status_t tsc_actor_list_filter(const tsc_actor_list_t *list, const c
 /* Actor (also accepts vehicle handles)                                     */
 /* ------------------------------------------------------------------------ */
 
+/* BEGIN GENERATED actor from bindings/actor.yaml, do not edit */
 TSC_API tsc_status_t tsc_actor_get_id(tsc_actor_t *actor, uint32_t *out_id);
 TSC_API tsc_status_t tsc_actor_get_type_id(tsc_actor_t *actor, tsc_string_t *out);
 TSC_API tsc_status_t tsc_actor_is_alive(tsc_actor_t *actor, int32_t *out_alive);
@@ -264,6 +265,7 @@ TSC_API tsc_status_t tsc_actor_set_target_velocity(tsc_actor_t *actor,
                                                    const tsc_vector3d_t *velocity);
 TSC_API tsc_status_t tsc_actor_get_acceleration(tsc_actor_t *actor, tsc_vector3d_t *out);
 TSC_API tsc_status_t tsc_actor_get_angular_velocity(tsc_actor_t *actor, tsc_vector3d_t *out);
+/* END GENERATED actor */
 TSC_API tsc_status_t tsc_actor_destroy(tsc_actor_t *actor, int32_t *out_destroyed);
 /* Checked downcast. TSC_TYPE_ERROR if the actor is not a vehicle. */
 TSC_API tsc_status_t tsc_actor_as_vehicle(tsc_actor_t *actor, tsc_vehicle_t **out_vehicle);
@@ -275,8 +277,10 @@ TSC_API tsc_status_t tsc_actor_as_vehicle(tsc_actor_t *actor, tsc_vehicle_t **ou
 TSC_API tsc_status_t tsc_vehicle_apply_control(tsc_vehicle_t *vehicle,
                                                const tsc_vehicle_control_t *control);
 TSC_API tsc_status_t tsc_vehicle_get_control(tsc_vehicle_t *vehicle, tsc_vehicle_control_t *out);
+/* BEGIN GENERATED vehicle from bindings/vehicle.yaml, do not edit */
 TSC_API tsc_status_t tsc_vehicle_set_autopilot(tsc_vehicle_t *vehicle, int32_t enabled,
                                                uint16_t tm_port);
+/* END GENERATED vehicle */
 
 /* ------------------------------------------------------------------------ */
 /* Blueprints                                                               */
@@ -323,7 +327,9 @@ typedef struct {
   tsc_rotation_t rotation;
 } tsc_bounding_box_t;
 
+/* BEGIN GENERATED actor_bounding_box from bindings/actor.yaml, do not edit */
 TSC_API tsc_status_t tsc_actor_get_bounding_box(tsc_actor_t *actor, tsc_bounding_box_t *out);
+/* END GENERATED actor_bounding_box */
 
 /* --- Snapshots ----------------------------------------------------------- */
 
@@ -613,6 +619,7 @@ typedef struct tsc_junction tsc_junction_t;
 
 /* --- More actor operations ----------------------------------------------- */
 
+/* BEGIN GENERATED actor_physics from bindings/actor.yaml, do not edit */
 TSC_API tsc_status_t tsc_actor_set_target_angular_velocity(tsc_actor_t *actor,
                                                            const tsc_vector3d_t *v);
 TSC_API tsc_status_t tsc_actor_add_impulse(tsc_actor_t *actor, const tsc_vector3d_t *impulse);
@@ -622,6 +629,7 @@ TSC_API tsc_status_t tsc_actor_add_angular_impulse(tsc_actor_t *actor,
 TSC_API tsc_status_t tsc_actor_add_torque(tsc_actor_t *actor, const tsc_vector3d_t *torque);
 TSC_API tsc_status_t tsc_actor_set_simulate_physics(tsc_actor_t *actor, int32_t enabled);
 TSC_API tsc_status_t tsc_actor_set_enable_gravity(tsc_actor_t *actor, int32_t enabled);
+/* END GENERATED actor_physics */
 
 /* Checked downcasts; TSC_TYPE_ERROR on a mismatch. */
 TSC_API tsc_status_t tsc_actor_as_walker(tsc_actor_t *actor, tsc_walker_t **out);
@@ -631,6 +639,7 @@ TSC_API tsc_status_t tsc_actor_as_traffic_light(tsc_actor_t *actor, tsc_traffic_
 
 /* --- Vehicle lights and traffic lights ------------------------------------- */
 
+/* BEGIN GENERATED vehicle_lights from bindings/vehicle.yaml, do not edit */
 /* light_state: CARLA VehicleLightState bit flags. */
 TSC_API tsc_status_t tsc_vehicle_set_light_state(tsc_vehicle_t *vehicle, uint32_t light_state);
 TSC_API tsc_status_t tsc_vehicle_get_light_state(tsc_vehicle_t *vehicle, uint32_t *out);
@@ -638,6 +647,7 @@ TSC_API tsc_status_t tsc_vehicle_get_speed_limit(tsc_vehicle_t *vehicle, double 
 /* state: tsc_traffic_light_state_t */
 TSC_API tsc_status_t tsc_vehicle_get_traffic_light_state(tsc_vehicle_t *vehicle, int32_t *out);
 TSC_API tsc_status_t tsc_vehicle_is_at_traffic_light(tsc_vehicle_t *vehicle, int32_t *out);
+/* END GENERATED vehicle_lights */
 /* *out = NULL (TSC_OK) when the vehicle is not affected by a traffic light. */
 TSC_API tsc_status_t tsc_vehicle_get_traffic_light(tsc_vehicle_t *vehicle,
                                                    tsc_traffic_light_t **out);
@@ -663,12 +673,14 @@ typedef struct {
 
 TSC_API tsc_status_t tsc_traffic_light_get_info(tsc_traffic_light_t *light,
                                                 tsc_traffic_light_info_t *out);
+/* BEGIN GENERATED traffic_light from bindings/traffic_light.yaml, do not edit */
 TSC_API tsc_status_t tsc_traffic_light_set_state(tsc_traffic_light_t *light, int32_t state);
 TSC_API tsc_status_t tsc_traffic_light_set_green_time(tsc_traffic_light_t *light, double t);
 TSC_API tsc_status_t tsc_traffic_light_set_yellow_time(tsc_traffic_light_t *light, double t);
 TSC_API tsc_status_t tsc_traffic_light_set_red_time(tsc_traffic_light_t *light, double t);
 TSC_API tsc_status_t tsc_traffic_light_freeze(tsc_traffic_light_t *light, int32_t freeze);
 TSC_API tsc_status_t tsc_traffic_light_reset_group(tsc_traffic_light_t *light);
+/* END GENERATED traffic_light */
 
 /* --- Walkers ------------------------------------------------------------- */
 
@@ -682,12 +694,14 @@ typedef struct {
 TSC_API tsc_status_t tsc_walker_apply_control(tsc_walker_t *walker,
                                               const tsc_walker_control_t *control);
 TSC_API tsc_status_t tsc_walker_get_control(tsc_walker_t *walker, tsc_walker_control_t *out);
+/* BEGIN GENERATED walker_ai_controller from bindings/walker_ai_controller.yaml, do not edit */
 TSC_API tsc_status_t tsc_walker_ai_controller_start(tsc_walker_ai_controller_t *controller);
 TSC_API tsc_status_t tsc_walker_ai_controller_stop(tsc_walker_ai_controller_t *controller);
-TSC_API tsc_status_t tsc_walker_ai_controller_go_to_location(
-    tsc_walker_ai_controller_t *controller, const tsc_location_t *destination);
-TSC_API tsc_status_t tsc_walker_ai_controller_set_max_speed(
-    tsc_walker_ai_controller_t *controller, double max_speed);
+TSC_API tsc_status_t tsc_walker_ai_controller_go_to_location(tsc_walker_ai_controller_t *controller,
+                                                             const tsc_location_t *destination);
+TSC_API tsc_status_t tsc_walker_ai_controller_set_max_speed(tsc_walker_ai_controller_t *controller,
+                                                            double max_speed);
+/* END GENERATED walker_ai_controller */
 /* *out_found = 0 when the navigation mesh yields no location. */
 TSC_API tsc_status_t tsc_world_get_random_location_from_navigation(tsc_world_t *world,
                                                                    tsc_location_t *out,
@@ -835,6 +849,7 @@ TSC_API tsc_status_t tsc_junction_get_waypoints(const tsc_junction_t *j, int32_t
 
 TSC_API tsc_status_t tsc_client_get_traffic_manager(tsc_client_t *client, uint16_t port,
                                                     tsc_traffic_manager_t **out);
+/* BEGIN GENERATED traffic_manager from bindings/traffic_manager.yaml, do not edit */
 TSC_API tsc_status_t tsc_traffic_manager_get_port(tsc_traffic_manager_t *tm, uint16_t *out);
 TSC_API tsc_status_t tsc_traffic_manager_set_synchronous_mode(tsc_traffic_manager_t *tm,
                                                               int32_t enabled);
@@ -846,6 +861,7 @@ TSC_API tsc_status_t tsc_traffic_manager_set_global_percentage_speed_difference(
     tsc_traffic_manager_t *tm, double percentage);
 TSC_API tsc_status_t tsc_traffic_manager_set_global_distance_to_leading_vehicle(
     tsc_traffic_manager_t *tm, double distance);
+/* END GENERATED traffic_manager */
 
 /* Per-vehicle settings. */
 typedef enum {
@@ -865,15 +881,16 @@ typedef enum {
 TSC_API tsc_status_t tsc_traffic_manager_set_vehicle_value(tsc_traffic_manager_t *tm,
                                                            tsc_vehicle_t *vehicle,
                                                            int32_t setting, double value);
+/* BEGIN GENERATED traffic_manager_vehicle from bindings/traffic_manager.yaml, do not edit */
 TSC_API tsc_status_t tsc_traffic_manager_set_auto_lane_change(tsc_traffic_manager_t *tm,
                                                               tsc_vehicle_t *vehicle,
                                                               int32_t enabled);
 TSC_API tsc_status_t tsc_traffic_manager_force_lane_change(tsc_traffic_manager_t *tm,
-                                                           tsc_vehicle_t *vehicle,
-                                                           int32_t to_left);
+                                                           tsc_vehicle_t *vehicle, int32_t to_left);
 TSC_API tsc_status_t tsc_traffic_manager_set_update_vehicle_lights(tsc_traffic_manager_t *tm,
                                                                    tsc_vehicle_t *vehicle,
                                                                    int32_t enabled);
+/* END GENERATED traffic_manager_vehicle */
 
 #ifdef __cplusplus
 } /* extern "C" */

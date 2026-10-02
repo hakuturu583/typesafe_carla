@@ -9,6 +9,8 @@ project(typesafe_carla VERSION ${TSC_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)  # LibCarla UE5 headers require C++20
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# tools/bindgen parses the shim with these flags (validate, coverage).
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
@@ -78,6 +80,7 @@ add_library(typesafe_carla_ffi SHARED
   native/src/walker.cpp
   native/src/world.cpp
   native/src/world_ext.cpp
+  native/src/generated/bindings.cpp
 )
 target_include_directories(typesafe_carla_ffi
   PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/native/include"
@@ -207,6 +210,16 @@ if(TSC_BUILD_TESTS AND NOT SKBUILD)
   target_link_libraries(test_ffi PRIVATE Threads::Threads)
   add_test(NAME test_ffi COMMAND test_ffi)
   set_tests_properties(test_ffi PROPERTIES LABELS "${TSC_BACKEND}")
+
+  # Generated with the bindings (tools/bindgen): NULL-handle checks for every
+  # generated function.
+  add_executable(test_generated tests/native/test_generated.c)
+  target_link_libraries(test_generated PRIVATE typesafe_carla_ffi)
+  if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_generated PRIVATE -Wall -Wextra -Werror -std=c99)
+  endif()
+  add_test(NAME test_generated COMMAND test_generated)
+  set_tests_properties(test_generated PROPERTIES LABELS "${TSC_BACKEND}")
 endif()
 
 # ---------------------------------------------------------------------------

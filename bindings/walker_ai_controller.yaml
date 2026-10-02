@@ -1,0 +1,10 @@
+# Walker AI controller operations: tsc_walker_ai_controller_<name>.
+class: carla::client::WalkerAIController
+prefix: walker_ai_controller
+self: {type: tsc_walker_ai_controller_t, name: controller, get: controller_of}
+blocks:
+  walker_ai_controller:
+    start: {call: Start}
+    stop: {call: Stop}
+    go_to_location: {call: GoToLocation, args: {destination: location}}
+    set_max_speed: {call: SetMaxSpeed, args: {max_speed: non_negative}}

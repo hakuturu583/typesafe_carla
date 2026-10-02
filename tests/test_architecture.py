@@ -76,3 +76,24 @@ def test_toolchain_matches_supported_codon():
     assert re.search(r'^CODON_VERSION = "(.+)"', package, re.MULTILINE).group(1) == codon
     assert tc_version.split(".post")[0] == codon
     assert toolchain.is_supported_version(codon)
+
+
+def test_generated_bindings_up_to_date():
+    """The code generated from bindings/*.yaml matches the spec
+    (regenerate with `uv run python -m tools.bindgen generate`)."""
+    from tools.bindgen import emit, spec
+
+    stale = [str(path.relative_to(ROOT)) for path in emit.stale(spec.load())]
+    assert not stale, f"out of date: {stale}; run `{emit.REGENERATE}`"
+
+
+def test_generated_functions_are_not_hand_written():
+    """A generated function has exactly one definition: the generated one."""
+    from tools.bindgen import spec
+
+    names = {f.name for f in spec.load().functions}
+    hand_written = ROOT / "native" / "src"
+    duplicates = [f"{p.name}: {name}" for p in hand_written.glob("*.cpp")
+                  for name in re.findall(r"^tsc_status_t (tsc_\w+)\(", p.read_text(), re.MULTILINE)
+                  if name in names]
+    assert not duplicates, duplicates
