@@ -6,8 +6,13 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CWaypointInfo, take_s
                    tsc_waypoint_next, tsc_waypoint_previous, tsc_waypoint_next_until_lane_end,
                    tsc_waypoint_previous_until_lane_start, tsc_waypoint_get_left_lane,
                    tsc_waypoint_get_right_lane, tsc_waypoint_list_size, tsc_waypoint_list_get)
+from ._ffi import (CLandmark, CBoundingBox, tsc_map_get_topology, tsc_map_get_crosswalks,
+                   tsc_landmark_free, tsc_map_get_all_landmarks, tsc_map_get_landmarks_of_type,
+                   tsc_landmark_list_size, tsc_landmark_list_get, tsc_waypoint_get_junction,
+                   tsc_junction_get_id, tsc_junction_get_bounding_box, tsc_junction_get_waypoints,
+                   copy_string)
 from .errors import _check
-from .geometry import Location, Transform
+from .geometry import Location, Transform, BoundingBox
 
 class LaneType:
     """OpenDRIVE lane types (bit flags, as carla.LaneType)."""
@@ -175,3 +180,127 @@ class Map:
 
     def __repr__(self) -> str:
         return f"Map(name={self.name})"
+
+def _pairs(ptr: cobj) -> List[Tuple[Waypoint, Waypoint]]:
+    flat = _take_list(ptr)
+    return [(flat[i], flat[i + 1]) for i in range(0, len(flat) - 1, 2)]
+
+class Junction:
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    @property
+    def id(self) -> int:
+        out = Ptr[i32](1)
+        _check(tsc_junction_get_id(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def bounding_box(self) -> BoundingBox:
+        out = Ptr[CBoundingBox](1)
+        _check(tsc_junction_get_bounding_box(self._h.ptr, out))
+        return BoundingBox._from_c(out[0])
+
+    def get_waypoints(self, lane_type: int = LaneType.Driving) -> List[Tuple[Waypoint, Waypoint]]:
+        """(entry, exit) waypoint pairs of the lanes through the junction."""
+        out = Ptr[cobj](1)
+        _check(tsc_junction_get_waypoints(self._h.ptr, i32(lane_type), out))
+        return _pairs(out[0])
+
+    def __repr__(self) -> str:
+        return f"Junction(id={self.id})"
+
+class Landmark:
+    """An OpenDRIVE signal or object (a plain value)."""
+    id: str
+    name: str
+    type: str
+    sub_type: str
+    country: str
+    unit: str
+    text: str
+    road_id: int
+    orientation: int
+    s: float
+    t: float
+    distance: float
+    z_offset: float
+    value: float
+    height: float
+    width: float
+    transform: Transform
+
+    def __init__(self, c: CLandmark):
+        self.id = copy_string(c.id)
+        self.name = copy_string(c.name)
+        self.type = copy_string(c.type)
+        self.sub_type = copy_string(c.sub_type)
+        self.country = copy_string(c.country)
+        self.unit = copy_string(c.unit)
+        self.text = copy_string(c.text)
+        self.road_id = int(c.road_id)
+        self.orientation = int(c.orientation)
+        self.s = c.s
+        self.t = c.t
+        self.distance = c.distance
+        self.z_offset = c.z_offset
+        self.value = c.value
+        self.height = c.height
+        self.width = c.width
+        self.transform = Transform._from_c(c.transform)
+
+    def __repr__(self) -> str:
+        return f"Landmark(id={self.id}, name={self.name}, type={self.type}, road_id={self.road_id}, s={self.s})"
+
+def _take_landmarks(ptr: cobj) -> List[Landmark]:
+    h = Handle(ptr)
+    n = tsc_landmark_list_size(h.ptr)
+    out = Ptr[CLandmark](1)
+    result = List[Landmark](n)
+    for i in range(n):
+        _check(tsc_landmark_list_get(h.ptr, i, out))
+        result.append(Landmark(out[0]))
+        tsc_landmark_free(out)
+    h.release()
+    return result
+
+@extend
+class Waypoint:
+    def get_junction(self) -> Optional[Junction]:
+        """The junction this waypoint is in, or None."""
+        out = Ptr[cobj](1)
+        _check(tsc_waypoint_get_junction(self._h.ptr, out))
+        if out[0] == cobj():
+            return None
+        return Junction(Handle(out[0]))
+
+@extend
+class Map:
+    def get_topology(self) -> List[Tuple[Waypoint, Waypoint]]:
+        """(begin, end) waypoint pairs of every lane segment of the road network."""
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_topology(self._h.ptr, out))
+        return _pairs(out[0])
+
+    def get_crosswalks(self) -> List[Location]:
+        """Crosswalk polygon corners (each polygon repeats its first point)."""
+        count = Ptr[int](1)
+        _check(tsc_map_get_crosswalks(self._h.ptr, Ptr[CVector3D](), 0, count))
+        n = count[0]
+        buf = Ptr[CVector3D](n if n > 0 else 1)
+        _check(tsc_map_get_crosswalks(self._h.ptr, buf, n, count))
+        return [Location._from_c(buf[i]) for i in range(min(n, count[0]))]
+
+    def get_all_landmarks(self) -> List[Landmark]:
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_all_landmarks(self._h.ptr, out))
+        return _take_landmarks(out[0])
+
+    def get_all_landmarks_of_type(self, landmark_type: str) -> List[Landmark]:
+        """Landmarks of an OpenDRIVE signal type, e.g. "206" (stop sign)."""
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_landmarks_of_type(self._h.ptr, landmark_type.ptr, landmark_type.len,
+                                             out))
+        return _take_landmarks(out[0])

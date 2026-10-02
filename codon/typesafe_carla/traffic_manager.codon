@@ -1,0 +1,121 @@
+# The Traffic Manager (client.get_trafficmanager()), as carla.TrafficManager.
+#
+# It runs inside LibCarla in this process. In synchronous mode, set
+# tm.set_synchronous_mode(True) together with the world's synchronous mode.
+
+from ._ffi import (Handle, tsc_client_get_traffic_manager, tsc_traffic_manager_get_port,
+                   tsc_traffic_manager_set_synchronous_mode,
+                   tsc_traffic_manager_set_random_device_seed,
+                   tsc_traffic_manager_set_hybrid_physics_mode,
+                   tsc_traffic_manager_set_global_percentage_speed_difference,
+                   tsc_traffic_manager_set_global_distance_to_leading_vehicle,
+                   tsc_traffic_manager_set_vehicle_value,
+                   tsc_traffic_manager_set_auto_lane_change,
+                   tsc_traffic_manager_force_lane_change,
+                   tsc_traffic_manager_set_update_vehicle_lights, TSC_INVALID_ARGUMENT)
+from .errors import _check, _check_port, CarlaError
+from .actor import Vehicle, TM_DEFAULT_PORT
+from .client import Client
+
+_PERCENTAGE_SPEED_DIFFERENCE = 1
+_DISTANCE_TO_LEADING_VEHICLE = 2
+_RANDOM_LEFT_LANECHANGE = 3
+_RANDOM_RIGHT_LANECHANGE = 4
+_IGNORE_LIGHTS = 5
+_IGNORE_SIGNS = 6
+_IGNORE_VEHICLES = 7
+_IGNORE_WALKERS = 8
+_KEEP_RIGHT = 9
+_DESIRED_SPEED = 10
+_LANE_OFFSET = 11
+
+class TrafficManager:
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    def get_port(self) -> int:
+        out = Ptr[u16](1)
+        _check(tsc_traffic_manager_get_port(self._h.ptr, out))
+        return int(out[0])
+
+    def set_synchronous_mode(self, enabled: bool = True):
+        _check(tsc_traffic_manager_set_synchronous_mode(self._h.ptr, i32(int(enabled))))
+
+    def set_random_device_seed(self, seed: int):
+        if seed < 0:
+            raise CarlaError("seed must be non-negative", TSC_INVALID_ARGUMENT)
+        _check(tsc_traffic_manager_set_random_device_seed(self._h.ptr, u64(seed)))
+
+    def set_hybrid_physics_mode(self, enabled: bool = True):
+        _check(tsc_traffic_manager_set_hybrid_physics_mode(self._h.ptr, i32(int(enabled))))
+
+    def global_percentage_speed_difference(self, percentage: float):
+        """Percent below the speed limit (negative: above)."""
+        _check(tsc_traffic_manager_set_global_percentage_speed_difference(self._h.ptr, percentage))
+
+    def set_global_distance_to_leading_vehicle(self, distance: float):
+        _check(tsc_traffic_manager_set_global_distance_to_leading_vehicle(self._h.ptr, distance))
+
+    def _set(self, vehicle: Vehicle, setting: int, value: float):
+        _check(tsc_traffic_manager_set_vehicle_value(self._h.ptr, vehicle._h.ptr, i32(setting),
+                                                     value))
+
+    def vehicle_percentage_speed_difference(self, vehicle: Vehicle, percentage: float):
+        self._set(vehicle, _PERCENTAGE_SPEED_DIFFERENCE, percentage)
+
+    def distance_to_leading_vehicle(self, vehicle: Vehicle, distance: float):
+        self._set(vehicle, _DISTANCE_TO_LEADING_VEHICLE, distance)
+
+    def random_left_lanechange_percentage(self, vehicle: Vehicle, percentage: float):
+        self._set(vehicle, _RANDOM_LEFT_LANECHANGE, percentage)
+
+    def random_right_lanechange_percentage(self, vehicle: Vehicle, percentage: float):
+        self._set(vehicle, _RANDOM_RIGHT_LANECHANGE, percentage)
+
+    def ignore_lights_percentage(self, vehicle: Vehicle, percentage: float):
+        self._set(vehicle, _IGNORE_LIGHTS, percentage)
+
+    def ignore_signs_percentage(self, vehicle: Vehicle, percentage: float):
+        self._set(vehicle, _IGNORE_SIGNS, percentage)
+
+    def ignore_vehicles_percentage(self, vehicle: Vehicle, percentage: float):
+        self._set(vehicle, _IGNORE_VEHICLES, percentage)
+
+    def ignore_walkers_percentage(self, vehicle: Vehicle, percentage: float):
+        self._set(vehicle, _IGNORE_WALKERS, percentage)
+
+    def keep_right_rule_percentage(self, vehicle: Vehicle, percentage: float):
+        self._set(vehicle, _KEEP_RIGHT, percentage)
+
+    def set_desired_speed(self, vehicle: Vehicle, speed: float):
+        """km/h"""
+        self._set(vehicle, _DESIRED_SPEED, speed)
+
+    def vehicle_lane_offset(self, vehicle: Vehicle, offset: float):
+        self._set(vehicle, _LANE_OFFSET, offset)
+
+    def auto_lane_change(self, vehicle: Vehicle, enable: bool):
+        _check(tsc_traffic_manager_set_auto_lane_change(self._h.ptr, vehicle._h.ptr,
+                                                        i32(int(enable))))
+
+    def force_lane_change(self, vehicle: Vehicle, direction: bool):
+        """direction: True for left, False for right."""
+        _check(tsc_traffic_manager_force_lane_change(self._h.ptr, vehicle._h.ptr,
+                                                     i32(int(direction))))
+
+    def update_vehicle_lights(self, vehicle: Vehicle, do_update: bool):
+        _check(tsc_traffic_manager_set_update_vehicle_lights(self._h.ptr, vehicle._h.ptr,
+                                                             i32(int(do_update))))
+
+    def __repr__(self) -> str:
+        return f"TrafficManager(port={self.get_port()})"
+
+@extend
+class Client:
+    def get_trafficmanager(self, port: int = TM_DEFAULT_PORT) -> TrafficManager:
+        _check_port("port", port)
+        out = Ptr[cobj](1)
+        _check(tsc_client_get_traffic_manager(self._h.ptr, u16(port), out))
+        return TrafficManager(Handle(out[0]))

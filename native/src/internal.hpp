@@ -145,6 +145,39 @@ struct tsc_sensor : tsc_actor {
       : tsc_actor(std::move(s), TSC_KIND_SENSOR) {}
 };
 
+struct tsc_walker : tsc_actor {
+  explicit tsc_walker(carla::SharedPtr<carla::client::Walker> w)
+      : tsc_actor(std::move(w), TSC_KIND_WALKER) {}
+};
+
+struct tsc_walker_ai_controller : tsc_actor {
+  explicit tsc_walker_ai_controller(carla::SharedPtr<carla::client::WalkerAIController> c)
+      : tsc_actor(std::move(c), TSC_KIND_WALKER_AI_CONTROLLER) {}
+};
+
+struct tsc_traffic_light : tsc_actor {
+  explicit tsc_traffic_light(carla::SharedPtr<carla::client::TrafficLight> t)
+      : tsc_actor(std::move(t), TSC_KIND_TRAFFIC_LIGHT) {}
+};
+
+struct tsc_traffic_manager : tsc_handle {
+  carla::traffic_manager::TrafficManager tm;
+  explicit tsc_traffic_manager(carla::traffic_manager::TrafficManager t)
+      : tsc_handle(TSC_KIND_TRAFFIC_MANAGER), tm(std::move(t)) {}
+};
+
+struct tsc_landmark_list : tsc_handle {
+  std::vector<carla::SharedPtr<carla::client::Landmark>> landmarks;
+  explicit tsc_landmark_list(std::vector<carla::SharedPtr<carla::client::Landmark>> l)
+      : tsc_handle(TSC_KIND_LANDMARK_LIST), landmarks(std::move(l)) {}
+};
+
+struct tsc_junction : tsc_handle {
+  carla::SharedPtr<carla::client::Junction> junction;
+  explicit tsc_junction(carla::SharedPtr<carla::client::Junction> j)
+      : tsc_handle(TSC_KIND_JUNCTION), junction(std::move(j)) {}
+};
+
 struct tsc_sensor_data : tsc_handle {
   carla::SharedPtr<carla::sensor::SensorData> data;
   explicit tsc_sensor_data(carla::SharedPtr<carla::sensor::SensorData> d)
@@ -213,9 +246,11 @@ T *check_handle(T *h, const char *name, tsc_handle_kind_t kind) {
   return check_handle(h, name, {kind});
 }
 
-// Any actor handle: plain actors, vehicles and sensors.
+// Any actor handle: plain actors and every derived actor kind.
 inline tsc_actor *check_actor(tsc_actor *a, const char *name = "actor") {
-  return check_handle(a, name, {TSC_KIND_ACTOR, TSC_KIND_VEHICLE, TSC_KIND_SENSOR});
+  return check_handle(a, name,
+                      {TSC_KIND_ACTOR, TSC_KIND_VEHICLE, TSC_KIND_SENSOR, TSC_KIND_WALKER,
+                       TSC_KIND_WALKER_AI_CONTROLLER, TSC_KIND_TRAFFIC_LIGHT});
 }
 
 // Shared body of tsc_actor_as_<kind>: a new reference to `actor` as the

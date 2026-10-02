@@ -176,6 +176,82 @@ struct VehiclePhysicsControl {
   std::vector<WheelPhysicsControl> wheels;
 };
 
+enum class TrafficLightState : uint8_t { Red, Yellow, Green, Off, Unknown, SIZE };
+
+class VehicleLightState {
+ public:
+  using flag_type = uint32_t;
+  enum class LightState : flag_type {
+    None = 0, Position = 0x1, LowBeam = 0x1 << 1, HighBeam = 0x1 << 2, Brake = 0x1 << 3,
+    RightBlinker = 0x1 << 4, LeftBlinker = 0x1 << 5, Reverse = 0x1 << 6, Fog = 0x1 << 7,
+    Interior = 0x1 << 8, Special1 = 0x1 << 9, Special2 = 0x1 << 10, All = 0xFFFFFFFF
+  };
+};
+
+class WalkerControl {
+ public:
+  WalkerControl() = default;
+  WalkerControl(geom::Vector3D in_direction, float in_speed, bool in_jump)
+      : direction(in_direction), speed(in_speed), jump(in_jump) {}
+  geom::Vector3D direction = {1.0f, 0.0f, 0.0f};
+  float speed = 0.0f;
+  bool jump = false;
+};
+
+class WeatherParameters {
+ public:
+  static WeatherParameters Default, ClearNoon, CloudyNoon, WetNoon, WetCloudyNoon, MidRainyNoon,
+      HardRainNoon, SoftRainNoon, ClearSunset, CloudySunset, WetSunset, WetCloudySunset,
+      MidRainSunset, HardRainSunset, SoftRainSunset, ClearNight, CloudyNight, WetNight,
+      WetCloudyNight, SoftRainNight, MidRainyNight, HardRainNight, DustStorm;
+  WeatherParameters() = default;
+  WeatherParameters(float in_cloudiness, float in_precipitation, float in_precipitation_deposits,
+                    float in_wind_intensity, float in_sun_azimuth_angle,
+                    float in_sun_altitude_angle, float in_fog_density, float in_fog_distance,
+                    float in_fog_falloff, float in_wetness, float in_scattering_intensity,
+                    float in_mie_scattering_scale, float in_rayleigh_scattering_scale,
+                    float in_dust_storm)
+      : cloudiness(in_cloudiness), precipitation(in_precipitation),
+        precipitation_deposits(in_precipitation_deposits), wind_intensity(in_wind_intensity),
+        sun_azimuth_angle(in_sun_azimuth_angle), sun_altitude_angle(in_sun_altitude_angle),
+        fog_density(in_fog_density), fog_distance(in_fog_distance), fog_falloff(in_fog_falloff),
+        wetness(in_wetness), scattering_intensity(in_scattering_intensity),
+        mie_scattering_scale(in_mie_scattering_scale),
+        rayleigh_scattering_scale(in_rayleigh_scattering_scale), dust_storm(in_dust_storm) {}
+  float cloudiness = 0.0f;
+  float precipitation = 0.0f;
+  float precipitation_deposits = 0.0f;
+  float wind_intensity = 0.0f;
+  float sun_azimuth_angle = 0.0f;
+  float sun_altitude_angle = 0.0f;
+  float fog_density = 0.0f;
+  float fog_distance = 0.0f;
+  float fog_falloff = 0.0f;
+  float wetness = 0.0f;
+  float scattering_intensity = 0.0f;
+  float mie_scattering_scale = 0.0f;
+  float rayleigh_scattering_scale = 0.0331f;
+  float dust_storm = 0.0f;
+};
+
+class OpendriveGenerationParameters {
+ public:
+  OpendriveGenerationParameters() = default;
+  OpendriveGenerationParameters(double v_distance, double max_road_len, double w_height,
+                                double a_width, bool smooth_junc, bool e_visibility,
+                                bool e_pedestrian)
+      : vertex_distance(v_distance), max_road_length(max_road_len), wall_height(w_height),
+        additional_width(a_width), smooth_junctions(smooth_junc),
+        enable_mesh_visibility(e_visibility), enable_pedestrian_navigation(e_pedestrian) {}
+  double vertex_distance = 2.0;
+  double max_road_length = 50.0;
+  double wall_height = 1.0;
+  double additional_width = 0.6;
+  bool smooth_junctions = true;
+  bool enable_mesh_visibility = true;
+  bool enable_pedestrian_navigation = true;
+};
+
 class ActorDescription {
  public:
   std::string id;
@@ -253,6 +329,57 @@ class Command {
     ActorId actor;
     bool enabled;
   };
+  struct ApplyWalkerControl : CommandBase<ApplyWalkerControl> {
+    ApplyWalkerControl(ActorId id, const WalkerControl &value) : actor(id), control(value) {}
+    ActorId actor;
+    WalkerControl control;
+  };
+  // Vector-valued physics commands share one shape.
+  struct ApplyTargetAngularVelocity : CommandBase<ApplyTargetAngularVelocity> {
+    ApplyTargetAngularVelocity(ActorId id, const geom::Vector3D &value) : actor(id), angular_velocity(value) {}
+    ActorId actor;
+    geom::Vector3D angular_velocity;
+  };
+  struct ApplyImpulse : CommandBase<ApplyImpulse> {
+    ApplyImpulse(ActorId id, const geom::Vector3D &value) : actor(id), impulse(value) {}
+    ActorId actor;
+    geom::Vector3D impulse;
+  };
+  struct ApplyForce : CommandBase<ApplyForce> {
+    ApplyForce(ActorId id, const geom::Vector3D &value) : actor(id), force(value) {}
+    ActorId actor;
+    geom::Vector3D force;
+  };
+  struct ApplyAngularImpulse : CommandBase<ApplyAngularImpulse> {
+    ApplyAngularImpulse(ActorId id, const geom::Vector3D &value) : actor(id), impulse(value) {}
+    ActorId actor;
+    geom::Vector3D impulse;
+  };
+  struct ApplyTorque : CommandBase<ApplyTorque> {
+    ApplyTorque(ActorId id, const geom::Vector3D &value) : actor(id), torque(value) {}
+    ActorId actor;
+    geom::Vector3D torque;
+  };
+  struct SetEnableGravity : CommandBase<SetEnableGravity> {
+    SetEnableGravity(ActorId id, bool value) : actor(id), enabled(value) {}
+    ActorId actor;
+    bool enabled;
+  };
+  struct SetVehicleLightState : CommandBase<SetVehicleLightState> {
+    SetVehicleLightState(ActorId id, VehicleLightState::flag_type value) : actor(id), light_state(value) {}
+    ActorId actor;
+    VehicleLightState::flag_type light_state;
+  };
+  struct ApplyLocation : CommandBase<ApplyLocation> {
+    ApplyLocation(ActorId id, const geom::Location &value) : actor(id), location(value) {}
+    ActorId actor;
+    geom::Location location;
+  };
+  struct SetTrafficLightState : CommandBase<SetTrafficLightState> {
+    SetTrafficLightState(ActorId id, TrafficLightState state) : actor(id), traffic_light_state(state) {}
+    ActorId actor;
+    TrafficLightState traffic_light_state;
+  };
   struct SetAutopilot : CommandBase<SetAutopilot> {
     SetAutopilot(ActorId id, bool value, uint16_t port) : actor(id), enabled(value), tm_port(port) {}
     ActorId actor;
@@ -260,8 +387,11 @@ class Command {
     uint16_t tm_port;
   };
 
-  using CommandType = std::variant<SpawnActor, DestroyActor, ApplyVehicleControl, ApplyTransform,
-                                   ApplyTargetVelocity, SetSimulatePhysics, SetAutopilot>;
+  using CommandType =
+      std::variant<SpawnActor, DestroyActor, ApplyVehicleControl, ApplyTransform, ApplyTargetVelocity,
+                   SetSimulatePhysics, SetAutopilot, ApplyWalkerControl, ApplyTargetAngularVelocity,
+                   ApplyImpulse, ApplyForce, ApplyAngularImpulse, ApplyTorque, SetEnableGravity,
+                   SetVehicleLightState, ApplyLocation, SetTrafficLightState>;
   CommandType command;
 };
 
@@ -282,6 +412,9 @@ namespace mock {
 struct Episode;
 struct ActorData;
 }  // namespace mock
+
+class Junction;
+class Landmark;
 
 class Timestamp {
  public:
@@ -339,6 +472,7 @@ class Waypoint : public std::enable_shared_from_this<Waypoint> {
   std::vector<SharedPtr<Waypoint>> GetPreviousUntilLaneStart(double distance) const;
   SharedPtr<Waypoint> GetRight() const;
   SharedPtr<Waypoint> GetLeft() const;
+  SharedPtr<Junction> GetJunction() const { return nullptr; }  // the mock road has none
 
  private:
   int32_t _lane_id;
@@ -355,6 +489,10 @@ class Map : public std::enable_shared_from_this<Map> {
   SharedPtr<Waypoint> GetWaypoint(const geom::Location &location, bool project_to_road = true,
                                   int32_t lane_type = static_cast<int32_t>(road::Lane::LaneType::Driving)) const;
   std::vector<SharedPtr<Waypoint>> GenerateWaypoints(double distance) const;
+  std::vector<std::pair<SharedPtr<Waypoint>, SharedPtr<Waypoint>>> GetTopology() const;
+  std::vector<geom::Location> GetAllCrosswalkZones() const;
+  std::vector<SharedPtr<Landmark>> GetAllLandmarks() const;
+  std::vector<SharedPtr<Landmark>> GetAllLandmarksOfType(std::string type) const;
 
  private:
   std::string _name;
@@ -434,6 +572,13 @@ class Actor : public std::enable_shared_from_this<Actor> {
   void SetLocation(const geom::Location &location);
   void SetTransform(const geom::Transform &transform);
   void SetTargetVelocity(const geom::Vector3D &vector);
+  void SetTargetAngularVelocity(const geom::Vector3D &vector);
+  void AddImpulse(const geom::Vector3D &vector);
+  void AddForce(const geom::Vector3D &force);
+  void AddAngularImpulse(const geom::Vector3D &vector);
+  void AddTorque(const geom::Vector3D &vector);
+  void SetSimulatePhysics(bool enabled = true);
+  void SetEnableGravity(bool enabled = true);
   const geom::BoundingBox &GetBoundingBox() const { return _bounding_box; }
   virtual bool Destroy();
 
@@ -448,6 +593,8 @@ class Actor : public std::enable_shared_from_this<Actor> {
   geom::BoundingBox _bounding_box;
 };
 
+class TrafficLight;
+
 class Vehicle : public Actor {
  public:
   using Control = rpc::VehicleControl;
@@ -458,6 +605,14 @@ class Vehicle : public Actor {
   using PhysicsControl = rpc::VehiclePhysicsControl;
   void ApplyPhysicsControl(const PhysicsControl &physics_control);
   PhysicsControl GetPhysicsControl() const;
+  using LightState = rpc::VehicleLightState::LightState;
+  void SetLightState(const LightState &light_state);
+  LightState GetLightState() const;
+  float GetSpeedLimit() const { return 30.0f; }
+  // The mock's traffic light controls vehicles within 15 m of it.
+  rpc::TrafficLightState GetTrafficLightState() const;
+  bool IsAtTrafficLight();
+  SharedPtr<TrafficLight> GetTrafficLight() const;
 };
 
 // Mock sensors produce synthetic measurements on every tick (see mock.cpp).
@@ -485,6 +640,105 @@ class ActorList : public std::enable_shared_from_this<ActorList> {
   std::vector<SharedPtr<Actor>> _actors;
 };
 
+class Walker : public Actor {
+ public:
+  using Control = rpc::WalkerControl;
+  using Actor::Actor;
+  void ApplyControl(const Control &control);
+  Control GetWalkerControl() const;
+};
+
+// Moves its parent walker towards the destination at up to max speed.
+class WalkerAIController : public Actor {
+ public:
+  using Actor::Actor;
+  void Start();
+  void Stop();
+  void GoToLocation(const geom::Location &destination);
+  void SetMaxSpeed(float max_speed);
+};
+
+// Cycles Green -> Yellow -> Red with the configured times unless frozen.
+class TrafficLight : public Actor {
+ public:
+  using Actor::Actor;
+  void SetState(rpc::TrafficLightState state);
+  rpc::TrafficLightState GetState() const;
+  void SetGreenTime(float t);
+  float GetGreenTime() const;
+  void SetYellowTime(float t);
+  float GetYellowTime() const;
+  void SetRedTime(float t);
+  float GetRedTime() const;
+  float GetElapsedTime() const;
+  void Freeze(bool freeze);
+  bool IsFrozen() const;
+  uint32_t GetPoleIndex() { return 0u; }
+  void ResetGroup();
+};
+
+class Landmark {
+ public:
+  Landmark(std::string id, std::string name, std::string type, double s, geom::Transform t)
+      : _id(std::move(id)), _name(std::move(name)), _type(std::move(type)), _s(s), _transform(t) {}
+  std::string GetId() const { return _id; }
+  std::string GetName() const { return _name; }
+  std::string GetType() const { return _type; }
+  std::string GetSubType() const { return "-1"; }
+  std::string GetCountry() const { return "OpenDRIVE"; }
+  std::string GetUnit() const { return ""; }
+  std::string GetText() const { return ""; }
+  uint32_t GetRoadId() const { return 1u; }
+  int32_t GetOrientation() const { return 0; }
+  double GetS() const { return _s; }
+  double GetT() const { return 3.0; }
+  double GetDistance() const { return 0.0; }
+  double GetZOffset() const { return 0.0; }
+  double GetValue() const { return -1.0; }
+  double GetHeight() const { return 1.0; }
+  double GetWidth() const { return 0.5; }
+  const geom::Transform &GetTransform() const { return _transform; }
+
+ private:
+  std::string _id, _name, _type;
+  double _s;
+  geom::Transform _transform;
+};
+
+class Junction {
+ public:
+  int32_t GetId() const { return -1; }
+  std::vector<std::pair<SharedPtr<Waypoint>, SharedPtr<Waypoint>>> GetWaypoints(
+      road::Lane::LaneType = road::Lane::LaneType::Driving) const {
+    return {};
+  }
+  geom::BoundingBox GetBoundingBox() const { return {}; }
+};
+
+}  // namespace client
+namespace sensor { namespace data { struct Color; } }
+namespace client {
+
+// Debug drawing is accepted and counted (see mock::Episode::debug_shapes).
+class DebugHelper {
+ public:
+  explicit DebugHelper(std::shared_ptr<mock::Episode> episode) : _episode(std::move(episode)) {}
+  void DrawPoint(const geom::Location &location, float size, sensor::data::Color color,
+                 float life_time, bool persistent_lines = true);
+  void DrawLine(const geom::Location &begin, const geom::Location &end, float thickness,
+                sensor::data::Color color, float life_time, bool persistent_lines = true);
+  void DrawArrow(const geom::Location &begin, const geom::Location &end, float thickness,
+                 float arrow_size, sensor::data::Color color, float life_time,
+                 bool persistent_lines = true);
+  void DrawBox(const geom::BoundingBox &box, const geom::Rotation &rotation, float thickness,
+               sensor::data::Color color, float life_time, bool persistent_lines = true);
+  void DrawString(const geom::Location &location, const std::string &text, bool draw_shadow,
+                  sensor::data::Color color, float life_time, bool persistent_lines = true);
+
+ private:
+  std::shared_ptr<mock::Episode> _episode;
+};
+
 class World {
  public:
   explicit World(std::shared_ptr<mock::Episode> episode) : _episode(std::move(episode)) {}
@@ -506,12 +760,58 @@ class World {
   // Asynchronous mode: the mock server "ticks on its own", so this steps once.
   // Synchronous mode: nobody else ticks, so this times out.
   WorldSnapshot WaitForTick(time_duration timeout) const;
+  std::optional<geom::Location> GetRandomLocationFromNavigation() const;
+  rpc::WeatherParameters GetWeather() const;
+  void SetWeather(const rpc::WeatherParameters &weather);
+  bool IsWeatherEnabled() const { return true; }
+  DebugHelper MakeDebugHelper() const { return DebugHelper(_episode); }
   rpc::EpisodeSettings GetSettings() const;
   uint64_t ApplySettings(const rpc::EpisodeSettings &settings, time_duration timeout);
 
  private:
   std::shared_ptr<mock::Episode> _episode;
 };
+
+}  // namespace client
+
+namespace traffic_manager {
+
+// Records settings; the mock's autopilot drives straight at 0.5 throttle,
+// scaled by the global percentage speed difference.
+class TrafficManager {
+ public:
+  using ActorPtr = SharedPtr<client::Actor>;
+  TrafficManager(std::shared_ptr<client::mock::Episode> episode, uint16_t port)
+      : _episode(std::move(episode)), _port(port) {}
+  uint16_t Port() const { return _port; }
+  void SetSynchronousMode(bool mode);
+  void SetRandomDeviceSeed(uint64_t seed);
+  void SetHybridPhysicsMode(bool mode);
+  void SetGlobalPercentageSpeedDifference(float percentage);
+  void SetGlobalDistanceToLeadingVehicle(float distance);
+  void SetPercentageSpeedDifference(const ActorPtr &actor, float percentage);
+  void SetDistanceToLeadingVehicle(const ActorPtr &actor, float distance);
+  void SetRandomLeftLaneChangePercentage(const ActorPtr &actor, float percentage);
+  void SetRandomRightLaneChangePercentage(const ActorPtr &actor, float percentage);
+  void SetPercentageRunningLight(const ActorPtr &actor, float percentage);
+  void SetPercentageRunningSign(const ActorPtr &actor, float percentage);
+  void SetPercentageIgnoreVehicles(const ActorPtr &actor, float percentage);
+  void SetPercentageIgnoreWalkers(const ActorPtr &actor, float percentage);
+  void SetKeepRightPercentage(const ActorPtr &actor, float percentage);
+  void SetDesiredSpeed(const ActorPtr &actor, float value);
+  void SetLaneOffset(const ActorPtr &actor, float offset);
+  void SetAutoLaneChange(const ActorPtr &actor, bool enable);
+  void SetForceLaneChange(const ActorPtr &actor, bool direction);
+  void SetUpdateVehicleLights(const ActorPtr &actor, bool do_update);
+
+ private:
+  std::shared_ptr<client::mock::Episode> _episode;
+  uint16_t _port;
+};
+
+}  // namespace traffic_manager
+
+namespace client {
 
 class Client {
  public:
@@ -525,6 +825,19 @@ class Client {
   World LoadWorld(std::string map_name, bool reset_settings = true,
                   rpc::MapLayer map_layers = rpc::MapLayer::All) const;
   void ApplyBatch(std::vector<rpc::Command> commands, bool do_tick_cue = false) const;
+  traffic_manager::TrafficManager GetInstanceTM(uint16_t port = 8000) const;
+  std::string StartRecorder(std::string name, bool additional_data = false);
+  void StopRecorder();
+  std::string ShowRecorderFileInfo(std::string name, bool show_all);
+  std::string ShowRecorderCollisions(std::string name, char type1, char type2);
+  std::string ShowRecorderActorsBlocked(std::string name, double min_time, double min_distance);
+  std::string ReplayFile(std::string name, double start, double duration, uint32_t follow_id,
+                         bool replay_sensors);
+  void StopReplayer(bool keep_actors);
+  void SetReplayerTimeFactor(double time_factor);
+  World GenerateOpenDriveWorld(std::string opendrive,
+                               const rpc::OpendriveGenerationParameters &params,
+                               bool reset_settings = true) const;
   std::vector<rpc::CommandResponse> ApplyBatchSync(std::vector<rpc::Command> commands,
                                                    bool do_tick_cue = false) const;
 
@@ -555,6 +868,9 @@ class SensorData : public std::enable_shared_from_this<SensorData> {
 namespace data {
 
 struct Color {
+  Color() = default;
+  Color(uint8_t in_r, uint8_t in_g, uint8_t in_b, uint8_t in_a = 255u)
+      : b(in_b), g(in_g), r(in_r), a(in_a) {}
   uint8_t b = 0u;
   uint8_t g = 0u;
   uint8_t r = 0u;

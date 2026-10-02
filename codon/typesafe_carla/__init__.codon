@@ -10,17 +10,23 @@ from ._ffi import (tsc_abi_version, tsc_libcarla_version, tsc_libcarla_git_ref,
                    tsc_live_handle_count, c_str, TSC_ABI_VERSION_MAJOR, TSC_ABI_VERSION_MINOR)
 from .errors import CarlaError, TimeoutError, ActorTypeError, VersionError
 from .geometry import Vector2D, Vector3D, Location, Rotation, Transform, BoundingBox
-from .control import VehicleControl, VehiclePhysicsControl, WheelPhysicsControl
+from .control import (VehicleControl, VehiclePhysicsControl, WheelPhysicsControl, WalkerControl,
+                      VehicleLightState, TrafficLightState)
 from .blueprint import (ActorAttribute, ActorAttributeType, ActorBlueprint, BlueprintLibrary,
                         Color)
 from .actor import Actor, Vehicle, ActorList, TM_DEFAULT_PORT
 from .world import World, WorldSettings
-from .map import Map, Waypoint, LaneType
+from .map import Map, Waypoint, LaneType, Junction, Landmark
 from .snapshot import WorldSnapshot, ActorSnapshot, Timestamp
 from .command import Command, CommandResponse
 from .sensor import (Sensor, SensorData, SensorDataType, Image, LidarMeasurement, LidarDetection,
                      GnssMeasurement, IMUMeasurement, CollisionEvent)
-from .client import Client
+from .client import Client, OpendriveGenerationParameters
+from .walker import Walker, WalkerAIController
+from .traffic_light import TrafficLight
+from .weather import WeatherParameters
+from .debug import DebugHelper
+from .traffic_manager import TrafficManager
 import typesafe_carla.command as command
 
 __version__ = "0.1.0"

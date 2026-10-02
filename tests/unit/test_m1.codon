@@ -5,7 +5,7 @@ import typesafe_carla._ffi as ffi
 
 # Codon mirrors must match the C layouts checked in tests/native/test_ffi.c.
 assert ffi.PHYSICS_WHEELS_OFFSET == 80 and ffi.PHYSICS_SIZE == 720
-assert ffi.CCommand.__elemsize__ == 144 and ffi.CCommandResponse.__elemsize__ == 24
+assert ffi.CCommand.__elemsize__ == 152 and ffi.CCommandResponse.__elemsize__ == 24
 assert ffi.CWaypointInfo.__elemsize__ == 96 and ffi.CActorSnapshot.__elemsize__ == 128
 assert ffi.CTimestamp.__elemsize__ == 32 and ffi.CBoundingBox.__elemsize__ == 72
 assert ffi.CWheelPhysicsControl.__elemsize__ == 80
@@ -49,7 +49,7 @@ assert raised
 
 # Snapshots
 snap = world.get_snapshot()
-assert len(snap) == 2
+assert len(snap) == 3
 vehicle_id = world.get_actors()[0].id
 found = snap.find(vehicle_id)
 assert found is not None and found.id == vehicle_id

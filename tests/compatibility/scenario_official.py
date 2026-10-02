@@ -43,6 +43,21 @@ out("generated", len(m.generate_waypoints(20.0)))
 r = client.apply_batch_sync([carla.command.DestroyActor(999999)])
 out("batch_error", r[0].error)
 
+# Milestone 4: map queries, traffic lights, weather.
+out("topology", len(m.get_topology()))
+out("crosswalk_points", len(m.get_crosswalks()))
+lms = m.get_all_landmarks()
+out("landmarks", len(lms))
+out("landmark0", f"{lms[0].id},{lms[0].name},{lms[0].type},{lms[0].road_id}")
+lights = [a for a in world.get_actors() if a.type_id == "traffic.traffic_light"]
+out("traffic_lights", len(lights))
+out("light0_times", f"{lights[0].get_green_time():.3f},{lights[0].get_yellow_time():.3f},{lights[0].get_red_time():.3f}")
+wthr = world.get_weather()
+out("weather", f"{wthr.cloudiness:.3f},{wthr.precipitation:.3f},{wthr.sun_altitude_angle:.3f},{wthr.rayleigh_scattering_scale:.3f}")
+junction_wp = [w for w in m.generate_waypoints(10.0) if w.is_junction][0]
+jn = junction_wp.get_junction()
+out("junction", f"{jn.id},{len(jn.get_waypoints(carla.LaneType.Driving))}")
+
 spawn = carla.Transform(carla.Location(-64.644844, 24.471010, 0.6), carla.Rotation(0.0, 0.159198, 0.0))
 original = world.get_settings()
 vehicle = world.spawn_actor(bp, spawn)

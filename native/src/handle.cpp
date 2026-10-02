@@ -29,6 +29,15 @@ tsc_actor *make_actor_handle(const carla::SharedPtr<carla::client::Actor> &actor
   if (auto sensor = downcast<carla::client::Sensor>(actor)) {
     return new tsc_sensor(std::move(sensor));
   }
+  if (auto walker = downcast<carla::client::Walker>(actor)) {
+    return new tsc_walker(std::move(walker));
+  }
+  if (auto controller = downcast<carla::client::WalkerAIController>(actor)) {
+    return new tsc_walker_ai_controller(std::move(controller));
+  }
+  if (auto light = downcast<carla::client::TrafficLight>(actor)) {
+    return new tsc_traffic_light(std::move(light));
+  }
   return new tsc_actor(actor);
 }
 

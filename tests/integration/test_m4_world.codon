@@ -1,0 +1,222 @@
+# Milestone 4 against a real CARLA server: Traffic Manager, walkers and their
+# AI controllers, traffic lights, vehicle lights, weather, debug drawing,
+# recorder, map queries, physics impulses and the new batch commands.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+tm_port = int(os.getenv("TSC_CARLA_TM_PORT", "8100"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+m = world.get_map()
+lib = world.get_blueprint_library()
+points = m.get_spawn_points()
+
+# --- Map queries ---------------------------------------------------------------------
+topology = m.get_topology()
+crosswalks = m.get_crosswalks()
+landmarks = m.get_all_landmarks()
+print("topology", len(topology), "crosswalks", len(crosswalks), "landmarks", len(landmarks))
+assert len(topology) > 50 and len(crosswalks) > 4 and len(landmarks) > 10
+stops = m.get_all_landmarks_of_type(landmarks[0].type)
+assert len(stops) >= 1 and all(l.type == landmarks[0].type for l in stops)
+junction: Optional[carla.Junction] = None
+for wp in m.generate_waypoints(10.0):
+    if wp.is_junction:
+        junction = wp.get_junction()
+        assert junction is not None and junction.id == wp.junction_id
+        break
+assert junction is not None
+print("junction", junction, junction.bounding_box.extent, "lanes", len(junction.get_waypoints()))
+assert junction.bounding_box.extent.x > 1.0 and len(junction.get_waypoints()) > 0
+# A waypoint outside any junction has none.
+outside = [wp for wp in m.generate_waypoints(10.0) if not wp.is_junction][0]
+assert outside.get_junction() is None
+
+# --- Weather (the server may have weather disabled) --------------------------------------
+original_weather = world.get_weather()
+print("weather enabled:", world.is_weather_enabled(), original_weather)
+if world.is_weather_enabled():
+    world.set_weather(carla.WeatherParameters.preset("HardRainNoon"))
+    world.wait_for_tick(10.0)
+    assert world.get_weather().precipitation > 90.0
+    world.set_weather(original_weather)
+raised = False
+try:
+    carla.WeatherParameters.preset("NoSuchWeather")
+except IndexError:
+    raised = True
+assert raised
+
+# --- Traffic lights -------------------------------------------------------------------------
+lights = [a.as_traffic_light() for a in world.get_actors() if a.is_traffic_light()]
+print("traffic lights", len(lights), lights[0])
+assert len(lights) > 0
+light = lights[0]
+green = light.get_green_time()
+try:
+    light.set_state(carla.TrafficLightState.Red)
+    light.freeze(True)
+    light.set_green_time(green + 1.0)
+    for _ in range(5):  # the client's view of the light updates with the episode
+        world.wait_for_tick(10.0)
+    assert light.get_state() == carla.TrafficLightState.Red and light.is_frozen()
+    assert abs(light.get_green_time() - (green + 1.0)) < 1e-3
+finally:
+    light.set_green_time(green)
+    light.freeze(False)
+    light.reset_group()
+
+# --- Recorder ---------------------------------------------------------------------------------
+recording = client.start_recorder("tsc_m4_test.log")
+print("recorder:", recording)
+assert "tsc_m4_test.log" in recording
+
+spawned = List[int]()
+original_settings = world.get_settings()
+try:
+    # --- Walkers with AI controllers (asynchronous: the navigation runs on its own) ----------------
+    walker_bp = lib.filter("walker.pedestrian.*")[0]
+    if walker_bp.has_attribute("is_invincible"):
+        walker_bp.set_attribute("is_invincible", "true")
+    walker: Optional[carla.Walker] = None
+    for _ in range(10):
+        nav = world.get_random_location_from_navigation()
+        if nav is None:
+            continue
+        spot = carla.Location(nav.x, nav.y, nav.z + 1.0)
+        a = world.try_spawn_actor(walker_bp, carla.Transform(spot))
+        if a is not None:
+            walker = a.as_walker()
+            break
+    assert walker is not None, "could not spawn a walker"
+    spawned.append(walker.id)
+    ai = world.spawn_actor(lib.find("controller.ai.walker"), carla.Transform(),
+                           attach_to=walker).as_walker_ai_controller()
+    spawned.append(ai.id)
+    world.wait_for_tick(10.0)
+    ai.start()
+    target = world.get_random_location_from_navigation()
+    assert target is not None
+    ai.go_to_location(target)
+    ai.set_max_speed(1.8)
+    start = walker.get_location()
+    for _ in range(150):
+        world.wait_for_tick(10.0)
+    walked = walker.get_location().distance(start)
+    print("walker walked", walked, "m")
+    assert walked > 1.0
+    ai.stop()
+
+    # Direct walker control and the batch variant.
+    walker.apply_control(carla.WalkerControl(carla.Vector3D(1.0, 0.0, 0.0), 1.0))
+    world.wait_for_tick(10.0)
+    assert abs(walker.get_control().speed - 1.0) < 1e-3
+
+    # --- Traffic Manager in synchronous mode ------------------------------------------------------------
+    settings = world.get_settings()
+    settings.synchronous_mode = True
+    settings.fixed_delta_seconds = 0.05
+    world.apply_settings(settings)
+    tm = client.get_trafficmanager(tm_port)
+    assert tm.get_port() == tm_port
+    tm.set_synchronous_mode(True)
+    tm.set_random_device_seed(7)
+    tm.global_percentage_speed_difference(-20.0)
+    tm.set_global_distance_to_leading_vehicle(3.0)
+    bp = lib.find("vehicle.lincoln.mkz")
+    vehicles = List[carla.Vehicle]()
+    for p in points[20:24]:
+        a = world.try_spawn_actor(bp, p)
+        if a is not None:
+            v = a.as_vehicle()
+            vehicles.append(v)
+            spawned.append(v.id)
+    assert len(vehicles) >= 3
+    for v in vehicles:
+        v.set_autopilot(True, tm_port)
+        tm.ignore_lights_percentage(v, 100.0)
+        tm.auto_lane_change(v, False)
+        tm.vehicle_percentage_speed_difference(v, -10.0)
+        tm.distance_to_leading_vehicle(v, 5.0)
+        tm.update_vehicle_lights(v, False)
+    starts = [v.get_location() for v in vehicles]
+    for _ in range(200):
+        world.tick()
+    moved = sum(1 for k in range(len(vehicles))
+                if vehicles[k].get_location().distance(starts[k]) > 5.0)
+    print("TM drove", moved, "of", len(vehicles), "vehicles")
+    assert moved >= len(vehicles) - 1
+
+    raised = False
+    try:
+        tm.ignore_lights_percentage(vehicles[0], 150.0)
+    except carla.CarlaError:
+        raised = True
+    assert raised
+
+    # --- Vehicle lights, speed limit, traffic light queries -------------------------------------------
+    car = vehicles[0]
+    car.set_autopilot(False, tm_port)
+    lights_on = carla.VehicleLightState.LowBeam | carla.VehicleLightState.Brake
+    car.set_light_state(lights_on)
+    world.tick()
+    assert car.get_light_state() == lights_on
+    print("speed limit", car.get_speed_limit(), "at light", car.is_at_traffic_light(),
+          "light state", car.get_traffic_light_state(), "light", car.get_traffic_light())
+    assert car.get_speed_limit() > 0.0
+
+    # --- Physics -----------------------------------------------------------------------------------------
+    car.apply_control(carla.VehicleControl(brake=1.0))
+    for _ in range(40):
+        world.tick()
+    before = car.get_velocity().length()
+    mass = car.get_physics_control().mass
+    car.add_impulse(car.get_transform().get_forward_vector() * (mass * 4.0))
+    world.tick()
+    after = car.get_velocity().length()
+    print("impulse: speed", before, "->", after)
+    assert after > before + 1.0
+
+    # --- New batch commands -----------------------------------------------------------------------------
+    batch = [carla.command.SetVehicleLightState(car.id, carla.VehicleLightState.HighBeam),
+             carla.command.ApplyWalkerControl(walker.id, carla.WalkerControl(carla.Vector3D(0.0, 1.0, 0.0), 0.5)),
+             carla.command.SetTrafficLightState(light.id, carla.TrafficLightState.Green),
+             carla.command.ApplyTargetAngularVelocity(car.id, carla.Vector3D(0.0, 0.0, 10.0)),
+             carla.command.ApplyForce(car.id, carla.Vector3D(0.0, 0.0, 10.0)),
+             carla.command.ApplyTorque(car.id, carla.Vector3D(0.0, 0.0, 1.0)),
+             carla.command.ApplyAngularImpulse(car.id, carla.Vector3D(0.0, 0.0, 1.0)),
+             carla.command.SetEnableGravity(car.id, True),
+             carla.command.ApplyLocation(car.id, car.get_location())]
+    responses = client.apply_batch_sync(batch, True)
+    print("batch", responses)
+    assert not any(r.has_error() for r in responses)
+    world.tick()
+    assert car.get_light_state() == carla.VehicleLightState.HighBeam
+    assert abs(walker.get_control().speed - 0.5) < 1e-3
+
+    # --- Debug drawing ------------------------------------------------------------------------------------
+    here = car.get_location()
+    world.debug.draw_point(here, 0.2, carla.Color(0, 255, 0), 1.0)
+    world.debug.draw_line(here, here + carla.Location(0.0, 0.0, 3.0), 0.05, carla.Color(0, 0, 255), 1.0)
+    world.debug.draw_arrow(here, here + carla.Location(3.0, 0.0, 0.0), life_time=1.0)
+    world.debug.draw_box(car.bounding_box, car.get_transform().rotation, life_time=1.0)
+    world.debug.draw_string(here, "typesafe_carla", True, carla.Color(255, 255, 0), 1.0)
+
+    tm.set_synchronous_mode(False)
+finally:
+    world.apply_settings(original_settings)
+    client.stop_recorder()
+    client.apply_batch_sync([carla.command.DestroyActor(i) for i in reversed(spawned)])
+
+info = client.show_recorder_file_info("tsc_m4_test.log", False)
+print("recorder file:", info.split("\n")[0], "...", len(info), "bytes of info")
+assert "Map: Town10HD_Opt" in info
+collisions = client.show_recorder_collisions("tsc_m4_test.log", "v", "a")
+blocked = client.show_recorder_actors_blocked("tsc_m4_test.log", 1.0, 1.0)
+assert len(collisions) > 0 and len(blocked) > 0
+print("OK")

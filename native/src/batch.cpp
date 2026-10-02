@@ -27,6 +27,35 @@ Command to_command(const tsc_command_t &c) {
       return Command::SetAutopilot(c.actor_id, c.flag != 0, c.tm_port);
     case TSC_COMMAND_SET_SIMULATE_PHYSICS:
       return Command::SetSimulatePhysics(c.actor_id, c.flag != 0);
+    case TSC_COMMAND_APPLY_WALKER_CONTROL:
+      if (!(c.scalar >= 0.0) || !std::isfinite(c.scalar)) {
+        fail(TSC_INVALID_ARGUMENT, "walker speed must be a finite, non-negative number of m/s");
+      }
+      return Command::ApplyWalkerControl(
+          c.actor_id, carla::rpc::WalkerControl(to_carla_vector(c.vector),
+                                                static_cast<float>(c.scalar), c.flag != 0));
+    case TSC_COMMAND_APPLY_TARGET_ANGULAR_VELOCITY:
+      return Command::ApplyTargetAngularVelocity(c.actor_id, to_carla_vector(c.vector));
+    case TSC_COMMAND_APPLY_IMPULSE:
+      return Command::ApplyImpulse(c.actor_id, to_carla_vector(c.vector));
+    case TSC_COMMAND_APPLY_FORCE:
+      return Command::ApplyForce(c.actor_id, to_carla_vector(c.vector));
+    case TSC_COMMAND_APPLY_ANGULAR_IMPULSE:
+      return Command::ApplyAngularImpulse(c.actor_id, to_carla_vector(c.vector));
+    case TSC_COMMAND_APPLY_TORQUE:
+      return Command::ApplyTorque(c.actor_id, to_carla_vector(c.vector));
+    case TSC_COMMAND_SET_ENABLE_GRAVITY:
+      return Command::SetEnableGravity(c.actor_id, c.flag != 0);
+    case TSC_COMMAND_SET_VEHICLE_LIGHT_STATE:
+      return Command::SetVehicleLightState(c.actor_id, static_cast<uint32_t>(c.flag));
+    case TSC_COMMAND_APPLY_LOCATION:
+      return Command::ApplyLocation(c.actor_id, to_carla(c.transform.location));
+    case TSC_COMMAND_SET_TRAFFIC_LIGHT_STATE:
+      if (c.flag < TSC_TRAFFIC_LIGHT_RED || c.flag > TSC_TRAFFIC_LIGHT_UNKNOWN) {
+        fail(TSC_INVALID_ARGUMENT, "invalid traffic light state " + std::to_string(c.flag));
+      }
+      return Command::SetTrafficLightState(c.actor_id,
+                                           static_cast<carla::rpc::TrafficLightState>(c.flag));
     default:
       fail(TSC_INVALID_ARGUMENT, "unknown command type " + std::to_string(c.type));
   }

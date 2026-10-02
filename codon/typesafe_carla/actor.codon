@@ -15,8 +15,13 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_vehicle_set_autopilot, tsc_actor_list_size, tsc_actor_list_get,
                    tsc_actor_list_filter, take_string, CBoundingBox, tsc_actor_get_bounding_box,
                    tsc_vehicle_get_physics_control, tsc_vehicle_apply_physics_control,
-                   PHYSICS_SIZE)
-from .errors import _check, _check_port, _normalize_index
+                   PHYSICS_SIZE, tsc_actor_set_target_angular_velocity, tsc_actor_add_impulse,
+                   tsc_actor_add_force, tsc_actor_add_angular_impulse, tsc_actor_add_torque,
+                   tsc_actor_set_simulate_physics, tsc_actor_set_enable_gravity,
+                   tsc_vehicle_set_light_state, tsc_vehicle_get_light_state,
+                   tsc_vehicle_get_speed_limit, tsc_vehicle_get_traffic_light_state,
+                   tsc_vehicle_is_at_traffic_light, TSC_INVALID_ARGUMENT)
+from .errors import _check, _check_port, _normalize_index, CarlaError
 from .geometry import BoundingBox, Location, Transform, Vector3D
 from .control import VehicleControl, VehiclePhysicsControl
 
@@ -88,6 +93,33 @@ class Actor:
         _check(tsc_actor_get_bounding_box(self._h.ptr, out))
         return BoundingBox._from_c(out[0])
 
+    def _vector_call(self, fn, v: Vector3D):
+        p = Ptr[CVector3D](1)
+        p[0] = v._to_c()
+        _check(fn(self._h.ptr, p))
+
+    def set_target_angular_velocity(self, angular_velocity: Vector3D):
+        """Degrees per second."""
+        self._vector_call(tsc_actor_set_target_angular_velocity, angular_velocity)
+
+    def add_impulse(self, impulse: Vector3D):
+        self._vector_call(tsc_actor_add_impulse, impulse)
+
+    def add_force(self, force: Vector3D):
+        self._vector_call(tsc_actor_add_force, force)
+
+    def add_angular_impulse(self, angular_impulse: Vector3D):
+        self._vector_call(tsc_actor_add_angular_impulse, angular_impulse)
+
+    def add_torque(self, torque: Vector3D):
+        self._vector_call(tsc_actor_add_torque, torque)
+
+    def set_simulate_physics(self, enabled: bool = True):
+        _check(tsc_actor_set_simulate_physics(self._h.ptr, i32(int(enabled))))
+
+    def set_enable_gravity(self, enabled: bool = True):
+        _check(tsc_actor_set_enable_gravity(self._h.ptr, i32(int(enabled))))
+
     def get_angular_velocity(self) -> Vector3D:
         out = Ptr[CVector3D](1)
         _check(tsc_actor_get_angular_velocity(self._h.ptr, out))
@@ -135,6 +167,34 @@ class Vehicle(Actor):
         buf = Ptr[byte](PHYSICS_SIZE)
         physics_control._write(buf)
         _check(tsc_vehicle_apply_physics_control(self._h.ptr, buf))
+
+    def set_light_state(self, light_state: int):
+        """light_state: VehicleLightState flags, e.g. LowBeam | Brake."""
+        if light_state < 0 or light_state > 0xFFFFFFFF:
+            raise CarlaError(f"light state {light_state} is out of range", TSC_INVALID_ARGUMENT)
+        _check(tsc_vehicle_set_light_state(self._h.ptr, u32(light_state)))
+
+    def get_light_state(self) -> int:
+        out = Ptr[u32](1)
+        _check(tsc_vehicle_get_light_state(self._h.ptr, out))
+        return int(out[0])
+
+    def get_speed_limit(self) -> float:
+        """km/h of the road the vehicle is on."""
+        out = Ptr[float](1)
+        _check(tsc_vehicle_get_speed_limit(self._h.ptr, out))
+        return out[0]
+
+    def get_traffic_light_state(self) -> int:
+        """TrafficLightState of the light affecting the vehicle (Green when none)."""
+        out = Ptr[i32](1)
+        _check(tsc_vehicle_get_traffic_light_state(self._h.ptr, out))
+        return int(out[0])
+
+    def is_at_traffic_light(self) -> bool:
+        out = Ptr[i32](1)
+        _check(tsc_vehicle_is_at_traffic_light(self._h.ptr, out))
+        return int(out[0]) != 0
 
     def set_autopilot(self, enabled: bool = True, tm_port: int = TM_DEFAULT_PORT):
         _check_port("tm_port", tm_port)

@@ -1,0 +1,47 @@
+import typesafe_carla as carla
+
+def populate(client: carla.Client, world: carla.World) -> int:
+    tm: carla.TrafficManager = client.get_trafficmanager(8000)
+    tm.set_synchronous_mode(True)
+    tm.global_percentage_speed_difference(10.0)
+    lib = world.get_blueprint_library()
+    count = 0
+    for p in world.get_map().get_spawn_points()[:3]:
+        actor = world.try_spawn_actor(lib.find("vehicle.audi.tt"), p)
+        if actor is not None:
+            v: carla.Vehicle = actor.as_vehicle()
+            v.set_autopilot(True, tm.get_port())
+            tm.ignore_lights_percentage(v, 50.0)
+            tm.auto_lane_change(v, False)
+            v.set_light_state(carla.VehicleLightState.LowBeam | carla.VehicleLightState.Position)
+            light: Optional[carla.TrafficLight] = v.get_traffic_light()
+            if light is not None and light.get_state() == carla.TrafficLightState.Red:
+                light.set_state(carla.TrafficLightState.Green)
+            count += 1
+    nav: Optional[carla.Location] = world.get_random_location_from_navigation()
+    if nav is not None:
+        walker = world.spawn_actor(lib.find("walker.pedestrian.0001"), carla.Transform(nav)).as_walker()
+        ai: carla.WalkerAIController = world.spawn_actor(
+            lib.find("controller.ai.walker"), carla.Transform(), attach_to=walker).as_walker_ai_controller()
+        ai.start()
+        ai.go_to_location(nav)
+        walker.apply_control(carla.WalkerControl(carla.Vector3D(0.0, 1.0, 0.0), 1.2))
+    weather: carla.WeatherParameters = carla.WeatherParameters.preset("ClearNoon")
+    weather.sun_altitude_angle = 70.0
+    world.set_weather(weather)
+    world.debug.draw_string(carla.Location(), "spawned", False, carla.Color(0, 255, 0), 5.0)
+    m = world.get_map()
+    for begin, end in m.get_topology():
+        world.debug.draw_arrow(begin.transform.location, end.transform.location)
+    for landmark in m.get_all_landmarks_of_type("206"):
+        count += landmark.road_id
+    info: str = client.show_recorder_file_info(client.start_recorder("run.log"))
+    client.stop_recorder()
+    client.apply_batch([carla.command.SetVehicleLightState(1, carla.VehicleLightState.All),
+                        carla.command.SetTrafficLightState(2, carla.TrafficLightState.Red),
+                        carla.command.ApplyImpulse(1, carla.Vector3D(1.0, 0.0, 0.0))])
+    return count + len(info)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_client = carla.Client("localhost", 2000)
+print(populate(_client, _client.get_world()))

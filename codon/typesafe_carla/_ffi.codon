@@ -13,8 +13,8 @@ from internal.gc import register_finalizer
 LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
-TSC_ABI_VERSION_MAJOR = 1
-TSC_ABI_VERSION_MINOR = 3
+TSC_ABI_VERSION_MAJOR = 2
+TSC_ABI_VERSION_MINOR = 0
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -26,6 +26,9 @@ TSC_VERSION_ERROR = 6
 
 TSC_KIND_VEHICLE = 4
 TSC_KIND_SENSOR = 12
+TSC_KIND_WALKER = 14
+TSC_KIND_WALKER_AI_CONTROLLER = 15
+TSC_KIND_TRAFFIC_LIGHT = 16
 
 # --- POD mirrors (layouts checked by tests/native/test_ffi.c) ---------------
 
@@ -160,6 +163,7 @@ class CCommand:
     flag: i32
     tm_port: u16
     reserved0: u16
+    scalar: float
 
 @tuple
 class CCommandResponse:
@@ -215,6 +219,79 @@ class CCollision:
     actor_id: u32
     other_actor_id: u32
     normal_impulse: CVector3D
+
+@tuple
+class CWalkerControl:
+    direction: CVector3D
+    speed: float
+    jump: i32
+    reserved0: i32
+
+@tuple
+class CTrafficLightInfo:
+    state: i32
+    is_frozen: i32
+    green_time: float
+    yellow_time: float
+    red_time: float
+    elapsed_time: float
+    pole_index: u32
+    reserved0: u32
+
+@tuple
+class CWeather:
+    cloudiness: float
+    precipitation: float
+    precipitation_deposits: float
+    wind_intensity: float
+    sun_azimuth_angle: float
+    sun_altitude_angle: float
+    fog_density: float
+    fog_distance: float
+    fog_falloff: float
+    wetness: float
+    scattering_intensity: float
+    mie_scattering_scale: float
+    rayleigh_scattering_scale: float
+    dust_storm: float
+
+@tuple
+class CColor:
+    r: u8
+    g: u8
+    b: u8
+    a: u8
+
+@tuple
+class COpendriveParameters:
+    vertex_distance: float
+    max_road_length: float
+    wall_height: float
+    additional_width: float
+    smooth_junctions: i32
+    enable_mesh_visibility: i32
+    enable_pedestrian_navigation: i32
+    reserved0: i32
+
+@tuple
+class CLandmark:
+    id: CString
+    name: CString
+    type: CString
+    sub_type: CString
+    country: CString
+    unit: CString
+    text: CString
+    road_id: u32
+    orientation: i32
+    s: float
+    t: float
+    distance: float
+    z_offset: float
+    value: float
+    height: float
+    width: float
+    transform: CTransform
 
 # --- Functions ----------------------------------------------------------------
 
@@ -330,6 +407,78 @@ from C import LIB.tsc_lidar_channel_point_count(cobj, u32, Ptr[u32]) -> i32
 from C import LIB.tsc_sensor_data_as_gnss(cobj, Ptr[CGnss]) -> i32
 from C import LIB.tsc_sensor_data_as_imu(cobj, Ptr[CImu]) -> i32
 from C import LIB.tsc_sensor_data_as_collision(cobj, Ptr[CCollision]) -> i32
+
+# ABI 2.0 (Milestone 4)
+from C import LIB.tsc_actor_set_target_angular_velocity(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_add_impulse(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_add_force(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_add_angular_impulse(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_add_torque(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_set_simulate_physics(cobj, i32) -> i32
+from C import LIB.tsc_actor_set_enable_gravity(cobj, i32) -> i32
+from C import LIB.tsc_actor_as_walker(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_actor_as_walker_ai_controller(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_actor_as_traffic_light(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_vehicle_set_light_state(cobj, u32) -> i32
+from C import LIB.tsc_vehicle_get_light_state(cobj, Ptr[u32]) -> i32
+from C import LIB.tsc_vehicle_get_speed_limit(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_vehicle_get_traffic_light_state(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_vehicle_is_at_traffic_light(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_vehicle_get_traffic_light(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_traffic_light_get_info(cobj, Ptr[CTrafficLightInfo]) -> i32
+from C import LIB.tsc_traffic_light_set_state(cobj, i32) -> i32
+from C import LIB.tsc_traffic_light_set_green_time(cobj, float) -> i32
+from C import LIB.tsc_traffic_light_set_yellow_time(cobj, float) -> i32
+from C import LIB.tsc_traffic_light_set_red_time(cobj, float) -> i32
+from C import LIB.tsc_traffic_light_freeze(cobj, i32) -> i32
+from C import LIB.tsc_traffic_light_reset_group(cobj) -> i32
+from C import LIB.tsc_walker_apply_control(cobj, Ptr[CWalkerControl]) -> i32
+from C import LIB.tsc_walker_get_control(cobj, Ptr[CWalkerControl]) -> i32
+from C import LIB.tsc_walker_ai_controller_start(cobj) -> i32
+from C import LIB.tsc_walker_ai_controller_stop(cobj) -> i32
+from C import LIB.tsc_walker_ai_controller_go_to_location(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_walker_ai_controller_set_max_speed(cobj, float) -> i32
+from C import LIB.tsc_world_get_random_location_from_navigation(cobj, Ptr[CVector3D], Ptr[i32]) -> i32
+from C import LIB.tsc_world_get_weather(cobj, Ptr[CWeather]) -> i32
+from C import LIB.tsc_world_set_weather(cobj, Ptr[CWeather]) -> i32
+from C import LIB.tsc_world_is_weather_enabled(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_weather_preset(cobj, int, Ptr[CWeather]) -> i32
+from C import LIB.tsc_debug_draw_point(cobj, Ptr[CVector3D], float, CColor, float) -> i32
+from C import LIB.tsc_debug_draw_line(cobj, Ptr[CVector3D], Ptr[CVector3D], float, CColor, float) -> i32
+from C import LIB.tsc_debug_draw_arrow(cobj, Ptr[CVector3D], Ptr[CVector3D], float, float, CColor, float) -> i32
+from C import LIB.tsc_debug_draw_box(cobj, Ptr[CBoundingBox], Ptr[CRotation], float, CColor, float) -> i32
+from C import LIB.tsc_debug_draw_string(cobj, Ptr[CVector3D], cobj, int, i32, CColor, float) -> i32
+from C import LIB.tsc_client_start_recorder(cobj, cobj, int, i32, Ptr[CString]) -> i32
+from C import LIB.tsc_client_stop_recorder(cobj) -> i32
+from C import LIB.tsc_client_show_recorder_file_info(cobj, cobj, int, i32, Ptr[CString]) -> i32
+from C import LIB.tsc_client_show_recorder_collisions(cobj, cobj, int, byte, byte, Ptr[CString]) -> i32
+from C import LIB.tsc_client_show_recorder_actors_blocked(cobj, cobj, int, float, float, Ptr[CString]) -> i32
+from C import LIB.tsc_client_replay_file(cobj, cobj, int, float, float, u32, i32, Ptr[CString]) -> i32
+from C import LIB.tsc_client_stop_replayer(cobj, i32) -> i32
+from C import LIB.tsc_client_set_replayer_time_factor(cobj, float) -> i32
+from C import LIB.tsc_client_generate_opendrive_world(cobj, cobj, int, Ptr[COpendriveParameters], i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_topology(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_crosswalks(cobj, Ptr[CVector3D], int, Ptr[int]) -> i32
+from C import LIB.tsc_landmark_free(Ptr[CLandmark]) -> None
+from C import LIB.tsc_map_get_all_landmarks(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_landmarks_of_type(cobj, cobj, int, Ptr[cobj]) -> i32
+from C import LIB.tsc_landmark_list_size(cobj) -> int
+from C import LIB.tsc_landmark_list_get(cobj, int, Ptr[CLandmark]) -> i32
+from C import LIB.tsc_waypoint_get_junction(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_junction_get_id(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_junction_get_bounding_box(cobj, Ptr[CBoundingBox]) -> i32
+from C import LIB.tsc_junction_get_waypoints(cobj, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_client_get_traffic_manager(cobj, u16, Ptr[cobj]) -> i32
+from C import LIB.tsc_traffic_manager_get_port(cobj, Ptr[u16]) -> i32
+from C import LIB.tsc_traffic_manager_set_synchronous_mode(cobj, i32) -> i32
+from C import LIB.tsc_traffic_manager_set_random_device_seed(cobj, u64) -> i32
+from C import LIB.tsc_traffic_manager_set_hybrid_physics_mode(cobj, i32) -> i32
+from C import LIB.tsc_traffic_manager_set_global_percentage_speed_difference(cobj, float) -> i32
+from C import LIB.tsc_traffic_manager_set_global_distance_to_leading_vehicle(cobj, float) -> i32
+from C import LIB.tsc_traffic_manager_set_vehicle_value(cobj, cobj, i32, float) -> i32
+from C import LIB.tsc_traffic_manager_set_auto_lane_change(cobj, cobj, i32) -> i32
+from C import LIB.tsc_traffic_manager_force_lane_change(cobj, cobj, i32) -> i32
+from C import LIB.tsc_traffic_manager_set_update_vehicle_lights(cobj, cobj, i32) -> i32
 
 # --- Helpers --------------------------------------------------------------------
 

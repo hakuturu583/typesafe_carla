@@ -6,7 +6,7 @@ world = client.get_world()
 first_id = world.id
 
 library = world.get_blueprint_library()
-assert len(library) == 10  # 3 vehicles, a walker, 5 sensors, a prop
+assert len(library) == 11  # 3 vehicles, a walker, 5 sensors, an AI controller, a prop
 vehicles = library.filter("vehicle.*")
 assert len(vehicles) == 3
 ids = [bp.id for bp in vehicles]
@@ -31,7 +31,7 @@ spawn = carla.Transform(carla.Location(10.0, 20.0, 0.5), carla.Rotation(0.0, 90.
 actor = world.spawn_actor(bp, spawn)
 assert actor.is_vehicle() and actor.type_id == "vehicle.lincoln.mkz_2020"
 assert world.try_spawn_actor(bp, spawn) is None
-assert len(world.get_actors()) == 3
+assert len(world.get_actors()) == 4
 assert len(world.get_actors().filter("vehicle.*")) == 2
 found = world.get_actors().find(actor.id)
 assert found is not None and found.id == actor.id
@@ -74,10 +74,10 @@ world.apply_settings(settings)
 assert world.get_settings().fixed_delta_seconds is None
 
 assert cone.destroy() and vehicle.destroy()
-assert len(world.get_actors()) == 2
+assert len(world.get_actors()) == 3
 
 # Loading a map starts a new episode with only the spectator.
 new_world = client.load_world("Town01")
 assert new_world.id != first_id
-assert len(new_world.get_actors()) == 1
+assert len(new_world.get_actors()) == 2  # spectator and traffic light
 print("OK")

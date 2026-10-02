@@ -31,9 +31,10 @@ extern "C" {
 #define TSC_API
 #endif
 
-/* ABI version. Bump MAJOR on any incompatible change to this header. */
-#define TSC_ABI_VERSION_MAJOR 1
-#define TSC_ABI_VERSION_MINOR 3
+/* ABI version. Bump MAJOR on any incompatible change to this header.
+ * 2.0: tsc_command_t gained `scalar` (and new command types), Milestone 4. */
+#define TSC_ABI_VERSION_MAJOR 2
+#define TSC_ABI_VERSION_MINOR 0
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -103,7 +104,13 @@ typedef enum {
   TSC_KIND_WAYPOINT = 10,      /* ABI 1.2 */
   TSC_KIND_WAYPOINT_LIST = 11, /* ABI 1.2 */
   TSC_KIND_SENSOR = 12,        /* ABI 1.3; also an actor */
-  TSC_KIND_SENSOR_DATA = 13    /* ABI 1.3 */
+  TSC_KIND_SENSOR_DATA = 13,   /* ABI 1.3 */
+  TSC_KIND_WALKER = 14,        /* also an actor */
+  TSC_KIND_WALKER_AI_CONTROLLER = 15, /* also an actor */
+  TSC_KIND_TRAFFIC_LIGHT = 16, /* also an actor */
+  TSC_KIND_TRAFFIC_MANAGER = 17,
+  TSC_KIND_LANDMARK_LIST = 18,
+  TSC_KIND_JUNCTION = 19
 } tsc_handle_kind_t;
 
 typedef struct tsc_handle tsc_handle_t;
@@ -449,7 +456,18 @@ typedef enum {
   TSC_COMMAND_APPLY_TRANSFORM = 4,
   TSC_COMMAND_APPLY_TARGET_VELOCITY = 5,
   TSC_COMMAND_SET_AUTOPILOT = 6,
-  TSC_COMMAND_SET_SIMULATE_PHYSICS = 7
+  TSC_COMMAND_SET_SIMULATE_PHYSICS = 7,
+  /* ABI 2.0 */
+  TSC_COMMAND_APPLY_WALKER_CONTROL = 8,       /* vector: direction, scalar: speed, flag: jump */
+  TSC_COMMAND_APPLY_TARGET_ANGULAR_VELOCITY = 9, /* vector */
+  TSC_COMMAND_APPLY_IMPULSE = 10,             /* vector */
+  TSC_COMMAND_APPLY_FORCE = 11,               /* vector */
+  TSC_COMMAND_APPLY_ANGULAR_IMPULSE = 12,     /* vector */
+  TSC_COMMAND_APPLY_TORQUE = 13,              /* vector */
+  TSC_COMMAND_SET_ENABLE_GRAVITY = 14,        /* flag */
+  TSC_COMMAND_SET_VEHICLE_LIGHT_STATE = 15,   /* flag: light state bits */
+  TSC_COMMAND_APPLY_LOCATION = 16,            /* transform.location */
+  TSC_COMMAND_SET_TRAFFIC_LIGHT_STATE = 17    /* flag: tsc_traffic_light_state_t */
 } tsc_command_type_t;
 
 /* Flat tagged record; only the fields the type uses are read.
@@ -466,9 +484,10 @@ typedef struct {
   tsc_transform_t transform;              /* SPAWN_ACTOR, APPLY_TRANSFORM */
   tsc_vehicle_control_t control;          /* APPLY_VEHICLE_CONTROL */
   tsc_vector3d_t vector;                  /* APPLY_TARGET_VELOCITY */
-  int32_t flag;                           /* SET_AUTOPILOT, SET_SIMULATE_PHYSICS */
+  int32_t flag;                           /* SET_AUTOPILOT, SET_SIMULATE_PHYSICS, ... */
   uint16_t tm_port;                       /* SET_AUTOPILOT */
   uint16_t reserved0;
+  double scalar;                          /* APPLY_WALKER_CONTROL: speed (ABI 2.0) */
 } tsc_command_t;
 
 typedef struct {
@@ -580,6 +599,279 @@ typedef struct {
 } tsc_collision_t;
 TSC_API tsc_status_t tsc_sensor_data_as_collision(const tsc_sensor_data_t *data,
                                                   tsc_collision_t *out);
+
+/* ------------------------------------------------------------------------ */
+/* Milestone 4: broader CARLA coverage (ABI 2.0)                            */
+/* ------------------------------------------------------------------------ */
+
+typedef struct tsc_walker tsc_walker_t;                   /* also an actor */
+typedef struct tsc_walker_ai_controller tsc_walker_ai_controller_t; /* also an actor */
+typedef struct tsc_traffic_light tsc_traffic_light_t;     /* also an actor */
+typedef struct tsc_traffic_manager tsc_traffic_manager_t;
+typedef struct tsc_landmark_list tsc_landmark_list_t;
+typedef struct tsc_junction tsc_junction_t;
+
+/* --- More actor operations ----------------------------------------------- */
+
+TSC_API tsc_status_t tsc_actor_set_target_angular_velocity(tsc_actor_t *actor,
+                                                           const tsc_vector3d_t *v);
+TSC_API tsc_status_t tsc_actor_add_impulse(tsc_actor_t *actor, const tsc_vector3d_t *impulse);
+TSC_API tsc_status_t tsc_actor_add_force(tsc_actor_t *actor, const tsc_vector3d_t *force);
+TSC_API tsc_status_t tsc_actor_add_angular_impulse(tsc_actor_t *actor,
+                                                   const tsc_vector3d_t *impulse);
+TSC_API tsc_status_t tsc_actor_add_torque(tsc_actor_t *actor, const tsc_vector3d_t *torque);
+TSC_API tsc_status_t tsc_actor_set_simulate_physics(tsc_actor_t *actor, int32_t enabled);
+TSC_API tsc_status_t tsc_actor_set_enable_gravity(tsc_actor_t *actor, int32_t enabled);
+
+/* Checked downcasts; TSC_TYPE_ERROR on a mismatch. */
+TSC_API tsc_status_t tsc_actor_as_walker(tsc_actor_t *actor, tsc_walker_t **out);
+TSC_API tsc_status_t tsc_actor_as_walker_ai_controller(tsc_actor_t *actor,
+                                                       tsc_walker_ai_controller_t **out);
+TSC_API tsc_status_t tsc_actor_as_traffic_light(tsc_actor_t *actor, tsc_traffic_light_t **out);
+
+/* --- Vehicle lights and traffic lights ------------------------------------- */
+
+/* light_state: CARLA VehicleLightState bit flags. */
+TSC_API tsc_status_t tsc_vehicle_set_light_state(tsc_vehicle_t *vehicle, uint32_t light_state);
+TSC_API tsc_status_t tsc_vehicle_get_light_state(tsc_vehicle_t *vehicle, uint32_t *out);
+TSC_API tsc_status_t tsc_vehicle_get_speed_limit(tsc_vehicle_t *vehicle, double *out);
+/* state: tsc_traffic_light_state_t */
+TSC_API tsc_status_t tsc_vehicle_get_traffic_light_state(tsc_vehicle_t *vehicle, int32_t *out);
+TSC_API tsc_status_t tsc_vehicle_is_at_traffic_light(tsc_vehicle_t *vehicle, int32_t *out);
+/* *out = NULL (TSC_OK) when the vehicle is not affected by a traffic light. */
+TSC_API tsc_status_t tsc_vehicle_get_traffic_light(tsc_vehicle_t *vehicle,
+                                                   tsc_traffic_light_t **out);
+
+typedef enum {
+  TSC_TRAFFIC_LIGHT_RED = 0,
+  TSC_TRAFFIC_LIGHT_YELLOW = 1,
+  TSC_TRAFFIC_LIGHT_GREEN = 2,
+  TSC_TRAFFIC_LIGHT_OFF = 3,
+  TSC_TRAFFIC_LIGHT_UNKNOWN = 4
+} tsc_traffic_light_state_t;
+
+typedef struct {
+  int32_t state; /* tsc_traffic_light_state_t */
+  int32_t is_frozen;
+  double green_time;
+  double yellow_time;
+  double red_time;
+  double elapsed_time;
+  uint32_t pole_index;
+  uint32_t reserved0;
+} tsc_traffic_light_info_t;
+
+TSC_API tsc_status_t tsc_traffic_light_get_info(tsc_traffic_light_t *light,
+                                                tsc_traffic_light_info_t *out);
+TSC_API tsc_status_t tsc_traffic_light_set_state(tsc_traffic_light_t *light, int32_t state);
+TSC_API tsc_status_t tsc_traffic_light_set_green_time(tsc_traffic_light_t *light, double t);
+TSC_API tsc_status_t tsc_traffic_light_set_yellow_time(tsc_traffic_light_t *light, double t);
+TSC_API tsc_status_t tsc_traffic_light_set_red_time(tsc_traffic_light_t *light, double t);
+TSC_API tsc_status_t tsc_traffic_light_freeze(tsc_traffic_light_t *light, int32_t freeze);
+TSC_API tsc_status_t tsc_traffic_light_reset_group(tsc_traffic_light_t *light);
+
+/* --- Walkers ------------------------------------------------------------- */
+
+typedef struct {
+  tsc_vector3d_t direction;
+  double speed; /* m/s */
+  int32_t jump;
+  int32_t reserved0;
+} tsc_walker_control_t;
+
+TSC_API tsc_status_t tsc_walker_apply_control(tsc_walker_t *walker,
+                                              const tsc_walker_control_t *control);
+TSC_API tsc_status_t tsc_walker_get_control(tsc_walker_t *walker, tsc_walker_control_t *out);
+TSC_API tsc_status_t tsc_walker_ai_controller_start(tsc_walker_ai_controller_t *controller);
+TSC_API tsc_status_t tsc_walker_ai_controller_stop(tsc_walker_ai_controller_t *controller);
+TSC_API tsc_status_t tsc_walker_ai_controller_go_to_location(
+    tsc_walker_ai_controller_t *controller, const tsc_location_t *destination);
+TSC_API tsc_status_t tsc_walker_ai_controller_set_max_speed(
+    tsc_walker_ai_controller_t *controller, double max_speed);
+/* *out_found = 0 when the navigation mesh yields no location. */
+TSC_API tsc_status_t tsc_world_get_random_location_from_navigation(tsc_world_t *world,
+                                                                   tsc_location_t *out,
+                                                                   int32_t *out_found);
+
+/* --- Weather -------------------------------------------------------------- */
+
+typedef struct {
+  double cloudiness;
+  double precipitation;
+  double precipitation_deposits;
+  double wind_intensity;
+  double sun_azimuth_angle;
+  double sun_altitude_angle;
+  double fog_density;
+  double fog_distance;
+  double fog_falloff;
+  double wetness;
+  double scattering_intensity;
+  double mie_scattering_scale;
+  double rayleigh_scattering_scale;
+  double dust_storm;
+} tsc_weather_t;
+
+TSC_API tsc_status_t tsc_world_get_weather(tsc_world_t *world, tsc_weather_t *out);
+TSC_API tsc_status_t tsc_world_set_weather(tsc_world_t *world, const tsc_weather_t *weather);
+/* Whether the server simulates weather (when not, set_weather has no effect). */
+TSC_API tsc_status_t tsc_world_is_weather_enabled(tsc_world_t *world, int32_t *out);
+/* LibCarla's named presets ("ClearNoon", "HardRainNoon", ...); TSC_NOT_FOUND otherwise. */
+TSC_API tsc_status_t tsc_weather_preset(const char *name, size_t name_len, tsc_weather_t *out);
+
+/* --- Debug drawing ---------------------------------------------------------- */
+
+typedef struct {
+  uint8_t r, g, b, a;
+} tsc_color_t;
+
+TSC_API tsc_status_t tsc_debug_draw_point(tsc_world_t *world, const tsc_location_t *location,
+                                          double size, tsc_color_t color, double life_time);
+TSC_API tsc_status_t tsc_debug_draw_line(tsc_world_t *world, const tsc_location_t *begin,
+                                         const tsc_location_t *end, double thickness,
+                                         tsc_color_t color, double life_time);
+TSC_API tsc_status_t tsc_debug_draw_arrow(tsc_world_t *world, const tsc_location_t *begin,
+                                          const tsc_location_t *end, double thickness,
+                                          double arrow_size, tsc_color_t color, double life_time);
+TSC_API tsc_status_t tsc_debug_draw_box(tsc_world_t *world, const tsc_bounding_box_t *box,
+                                        const tsc_rotation_t *rotation, double thickness,
+                                        tsc_color_t color, double life_time);
+TSC_API tsc_status_t tsc_debug_draw_string(tsc_world_t *world, const tsc_location_t *location,
+                                           const char *text, size_t text_len, int32_t draw_shadow,
+                                           tsc_color_t color, double life_time);
+
+/* --- Recorder ---------------------------------------------------------------- */
+
+/* All return the server's text output in *out (free with tsc_string_free). */
+TSC_API tsc_status_t tsc_client_start_recorder(tsc_client_t *client, const char *name,
+                                               size_t name_len, int32_t additional_data,
+                                               tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_stop_recorder(tsc_client_t *client);
+TSC_API tsc_status_t tsc_client_show_recorder_file_info(tsc_client_t *client, const char *name,
+                                                        size_t name_len, int32_t show_all,
+                                                        tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_show_recorder_collisions(tsc_client_t *client, const char *name,
+                                                         size_t name_len, char type1, char type2,
+                                                         tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_show_recorder_actors_blocked(tsc_client_t *client,
+                                                             const char *name, size_t name_len,
+                                                             double min_time,
+                                                             double min_distance,
+                                                             tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_replay_file(tsc_client_t *client, const char *name,
+                                            size_t name_len, double start, double duration,
+                                            uint32_t follow_id, int32_t replay_sensors,
+                                            tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_stop_replayer(tsc_client_t *client, int32_t keep_actors);
+TSC_API tsc_status_t tsc_client_set_replayer_time_factor(tsc_client_t *client, double factor);
+
+/* --- OpenDRIVE worlds ---------------------------------------------------------- */
+
+typedef struct {
+  double vertex_distance;
+  double max_road_length;
+  double wall_height;
+  double additional_width;
+  int32_t smooth_junctions;
+  int32_t enable_mesh_visibility;
+  int32_t enable_pedestrian_navigation;
+  int32_t reserved0;
+} tsc_opendrive_parameters_t;
+
+TSC_API tsc_status_t tsc_client_generate_opendrive_world(
+    tsc_client_t *client, const char *opendrive, size_t opendrive_len,
+    const tsc_opendrive_parameters_t *parameters, int32_t reset_settings, tsc_world_t **out);
+
+/* --- Map queries ------------------------------------------------------------------ */
+
+/* Topology: pairs (begin, end) of the road network's lane segments, as a
+ * waypoint list of 2 * pair_count entries [b0, e0, b1, e1, ...]. */
+TSC_API tsc_status_t tsc_map_get_topology(const tsc_map_t *map, tsc_waypoint_list_t **out);
+/* Two-call pattern, like tsc_map_get_spawn_points. */
+TSC_API tsc_status_t tsc_map_get_crosswalks(const tsc_map_t *map, tsc_location_t *out,
+                                            size_t capacity, size_t *out_count);
+
+typedef struct {
+  tsc_string_t id;
+  tsc_string_t name;
+  tsc_string_t type;
+  tsc_string_t sub_type;
+  tsc_string_t country;
+  tsc_string_t unit;
+  tsc_string_t text;
+  uint32_t road_id;
+  int32_t orientation; /* CARLA SignalOrientation */
+  double s;
+  double t;
+  double distance;
+  double z_offset;
+  double value;
+  double height;
+  double width;
+  tsc_transform_t transform;
+} tsc_landmark_t;
+
+/* Frees the landmark's strings. */
+TSC_API void tsc_landmark_free(tsc_landmark_t *landmark);
+TSC_API tsc_status_t tsc_map_get_all_landmarks(const tsc_map_t *map, tsc_landmark_list_t **out);
+TSC_API tsc_status_t tsc_map_get_landmarks_of_type(const tsc_map_t *map, const char *type,
+                                                   size_t type_len, tsc_landmark_list_t **out);
+TSC_API size_t tsc_landmark_list_size(const tsc_landmark_list_t *list);
+TSC_API tsc_status_t tsc_landmark_list_get(const tsc_landmark_list_t *list, size_t index,
+                                           tsc_landmark_t *out);
+
+/* *out = NULL (TSC_OK) when the waypoint is not in a junction. */
+TSC_API tsc_status_t tsc_waypoint_get_junction(const tsc_waypoint_t *wp, tsc_junction_t **out);
+TSC_API tsc_status_t tsc_junction_get_id(const tsc_junction_t *j, int32_t *out);
+TSC_API tsc_status_t tsc_junction_get_bounding_box(const tsc_junction_t *j,
+                                                   tsc_bounding_box_t *out);
+/* Pairs (entry, exit) as a waypoint list [b0, e0, b1, e1, ...]. */
+TSC_API tsc_status_t tsc_junction_get_waypoints(const tsc_junction_t *j, int32_t lane_type,
+                                                tsc_waypoint_list_t **out);
+
+/* --- Traffic Manager ---------------------------------------------------------------- */
+
+TSC_API tsc_status_t tsc_client_get_traffic_manager(tsc_client_t *client, uint16_t port,
+                                                    tsc_traffic_manager_t **out);
+TSC_API tsc_status_t tsc_traffic_manager_get_port(tsc_traffic_manager_t *tm, uint16_t *out);
+TSC_API tsc_status_t tsc_traffic_manager_set_synchronous_mode(tsc_traffic_manager_t *tm,
+                                                              int32_t enabled);
+TSC_API tsc_status_t tsc_traffic_manager_set_random_device_seed(tsc_traffic_manager_t *tm,
+                                                                uint64_t seed);
+TSC_API tsc_status_t tsc_traffic_manager_set_hybrid_physics_mode(tsc_traffic_manager_t *tm,
+                                                                 int32_t enabled);
+TSC_API tsc_status_t tsc_traffic_manager_set_global_percentage_speed_difference(
+    tsc_traffic_manager_t *tm, double percentage);
+TSC_API tsc_status_t tsc_traffic_manager_set_global_distance_to_leading_vehicle(
+    tsc_traffic_manager_t *tm, double distance);
+
+/* Per-vehicle settings. */
+typedef enum {
+  TSC_TM_PERCENTAGE_SPEED_DIFFERENCE = 1,
+  TSC_TM_DISTANCE_TO_LEADING_VEHICLE = 2,
+  TSC_TM_RANDOM_LEFT_LANECHANGE_PERCENTAGE = 3,
+  TSC_TM_RANDOM_RIGHT_LANECHANGE_PERCENTAGE = 4,
+  TSC_TM_IGNORE_LIGHTS_PERCENTAGE = 5,
+  TSC_TM_IGNORE_SIGNS_PERCENTAGE = 6,
+  TSC_TM_IGNORE_VEHICLES_PERCENTAGE = 7,
+  TSC_TM_IGNORE_WALKERS_PERCENTAGE = 8,
+  TSC_TM_KEEP_RIGHT_PERCENTAGE = 9,
+  TSC_TM_DESIRED_SPEED = 10,
+  TSC_TM_LANE_OFFSET = 11
+} tsc_tm_vehicle_setting_t;
+
+TSC_API tsc_status_t tsc_traffic_manager_set_vehicle_value(tsc_traffic_manager_t *tm,
+                                                           tsc_vehicle_t *vehicle,
+                                                           int32_t setting, double value);
+TSC_API tsc_status_t tsc_traffic_manager_set_auto_lane_change(tsc_traffic_manager_t *tm,
+                                                              tsc_vehicle_t *vehicle,
+                                                              int32_t enabled);
+TSC_API tsc_status_t tsc_traffic_manager_force_lane_change(tsc_traffic_manager_t *tm,
+                                                           tsc_vehicle_t *vehicle,
+                                                           int32_t to_left);
+TSC_API tsc_status_t tsc_traffic_manager_set_update_vehicle_lights(tsc_traffic_manager_t *tm,
+                                                                   tsc_vehicle_t *vehicle,
+                                                                   int32_t enabled);
 
 #ifdef __cplusplus
 } /* extern "C" */

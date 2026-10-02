@@ -27,7 +27,8 @@ def _require_server(backend):
 
 @pytest.mark.parametrize("source", PROGRAMS, ids=lambda p: p.stem)
 def test_integration(launcher, source):
-    result = launcher("run", "-release", str(source), timeout=900)
+    result = launcher("run", "-release", str(source), timeout=900,
+                      env={"TSC_TEST_DIR": str(source.parent)})
     output = result.stdout + result.stderr
     print(output)
     assert result.returncode == 0, output

@@ -38,7 +38,7 @@ try:
 except IndexError:
     raised = True
 assert raised
-assert world.get_actors()[-1].type_id == "spectator"
+assert world.get_actors()[-1].type_id == "traffic.traffic_light"
 
 vehicle = world.get_actors()[0].as_vehicle()
 raised = False
