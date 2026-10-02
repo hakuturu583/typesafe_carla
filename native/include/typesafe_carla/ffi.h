@@ -48,9 +48,10 @@ extern "C" {
  *      map layers, IMU gravity, textures, on_tick, light manager (#21).
  * 3.6: sensor data frame_number, image convert/save, point cloud save, collision
  *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24).
- * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37). */
+ * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37).
+ * 3.8: tsc_world_get_actors_by_id (#38). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 7
+#define TSC_ABI_VERSION_MINOR 8
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
