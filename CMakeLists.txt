@@ -138,10 +138,11 @@ else()
   # BOOST_ENABLE_PYTHON is OFF"), and some refs (0.10.0) link carla-client
   # against Boost::python unconditionally. The client sources only use
   # Boost.Python under LIBCARLA_WITH_PYTHON_SUPPORT, which is never defined
-  # here, so: build Boost without it, and satisfy the link with an empty
-  # target. No Python headers or libpython are needed (manylinux has no
-  # libpython). CARLA requires CMake >= 3.27 (CMP0126 NEW), so the normal
-  # variable shadows the cache entry CARLA's Dependencies.cmake writes.
+  # here, so: build Boost without it, and satisfy any such link with an empty
+  # target (unused on refs that do not link it). No Python headers or
+  # libpython are needed (manylinux has no libpython). CARLA requires
+  # CMake >= 3.27 (CMP0126 NEW), so the normal variable shadows the cache
+  # entry CARLA's Dependencies.cmake writes.
   file(READ "${TSC_CARLA_DIR}/CMake/Dependencies.cmake" _tsc_deps)
   if(_tsc_deps MATCHES "set \\([ \t\r\n]*BOOST_INCLUDED_PROJECTS([^)]*)\\)")
     string(REGEX REPLACE "[ \t\r\n]+" ";" _tsc_boost_libs "${CMAKE_MATCH_1}")
@@ -152,10 +153,8 @@ else()
     message(WARNING "typesafe_carla: could not read CARLA's Boost library list; "
                     "configuring Boost may fail on BOOST_ENABLE_PYTHON")
   endif()
-  file(READ "${TSC_CARLA_DIR}/LibCarla/CMakeLists.txt" _tsc_libcarla_cmake)
-  if(_tsc_libcarla_cmake MATCHES "Boost::python" AND NOT TARGET Boost::python)
+  if(NOT TARGET Boost::python)
     add_library(Boost::python INTERFACE IMPORTED)
-    message(STATUS "typesafe_carla: carla-client links Boost::python; using an empty stand-in")
   endif()
 
   # CARLA 0.10.0's carla/client/FileTransfer.h uses uint8_t without including
@@ -163,8 +162,9 @@ else()
   # provides it transitively. Force-include it for CARLA and for the shim
   # (which includes that header through Client.h). Harmless for other refs.
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>")
-    target_compile_options(typesafe_carla_ffi PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>")
+    set(_tsc_include_cstdint "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>")
+    add_compile_options("${_tsc_include_cstdint}")
+    target_compile_options(typesafe_carla_ffi PRIVATE "${_tsc_include_cstdint}")
   endif()
 
   # CMake 4 removed compatibility with cmake_minimum_required < 3.5, which some

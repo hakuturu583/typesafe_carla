@@ -111,11 +111,9 @@ uv run typesafe-codon run main.py
 ```
 
 `typesafe-carla` depends on `typesafe-carla-toolchain`, which bundles a
-pinned Codon, so no separate Codon install and no `CODON_PATH` setup is
-needed. To use a different CARLA ref than the published wheel's, build from
-the sdist: `CARLA_GIT_REF=<ref> pip install --no-binary typesafe-carla
-typesafe-carla`. See [docs/releasing.md](docs/releasing.md) for the release
-process.
+pinned Codon. Requirements and building for another CARLA ref are in
+[docs/usage.md](docs/usage.md); the release process is in
+[docs/releasing.md](docs/releasing.md).
 
 ## Testing against a real CARLA server
 
