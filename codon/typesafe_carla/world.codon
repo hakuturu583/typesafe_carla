@@ -63,7 +63,7 @@ def _parent_ptr(attach_to) -> cobj:
     if attach_to is None:
         return cobj()
     elif isinstance(attach_to, Optional):
-        return _parent_ptr(attach_to.__val__()) if attach_to is not None else cobj()
+        return _parent_ptr(attach_to.__val__())  # None was handled above
     elif hasattr(attach_to, "as_vehicle"):  # Actor and its subclasses
         return attach_to._h.ptr
     else:

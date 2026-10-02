@@ -47,6 +47,7 @@ struct Episode : std::enable_shared_from_this<Episode> {
   rpc::ActorId next_actor_id = 1;
   rpc::EpisodeSettings settings;
   std::map<rpc::ActorId, ActorData> actors;  // ordered: GetActors() is deterministic
+  std::map<rpc::ActorId, std::function<void(SharedPtr<sensor::SensorData>)>> listeners;
 
   rpc::ActorId AddActorLocked(const std::string &type_id, bool is_vehicle,
                               const geom::Transform &transform) {
@@ -94,12 +95,16 @@ struct Episode : std::enable_shared_from_this<Episode> {
     return id;
   }
 
-  std::map<rpc::ActorId, std::function<void(SharedPtr<sensor::SensorData>)>> listeners;
-
   // Synthetic measurements for every listening sensor (see the class comment
   // on client::Sensor). Collision events need actor objects, whose
   // constructors take the episode lock, so they are built in the delivery.
   std::vector<Delivery> SenseLocked();
+
+  // Every actor removal goes through here so listeners never outlive their sensor.
+  bool EraseActorLocked(rpc::ActorId id) {
+    listeners.erase(id);
+    return actors.erase(id) > 0;
+  }
 
   ActorData &LiveLocked(rpc::ActorId id) {
     auto it = actors.find(id);
@@ -437,11 +442,7 @@ void Actor::SetTargetVelocity(const geom::Vector3D &vector) {
 
 bool Actor::Destroy() {
   std::lock_guard<std::mutex> lock(_episode->mutex);
-  auto it = _episode->actors.find(_id);
-  if (it == _episode->actors.end()) return false;
-  _episode->actors.erase(it);
-  _episode->listeners.erase(_id);
-  return true;
+  return _episode->EraseActorLocked(_id);
 }
 
 void Vehicle::SetAutopilot(bool enabled, uint16_t) {
@@ -736,7 +737,7 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
           return id;
         } else if constexpr (std::is_same_v<T, Command::DestroyActor>) {
           const rpc::ActorId id = target(c.actor).id;
-          e.actors.erase(id);
+          e.EraseActorLocked(id);
           return id;
         } else if constexpr (std::is_same_v<T, Command::ApplyVehicleControl>) {
           auto &a = target(c.actor);
@@ -843,28 +844,33 @@ std::vector<Delivery> Episode::SenseLocked() {
     auto it = actors.find(entry.first);
     if (it == actors.end()) continue;
     const ActorData &a = it->second;
-    const auto callback = entry.second;
+    auto callback = entry.second;
     SharedPtr<sensor::SensorData> data;
     namespace sd = sensor::data;
     if (a.type_id == "sensor.camera.rgb") {
       const auto w = static_cast<size_t>(AttributeInt(a, "image_size_x", 800));
       const auto h = static_cast<size_t>(AttributeInt(a, "image_size_y", 600));
-      auto image = std::make_shared<sd::Image>(frame, timestamp, a.transform, w, h,
-                                               static_cast<float>(AttributeDouble(a, "fov", 90.0)));
-      // A gradient that changes with the frame: B = x, G = y, R = frame.
-      for (size_t y = 0; y < h; ++y) {
-        for (size_t x = 0; x < w; ++x) {
-          image->data()[y * w + x] = sd::Color{static_cast<uint8_t>(x), static_cast<uint8_t>(y),
-                                               static_cast<uint8_t>(frame), 255u};
+      const auto fov = static_cast<float>(AttributeDouble(a, "fov", 90.0));
+      // The pixels are filled in the delivery, outside the episode lock.
+      out.push_back([cb = std::move(callback), f = frame, timestamp, t = a.transform, w, h, fov]() {
+        auto image = std::make_shared<sd::Image>(f, timestamp, t, w, h, fov);
+        // A gradient that changes with the frame: B = x, G = y, R = frame.
+        for (size_t y = 0; y < h; ++y) {
+          for (size_t x = 0; x < w; ++x) {
+            image->data()[y * w + x] = sd::Color{static_cast<uint8_t>(x), static_cast<uint8_t>(y),
+                                                 static_cast<uint8_t>(f), 255u};
+          }
         }
-      }
-      data = image;
+        cb(std::move(image));
+      });
+      continue;
     } else if (a.type_id == "sensor.lidar.ray_cast") {
       const auto channels = static_cast<uint32_t>(AttributeInt(a, "channels", 32));
       const float range = static_cast<float>(AttributeDouble(a, "range", 10.0));
       constexpr uint32_t kPerChannel = 100;
       std::vector<uint32_t> per_channel(channels, kPerChannel);
       std::vector<sd::LidarDetection> points;
+      points.reserve(size_t{channels} * kPerChannel);
       for (uint32_t c = 0; c < channels; ++c) {
         const double elevation = (static_cast<double>(c) / std::max(1u, channels - 1) - 0.5) * 0.5;
         for (uint32_t i = 0; i < kPerChannel; ++i) {
@@ -910,27 +916,16 @@ std::vector<Delivery> Episode::SenseLocked() {
         const size_t f = frame;
         const geom::Vector3D impulse(1000.0f * (p.x - o.x), 1000.0f * (p.y - o.y), 0.0f);
         out.push_back([self, callback, self_id, other_id, t, f, timestamp, impulse]() {
-          auto make = [&](rpc::ActorId id) -> SharedPtr<Actor> {
-            try {
-              ActorData d;
-              {
-                std::lock_guard<std::mutex> lock(self->mutex);
-                d = self->actors.at(id);
-              }
-              return MakeActor(self, d);
-            } catch (const std::exception &) {
-              return nullptr;
-            }
-          };
-          callback(std::make_shared<sensor::data::CollisionEvent>(f, timestamp, t, make(self_id),
-                                                                   make(other_id), impulse));
+          const World world(self);  // GetActor: nullptr once an actor is destroyed
+          callback(std::make_shared<sensor::data::CollisionEvent>(
+              f, timestamp, t, world.GetActor(self_id), world.GetActor(other_id), impulse));
         });
       }
       continue;
     } else {
       continue;
     }
-    out.push_back([callback, data]() { callback(data); });
+    out.push_back([cb = std::move(callback), data = std::move(data)]() { cb(data); });
   }
   return out;
 }

@@ -64,14 +64,9 @@ class SensorData:
     def __repr__(self) -> str:
         return f"SensorData(frame={self.frame}, type={self.type})"
 
-class Image:
-    """Camera image: BGRA, 4 bytes per pixel, row-major."""
+class _Measurement:
+    """A typed view of a SensorData, which it keeps alive."""
     data: SensorData
-    _c: CImage
-
-    def __init__(self, data: SensorData, c: CImage):
-        self.data = data
-        self._c = c
 
     @property
     def frame(self) -> int:
@@ -80,6 +75,14 @@ class Image:
     @property
     def timestamp(self) -> float:
         return self.data.timestamp
+
+class Image(_Measurement):
+    """Camera image: BGRA, 4 bytes per pixel, row-major."""
+    _c: CImage
+
+    def __init__(self, data: SensorData, c: CImage):
+        self.data = data
+        self._c = c
 
     @property
     def transform(self) -> Transform:
@@ -124,22 +127,13 @@ class LidarDetection:
     def __repr__(self) -> str:
         return f"LidarDetection({self.point}, intensity={self.intensity})"
 
-class LidarMeasurement:
+class LidarMeasurement(_Measurement):
     """A LiDAR sweep. Points are a zero-copy view of float32 {x, y, z, intensity}."""
-    data: SensorData
     _c: CLidar
 
     def __init__(self, data: SensorData, c: CLidar):
         self.data = data
         self._c = c
-
-    @property
-    def frame(self) -> int:
-        return self.data.frame
-
-    @property
-    def timestamp(self) -> float:
-        return self.data.timestamp
 
     @property
     def transform(self) -> Transform:
@@ -167,20 +161,21 @@ class LidarMeasurement:
     def __len__(self) -> int:
         return self._c.point_count
 
-    def __getitem__(self, index: int) -> LidarDetection:
-        p = self._c.points[_normalize_index(index, len(self), "lidar point")]
+    def _get(self, i: int) -> LidarDetection:
+        p = self._c.points[i]
         return LidarDetection(Location(float(p.x), float(p.y), float(p.z)), float(p.intensity))
+
+    def __getitem__(self, index: int) -> LidarDetection:
+        return self._get(_normalize_index(index, len(self), "lidar point"))
 
     def __iter__(self) -> Generator[LidarDetection]:
         for i in range(len(self)):
-            p = self._c.points[i]
-            yield LidarDetection(Location(float(p.x), float(p.y), float(p.z)), float(p.intensity))
+            yield self._get(i)
 
     def __repr__(self) -> str:
         return f"LidarMeasurement(frame={self.frame}, channels={self.channels}, points={len(self)})"
 
-class GnssMeasurement:
-    data: SensorData
+class GnssMeasurement(_Measurement):
     latitude: float
     longitude: float
     altitude: float
@@ -191,20 +186,11 @@ class GnssMeasurement:
         self.longitude = c.longitude
         self.altitude = c.altitude
 
-    @property
-    def frame(self) -> int:
-        return self.data.frame
-
-    @property
-    def timestamp(self) -> float:
-        return self.data.timestamp
-
     def __repr__(self) -> str:
         return (f"GnssMeasurement(frame={self.frame}, lat={self.latitude}, lon={self.longitude}, "
                 f"alt={self.altitude})")
 
-class IMUMeasurement:
-    data: SensorData
+class IMUMeasurement(_Measurement):
     accelerometer: Vector3D  # m/s^2
     gyroscope: Vector3D  # rad/s
     compass: float  # radians from north
@@ -215,20 +201,11 @@ class IMUMeasurement:
         self.gyroscope = Vector3D._from_c(c.gyroscope)
         self.compass = c.compass
 
-    @property
-    def frame(self) -> int:
-        return self.data.frame
-
-    @property
-    def timestamp(self) -> float:
-        return self.data.timestamp
-
     def __repr__(self) -> str:
         return (f"IMUMeasurement(frame={self.frame}, accelerometer={self.accelerometer}, "
                 f"gyroscope={self.gyroscope}, compass={self.compass})")
 
-class CollisionEvent:
-    data: SensorData
+class CollisionEvent(_Measurement):
     actor_id: int  # the actor the sensor is attached to
     other_actor_id: int  # 0 when the other side is not an actor (e.g. static geometry)
     normal_impulse: Vector3D
@@ -238,14 +215,6 @@ class CollisionEvent:
         self.actor_id = int(c.actor_id)
         self.other_actor_id = int(c.other_actor_id)
         self.normal_impulse = Vector3D._from_c(c.normal_impulse)
-
-    @property
-    def frame(self) -> int:
-        return self.data.frame
-
-    @property
-    def timestamp(self) -> float:
-        return self.data.timestamp
 
     def __repr__(self) -> str:
         return (f"CollisionEvent(frame={self.frame}, actor_id={self.actor_id}, "
