@@ -101,9 +101,9 @@ resolved commit are compiled in: `typesafe-codon info`,
 `carla.libcarla_git_ref()` / `carla.libcarla_git_commit()` in Codon, and
 `_native/BUILD_INFO.json` in the wheel.
 
-| typesafe_carla | ABI | Codon | CARLA | Platform | Tested |
-|---|---|---|---|---|---|
-| 0.1.0 | 1.1 | 0.19.x | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
+| typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
+|---|---|---|---|---|---|---|
+| 0.1.0 | 2.0 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
 
 ### Backends
 
@@ -131,7 +131,7 @@ uv add typesafe-carla        # or: pip install typesafe-carla
 uv run typesafe-codon run main.py
 ```
 
-Python 3.10 or newer (tested on 3.10–3.14). Python only runs the
+Python 3.10 or newer (CI tests 3.10 and 3.14). Python only runs the
 `typesafe-codon` launcher; your programs are compiled by Codon.
 `typesafe-carla` depends on `typesafe-carla-toolchain`, which bundles a
 pinned Codon. Requirements and building for another CARLA ref are in
