@@ -18,9 +18,12 @@ def check_parent(child: carla.Actor, parent: carla.Actor, what: str):
     p = child.parent
     assert p is not None, f"{what}: no parent"
     assert p.id == parent.id, f"{what}: parent {p.id}, expected {parent.id}"
+    # The offsets are at most about 6.7 m and a spring arm only shortens, so a
+    # camera that follows its parent stays within 15 m. This cannot tell
+    # SpringArm from Rigid: the server exposes no attachment type to query.
     d = child.get_location().distance(parent.get_location())
     print(what, "camera", child.id, "parent", p.id, "distance", d)
-    assert d < 50.0, f"{what}: camera {d} m from its parent"
+    assert d < 15.0, f"{what}: camera {d} m from its parent"
 
 assert carla.backend() == "libcarla"
 client = carla.Client(host, port)

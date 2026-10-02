@@ -262,12 +262,12 @@ TSC_API tsc_status_t tsc_world_get_id(tsc_world_t *world, uint64_t *out_id);
 TSC_API tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_list);
 TSC_API tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
                                                      tsc_blueprint_library_t **out_library);
-/* parent may be NULL; attachment_type is then ignored. */
+/* attachment_type: tsc_attachment_type_t, always checked; used only with a parent (may be NULL). */
 TSC_API tsc_status_t tsc_world_spawn_actor(tsc_world_t *world,
                                            const tsc_actor_blueprint_t *blueprint,
                                            const tsc_transform_t *transform, tsc_actor_t *parent,
                                            int32_t attachment_type, tsc_actor_t **out_actor);
-/* TSC_OK with *out_actor == NULL when the spawn location is occupied. */
+/* TSC_OK with *out_actor == NULL if the spawn fails; bad attachment_type: TSC_INVALID_ARGUMENT. */
 TSC_API tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world,
                                                const tsc_actor_blueprint_t *blueprint,
                                                const tsc_transform_t *transform,

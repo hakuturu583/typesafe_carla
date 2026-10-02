@@ -1,6 +1,7 @@
 # World.spawn_actor / try_spawn_actor take an attachment_type (issue #34), as
 # the Python API: spawn_actor(blueprint, transform, attach_to=None,
 # attachment_type=carla.AttachmentType.Rigid).
+# strict
 import typesafe_carla as carla
 
 def spawn(world: carla.World, vehicle: carla.Vehicle):

@@ -346,7 +346,7 @@ using TextureFloatColor = Texture<FloatColor>;
 
 enum class ActorAttributeType : uint8_t { Bool, Int, Float, String, RGBColor, SIZE, INVALID };
 
-enum class AttachmentType { Rigid, SpringArm, SpringArmGhost };
+enum class AttachmentType : uint8_t { Rigid, SpringArm, SpringArmGhost, SIZE, INVALID };
 
 enum class MapLayer : uint16_t { None = 0, All = 0xFFFF };
 
@@ -1286,12 +1286,10 @@ class World {
   SharedPtr<Actor> GetActor(rpc::ActorId id) const;
   SharedPtr<Actor> SpawnActor(const ActorBlueprint &blueprint, const geom::Transform &transform,
                               Actor *parent = nullptr,
-                              rpc::AttachmentType attachment_type = rpc::AttachmentType::Rigid,
-                              const std::string &socket_name = "");
+                              rpc::AttachmentType attachment_type = rpc::AttachmentType::Rigid);
   SharedPtr<Actor> TrySpawnActor(const ActorBlueprint &blueprint,
                                  const geom::Transform &transform, Actor *parent = nullptr,
-                                 rpc::AttachmentType attachment_type = rpc::AttachmentType::Rigid,
-                                 const std::string &socket_name = "") noexcept;
+                                 rpc::AttachmentType attachment_type = rpc::AttachmentType::Rigid) noexcept;
   uint64_t Tick(time_duration timeout);
   SharedPtr<Map> GetMap() const;
   WorldSnapshot GetSnapshot() const;
