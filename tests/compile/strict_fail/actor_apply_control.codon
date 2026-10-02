@@ -1,0 +1,10 @@
+# Strict mode: an Actor must be converted with as_vehicle() before it can be
+# driven. (Outside strict mode this compiles: a Python-API compatibility path.)
+# expect-error: strict mode: call as_vehicle() first (Actor.apply_control is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def drive(world: carla.World):
+    world.get_actors()[0].apply_control(carla.VehicleControl(throttle=0.5))
+
+# Compile-only: Codon type-checks a function only when it is called.
+drive(carla.Client("localhost", 2000).get_world())

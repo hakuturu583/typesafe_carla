@@ -64,3 +64,55 @@ def test_info(launcher):
     assert result.returncode == 0, result.stdout + result.stderr
     assert "native ABI         3.0" in result.stdout
     assert "carla ref" in result.stdout
+
+
+def test_split_strict():
+    assert cli.split_strict(["--strict", "run", "a.py"]) == (["run", "a.py"], True)
+    assert cli.split_strict(["build", "--strict", "-release", "a.py"]) == \
+        (["build", "-release", "a.py"], True)
+    assert cli.split_strict(["run", "a.py", "--strict"]) == (["run", "a.py", "--strict"], False)
+    assert cli.split_strict(["info"]) == (["info"], False)
+
+
+def test_llvm_args(tmp_path):
+    src = tmp_path / "main.py"
+    src.write_text("")
+    args = ["build", "--linker-flags=-lm", "-release", "-o", "out", "-exe", str(src)]
+    assert cli.llvm_args(args, "x.ll") == ["build", "--llvm", "-o", "x.ll", str(src)]
+    args = ["run", "-D", "N=1", str(src), "progarg", "-x"]
+    assert cli.llvm_args(args, "x.ll") == ["build", "--llvm", "-o", "x.ll", "-D", "N=1", str(src)]
+    assert cli.llvm_args(["run", str(tmp_path / "missing.py")], "x.ll") is None
+
+
+def test_compat_paths_in_ir():
+    ir = (b'@s0 = private constant [14 x i8] c"[tsc-compat] \\00"\n'
+          b"declare void @\"f.0,'[tsc-compat] A.b() without as_b()'\"()\n"
+          b'@s1 = private constant [36 x i8] c"[tsc-compat] A.b() without as_b()\\00"\n'
+          b'@s2 = private constant [36 x i8] c"[tsc-compat] A.b() without as_b()\\00"\n'
+          b'@s3 = private constant [30 x i8] c"[tsc-compat] say \\22hi\\22\\00"\n')
+    assert cli.compat_paths_in_ir(ir) == ["A.b() without as_b()", 'say "hi"']
+    assert cli.compat_paths_in_ir(b'declare void @"f.0,\'[tsc-compat] x\'"()') == []
+
+
+def test_codon_path_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv(paths.ENV_CACHE_DIR, str(tmp_path))
+    package = paths.codon_modules_dir() / "typesafe_carla"
+    lax, strict = paths.codon_path_dir(False), paths.codon_path_dir(True)
+    assert lax != strict and lax.parent == tmp_path / "codon-path"
+    for directory, value in ((lax, 0), (strict, 1)):
+        assert (directory / "typesafe_carla").resolve() == package.resolve()
+        config = (directory / "_tsc_build_config.codon").read_text()
+        assert f"TSC_STRICT: Static[int] = {value}" in config
+    assert paths.codon_path_dir(False) == lax  # reused
+    (lax / "_tsc_build_config.codon").write_text("stale")
+    assert paths.codon_path_dir(False) == lax
+    assert "= 0" in (lax / "_tsc_build_config.codon").read_text()
+    assert sorted(p.name for p in lax.parent.iterdir()) == sorted([lax.name, strict.name])
+
+
+def test_info_shows_strict_mode(launcher):
+    assert "strict mode        off" in launcher("info").stdout
+    assert "strict mode        on" in launcher("--strict", "info").stdout
+    result = launcher("info", env={"TYPESAFE_CARLA_STRICT": "1"})
+    assert "strict mode        on" in result.stdout
+    assert "CODON_PATH" in result.stdout

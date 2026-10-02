@@ -4,7 +4,9 @@
 #   └── Vehicle
 #
 # Conversions are explicit and checked: Actor.as_vehicle() raises
-# ActorTypeError when the actor is not a vehicle.
+# ActorTypeError when the actor is not a vehicle. For Python API
+# compatibility, _actor_compat.codon also puts the subclass methods on Actor
+# (converting at run time; compile errors in strict mode).
 
 from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_KIND_VEHICLE,
                    tsc_handle_kind, tsc_actor_get_id, tsc_actor_get_type_id, tsc_actor_is_alive,

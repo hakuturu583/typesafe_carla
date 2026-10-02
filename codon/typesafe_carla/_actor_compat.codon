@@ -1,0 +1,265 @@
+# Python-API compatibility: subclass methods callable on a plain Actor.
+#
+# The CARLA Python API returns the concrete subclass from world.get_actor(),
+# so `world.get_actor(i).apply_control(...)` works there. Here every such
+# method on Actor does the checked as_*() conversion at run time (raising
+# ActorTypeError when the actor is of another kind) and delegates to the
+# subclass, so argument types are still checked at compile time.
+#
+# These shortcuts are not statically checked for the actor kind. Each prints a
+# warning the first time it is used, and is a compile error in strict mode
+# (typesafe-codon --strict); call as_vehicle() & co. for the static path.
+#
+# Lives in its own module because it needs every subclass, and the subclass
+# modules import actor.codon. Codon resolves inherited methods through the
+# base class, so subclasses see these too (vehicle.listen() compiles and raises
+# ActorTypeError at run time unless strict mode is on); a subclass's own method
+# of the same name shadows all of them (vehicle.apply_control(WalkerControl)
+# stays a compile error).
+
+from ._ffi import TSC_KIND_SENSOR, TSC_KIND_WALKER, TSC_KIND_WALKER_AI_CONTROLLER, tsc_handle_kind
+from ._strict import STRICT, compat_warning
+from .errors import ActorTypeError
+from .control import VehicleControl, WalkerControl
+from .actor import Actor, Vehicle
+from .walker import Walker, WalkerAIController
+from .traffic_light import TrafficLight
+from .sensor import Sensor
+
+@extend
+class Actor:
+    def _kind(self) -> int:
+        return int(tsc_handle_kind(self._h.ptr))
+
+    # Vehicle and Walker share apply_control(); the argument type picks one.
+
+    def apply_control(self, control: VehicleControl):
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.apply_control is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.apply_control(VehicleControl) without as_vehicle()", "call as_vehicle() first")
+        self.as_vehicle().apply_control(control)
+
+    def apply_control(self, control: WalkerControl):
+        if STRICT:
+            compile_error("strict mode: call as_walker() first (Actor.apply_control is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.apply_control(WalkerControl) without as_walker()", "call as_walker() first")
+        self.as_walker().apply_control(control)
+
+    def get_control(self) -> VehicleControl:
+        """Vehicles only: the return type cannot depend on the actor kind.
+
+        Use as_walker().get_control() for a walker's WalkerControl."""
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.get_control is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_control() without as_vehicle()", "call as_vehicle() first")
+        if self._kind() == TSC_KIND_WALKER:
+            raise ActorTypeError(f"actor {self.id} is a walker; Actor.get_control() returns a "
+                                 "VehicleControl, use as_walker().get_control()")
+        return self.as_vehicle().get_control()
+
+    # Vehicle
+
+    def get_physics_control(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.get_physics_control is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_physics_control() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_physics_control(*args, **kwargs)
+
+    def apply_physics_control(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.apply_physics_control is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.apply_physics_control() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().apply_physics_control(*args, **kwargs)
+
+    def set_light_state(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.set_light_state is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.set_light_state() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().set_light_state(*args, **kwargs)
+
+    def get_light_state(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.get_light_state is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_light_state() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_light_state(*args, **kwargs)
+
+    def get_speed_limit(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.get_speed_limit is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_speed_limit() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_speed_limit(*args, **kwargs)
+
+    def get_traffic_light_state(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.get_traffic_light_state is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_traffic_light_state() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_traffic_light_state(*args, **kwargs)
+
+    def is_at_traffic_light(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.is_at_traffic_light is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.is_at_traffic_light() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().is_at_traffic_light(*args, **kwargs)
+
+    def get_traffic_light(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.get_traffic_light is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_traffic_light() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_traffic_light(*args, **kwargs)
+
+    def set_autopilot(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_vehicle() first (Actor.set_autopilot is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.set_autopilot() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().set_autopilot(*args, **kwargs)
+
+    # WalkerAIController (stop() is shared with Sensor, below)
+
+    def start(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_walker_ai_controller() first (Actor.start is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.start() without as_walker_ai_controller()", "call as_walker_ai_controller() first")
+        return self.as_walker_ai_controller().start(*args, **kwargs)
+
+    def go_to_location(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_walker_ai_controller() first (Actor.go_to_location is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.go_to_location() without as_walker_ai_controller()", "call as_walker_ai_controller() first")
+        return self.as_walker_ai_controller().go_to_location(*args, **kwargs)
+
+    def set_max_speed(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_walker_ai_controller() first (Actor.set_max_speed is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.set_max_speed() without as_walker_ai_controller()", "call as_walker_ai_controller() first")
+        return self.as_walker_ai_controller().set_max_speed(*args, **kwargs)
+
+    # TrafficLight
+
+    def get_state(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.get_state is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_state() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_state(*args, **kwargs)
+
+    def set_state(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.set_state is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.set_state() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().set_state(*args, **kwargs)
+
+    def get_green_time(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.get_green_time is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_green_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_green_time(*args, **kwargs)
+
+    def set_green_time(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.set_green_time is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.set_green_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().set_green_time(*args, **kwargs)
+
+    def get_yellow_time(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.get_yellow_time is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_yellow_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_yellow_time(*args, **kwargs)
+
+    def set_yellow_time(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.set_yellow_time is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.set_yellow_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().set_yellow_time(*args, **kwargs)
+
+    def get_red_time(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.get_red_time is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_red_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_red_time(*args, **kwargs)
+
+    def set_red_time(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.set_red_time is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.set_red_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().set_red_time(*args, **kwargs)
+
+    def get_elapsed_time(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.get_elapsed_time is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_elapsed_time() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_elapsed_time(*args, **kwargs)
+
+    def freeze(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.freeze is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.freeze() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().freeze(*args, **kwargs)
+
+    def is_frozen(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.is_frozen is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.is_frozen() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().is_frozen(*args, **kwargs)
+
+    def get_pole_index(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.get_pole_index is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.get_pole_index() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().get_pole_index(*args, **kwargs)
+
+    def reset_group(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_traffic_light() first (Actor.reset_group is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.reset_group() without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().reset_group(*args, **kwargs)
+
+    # Sensor
+
+    def listen(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_sensor() first (Actor.listen is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.listen() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().listen(*args, **kwargs)
+
+    @property
+    def is_listening(self) -> bool:
+        if STRICT:
+            compile_error("strict mode: call as_sensor() first (Actor.is_listening is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.is_listening without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().is_listening
+
+    @property
+    def dropped_count(self) -> int:
+        if STRICT:
+            compile_error("strict mode: call as_sensor() first (Actor.dropped_count is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.dropped_count without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().dropped_count
+
+    def poll(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_sensor() first (Actor.poll is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.poll() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().poll(*args, **kwargs)
+
+    def wait_for_data(self, *args, **kwargs):
+        if STRICT:
+            compile_error("strict mode: call as_sensor() first (Actor.wait_for_data is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.wait_for_data() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().wait_for_data(*args, **kwargs)
+
+    # Sensor and WalkerAIController
+
+    def stop(self):
+        """Sensor.stop() or WalkerAIController.stop(), whichever this actor is."""
+        if STRICT:
+            compile_error("strict mode: call as_sensor() or as_walker_ai_controller() first (Actor.stop is a Python-API compatibility shortcut)")
+        compat_warning("[tsc-compat] Actor.stop() without as_sensor() / as_walker_ai_controller()",
+                       "call as_sensor() or as_walker_ai_controller() first")
+        kind = self._kind()
+        if kind == TSC_KIND_SENSOR:
+            self.as_sensor().stop()
+        elif kind == TSC_KIND_WALKER_AI_CONTROLLER:
+            self.as_walker_ai_controller().stop()
+        else:
+            raise ActorTypeError(f"actor {self.id} ({self.type_id}) is neither a sensor nor a "
+                                 "walker AI controller")

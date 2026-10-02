@@ -1,0 +1,10 @@
+# Subclass methods called on a plain Actor forward to the subclass, whose
+# signature is still checked: TrafficLight.set_state takes an int state.
+# expect-error: 'Transform' does not match expected type 'int'
+import typesafe_carla as carla
+
+def turn(world: carla.World):
+    world.get_actor(3).set_state(carla.Transform())
+
+# Compile-only: Codon type-checks a function only when it is called.
+turn(carla.Client("localhost", 2000).get_world())

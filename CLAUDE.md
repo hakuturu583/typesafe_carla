@@ -31,6 +31,14 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
 - New API needs both a `tests/compile/pass` and, where misuse is possible, a
   `tests/compile/fail` case with an `# expect-error:` line. Test programs must
   *call* their functions: Codon only type-checks functions that are called.
+  Strict mode (`typesafe-codon --strict`): a pass program with a `# strict`
+  line must also compile in strict mode; `tests/compile/strict_fail` programs
+  must compile normally and fail in strict mode with their `# expect-error:`.
+- Python-API compatibility shortcuts (not statically checked) start with
+  `if STRICT: compile_error("strict mode: ...")` and call
+  `compat_warning("[tsc-compat] <what>", "<instead>")` with literal strings
+  (`_strict.codon`); the launcher finds the marker in the LLVM IR to warn at
+  compile time.
 - A C function that only checks a handle, converts arguments and calls one
   LibCarla method belongs in `bindings/*.yaml` (generated), not hand-written.
   Never edit generated code (`native/src/generated/`, marked blocks in

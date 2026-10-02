@@ -1,0 +1,10 @@
+# Strict mode: listening needs a checked as_sensor() conversion.
+# (Outside strict mode this compiles: a Python-API compatibility path.)
+# expect-error: strict mode: call as_sensor() first (Actor.listen is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def start(world: carla.World, camera_id: int):
+    world.get_actor(camera_id).listen()
+
+# Compile-only: Codon type-checks a function only when it is called.
+start(carla.Client("localhost", 2000).get_world(), 2)

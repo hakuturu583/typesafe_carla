@@ -1,0 +1,10 @@
+# Calling Vehicle/Walker methods on a plain Actor still checks the arguments:
+# apply_control takes a VehicleControl or a WalkerControl, not a Transform.
+# expect-error: no function 'Actor.apply_control' with arguments (Actor, Transform)
+import typesafe_carla as carla
+
+def drive(world: carla.World):
+    world.get_actor(1).apply_control(carla.Transform())
+
+# Compile-only: Codon type-checks a function only when it is called.
+drive(carla.Client("localhost", 2000).get_world())

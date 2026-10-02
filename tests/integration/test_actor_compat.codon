@@ -1,0 +1,163 @@
+# Issue #8 against a real CARLA server: the subclass methods of Vehicle,
+# Walker, WalkerAIController, TrafficLight and Sensor called on the plain Actor
+# that world.get_actor() returns, as in the CARLA Python API, and
+# ActorTypeError for the wrong kind of actor.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+tm_port = int(os.getenv("TSC_CARLA_TM_PORT", "8100"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+lib = world.get_blueprint_library()
+points = world.get_map().get_spawn_points()
+
+def raises_type_error(f) -> bool:
+    try:
+        f()
+    except carla.ActorTypeError:
+        return True
+    return False
+
+spawned = List[int]()
+original_settings = world.get_settings()
+try:
+    # --- Vehicle --------------------------------------------------------------------------
+    car_id = -1
+    for p in points:
+        a = world.try_spawn_actor(lib.find("vehicle.lincoln.mkz"), p)
+        if a is not None:
+            car_id = a.id
+            break
+    assert car_id >= 0, "could not spawn a vehicle"
+    spawned.append(car_id)
+    car = world.get_actor(car_id)  # a plain Actor, as get_actor returns in Python
+    settings = world.get_settings()
+    settings.synchronous_mode = True
+    settings.fixed_delta_seconds = 0.05
+    world.apply_settings(settings)
+    world.tick()
+
+    car.apply_control(carla.VehicleControl(throttle=0.4, steer=0.1))
+    world.tick()
+    c = car.get_control()
+    print("control through Actor:", c)
+    assert abs(c.throttle - 0.4) < 1e-3 and abs(c.steer - 0.1) < 1e-3
+    physics = car.get_physics_control()
+    assert physics.mass > 0.0
+    car.apply_physics_control(physics)
+    car.set_light_state(carla.VehicleLightState.LowBeam)
+    world.tick()
+    assert car.get_light_state() == carla.VehicleLightState.LowBeam
+    print("speed limit", car.get_speed_limit(), "light state", car.get_traffic_light_state(),
+          "at light", car.is_at_traffic_light(), "light", car.get_traffic_light())
+    car.set_autopilot(True, tm_port)
+    world.tick()
+    car.set_autopilot(False, tm_port)
+
+    # --- TrafficLight ---------------------------------------------------------------------
+    light_id = -1
+    for a in world.get_actors():
+        if a.type_id == "traffic.traffic_light":
+            light_id = a.id
+            break
+    assert light_id >= 0, "no traffic light on this map"
+    light = world.get_actor(light_id)
+    light.freeze(True)
+    light.set_state(carla.TrafficLightState.Green)
+    world.tick()
+    assert light.get_state() == carla.TrafficLightState.Green and light.is_frozen()
+    green = light.get_green_time()
+    light.set_green_time(green + 1.0)
+    world.tick()
+    assert abs(light.get_green_time() - (green + 1.0)) < 1e-3
+    light.set_green_time(green)
+    print("light pole", light.get_pole_index(), "times", light.get_green_time(),
+          light.get_yellow_time(), light.get_red_time(), "elapsed", light.get_elapsed_time())
+    light.freeze(False)
+    light.reset_group()
+
+    # --- Sensor ---------------------------------------------------------------------------
+    camera_id = world.spawn_actor(lib.find("sensor.camera.rgb"),
+                                  carla.Transform(carla.Location(0.0, 0.0, 2.0)),
+                                  attach_to=car).id
+    spawned.append(camera_id)
+    camera = world.get_actor(camera_id)
+    camera.listen()
+    assert camera.is_listening
+    world.tick()
+    image = camera.wait_for_data(20.0).as_image()
+    print("camera through Actor:", image, "dropped", camera.dropped_count)
+    camera.stop()
+    assert not camera.is_listening
+    while camera.poll() is not None:
+        pass
+
+    # --- Wrong kinds raise ActorTypeError ---------------------------------------------------
+    for other in (light, camera):
+        assert raises_type_error(lambda: other.apply_control(carla.VehicleControl(throttle=1.0)))
+        assert raises_type_error(lambda: other.get_control())
+        assert raises_type_error(lambda: other.set_autopilot(True, tm_port))
+        assert raises_type_error(lambda: other.start())
+    assert raises_type_error(lambda: car.listen())
+    assert raises_type_error(lambda: car.stop())
+    assert raises_type_error(lambda: car.get_state())
+    assert raises_type_error(lambda: camera.set_state(carla.TrafficLightState.Red))
+    assert raises_type_error(
+        lambda: car.apply_control(carla.WalkerControl(carla.Vector3D(1.0, 0.0, 0.0), 1.0)))
+
+    # --- Walker and WalkerAIController (asynchronous: crowd navigation runs on its own) ---
+    world.apply_settings(original_settings)
+    walker_bp = lib.filter("walker.pedestrian.*")[0]
+    if walker_bp.has_attribute("is_invincible"):
+        walker_bp.set_attribute("is_invincible", "true")
+    walker_id = -1
+    for _ in range(10):
+        nav = world.get_random_location_from_navigation()
+        if nav is None:
+            continue
+        a = world.try_spawn_actor(walker_bp, carla.Transform(carla.Location(nav.x, nav.y,
+                                                                            nav.z + 1.0)))
+        if a is not None:
+            walker_id = a.id
+            break
+    assert walker_id >= 0, "could not spawn a walker"
+    spawned.append(walker_id)
+    walker = world.get_actor(walker_id)
+    ai_id = world.spawn_actor(lib.find("controller.ai.walker"), carla.Transform(),
+                              attach_to=walker).id
+    spawned.append(ai_id)
+    ai = world.get_actor(ai_id)
+    world.wait_for_tick(10.0)
+    ai.start()
+    target = world.get_random_location_from_navigation()
+    assert target is not None
+    ai.go_to_location(target)
+    ai.set_max_speed(1.8)
+    start = walker.get_location()
+    for _ in range(150):
+        world.wait_for_tick(10.0)
+    walked = walker.get_location().distance(start)
+    print("walker walked", walked, "m (AI controller through Actor)")
+    assert walked > 1.0
+    ai.stop()
+    for _ in range(5):
+        world.wait_for_tick(10.0)
+    walker.apply_control(carla.WalkerControl(carla.Vector3D(1.0, 0.0, 0.0), 1.0))
+    for _ in range(20):
+        world.wait_for_tick(10.0)
+        if abs(walker.as_walker().get_control().speed - 1.0) < 1e-3:
+            break
+    assert abs(walker.as_walker().get_control().speed - 1.0) < 1e-3
+    assert raises_type_error(lambda: walker.get_control())  # VehicleControl: vehicles only
+    assert raises_type_error(lambda: walker.set_max_speed(1.0))
+    assert raises_type_error(lambda: ai.apply_control(carla.WalkerControl()))
+finally:
+    world.apply_settings(original_settings)
+    client.apply_batch_sync([carla.command.DestroyActor(i) for i in reversed(spawned)])
+
+print("OK")

@@ -357,6 +357,12 @@ vehicle: Vehicle = actor.as_vehicle()
 
 If the actor is not a vehicle, `ActorTypeError` should be raised.
 
+For compatibility with Python-API code, `Actor` also has the subclass methods
+(`world.get_actor(i).apply_control(...)`): each converts with the matching
+`as_*()` at run time and delegates to the subclass, so argument types stay
+checked at compile time but the actor kind does not. They warn when used and
+are compile errors in strict mode (`typesafe-codon --strict`).
+
 ## 11. Ownership model
 
 All handle-backed public objects own a reference to an FFI handle.

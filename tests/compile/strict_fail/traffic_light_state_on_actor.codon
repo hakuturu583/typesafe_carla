@@ -1,5 +1,6 @@
-# Traffic-light operations need a checked as_traffic_light() conversion.
-# expect-error: 'Actor' object has no attribute 'set_state'
+# Strict mode: traffic-light operations need a checked as_traffic_light()
+# conversion. (Outside strict mode this compiles: a Python-API compatibility path.)
+# expect-error: strict mode: call as_traffic_light() first (Actor.set_state is a Python-API compatibility shortcut)
 import typesafe_carla as carla
 
 def turn_green(world: carla.World):

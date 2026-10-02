@@ -1,0 +1,33 @@
+# Compile-time strict mode (typesafe-codon --strict / TYPESAFE_CARLA_STRICT=1).
+# The launcher generates _tsc_build_config.codon (TSC_STRICT = 0 or 1) next to
+# typesafe_carla/ on CODON_PATH; Codon's -D defines would only reach the main
+# file. In strict mode the Python-API compatibility shortcuts are compile
+# errors (README: "Strict mode"); otherwise each one prints a warning the first
+# time it is used.
+#
+# compat_warning() takes literal strings and `what` starts with "[tsc-compat] ":
+# Codon only generates code for functions a program uses, so that string
+# constant shows up in the program's LLVM IR exactly when it uses a
+# compatibility path. The launcher scans the IR for it and warns at compile
+# time too. (No constant here may be the bare marker, or every program would
+# match.)
+import os
+import sys
+from _tsc_build_config import TSC_STRICT
+
+STRICT: Static[int] = TSC_STRICT
+
+_warned = Set[str]()
+
+def compat_warning(what: Literal[str], instead: Literal[str]):
+    """Warns once per `what` that a statically unchecked compatibility path was used."""
+    if what in _warned:
+        return
+    _warned.add(what)
+    if os.getenv("TYPESAFE_CARLA_COMPAT_WARNINGS", "1") == "0":
+        return
+    name = what[13:] if what.startswith("[tsc-compat]") else what  # len("[tsc-compat] ")
+    msg = (f"typesafe_carla: warning: {name} is a Python-API compatibility path that is not "
+           f"statically checked; {instead} (typesafe-codon --strict makes this a compile error, "
+           f"TYPESAFE_CARLA_COMPAT_WARNINGS=0 silences this warning)\n")
+    sys.stderr.write(msg)

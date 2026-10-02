@@ -82,6 +82,15 @@ camera.listen(lambda data: frames.append(data.as_image().frame))
 world.wait_for_tick()   # runs the callbacks queued so far
 ```
 
+Python-API code that calls subclass methods on whatever `get_actor` returns
+also works: `world.get_actor(i).apply_control(...)` converts at run time and
+raises `ActorTypeError` if the actor is not a vehicle. Such shortcuts are not
+statically checked for the actor kind, so the launcher warns about each one at
+compile time and the program warns the first time it takes one
+(`TYPESAFE_CARLA_COMPAT_WARNINGS=0` silences both). With
+`typesafe-codon --strict ...` (or `TYPESAFE_CARLA_STRICT=1`) they are compile
+errors, and only the `as_vehicle()` & co. path compiles.
+
 A mistake such as `vehicle.apply_control(carla.Transform())` is a compile
 error, and no executable is produced:
 

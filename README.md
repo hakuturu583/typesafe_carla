@@ -36,7 +36,7 @@ Milestones (design section 43):
 |---|---|
 | Client | `Client`, `set_timeout`, `get_timeout`, `get_world`, `load_world`, `reload_world`, `get_server_version`, `get_client_version`, `apply_batch`, `apply_batch_sync`, `get_trafficmanager`, `generate_opendrive_world` (+ `OpendriveGenerationParameters`), recorder: `start_recorder`, `stop_recorder`, `show_recorder_file_info`, `show_recorder_collisions`, `show_recorder_actors_blocked`, `replay_file`, `stop_replayer`, `set_replayer_time_factor` |
 | World | `id`, `get_actors`, `get_actor` (→ `Optional[Actor]`), `get_blueprint_library`, `spawn_actor`, `try_spawn_actor` (→ `Optional[Actor]`), `tick`, `wait_for_tick`, `get_snapshot`, `get_map`, `get_settings`, `apply_settings`, `get_weather` / `set_weather` / `is_weather_enabled`, `get_random_location_from_navigation` (→ `Optional`), `debug` (`DebugHelper`: `draw_point`, `draw_line`, `draw_arrow`, `draw_box`, `draw_string`) |
-| Actor | `id`, `type_id`, `is_alive`, `bounding_box`, `get/set_transform`, `get/set_location`, `get_velocity`, `set_target_velocity`, `get_acceleration`, `get_angular_velocity`, `destroy`, `set_target_angular_velocity`, `add_impulse`, `add_force`, `add_angular_impulse`, `add_torque`, `set_simulate_physics`, `set_enable_gravity`; checked `as_vehicle` / `as_sensor` / `as_walker` / `as_walker_ai_controller` / `as_traffic_light` |
+| Actor | `id`, `type_id`, `is_alive`, `bounding_box`, `get/set_transform`, `get/set_location`, `get_velocity`, `set_target_velocity`, `get_acceleration`, `get_angular_velocity`, `destroy`, `set_target_angular_velocity`, `add_impulse`, `add_force`, `add_angular_impulse`, `add_torque`, `set_simulate_physics`, `set_enable_gravity`; checked `as_vehicle` / `as_sensor` / `as_walker` / `as_walker_ai_controller` / `as_traffic_light`; the methods of Vehicle, Walker, WalkerAIController, TrafficLight and Sensor, as in the Python API (checked at run time, `ActorTypeError` on the wrong kind; compile errors with `--strict`) |
 | Vehicle | `apply_control`, `get_control`, `set_autopilot`, `get_physics_control` / `apply_physics_control` (every LibCarla UE5 field), `set_light_state` / `get_light_state` (`VehicleLightState`), `get_speed_limit`, `get_traffic_light_state`, `is_at_traffic_light`, `get_traffic_light` (→ `Optional`) |
 | Walkers | `Walker` (`apply_control(WalkerControl)`, `get_control`), `WalkerAIController` (`start`, `stop`, `go_to_location`, `set_max_speed`) |
 | Traffic lights | `TrafficLight` (`get_state` / `set_state` (`TrafficLightState`), green/yellow/red times, `get_elapsed_time`, `freeze`, `is_frozen`, `get_pole_index`, `reset_group`) |
@@ -214,6 +214,7 @@ native/src/generated/      generated C++ shim (do not edit)
 .github/workflows/         CI (mock + LibCarla builds) and PyPI release
 tests/native/              C ABI tests (ctest)
 tests/compile/pass|fail/   programs that must / must not compile
+tests/compile/strict_fail/ programs that compile only outside strict mode
 tests/unit/                Codon runtime tests against the mock backend
 examples/                  example programs
 ```
@@ -223,9 +224,18 @@ examples/                  example programs
 Most code ports by changing `import carla` to `import typesafe_carla as carla`.
 Deliberate differences, all in favour of static checking:
 
-* **Actors must be converted before using subclass methods.**
-  `world.get_actor(id).apply_control(...)` does not compile; use
-  `as_vehicle()`, which raises `ActorTypeError` if the actor is not a vehicle.
+* **Subclass methods on a plain `Actor` are checked at run time.** As in the
+  Python API, `world.get_actor(id).apply_control(...)` works. The Vehicle,
+  Walker, WalkerAIController, TrafficLight and Sensor methods on `Actor`
+  convert with the matching `as_*()` and raise `ActorTypeError` when the actor
+  is of another kind; argument types are still checked at compile time. Each
+  such shortcut warns once at compile time (launcher) and at run time
+  (`TYPESAFE_CARLA_COMPAT_WARNINGS=0` silences both); `typesafe-codon --strict`
+  makes them compile errors. The static path is `as_vehicle()` & co., which
+  return a typed `Vehicle`, `Walker`, ... Limits: `Actor.get_control()`
+  returns a `VehicleControl` (a walker's needs `as_walker().get_control()`),
+  and typed subclasses inherit the shortcuts too, so `vehicle.listen()`
+  compiles outside strict mode and raises `ActorTypeError`.
 * **`Location` is not a `Vector3D`.** A position cannot be passed where a
   velocity is expected (`set_target_velocity(actor.get_location())` fails to
   compile). Convert explicitly with `as_vector()` / `Location.from_vector()`.

@@ -1,0 +1,10 @@
+# Actor.get_control() returns a VehicleControl: the return type cannot depend on
+# the actor kind at run time. A walker's WalkerControl needs as_walker().
+# expect-error: 'VehicleControl' object has no attribute 'direction'
+import typesafe_carla as carla
+
+def heading(world: carla.World) -> carla.Vector3D:
+    return world.get_actor(4).get_control().direction
+
+# Compile-only: Codon type-checks a function only when it is called.
+heading(carla.Client("localhost", 2000).get_world())
