@@ -93,9 +93,9 @@ errors, and only the `as_vehicle()` & co. path compiles.
 
 To print the compile-time warnings before the program's output without a
 second compilation, `typesafe-codon run` builds the program (Codon links with
-g++) and runs it as a child process. It forwards termination signals to it and
-reports a program killed by signal N as exit status 128 + N. Without g++ it
-falls back to Codon's JIT and a separate warning pass.
+g++) and then execs it, so the launcher process becomes the program: same
+PID, signals and exit status. Without g++, or where the cache directory is
+mounted noexec, it falls back to Codon's JIT and a separate warning pass.
 
 A mistake such as `vehicle.apply_control(carla.Transform())` is a compile
 error, and no executable is produced:

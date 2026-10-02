@@ -133,8 +133,17 @@ print("not interrupted")
 """
 
 
+def _default_signals() -> None:
+    """In the launcher child: SIG_DFL for SIGINT/SIGQUIT, which a shell ignores in
+    background jobs (e.g. `pytest &`) and an exec would otherwise pass on."""
+    import signal
+
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGQUIT, signal.SIG_DFL)
+
+
 def _start_sleeper(launcher, tmp_path):
-    """Starts `typesafe-codon run` on a program that sleeps; returns (proc, info)."""
+    """Starts `typesafe-codon run` on a program that sleeps; returns (proc, info, source)."""
     import os
     import subprocess
     import sys
@@ -145,7 +154,8 @@ def _start_sleeper(launcher, tmp_path):
     env = {**os.environ, paths.ENV_CACHE_DIR: str(tmp_path / "cache")}
     proc = subprocess.Popen([sys.executable, "-m", "typesafe_carla.cli", "run", str(source)],
                             stdout=subprocess.PIPE, text=True, env=env,
-                            cwd=Path(__file__).resolve().parent.parent)
+                            cwd=Path(__file__).resolve().parent.parent,
+                            preexec_fn=_default_signals)
     info = {}
     for line in proc.stdout:
         key, _, value = line.strip().partition(" ") if not line.startswith("Sig") else \
@@ -156,45 +166,66 @@ def _start_sleeper(launcher, tmp_path):
     return proc, info, source
 
 
-def _gone(pid: int) -> bool:
-    import os
-    import time
-
-    for _ in range(50):
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return True
-        time.sleep(0.1)
-    return False
-
-
-def test_run_program_gets_default_signals_and_source_argv0(launcher, tmp_path):
+@pytest.mark.parametrize("sig", ["SIGINT", "SIGTERM"])
+def test_run_execs_the_built_program(launcher, tmp_path, sig):
+    """The launcher becomes the program: same PID, default signal handling,
+    argv[0] = source, death by the signal, and no scratch directory left."""
     import signal
 
     proc, info, source = _start_sleeper(launcher, tmp_path)
     try:
+        assert int(info["pid"]) == proc.pid
         assert int(info["SigIgn"], 16) & (1 << (signal.SIGINT - 1)) == 0, info
         assert int(info["SigBlk"], 16) == 0, info
         assert info["argv0"] == str(source)
-        proc.send_signal(signal.SIGINT)  # forwarded: the program dies of it
-        assert proc.wait(timeout=30) == 128 + signal.SIGINT
-        assert _gone(int(info["pid"]))
+        assert list((tmp_path / "cache" / "run").iterdir()) == []
+        proc.send_signal(getattr(signal, sig))
+        assert proc.wait(timeout=30) == -getattr(signal, sig)  # died of it
     finally:
         proc.kill()
 
 
-def test_run_forwards_sigterm_without_orphans(launcher, tmp_path):
-    import signal
+def test_run_falls_back_to_jit_when_the_program_cannot_be_executed(launcher, tmp_path,
+                                                                   monkeypatch):
+    """noexec scratch directory: fexecve fails, so `codon run` is exec'd instead."""
+    import os
 
-    proc, info, _ = _start_sleeper(launcher, tmp_path)
-    try:
-        proc.send_signal(signal.SIGTERM)
-        assert proc.wait(timeout=30) == 128 + signal.SIGTERM
-        assert _gone(int(info["pid"])), "the program outlived the launcher"
-        assert list((tmp_path / "cache" / "run").iterdir()) == []  # scratch dir removed
-    finally:
-        proc.kill()
+    from typesafe_carla import cli
+
+    launcher("info")  # skips when Codon or the native library is missing
+    source = tmp_path / "hello.codon"
+    source.write_text("print('hello')\n")
+    monkeypatch.setenv(paths.ENV_CACHE_DIR, str(tmp_path / "cache"))
+    calls = []
+
+    class Exec(Exception):
+        pass
+
+    def fake_execve(path, argv, env):
+        calls.append((path, list(argv)))
+        if isinstance(path, int):
+            raise PermissionError(13, "Permission denied")  # what noexec gives
+        raise Exec
+
+    monkeypatch.setattr(os, "execve", fake_execve)
+    with pytest.raises(Exec):
+        cli.main(["run", str(source)])
+    assert isinstance(calls[0][0], int) and calls[0][1] == [str(source)]
+    assert calls[1][1][1:] == ["run", str(source)]
+    assert list((tmp_path / "cache" / "run").iterdir()) == []
+
+
+def test_sweep_removes_old_scratch_dirs(tmp_path, monkeypatch):
+    import os
+    import time
+
+    monkeypatch.setenv(paths.ENV_CACHE_DIR, str(tmp_path))
+    old = tmp_path / "run" / "typesafe-codon-old"
+    old.mkdir(parents=True)
+    past = time.time() - paths.SCRATCH_MAX_AGE - 60
+    os.utime(old, (past, past))
+    fresh = paths.scratch_dir()
+    assert not old.exists() and os.path.isdir(fresh)
 
 
 def test_run_without_gpp_falls_back_to_jit(launcher, tmp_path):

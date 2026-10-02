@@ -250,6 +250,23 @@ def codon_path_dir(strict: bool) -> Path:
                     f"set {ENV_CACHE_DIR} to a writable directory")
 
 
+SCRATCH_MAX_AGE = 24 * 3600  # seconds
+
+
+def _sweep_scratch(run: Path) -> None:
+    """Removes scratch directories older than a day (left by a killed launcher)."""
+    import shutil
+    import time
+
+    cutoff = time.time() - SCRATCH_MAX_AGE
+    for entry in run.glob("typesafe-codon-*"):
+        try:
+            if entry.lstat().st_mtime < cutoff:
+                shutil.rmtree(entry, ignore_errors=True)
+        except OSError:
+            pass
+
+
 def scratch_dir() -> str:
     """A new private directory for the launcher's temporary files (caller removes it).
 
@@ -262,6 +279,7 @@ def scratch_dir() -> str:
     for root in _cache_roots():
         try:
             (root / "run").mkdir(parents=True, exist_ok=True)
+            _sweep_scratch(root / "run")
             return tempfile.mkdtemp(prefix="typesafe-codon-", dir=root / "run")
         except OSError:
             continue

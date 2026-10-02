@@ -14,15 +14,16 @@ them, and the matching run-time warnings).
 
 To print those before the program's output without compiling twice, ``run``
 builds the program into a scratch executable (under the cache directory)
-while the IR pass runs in parallel, and runs it as a child with argv[0] set
-to the source path. The launcher forwards SIGTERM, SIGHUP, SIGQUIT and SIGINT
-sent to it, kills and reaps its children on any exit, and reports a program
-killed by signal N as exit status 128 + N. Building needs g++ (Codon links
-with it): without g++, or if the scratch executable cannot be executed
-(noexec), ``run`` falls back to ``codon run`` (JIT), with the warnings from a
-separate IR compile. With warnings off or in strict mode, ``run`` execs
-``codon run`` directly. ``TYPESAFE_CARLA_LAUNCHER_DEBUG=1`` reports why
-compile-time warnings could not be produced.
+while the IR pass runs in parallel, then execs it with argv[0] set to the
+source path: the launcher process becomes the program (same PID, signals and
+exit status). During the compile the launcher passes SIGINT, SIGTERM, SIGHUP
+and SIGQUIT on to the compilers, kills them, and then dies of that signal
+itself. Building needs g++ (Codon links with it): without g++, or if the
+scratch executable cannot be executed (noexec), ``run`` falls back to
+``codon run`` (JIT), with the warnings from a separate IR compile. With
+warnings off or in strict mode, ``run`` execs ``codon run`` directly.
+``TYPESAFE_CARLA_LAUNCHER_DEBUG=1`` reports why compile-time warnings could
+not be produced or a fallback was taken.
 
 The launcher sets:
 
@@ -178,7 +179,7 @@ def _print_compat_warnings_from(ir: str) -> None:
 
 
 ENV_DEBUG = "TYPESAFE_CARLA_LAUNCHER_DEBUG"
-# Signals the launcher passes on to the program (and to compilers it waits for).
+# Signals that end the launcher; while it waits for compilers they are passed on.
 _FORWARDED = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
 
 
@@ -191,20 +192,29 @@ def _debug(message: str) -> None:
         print(f"typesafe-codon: debug: {message}", file=sys.stderr)
 
 
+def _restore_signals() -> None:
+    """Before exec: undo Python's SIG_IGN for SIGPIPE and SIGXFSZ, which an exec
+    would otherwise pass on to the program (subprocess does the same)."""
+    for name in ("SIGPIPE", "SIGXFSZ"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), signal.SIG_DFL)
+
+
 def _unblock_signals() -> None:  # in the child, before exec: start with an empty mask
     signal.pthread_sigmask(signal.SIG_SETMASK, [])
 
 
 class _Supervisor:
-    """Runs child processes so that the launcher's own termination reaches them.
+    """Runs the compilers (the build and the parallel IR pass) so that the
+    launcher's own termination reaches them.
 
-    The forwarded signals are blocked in the launcher and collected with
-    sigtimedwait while it waits. A signal sent to the launcher by another
-    process (kill, timeout, CI) is passed on to the running children; one the
-    kernel generated (Ctrl-C at the terminal, hangup) already went to the whole
-    foreground process group, children included, so it is not sent twice.
-    Children start with SIG_DFL dispositions and an empty signal mask. On exit
-    every child still running is killed and reaped, so nothing is orphaned.
+    The forwarded signals and SIGCHLD are blocked in the launcher and collected
+    with sigtimedwait while it waits. A signal sent to the launcher alone (kill)
+    is passed on to the running compilers; one also delivered to them (terminal
+    Ctrl-C, a signal to the process group) is not sent twice. Compilers start
+    with an empty signal mask. On exit every compiler still running is killed
+    and reaped; `signalled` records the first terminating signal received, of
+    which the caller then dies (`_die_of`).
     """
 
     def __init__(self) -> None:
@@ -212,19 +222,25 @@ class _Supervisor:
         self.signalled: int | None = None
 
     def __enter__(self) -> "_Supervisor":
-        signal.pthread_sigmask(signal.SIG_BLOCK, _FORWARDED)
+        signal.pthread_sigmask(signal.SIG_BLOCK, _FORWARDED + (signal.SIGCHLD,))
         return self
 
     def __exit__(self, *exc) -> None:
+        self.reap()
+        while True:  # collect what is still pending, so that unblocking does not act on it
+            info = signal.sigtimedwait(_FORWARDED + (signal.SIGCHLD,), 0)
+            if info is None:
+                break
+            if info.si_signo != signal.SIGCHLD and self.signalled is None:
+                self.signalled = info.si_signo
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, _FORWARDED + (signal.SIGCHLD,))
+
+    def reap(self) -> None:
+        """Kills and waits for every compiler still running."""
         for p in self.procs:
             if p.poll() is None:
                 p.kill()
             p.wait()
-        # Drop signals still pending (e.g. the Ctrl-C that also ended the
-        # program) so that unblocking does not kill the launcher afterwards.
-        while signal.sigtimedwait(_FORWARDED, 0) is not None:
-            pass
-        signal.pthread_sigmask(signal.SIG_UNBLOCK, _FORWARDED)
 
     def popen(self, cmd: list[str], **kwargs) -> subprocess.Popen:
         p = subprocess.Popen(cmd, preexec_fn=_unblock_signals, **kwargs)
@@ -232,22 +248,37 @@ class _Supervisor:
         return p
 
     def wait(self, proc: subprocess.Popen) -> int:
-        """Waits for `proc`, forwarding signals to all running children."""
+        """Waits for `proc`, passing terminating signals on to all running compilers."""
         while proc.poll() is None:
-            info = signal.sigtimedwait(_FORWARDED, 0.05)
-            if info is None:
+            info = signal.sigtimedwait(_FORWARDED + (signal.SIGCHLD,), 1.0)
+            if info is None or info.si_signo == signal.SIGCHLD:
                 continue
-            self.signalled = info.si_signo
-            if info.si_code <= 0:  # SI_USER, SI_QUEUE, SI_TKILL: sent by a process
-                for p in self.procs:
-                    if p.poll() is None:
-                        p.send_signal(info.si_signo)
+            if self.signalled is None:
+                self.signalled = info.si_signo
+            for p in self.procs:
+                if p.poll() is None:
+                    p.send_signal(info.si_signo)  # a second copy to a compiler is harmless
         return proc.returncode
 
 
-def _exit_code(rc: int) -> int:
-    """A child killed by signal N is reported as 128 + N, as shells do."""
-    return 128 - rc if rc < 0 else rc
+def _die_of(sig: int) -> int:
+    """Ends the launcher by signal `sig` (as its child did, or as it was asked to),
+    so a shell sees death by signal and, for SIGINT, stops a loop too."""
+    sys.stdout.flush()
+    sys.stderr.flush()
+    signal.signal(sig, signal.SIG_DFL)
+    signal.pthread_sigmask(signal.SIG_UNBLOCK, [sig])
+    os.kill(os.getpid(), sig)
+    return 128 + sig  # not reached
+
+
+def _finish(rc: int, sup: _Supervisor) -> int:
+    """The launcher's exit for a compile that returned `rc` under `sup`."""
+    if sup.signalled is not None:
+        return _die_of(sup.signalled)
+    if rc < 0:
+        return _die_of(-rc)
+    return rc
 
 
 def _compile_with_scan(sup: _Supervisor, codon: str, build_args: list[str],
@@ -301,13 +332,15 @@ def _build_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> in
             rc = sup.wait(sup.popen([codon] + args, env=env))
             if rc == 0:
                 _print_compat_warnings_from(ll)
-            return _exit_code(rc)
-        tmp = paths.scratch_dir()
-        try:
-            ir = os.path.join(tmp, "program.ll")
-            return _exit_code(_compile_with_scan(sup, codon, args, llvm_args(args, ir), ir, env))
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+        else:
+            tmp = paths.scratch_dir()
+            try:
+                ir = os.path.join(tmp, "program.ll")
+                rc = _compile_with_scan(sup, codon, args, llvm_args(args, ir), ir, env)
+                sup.reap()
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+    return _finish(rc, sup)
 
 
 def _scan_only(codon: str, args: list[str], env: dict[str, str]) -> None:
@@ -317,34 +350,38 @@ def _scan_only(codon: str, args: list[str], env: dict[str, str]) -> None:
         try:
             ir = os.path.join(tmp, "program.ll")
             cmd = llvm_args(args, ir)
-            if cmd is None:
-                return
-            rc = sup.wait(sup.popen([codon] + cmd, env=env, stdout=subprocess.DEVNULL,
-                                    stderr=None if _debug_enabled() else subprocess.DEVNULL))
+            rc = 1
+            if cmd is not None:
+                rc = sup.wait(sup.popen([codon] + cmd, env=env, stdout=subprocess.DEVNULL,
+                                        stderr=None if _debug_enabled() else subprocess.DEVNULL))
             if rc == 0:
                 _print_compat_warnings_from(ir)
             else:
                 _debug(f"compatibility scan failed (exit {rc}); no compile-time warnings")
+            sup.reap()
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+    if sup.signalled is not None:
+        _die_of(sup.signalled)
 
 
 def _run_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> int | None:
     """`codon run`, with the compile-time compatibility warnings printed first.
 
     The warnings must come before the program's output, and the IR pass must
-    not double the compile time, so the program is built into a temporary
-    executable (in the cache directory) while the IR pass runs in parallel,
-    then executed with argv[0] set to the source path, as `codon run` does.
-    The launcher stays the program's parent: it forwards termination signals
-    and reports a program killed by signal N as exit status 128 + N.
+    not double the compile time, so the program is built into a scratch
+    executable (in the cache directory) while the IR pass runs in parallel.
+    The launcher then opens the executable, removes the scratch directory and
+    execs it with argv[0] set to the source path, as `codon run` does: the
+    launcher becomes the program (same PID, signals and exit status).
 
-    Building needs g++ (Codon links with it) and an executable scratch
-    directory. Without g++ the warnings come from a separate IR compile and
-    the program runs with `codon run` (JIT), costing a second compilation; if
-    the built program cannot be executed (noexec), it also falls back to
-    `codon run`. None means: exec `codon run` (also when the source file
-    cannot be identified, then without compile-time warnings).
+    Building needs g++ (Codon links with it). Without g++ the warnings come
+    from a separate IR compile and the program runs with `codon run` (JIT),
+    costing a second compilation; if the built program cannot be executed
+    (noexec), it also falls back to `codon run`. Returns an exit status if the
+    compile failed, None for: exec `codon run` (also when the source file
+    cannot be identified, then without compile-time warnings). On success it
+    does not return.
     """
     src = _source_index(args)
     if src is None:
@@ -353,6 +390,7 @@ def _run_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> int 
         _debug("g++ not found: separate compatibility scan, then codon run (JIT)")
         _scan_only(codon, args, env)
         return None
+    fd = -1
     with _Supervisor() as sup:
         tmp = paths.scratch_dir()
         try:
@@ -360,18 +398,26 @@ def _run_with_warnings(codon: str, args: list[str], env: dict[str, str]) -> int 
             exe = os.path.join(tmp, "program")
             build = ["build"] + args[1:src] + ["-o", exe, args[src]]
             rc = _compile_with_scan(sup, codon, build, llvm_args(args, ir), ir, env)
-            if rc != 0 or sup.signalled is not None:
-                return _exit_code(rc) if rc != 0 else 128 + sup.signalled
-            sys.stdout.flush()
-            sys.stderr.flush()
-            try:
-                program = sup.popen([args[src]] + args[src + 1:], executable=exe, env=env)
-            except OSError as e:
-                _debug(f"cannot execute the built program ({e}): codon run (JIT)")
-                return None
-            return _exit_code(sup.wait(program))
+            sup.reap()
+            if rc == 0 and sup.signalled is None:
+                fd = os.open(exe, os.O_RDONLY)  # stays executable after the rmtree
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+    # __exit__ collected any signal that arrived until now (e.g. a Ctrl-C between
+    # the end of the compile and the exec): it is not lost.
+    if fd < 0 or sup.signalled is not None:
+        if fd >= 0:
+            os.close(fd)
+        return _finish(rc, sup)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    _restore_signals()
+    try:
+        os.execve(fd, [args[src]] + args[src + 1:], env)  # fexecve
+    except OSError as e:
+        os.close(fd)
+        _debug(f"cannot execute the built program ({e}): codon run (JIT)")
+    return None
 
 
 def _info(tc: toolchain.Toolchain | None, error: str | None, strict: bool) -> int:
@@ -452,6 +498,8 @@ def main(argv: list[str] | None = None) -> int:
 
     cmd = [codon] + args
     sys.stdout.flush()
+    sys.stderr.flush()
+    _restore_signals()
     os.execve(cmd[0], cmd, env)
     return 127  # not reached
 
