@@ -85,6 +85,13 @@ def main() -> int:
                                                 for x, y in zip(xs, ys))
             except ValueError:
                 ok = False
+        elif key == "palette":
+            # tag:color pairs seen in one rendered frame: which tags are visible
+            # differs between runs, so compare the colors of the shared tags.
+            pa = dict(p.split(":", 1) for p in a.split(";") if ":" in p)
+            pb = dict(p.split(":", 1) for p in b.split(";") if ":" in p)
+            common = pa.keys() & pb.keys()
+            ok = len(common) >= 3 and all(pa[t] == pb[t] for t in common)
         else:
             ok = a == b
         failures += not ok
