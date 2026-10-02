@@ -15,6 +15,7 @@ from .errors import (CarlaError, _check_light_state, _check_port, _check_traffic
                      _is_actor_id)
 from .geometry import Location, Transform, Vector3D, _vector_arg, _location_arg
 from .control import VehicleControl, WalkerControl
+from .vehicle import VehicleAckermannControl
 from .blueprint import ActorBlueprint
 
 # In a command passed to SpawnActor(...).then(...), the actor being spawned.
@@ -37,12 +38,14 @@ _SET_ENABLE_GRAVITY = 14
 _SET_VEHICLE_LIGHT_STATE = 15
 _APPLY_LOCATION = 16
 _SET_TRAFFIC_LIGHT_STATE = 17
+_APPLY_VEHICLE_ACKERMANN_CONTROL = 18  # issue #20
+_SHOW_DEBUG_TELEMETRY = 19  # issue #20
 
 _NAMES = ["", "SpawnActor", "DestroyActor", "ApplyVehicleControl", "ApplyTransform",
           "ApplyTargetVelocity", "SetAutopilot", "SetSimulatePhysics", "ApplyWalkerControl",
           "ApplyTargetAngularVelocity", "ApplyImpulse", "ApplyForce", "ApplyAngularImpulse",
           "ApplyTorque", "SetEnableGravity", "SetVehicleLightState", "ApplyLocation",
-          "SetTrafficLightState"]
+          "SetTrafficLightState", "ApplyVehicleAckermannControl", "ShowDebugTelemetry"]
 
 def _actor_id(actor_id: int) -> u32:
     if not _is_actor_id(actor_id):
@@ -217,6 +220,16 @@ def SetTrafficLightState(actor_id: int, state: int) -> Command:
     """state: TrafficLightState."""
     _check_traffic_light_state(state)
     return _flag_command(_SET_TRAFFIC_LIGHT_STATE, actor_id, state)
+
+def ApplyVehicleAckermannControl(actor_id: int, control: VehicleAckermannControl) -> Command:
+    c = Command(_APPLY_VEHICLE_ACKERMANN_CONTROL, actor_id)
+    # tsc_command_t carries the five values in vector and transform.location (ffi.h).
+    c._vector = Vector3D(control.steer, control.steer_speed, control.speed)
+    c._transform = Transform(Location(control.acceleration, control.jerk, 0.0))
+    return c
+
+def ShowDebugTelemetry(actor_id: int, enabled: bool) -> Command:
+    return _flag_command(_SHOW_DEBUG_TELEMETRY, actor_id, int(enabled))
 
 def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int]:
     """C records for `commands` (then-commands follow their SpawnActor).

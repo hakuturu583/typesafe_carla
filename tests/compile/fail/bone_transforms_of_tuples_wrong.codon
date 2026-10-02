@@ -1,0 +1,9 @@
+# A custom pose is built from (name, Transform) pairs or bone_transform values.
+# expect-error: no function 'WalkerBoneControlIn.__init__' with arguments (WalkerBoneControlIn, List[Tuple[str,Location]])
+import typesafe_carla as carla
+
+def pose(walker: carla.Walker):
+    walker.set_bones(carla.WalkerBoneControlIn([("crl_hips__C", carla.Location(0.0, 0.0, 1.0))]))
+
+# Compile-only: Codon type-checks a function only when it is called.
+pose(carla.Client("localhost", 2000).get_world().get_actors()[0].as_walker())

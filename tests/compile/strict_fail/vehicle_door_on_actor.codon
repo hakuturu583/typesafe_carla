@@ -1,0 +1,10 @@
+# Actor.open_door is a Python-API compatibility shortcut (issue #20 methods
+# are shortcuts too): it compiles normally, and is an error in strict mode.
+# expect-error: strict mode: call as_vehicle() first (Actor.open_door is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def open_all(actor: carla.Actor):
+    actor.open_door(carla.VehicleDoor.All)
+
+# Compile-only: Codon type-checks a function only when it is called.
+open_all(carla.Client("localhost", 2000).get_world().get_actors()[0])

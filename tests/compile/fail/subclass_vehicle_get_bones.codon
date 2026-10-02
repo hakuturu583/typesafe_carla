@@ -1,0 +1,10 @@
+# Walker methods are not Vehicle methods, in every mode (carla.Vehicle has no
+# get_bones in the Python API).
+# expect-error: Vehicle has no method get_bones() (it is an Actor compatibility shortcut; call it on the right actor type)
+import typesafe_carla as carla
+
+def bones(vehicle: carla.Vehicle):
+    print(vehicle.get_bones())
+
+# Compile-only: Codon type-checks a function only when it is called.
+bones(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

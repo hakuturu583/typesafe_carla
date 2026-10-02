@@ -1,0 +1,9 @@
+# Ackermann control has its own value type.
+# expect-error: 'VehicleControl' does not match expected type 'VehicleAckermannControl'
+import typesafe_carla as carla
+
+def drive(vehicle: carla.Vehicle):
+    vehicle.apply_ackermann_control(carla.VehicleControl(throttle=0.5))
+
+# Compile-only: Codon type-checks a function only when it is called.
+drive(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

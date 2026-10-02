@@ -22,20 +22,24 @@ EXACT = ("server_version", "vehicle_blueprints", "color_type", "wheels", "type_i
          "landmark0", "traffic_lights", "light0_times", "weather", "junction", "none_lookups",
          "destroyed_lookup", "lane_walk", "try_spawn_occupied", "callback_frames", "actor_compat",
          "location_vector_types", "waypoint_xodr", "lane_markings", "landmark_details",
-         "landmarks_by_id", "landmarks_ahead", "light_geometry")
+         "landmarks_by_id", "landmarks_ahead", "light_geometry", "ackermann_settings",
+         "failure_state", "doors", "telemetry", "vehicle_bones", "ackermann_batch",
+         "walker_bones")
 NUMERIC = {"settled": 0.05, "driven": 0.5, "speed": 0.3, "spawn0": 0.001, "waypoint_s": 0.001,
            "next10": 0.001, "bbox": 0.001, "physics": 0.001, "physics_all": 0.001,
            "gnss": 0.0000005, "imu_compass": 0.01, "location_vector": 0.002,
            "georeference": 0.0000005, "geo_origin": 0.0000005, "waypoint_xodr_loc": 0.002,
-           "light_trigger": 0.002}
+           "light_trigger": 0.002, "wheel_steer": 0.5, "ackermann_speed": 0.3,
+           "walker_pose": 0.01}
 
 
 def parse(text: str) -> dict[str, str]:
     return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
 
 
-def run(cmd: list[str]) -> dict[str, str]:
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+def run(cmd: list[str], env: dict[str, str] | None = None) -> dict[str, str]:
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=900,
+                            env={**os.environ, **(env or {})})
     if result.returncode != 0:
         sys.exit(f"{cmd[0]} failed:\n{result.stdout}\n{result.stderr}")
     return parse(result.stdout)
@@ -49,9 +53,12 @@ def _short(v: str | None) -> str:
 
 def main() -> int:
     python = os.environ.get("CARLA_PYTHON", sys.executable)
-    official = run([python, str(HERE / "scenario_official.py")])
     typesafe = run([sys.executable, "-m", "typesafe_carla.cli", "run", "-release",
                     str(HERE / "scenario_typesafe.codon")])
+    # Keys typesafe_carla's LibCarla build cannot provide (e.g. telemetry with
+    # LibCarla 0.10.0) are skipped on both sides.
+    skipped = ",".join(k for k, v in typesafe.items() if v == "skip")
+    official = run([python, str(HERE / "scenario_official.py")], {"TSC_SKIP_KEYS": skipped})
     failures = 0
     print(f"{'key':20} {'official':40} {'typesafe_carla':40} result")
     for key in EXACT + tuple(NUMERIC):

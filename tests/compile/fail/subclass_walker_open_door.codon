@@ -1,0 +1,9 @@
+# Vehicle methods are not Walker methods, in every mode.
+# expect-error: Walker has no method open_door() (it is an Actor compatibility shortcut; call it on the right actor type)
+import typesafe_carla as carla
+
+def open_walker(walker: carla.Walker):
+    walker.open_door(carla.VehicleDoor.FL)
+
+# Compile-only: Codon type-checks a function only when it is called.
+open_walker(carla.Client("localhost", 2000).get_world().get_actors()[0].as_walker())

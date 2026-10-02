@@ -1,0 +1,13 @@
+# Walker operations: tsc_walker_<name>, accepting walker handles (issue #20).
+class: carla::client::Walker
+prefix: walker
+self: {type: tsc_walker_t, name: walker, get: walker_of}
+blocks:
+  walker_pose:
+    blend_pose:
+      call: BlendPose
+      args: {blend: finite}
+      doc: "blend: 0 = animation, 1 = the custom pose set with tsc_walker_set_bones."
+    show_pose: {call: ShowPose}
+    hide_pose: {call: HidePose}
+    get_pose_from_animation: {call: GetPoseFromAnimation}

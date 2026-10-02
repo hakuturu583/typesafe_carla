@@ -77,6 +77,23 @@ int main(void) {
   expect_null_rejected(tsc_vehicle_get_speed_limit(NULL, NULL), "tsc_vehicle_get_speed_limit");
   expect_null_rejected(tsc_vehicle_get_traffic_light_state(NULL, NULL), "tsc_vehicle_get_traffic_light_state");
   expect_null_rejected(tsc_vehicle_is_at_traffic_light(NULL, NULL), "tsc_vehicle_is_at_traffic_light");
+  expect_null_rejected(tsc_vehicle_apply_ackermann_control(NULL, NULL), "tsc_vehicle_apply_ackermann_control");
+  expect_null_rejected(tsc_vehicle_get_ackermann_controller_settings(NULL, NULL), "tsc_vehicle_get_ackermann_controller_settings");
+  expect_null_rejected(tsc_vehicle_apply_ackermann_controller_settings(NULL, NULL), "tsc_vehicle_apply_ackermann_controller_settings");
+  expect_null_rejected(tsc_vehicle_open_door(NULL, 99), "tsc_vehicle_open_door");
+  expect_null_rejected(tsc_vehicle_close_door(NULL, 99), "tsc_vehicle_close_door");
+  expect_null_rejected(tsc_vehicle_get_failure_state(NULL, NULL), "tsc_vehicle_get_failure_state");
+  expect_null_rejected(tsc_vehicle_show_debug_telemetry(NULL, 0), "tsc_vehicle_show_debug_telemetry");
+  expect_null_rejected(tsc_vehicle_get_wheel_steer_angle(NULL, 99, NULL), "tsc_vehicle_get_wheel_steer_angle");
+  expect_null_rejected(tsc_vehicle_set_wheel_steer_direction(NULL, 99, NAN), "tsc_vehicle_set_wheel_steer_direction");
+  expect_null_rejected(tsc_vehicle_use_carsim_road(NULL, 0), "tsc_vehicle_use_carsim_road");
+  expect_null_rejected(tsc_vehicle_enable_carsim(NULL, NULL, 1), "tsc_vehicle_enable_carsim");
+  expect_null_rejected(tsc_vehicle_enable_chrono_physics(NULL, 0, NAN, NULL, 1, NULL, 1, NULL, 1, NULL, 1), "tsc_vehicle_enable_chrono_physics");
+  expect_null_rejected(tsc_vehicle_get_vehicle_bone_world_transforms(NULL, NULL, 0, NULL), "tsc_vehicle_get_vehicle_bone_world_transforms");
+  expect_null_rejected(tsc_walker_blend_pose(NULL, NAN), "tsc_walker_blend_pose");
+  expect_null_rejected(tsc_walker_show_pose(NULL), "tsc_walker_show_pose");
+  expect_null_rejected(tsc_walker_hide_pose(NULL), "tsc_walker_hide_pose");
+  expect_null_rejected(tsc_walker_get_pose_from_animation(NULL), "tsc_walker_get_pose_from_animation");
   expect_null_rejected(tsc_walker_ai_controller_start(NULL), "tsc_walker_ai_controller_start");
   expect_null_rejected(tsc_walker_ai_controller_stop(NULL), "tsc_walker_ai_controller_stop");
   expect_null_rejected(tsc_walker_ai_controller_go_to_location(NULL, NULL), "tsc_walker_ai_controller_go_to_location");
@@ -90,6 +107,6 @@ int main(void) {
   expect_null_rejected(tsc_waypoint_get_landmarks(NULL, NAN, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks");
   expect_null_rejected(tsc_waypoint_get_landmarks_of_type(NULL, NAN, NULL, 1, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks_of_type");
   if (g_failures != 0) return 1;
-  printf("test_generated: 69 generated functions reject NULL handles\n");
+  printf("test_generated: 86 generated functions reject NULL handles\n");
   return 0;
 }

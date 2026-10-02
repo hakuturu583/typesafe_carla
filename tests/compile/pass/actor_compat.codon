@@ -18,12 +18,36 @@ def vehicle_methods(actor: carla.Actor):
     actor.set_autopilot(True)
     actor.set_autopilot(enabled=False, tm_port=8000)
     print(control, lights, limit, state, at_light, light)
+    # issue #20
+    actor.apply_ackermann_control(carla.VehicleAckermannControl(speed=3.0))
+    settings: carla.AckermannControllerSettings = actor.get_ackermann_controller_settings()
+    actor.apply_ackermann_controller_settings(settings)
+    actor.open_door(carla.VehicleDoor.All)
+    actor.close_door(carla.VehicleDoor.FL)
+    failure: carla.VehicleFailureState = actor.get_failure_state()
+    telemetry: carla.VehicleTelemetryData = actor.get_telemetry_data()
+    actor.show_debug_telemetry(False)
+    angle: float = actor.get_wheel_steer_angle(carla.VehicleWheelLocation.FL_Wheel)
+    actor.set_wheel_steer_direction(carla.VehicleWheelLocation.FR_Wheel, 5.0)
+    bones: List[carla.Transform] = actor.get_vehicle_bone_world_transforms()
+    actor.enable_carsim("sim.par")
+    actor.use_carsim_road(True)
+    actor.enable_chrono_physics(max_substeps=10)
+    print(settings, failure, telemetry, angle, bones)
 
 def walker_methods(actor: carla.Actor):
     # Same name as Vehicle.apply_control; the argument type picks the overload.
     actor.apply_control(carla.WalkerControl(carla.Vector3D(1.0, 0.0, 0.0), 1.5))
     walker_control: carla.WalkerControl = actor.as_walker().get_control()
     print(walker_control)
+    # issue #20
+    pose: carla.WalkerBoneControlOut = actor.get_bones()
+    actor.set_bones(carla.WalkerBoneControlIn([("crl_hips__C", carla.Transform())]))
+    actor.blend_pose(0.5)
+    actor.show_pose()
+    actor.hide_pose()
+    actor.get_pose_from_animation()
+    print(pose)
 
 def walker_ai_methods(actor: carla.Actor):
     actor.start()

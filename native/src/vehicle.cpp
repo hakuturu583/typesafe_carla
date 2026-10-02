@@ -201,4 +201,29 @@ tsc_status_t tsc_vehicle_apply_physics_control(tsc_vehicle_t *vehicle,
   });
 }
 
+// --- Issue #20 ---------------------------------------------------------------
+
+tsc_status_t tsc_vehicle_get_telemetry_data(tsc_vehicle_t *vehicle,
+                                            tsc_vehicle_telemetry_data_t *out,
+                                            tsc_wheel_telemetry_data_t *wheels,
+                                            size_t wheel_capacity, size_t *out_wheel_count) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+    require_ptr(out_wheel_count, "out_wheel_count");
+    require_array(wheels, wheel_capacity, "wheels");
+    *out_wheel_count = 0;
+    with_telemetry_data(
+        vehicle_of(vehicle),
+        [&](const auto &data) {
+          *out = tsc_vehicle_telemetry_data_t{data.speed,  data.steer,      data.throttle,
+                                              data.brake,  data.engine_rpm, data.gear, 0};
+          *out_wheel_count = data.wheels.size();
+          for (size_t i = 0; i < data.wheels.size() && i < wheel_capacity; ++i) {
+            const auto &w = data.wheels[i];
+            wheels[i] = tsc_wheel_telemetry_data_t{w.lat_slip, w.long_slip, w.omega};
+          }
+        });
+  });
+}
+
 }  // extern "C"

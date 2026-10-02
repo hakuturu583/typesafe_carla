@@ -1,0 +1,9 @@
+# set_bones takes a WalkerBoneControlIn; get_bones returns a WalkerBoneControlOut.
+# expect-error: 'WalkerBoneControlOut' does not match expected type 'WalkerBoneControlIn'
+import typesafe_carla as carla
+
+def copy_pose(walker: carla.Walker):
+    walker.set_bones(walker.get_bones())
+
+# Compile-only: Codon type-checks a function only when it is called.
+copy_pose(carla.Client("localhost", 2000).get_world().get_actors()[0].as_walker())

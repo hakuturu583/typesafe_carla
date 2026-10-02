@@ -28,6 +28,7 @@ from .errors import ActorTypeError
 from .control import VehicleControl, WalkerControl
 from .geometry import BoundingBox
 from .actor import Actor, Vehicle
+from .vehicle import VehicleAckermannControl  # Vehicle's issue #20 methods
 from .walker import Walker, WalkerAIController
 from .traffic_light import TrafficLight
 from .sensor import Sensor
@@ -109,6 +110,110 @@ class Actor:
         _plain_actor_only(self, "set_autopilot()")
         compat_shortcut("Actor.set_autopilot", "[tsc-compat] Actor.set_autopilot() without as_vehicle()", "call as_vehicle() first")
         return self.as_vehicle().set_autopilot(*args, **kwargs)
+
+    # Vehicle (issue #20)
+
+    def apply_ackermann_control(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "apply_ackermann_control()")
+        compat_shortcut("Actor.apply_ackermann_control", "[tsc-compat] Actor.apply_ackermann_control() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().apply_ackermann_control(*args, **kwargs)
+
+    def get_ackermann_controller_settings(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_ackermann_controller_settings()")
+        compat_shortcut("Actor.get_ackermann_controller_settings", "[tsc-compat] Actor.get_ackermann_controller_settings() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_ackermann_controller_settings(*args, **kwargs)
+
+    def apply_ackermann_controller_settings(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "apply_ackermann_controller_settings()")
+        compat_shortcut("Actor.apply_ackermann_controller_settings", "[tsc-compat] Actor.apply_ackermann_controller_settings() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().apply_ackermann_controller_settings(*args, **kwargs)
+
+    def open_door(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "open_door()")
+        compat_shortcut("Actor.open_door", "[tsc-compat] Actor.open_door() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().open_door(*args, **kwargs)
+
+    def close_door(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "close_door()")
+        compat_shortcut("Actor.close_door", "[tsc-compat] Actor.close_door() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().close_door(*args, **kwargs)
+
+    def get_failure_state(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_failure_state()")
+        compat_shortcut("Actor.get_failure_state", "[tsc-compat] Actor.get_failure_state() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_failure_state(*args, **kwargs)
+
+    def get_telemetry_data(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_telemetry_data()")
+        compat_shortcut("Actor.get_telemetry_data", "[tsc-compat] Actor.get_telemetry_data() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_telemetry_data(*args, **kwargs)
+
+    def show_debug_telemetry(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "show_debug_telemetry()")
+        compat_shortcut("Actor.show_debug_telemetry", "[tsc-compat] Actor.show_debug_telemetry() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().show_debug_telemetry(*args, **kwargs)
+
+    def get_wheel_steer_angle(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_wheel_steer_angle()")
+        compat_shortcut("Actor.get_wheel_steer_angle", "[tsc-compat] Actor.get_wheel_steer_angle() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_wheel_steer_angle(*args, **kwargs)
+
+    def set_wheel_steer_direction(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_wheel_steer_direction()")
+        compat_shortcut("Actor.set_wheel_steer_direction", "[tsc-compat] Actor.set_wheel_steer_direction() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().set_wheel_steer_direction(*args, **kwargs)
+
+    def get_vehicle_bone_world_transforms(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_vehicle_bone_world_transforms()")
+        compat_shortcut("Actor.get_vehicle_bone_world_transforms", "[tsc-compat] Actor.get_vehicle_bone_world_transforms() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_vehicle_bone_world_transforms(*args, **kwargs)
+
+    def enable_carsim(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "enable_carsim()")
+        compat_shortcut("Actor.enable_carsim", "[tsc-compat] Actor.enable_carsim() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().enable_carsim(*args, **kwargs)
+
+    def use_carsim_road(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "use_carsim_road()")
+        compat_shortcut("Actor.use_carsim_road", "[tsc-compat] Actor.use_carsim_road() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().use_carsim_road(*args, **kwargs)
+
+    def enable_chrono_physics(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "enable_chrono_physics()")
+        compat_shortcut("Actor.enable_chrono_physics", "[tsc-compat] Actor.enable_chrono_physics() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().enable_chrono_physics(*args, **kwargs)
+
+    # Walker (issue #20)
+
+    def get_bones(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_bones()")
+        compat_shortcut("Actor.get_bones", "[tsc-compat] Actor.get_bones() without as_walker()", "call as_walker() first")
+        return self.as_walker().get_bones(*args, **kwargs)
+
+    def set_bones(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_bones()")
+        compat_shortcut("Actor.set_bones", "[tsc-compat] Actor.set_bones() without as_walker()", "call as_walker() first")
+        return self.as_walker().set_bones(*args, **kwargs)
+
+    def blend_pose(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "blend_pose()")
+        compat_shortcut("Actor.blend_pose", "[tsc-compat] Actor.blend_pose() without as_walker()", "call as_walker() first")
+        return self.as_walker().blend_pose(*args, **kwargs)
+
+    def show_pose(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "show_pose()")
+        compat_shortcut("Actor.show_pose", "[tsc-compat] Actor.show_pose() without as_walker()", "call as_walker() first")
+        return self.as_walker().show_pose(*args, **kwargs)
+
+    def hide_pose(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "hide_pose()")
+        compat_shortcut("Actor.hide_pose", "[tsc-compat] Actor.hide_pose() without as_walker()", "call as_walker() first")
+        return self.as_walker().hide_pose(*args, **kwargs)
+
+    def get_pose_from_animation(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_pose_from_animation()")
+        compat_shortcut("Actor.get_pose_from_animation", "[tsc-compat] Actor.get_pose_from_animation() without as_walker()", "call as_walker() first")
+        return self.as_walker().get_pose_from_animation(*args, **kwargs)
 
     # WalkerAIController (stop() is shared with Sensor, below)
 

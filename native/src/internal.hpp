@@ -211,6 +211,13 @@ struct tsc_physics_control : tsc_handle {
   explicit tsc_physics_control(const carla::rpc::VehiclePhysicsControl &pc);  // vehicle.cpp
 };
 
+// Walker::GetBonesTransform's result, one RPC (issue #20).
+struct tsc_bone_list : tsc_handle {
+  std::vector<carla::rpc::BoneTransformDataOut> bones;
+  explicit tsc_bone_list(std::vector<carla::rpc::BoneTransformDataOut> b)
+      : tsc_handle(TSC_KIND_BONE_LIST), bones(std::move(b)) {}
+};
+
 struct tsc_sensor_data : tsc_handle {
   carla::SharedPtr<carla::sensor::SensorData> data;
   explicit tsc_sensor_data(carla::SharedPtr<carla::sensor::SensorData> d)
@@ -327,6 +334,10 @@ C &actor_as(H *h, const char *name, tsc_handle_kind_t kind) {
 
 inline carla::client::Vehicle &vehicle_of(tsc_vehicle_t *v) {
   return actor_as<carla::client::Vehicle>(v, "vehicle", TSC_KIND_VEHICLE);
+}
+
+inline carla::client::Walker &walker_of(tsc_walker_t *w) {
+  return actor_as<carla::client::Walker>(w, "walker", TSC_KIND_WALKER);
 }
 
 inline carla::client::TrafficLight &light_of(tsc_traffic_light_t *t) {
@@ -476,11 +487,18 @@ inline float check_non_negative(double v, const char *name) {
   return check_float(v, name);
 }
 
-inline carla::rpc::TrafficLightState to_light_state(int32_t state) {
-  if (state < TSC_TRAFFIC_LIGHT_RED || state > TSC_TRAFFIC_LIGHT_UNKNOWN) {
-    fail(TSC_INVALID_ARGUMENT, "invalid traffic light state " + std::to_string(state));
+// A C enumeration value as LibCarla's enum E; values outside [first, last] fail.
+template <typename E>
+E to_enum(int32_t value, int32_t first, int32_t last, const char *what) {
+  if (value < first || value > last) {
+    fail(TSC_INVALID_ARGUMENT, std::string("invalid ") + what + " " + std::to_string(value));
   }
-  return static_cast<carla::rpc::TrafficLightState>(state);
+  return static_cast<E>(value);
+}
+
+inline carla::rpc::TrafficLightState to_light_state(int32_t state) {
+  return to_enum<carla::rpc::TrafficLightState>(state, TSC_TRAFFIC_LIGHT_RED,
+                                                TSC_TRAFFIC_LIGHT_UNKNOWN, "traffic light state");
 }
 
 // Direct and batch walker control go through here.
@@ -505,6 +523,30 @@ inline carla::rpc::VehicleControl to_carla(const tsc_vehicle_control_t &c) {
   rc.gear = c.gear;
   return rc;
 }
+
+// Issue #20: Ackermann control and controller settings. Values must be finite
+// (as everywhere else, NaN and infinities never reach the server).
+inline carla::rpc::VehicleAckermannControl to_carla(const tsc_vehicle_ackermann_control_t &c) {
+  return carla::rpc::VehicleAckermannControl(
+      check_float(c.steer, "steer"), check_float(c.steer_speed, "steer_speed"),
+      check_float(c.speed, "speed"), check_float(c.acceleration, "acceleration"),
+      check_float(c.jerk, "jerk"));
+}
+
+inline carla::rpc::AckermannControllerSettings to_carla(
+    const tsc_ackermann_controller_settings_t &s) {
+  return carla::rpc::AckermannControllerSettings(
+      check_float(s.speed_kp, "speed_kp"), check_float(s.speed_ki, "speed_ki"),
+      check_float(s.speed_kd, "speed_kd"), check_float(s.accel_kp, "accel_kp"),
+      check_float(s.accel_ki, "accel_ki"), check_float(s.accel_kd, "accel_kd"));
+}
+
+inline tsc_ackermann_controller_settings_t from_carla(
+    const carla::rpc::AckermannControllerSettings &s) {
+  return tsc_ackermann_controller_settings_t{s.speed_kp, s.speed_ki, s.speed_kd,
+                                             s.accel_kp, s.accel_ki, s.accel_kd};
+}
+
 
 // Longest accepted timeout (~31 years): keeps the millisecond count far inside
 // size_t and LibCarla's signed boost::posix_time milliseconds.

@@ -1,0 +1,50 @@
+# Issue #20: the typed Vehicle and Walker APIs (Ackermann control, doors,
+# failure state, telemetry, wheel steering, bones, poses) and their batch
+# commands, in the statically checked style.
+# strict
+import typesafe_carla as carla
+
+def drive(client: carla.Client, vehicle: carla.Vehicle):
+    vehicle.apply_ackermann_control(carla.VehicleAckermannControl(steer=0.1, speed=5.0))
+    settings: carla.AckermannControllerSettings = vehicle.get_ackermann_controller_settings()
+    settings.speed_kp = 0.2
+    vehicle.apply_ackermann_controller_settings(settings)
+    vehicle.open_door(carla.VehicleDoor.FL)
+    vehicle.close_door(carla.VehicleDoor.All)
+    failure: carla.VehicleFailureState = vehicle.get_failure_state()
+    rolled: bool = failure == carla.VehicleFailureState.Rollover
+    telemetry: carla.VehicleTelemetryData = vehicle.get_telemetry_data()
+    slip: float = telemetry.wheels[0].lat_slip if telemetry.wheels else 0.0
+    gear: int = telemetry.gear
+    vehicle.show_debug_telemetry()
+    vehicle.show_debug_telemetry(False)
+    angle: float = vehicle.get_wheel_steer_angle(carla.VehicleWheelLocation.Front_Wheel)
+    vehicle.set_wheel_steer_direction(carla.VehicleWheelLocation.FL_Wheel, 15.0)
+    bones: List[carla.Transform] = vehicle.get_vehicle_bone_world_transforms()
+    vehicle.enable_carsim()
+    vehicle.enable_carsim("simfile.par")
+    vehicle.use_carsim_road(False)
+    vehicle.enable_chrono_physics(30, 0.002, "vehicle.json", "powertrain.json", "tire.json", "/")
+    vehicle.enable_chrono_physics(max_substeps=10, base_json_path="/data/")
+    responses = client.apply_batch_sync([
+        carla.command.ApplyVehicleAckermannControl(vehicle.id, carla.VehicleAckermannControl(speed=1.0)),
+        carla.command.ShowDebugTelemetry(vehicle.id, True)])
+    print(rolled, slip, gear, angle, len(bones), responses)
+
+def pose(walker: carla.Walker):
+    out: carla.WalkerBoneControlOut = walker.get_bones()
+    first: carla.bone_transform_out = out.bone_transforms[0]
+    name: str = first.name
+    world: carla.Transform = first.world
+    walker.set_bones(carla.WalkerBoneControlIn([(name, first.relative)]))
+    walker.set_bones(carla.WalkerBoneControlIn([carla.bone_transform(name, carla.Transform())]))
+    walker.blend_pose(0.5)
+    walker.show_pose()
+    walker.hide_pose()
+    walker.get_pose_from_animation()
+    print(world)
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+drive(client, world.get_actors()[0].as_vehicle())
+pose(world.get_actors()[1].as_walker())

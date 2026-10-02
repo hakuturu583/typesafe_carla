@@ -8,7 +8,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**195 of 326 methods bound (59%), 68 of them generated.**
+**213 of 326 methods bound (65%), 84 of them generated.**
 
 | class | bound |
 |---|---|
@@ -19,8 +19,8 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `carla::client::Junction` | 3 / 3 |
 | `carla::client::Landmark` | 23 / 23 |
 | `carla::client::Actor` | 20 / 37 |
-| `carla::client::Vehicle` | 11 / 23 |
-| `carla::client::Walker` | 2 / 8 |
+| `carla::client::Vehicle` | 23 / 23 |
+| `carla::client::Walker` | 8 / 8 |
 | `carla::client::WalkerAIController` | 4 / 5 |
 | `carla::client::TrafficLight` | 19 / 20 |
 | `carla::client::Sensor` | 3 / 3 |
@@ -250,42 +250,42 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 
 | method | binding |
 |---|---|
-| `ApplyAckermannControl` | — |
-| `ApplyAckermannControllerSettings` | — |
+| `ApplyAckermannControl` | generated |
+| `ApplyAckermannControllerSettings` | generated |
 | `ApplyControl` | hand-written |
 | `ApplyPhysicsControl` | hand-written |
-| `CloseDoor` | — |
-| `EnableCarSim` | — |
-| `EnableChronoPhysics` | — |
-| `GetAckermannControllerSettings` | — |
+| `CloseDoor` | generated |
+| `EnableCarSim` | generated |
+| `EnableChronoPhysics` | generated |
+| `GetAckermannControllerSettings` | generated |
 | `GetControl` | hand-written |
-| `GetFailureState` | — |
+| `GetFailureState` | generated |
 | `GetLightState` | generated |
 | `GetPhysicsControl` | hand-written |
 | `GetSpeedLimit` | generated |
 | `GetTrafficLight` | hand-written |
 | `GetTrafficLightState` | generated |
-| `GetWheelSteerAngle` | — |
+| `GetWheelSteerAngle` | generated |
 | `IsAtTrafficLight` | generated |
-| `OpenDoor` | — |
+| `OpenDoor` | generated |
 | `SetAutopilot` | generated |
 | `SetLightState` | generated |
-| `SetWheelSteerDirection` | — |
-| `ShowDebugTelemetry` | — |
-| `UseCarSimRoad` | — |
+| `SetWheelSteerDirection` | generated |
+| `ShowDebugTelemetry` | generated |
+| `UseCarSimRoad` | generated |
 
 ### `carla::client::Walker`
 
 | method | binding |
 |---|---|
 | `ApplyControl` | hand-written |
-| `BlendPose` | — |
-| `GetBonesTransform` | — |
-| `GetPoseFromAnimation` | — |
+| `BlendPose` | generated |
+| `GetBonesTransform` | hand-written |
+| `GetPoseFromAnimation` | generated |
 | `GetWalkerControl` | hand-written |
-| `HidePose` | — |
-| `SetBonesTransform` | — |
-| `ShowPose` | — |
+| `HidePose` | generated |
+| `SetBonesTransform` | hand-written |
+| `ShowPose` | generated |
 
 ### `carla::client::WalkerAIController`
 

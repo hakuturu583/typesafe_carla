@@ -12,12 +12,77 @@ from ._ffi import (Handle, CVector3D, CWalkerControl, TSC_KIND_WALKER,
                    tsc_walker_get_control, tsc_walker_ai_controller_start,
                    tsc_walker_ai_controller_stop, tsc_walker_ai_controller_go_to_location,
                    tsc_walker_ai_controller_set_max_speed,
-                   tsc_world_get_random_location_from_navigation)
+                   tsc_world_get_random_location_from_navigation, CBoneTransform,
+                   CBoneTransformOut, CString, take_string, tsc_walker_blend_pose,
+                   tsc_walker_show_pose, tsc_walker_hide_pose, tsc_walker_get_pose_from_animation,
+                   tsc_walker_set_bones, tsc_walker_get_bones, tsc_bone_list_size,
+                   tsc_bone_list_get)
 from .errors import _check
-from .geometry import Location, _location_arg
+from .geometry import Location, Transform, _location_arg
 from .control import WalkerControl
 from .actor import Actor
 from .world import World
+
+class bone_transform:
+    """One bone of a custom pose, as carla.bone_transform: a bone name and its
+    transform relative to the parent bone."""
+    name: str
+    transform: Transform
+
+    def __init__(self, name: str = "", transform: Optional[Transform] = None):
+        self.name = name
+        self.transform = transform if transform is not None else Transform()
+
+    def __repr__(self) -> str:
+        return f"bone_transform(name={self.name}, transform={self.transform})"
+
+class bone_transform_out:
+    """One bone of Walker.get_bones(), as carla.bone_transform_out."""
+    name: str
+    world: Transform
+    component: Transform
+    relative: Transform
+
+    def __init__(self, name: str = "", world: Optional[Transform] = None,
+                 component: Optional[Transform] = None, relative: Optional[Transform] = None):
+        self.name = name
+        self.world = world if world is not None else Transform()
+        self.component = component if component is not None else Transform()
+        self.relative = relative if relative is not None else Transform()
+
+    def __repr__(self) -> str:
+        return (f"bone_transform_out(name={self.name}, world={self.world}, "
+                f"component={self.component}, relative={self.relative})")
+
+class WalkerBoneControlIn:
+    """A custom pose for Walker.set_bones(), as carla.WalkerBoneControlIn.
+
+    Built from bone_transform values or, as in the Python API, from
+    (name, Transform) pairs."""
+    bone_transforms: List[bone_transform]
+
+    def __init__(self):
+        self.bone_transforms = List[bone_transform]()
+
+    def __init__(self, bone_transforms: List[bone_transform]):
+        self.bone_transforms = bone_transforms
+
+    def __init__(self, bone_transforms: List[Tuple[str, Transform]]):
+        self.bone_transforms = [bone_transform(name, t) for name, t in bone_transforms]
+
+    def __repr__(self) -> str:
+        return f"WalkerBoneControlIn(bones={len(self.bone_transforms)})"
+
+class WalkerBoneControlOut:
+    """Walker.get_bones(), as carla.WalkerBoneControlOut."""
+    bone_transforms: List[bone_transform_out]
+
+    def __init__(self, bone_transforms: Optional[List[bone_transform_out]] = None):
+        self.bone_transforms = (bone_transforms if bone_transforms is not None
+                                else List[bone_transform_out]())
+
+    def __repr__(self) -> str:
+        return f"WalkerBoneControlOut(bones={len(self.bone_transforms)})"
 
 class Walker(Actor):
     def __init__(self, h: Handle):
@@ -32,6 +97,52 @@ class Walker(Actor):
         out = Ptr[CWalkerControl](1)
         _check(tsc_walker_get_control(self._h.ptr, out))
         return WalkerControl._from_c(out[0])
+
+    # Bones and poses (issue #20). A custom pose set with set_bones() shows
+    # once it is blended in: blend_pose(1.0) / show_pose().
+
+    def get_bones(self) -> WalkerBoneControlOut:
+        """Every bone's world, component and relative transform (one RPC)."""
+        out = Ptr[cobj](1)
+        _check(tsc_walker_get_bones(self._h.ptr, out))
+        bones = Handle(out[0])
+        n = tsc_bone_list_size(bones.ptr)
+        result = List[bone_transform_out](n)
+        b = Ptr[CBoneTransformOut](1)
+        name = Ptr[CString](1)
+        for i in range(n):
+            _check(tsc_bone_list_get(bones.ptr, i, b))
+            name[0] = b[0].name
+            result.append(bone_transform_out(take_string(name), Transform._from_c(b[0].world),
+                                             Transform._from_c(b[0].component),
+                                             Transform._from_c(b[0].relative)))
+        bones.release()
+        return WalkerBoneControlOut(result)
+
+    def set_bones(self, bones: WalkerBoneControlIn):
+        """Sets the custom pose: each bone's transform relative to its parent."""
+        n = len(bones.bone_transforms)
+        buf = Ptr[CBoneTransform](n if n > 0 else 1)
+        for i in range(n):
+            b = bones.bone_transforms[i]
+            buf[i] = CBoneTransform(b.name.ptr, b.name.len, b.transform._to_c())
+        _check(tsc_walker_set_bones(self._h.ptr, buf, n))
+
+    def blend_pose(self, blend: float):
+        """0 shows the animation, 1 the custom pose."""
+        _check(tsc_walker_blend_pose(self._h.ptr, blend))
+
+    def show_pose(self):
+        """blend_pose(1.0)"""
+        _check(tsc_walker_show_pose(self._h.ptr))
+
+    def hide_pose(self):
+        """blend_pose(0.0)"""
+        _check(tsc_walker_hide_pose(self._h.ptr))
+
+    def get_pose_from_animation(self):
+        """Copies the current animation frame into the custom pose."""
+        _check(tsc_walker_get_pose_from_animation(self._h.ptr))
 
     def __repr__(self) -> str:
         return f"Walker(id={self.id}, type={self.type_id})"

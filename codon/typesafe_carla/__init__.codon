@@ -26,7 +26,11 @@ from .command import Command, CommandResponse
 from .sensor import (Sensor, SensorData, SensorDataType, Image, LidarMeasurement, LidarDetection,
                      GnssMeasurement, IMUMeasurement, CollisionEvent, dispatch_sensor_callbacks)
 from .client import Client, OpendriveGenerationParameters
-from .walker import Walker, WalkerAIController
+from .walker import (Walker, WalkerAIController, WalkerBoneControlIn, WalkerBoneControlOut,
+                     bone_transform, bone_transform_out)
+from .vehicle import (VehicleAckermannControl, AckermannControllerSettings, VehicleDoor,
+                      VehicleWheelLocation, VehicleFailureState, VehicleTelemetryData,
+                      WheelTelemetryData)
 from .traffic_light import TrafficLight
 from .weather import WeatherParameters
 from .debug import DebugHelper

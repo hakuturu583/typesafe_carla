@@ -305,6 +305,112 @@ tsc_status_t tsc_vehicle_is_at_traffic_light(tsc_vehicle_t *vehicle, int32_t *ou
   return TSC_GUARD({ *require_ptr(out, "out") = vehicle_of(vehicle).IsAtTrafficLight() ? 1 : 0; });
 }
 
+// bindings/vehicle_ext.yaml: carla::client::Vehicle
+
+tsc_status_t tsc_vehicle_apply_ackermann_control(tsc_vehicle_t *vehicle,
+                                                 const tsc_vehicle_ackermann_control_t *control) {
+  return TSC_GUARD({
+    vehicle_of(vehicle).ApplyAckermannControl(to_carla(*require_ptr(control, "control")));
+  });
+}
+
+tsc_status_t tsc_vehicle_get_ackermann_controller_settings(
+    tsc_vehicle_t *vehicle, tsc_ackermann_controller_settings_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = from_carla(vehicle_of(vehicle).GetAckermannControllerSettings());
+  });
+}
+
+tsc_status_t tsc_vehicle_apply_ackermann_controller_settings(
+    tsc_vehicle_t *vehicle, const tsc_ackermann_controller_settings_t *settings) {
+  return TSC_GUARD({
+    vehicle_of(vehicle).ApplyAckermannControllerSettings(to_carla(*require_ptr(settings, "settings")));
+  });
+}
+
+tsc_status_t tsc_vehicle_open_door(tsc_vehicle_t *vehicle, int32_t door) {
+  return TSC_GUARD({
+    vehicle_of(vehicle).OpenDoor(to_enum<carla::rpc::VehicleDoor>(door, TSC_VEHICLE_DOOR_FL, TSC_VEHICLE_DOOR_ALL, "vehicle door"));
+  });
+}
+
+tsc_status_t tsc_vehicle_close_door(tsc_vehicle_t *vehicle, int32_t door) {
+  return TSC_GUARD({
+    vehicle_of(vehicle).CloseDoor(to_enum<carla::rpc::VehicleDoor>(door, TSC_VEHICLE_DOOR_FL, TSC_VEHICLE_DOOR_ALL, "vehicle door"));
+  });
+}
+
+tsc_status_t tsc_vehicle_get_failure_state(tsc_vehicle_t *vehicle, int32_t *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = static_cast<int32_t>(vehicle_of(vehicle).GetFailureState());
+  });
+}
+
+tsc_status_t tsc_vehicle_show_debug_telemetry(tsc_vehicle_t *vehicle, int32_t enabled) {
+  return TSC_GUARD({ vehicle_of(vehicle).ShowDebugTelemetry(enabled != 0); });
+}
+
+tsc_status_t tsc_vehicle_get_wheel_steer_angle(tsc_vehicle_t *vehicle, int32_t wheel_location,
+                                               double *out) {
+  return TSC_GUARD({
+    *require_ptr(out, "out") = vehicle_of(vehicle).GetWheelSteerAngle(to_enum<carla::rpc::VehicleWheelLocation>(wheel_location, TSC_WHEEL_FL, TSC_WHEEL_BR, "wheel location"));
+  });
+}
+
+tsc_status_t tsc_vehicle_set_wheel_steer_direction(tsc_vehicle_t *vehicle, int32_t wheel_location,
+                                                   double angle_in_deg) {
+  return TSC_GUARD({
+    vehicle_of(vehicle).SetWheelSteerDirection(to_enum<carla::rpc::VehicleWheelLocation>(wheel_location, TSC_WHEEL_FL, TSC_WHEEL_BR, "wheel location"), check_finite(angle_in_deg, "angle_in_deg"));
+  });
+}
+
+tsc_status_t tsc_vehicle_use_carsim_road(tsc_vehicle_t *vehicle, int32_t enabled) {
+  return TSC_GUARD({ vehicle_of(vehicle).UseCarSimRoad(enabled != 0); });
+}
+
+tsc_status_t tsc_vehicle_enable_carsim(tsc_vehicle_t *vehicle,
+                                       const char *simfile_path, size_t simfile_path_len) {
+  return TSC_GUARD({
+    vehicle_of(vehicle).EnableCarSim(to_string(simfile_path, simfile_path_len, "simfile_path"));
+  });
+}
+
+tsc_status_t tsc_vehicle_enable_chrono_physics(
+    tsc_vehicle_t *vehicle, uint64_t max_substeps, double max_substep_delta_time,
+    const char *vehicle_json, size_t vehicle_json_len,
+    const char *powertrain_json, size_t powertrain_json_len,
+    const char *tire_json, size_t tire_json_len,
+    const char *base_json_path, size_t base_json_path_len) {
+  return TSC_GUARD({
+    vehicle_of(vehicle).EnableChronoPhysics(max_substeps, check_non_negative(max_substep_delta_time, "max_substep_delta_time"), to_string(vehicle_json, vehicle_json_len, "vehicle_json"), to_string(powertrain_json, powertrain_json_len, "powertrain_json"), to_string(tire_json, tire_json_len, "tire_json"), to_string(base_json_path, base_json_path_len, "base_json_path"));
+  });
+}
+
+tsc_status_t tsc_vehicle_get_vehicle_bone_world_transforms(
+    tsc_vehicle_t *vehicle, tsc_transform_t *out, size_t capacity, size_t *out_count) {
+  return TSC_GUARD({
+    copy_out(vehicle_bone_world_transforms(vehicle_of(vehicle)), out, capacity, out_count);
+  });
+}
+
+// bindings/walker.yaml: carla::client::Walker
+
+tsc_status_t tsc_walker_blend_pose(tsc_walker_t *walker, double blend) {
+  return TSC_GUARD({ walker_of(walker).BlendPose(check_finite(blend, "blend")); });
+}
+
+tsc_status_t tsc_walker_show_pose(tsc_walker_t *walker) {
+  return TSC_GUARD({ walker_of(walker).ShowPose(); });
+}
+
+tsc_status_t tsc_walker_hide_pose(tsc_walker_t *walker) {
+  return TSC_GUARD({ walker_of(walker).HidePose(); });
+}
+
+tsc_status_t tsc_walker_get_pose_from_animation(tsc_walker_t *walker) {
+  return TSC_GUARD({ walker_of(walker).GetPoseFromAnimation(); });
+}
+
 // bindings/walker_ai_controller.yaml: carla::client::WalkerAIController
 
 tsc_status_t tsc_walker_ai_controller_start(tsc_walker_ai_controller_t *controller) {

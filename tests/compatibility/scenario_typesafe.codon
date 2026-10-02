@@ -261,6 +261,78 @@ try:
     out("actor_compat", fmt(c.throttle) + "," + fmt(c.brake) + "," +
         str(int(same.is_at_traffic_light())) + "," + str(light0.get_pole_index()) + "," +
         fmt(light0.get_green_time()))
+    # Issue #20: Ackermann control, failure state, wheel steering, doors,
+    # telemetry, vehicle bones, the batch commands, walker bones and poses.
+    car = vehicle
+    s0 = car.get_ackermann_controller_settings()
+    car.apply_ackermann_controller_settings(
+        carla.AckermannControllerSettings(0.5, 0.0, 0.3, 0.02, 0.0, 0.02))
+    world.tick()
+    s1 = car.get_ackermann_controller_settings()
+    out("ackermann_settings", ",".join([fmt(v) for s in (s0, s1) for v in
+                                        (s.speed_kp, s.speed_ki, s.speed_kd, s.accel_kp,
+                                         s.accel_ki, s.accel_kd)]))
+    out("failure_state", str(int(car.get_failure_state())))
+    car.apply_control(carla.VehicleControl(steer=0.5, brake=1.0))
+    for _ in range(10):
+        world.tick()
+    out("wheel_steer", fmt(car.get_wheel_steer_angle(carla.VehicleWheelLocation.FL_Wheel)) + "," +
+        fmt(car.get_wheel_steer_angle(carla.VehicleWheelLocation.BL_Wheel)))
+    car.set_wheel_steer_direction(carla.VehicleWheelLocation.FR_Wheel, 10.0)
+    car.open_door(carla.VehicleDoor.All)
+    car.show_debug_telemetry(True)
+    world.tick()
+    car.close_door(carla.VehicleDoor.All)
+    car.show_debug_telemetry(False)
+    world.tick()
+    out("doors", "1")
+    car.apply_ackermann_control(carla.VehicleAckermannControl(speed=3.0))
+    for _ in range(60):
+        world.tick()
+    out("ackermann_speed", fmt(car.get_velocity().length()))
+    # These need a LibCarla newer than 0.10.0: with a build that lacks them,
+    # print "skip" (compare.py then has the official side skip them too).
+    try:
+        out("telemetry", str(len(car.get_telemetry_data().wheels)))
+    except carla.CarlaError as e:
+        out("telemetry", "skip" if "is not available in LibCarla" in str(e) else "error")
+    try:
+        out("vehicle_bones", str(len(car.get_vehicle_bone_world_transforms())))
+    except carla.CarlaError as e:
+        out("vehicle_bones", "skip" if "is not available in LibCarla" in str(e) else "error")
+    r20 = client.apply_batch_sync(
+        [carla.command.ApplyVehicleAckermannControl(car.id,
+                                                    carla.VehicleAckermannControl(speed=0.0))], True)
+    out("ackermann_batch", ",".join([str(int(x.has_error())) for x in r20]))
+    nav = world.get_random_location_from_navigation()
+    spawned: Optional[carla.Actor] = None
+    if nav is not None:
+        n = unwrap(nav)
+        spawned = world.try_spawn_actor(lib.filter("walker.pedestrian.*")[0],
+                                        carla.Transform(carla.Location(n.x, n.y, n.z + 1.0)))
+    if spawned is None:
+        out("walker_bones", "nospawn")
+        out("walker_pose", "nospawn")
+    else:
+        walker = unwrap(spawned).as_walker()
+        world.tick()
+        bones = walker.get_bones().bone_transforms
+        out("walker_bones", str(len(bones)) + "," + (bones[0].name if bones else ""))
+        b1 = bones[1]
+        rel = b1.relative
+        walker.set_bones(carla.WalkerBoneControlIn([(b1.name, carla.Transform(
+            carla.Location(rel.location.x, rel.location.y, rel.location.z + 0.1),
+            carla.Rotation(rel.rotation.pitch, rel.rotation.yaw + 30.0, rel.rotation.roll)))]))
+        walker.show_pose()
+        world.tick()
+        posed = [b for b in walker.get_bones().bone_transforms if b.name == b1.name][0].relative
+        out("walker_pose", fmt(posed.location.z - rel.location.z) + "," +
+            fmt(posed.rotation.yaw - rel.rotation.yaw))
+        walker.hide_pose()
+        walker.blend_pose(0.5)
+        walker.get_pose_from_animation()
+        world.tick()
+        walker.destroy()
 finally:
     world.apply_settings(original)
     out("destroyed", str(int(vehicle.destroy())))

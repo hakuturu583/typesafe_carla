@@ -237,6 +237,80 @@ try:
     light0 = world.get_actor(lights[0].id)
     out("actor_compat", f"{c.throttle:.3f},{c.brake:.3f},{int(same.is_at_traffic_light())},"
                         f"{light0.get_pole_index()},{light0.get_green_time():.3f}")
+    # Issue #20: Ackermann control, failure state, wheel steering, doors,
+    # telemetry, vehicle bones, the batch commands, walker bones and poses.
+    s0 = vehicle.get_ackermann_controller_settings()
+    vehicle.apply_ackermann_controller_settings(
+        carla.AckermannControllerSettings(0.5, 0.0, 0.3, 0.02, 0.0, 0.02))
+    world.tick()
+    s1 = vehicle.get_ackermann_controller_settings()
+    out("ackermann_settings", ",".join(f"{v:.3f}" for s in (s0, s1) for v in
+                                       (s.speed_kp, s.speed_ki, s.speed_kd, s.accel_kp,
+                                        s.accel_ki, s.accel_kd)))
+    out("failure_state", int(vehicle.get_failure_state()))
+    vehicle.apply_control(carla.VehicleControl(steer=0.5, brake=1.0))
+    for _ in range(10):
+        world.tick()
+    out("wheel_steer", f"{vehicle.get_wheel_steer_angle(carla.VehicleWheelLocation.FL_Wheel):.3f},"
+                       f"{vehicle.get_wheel_steer_angle(carla.VehicleWheelLocation.BL_Wheel):.3f}")
+    vehicle.set_wheel_steer_direction(carla.VehicleWheelLocation.FR_Wheel, 10.0)
+    vehicle.open_door(carla.VehicleDoor.All)
+    vehicle.show_debug_telemetry(True)
+    world.tick()
+    vehicle.close_door(carla.VehicleDoor.All)
+    vehicle.show_debug_telemetry(False)
+    world.tick()
+    out("doors", 1)
+    vehicle.apply_ackermann_control(carla.VehicleAckermannControl(speed=3.0))
+    for _ in range(60):
+        world.tick()
+    out("ackermann_speed", f"{vehicle.get_velocity().length():.3f}")
+    # get_telemetry_data and get_vehicle_bone_world_transforms need a LibCarla
+    # newer than 0.10.0. When typesafe_carla's build lacks them it prints
+    # "skip", and compare.py runs this script with those keys in TSC_SKIP_KEYS.
+    skip = os.environ.get("TSC_SKIP_KEYS", "").split(",")
+    for key, call in (("telemetry", lambda: len(vehicle.get_telemetry_data().wheels)),
+                      ("vehicle_bones", lambda: len(vehicle.get_vehicle_bone_world_transforms()))):
+        if key in skip:
+            out(key, "skip")
+            continue
+        try:
+            out(key, call())
+        except Exception:
+            out(key, "error")
+    r20 = client.apply_batch_sync(
+        [carla.command.ApplyVehicleAckermannControl(vehicle.id,
+                                                    carla.VehicleAckermannControl(speed=0.0))],
+        True)
+    # (command.ShowDebugTelemetry is not batched here: the official 0.10.0 module
+    # has no converter for it in apply_batch_sync; test_issue20 covers ours.)
+    out("ackermann_batch", ",".join(str(int(x.has_error())) for x in r20))
+    nav = world.get_random_location_from_navigation()
+    walker = None if nav is None else world.try_spawn_actor(
+        lib.filter("walker.pedestrian.*")[0],
+        carla.Transform(carla.Location(nav.x, nav.y, nav.z + 1.0)))
+    if walker is None:
+        out("walker_bones", "nospawn")
+        out("walker_pose", "nospawn")
+    else:
+        world.tick()
+        bones = list(walker.get_bones().bone_transforms)
+        out("walker_bones", f"{len(bones)},{bones[0].name if bones else ''}")
+        b1 = bones[1]
+        rel = b1.relative
+        walker.set_bones(carla.WalkerBoneControlIn([(b1.name, carla.Transform(
+            carla.Location(rel.location.x, rel.location.y, rel.location.z + 0.1),
+            carla.Rotation(rel.rotation.pitch, rel.rotation.yaw + 30.0, rel.rotation.roll)))]))
+        walker.show_pose()
+        world.tick()
+        posed = [b for b in walker.get_bones().bone_transforms if b.name == b1.name][0].relative
+        out("walker_pose", f"{posed.location.z - rel.location.z:.3f},"
+                           f"{posed.rotation.yaw - rel.rotation.yaw:.3f}")
+        walker.hide_pose()
+        walker.blend_pose(0.5)
+        walker.get_pose_from_animation()
+        world.tick()
+        walker.destroy()
 finally:
     world.apply_settings(original)
     out("destroyed", int(vehicle.destroy()))
