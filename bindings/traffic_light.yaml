@@ -1,0 +1,12 @@
+# Traffic light operations: tsc_traffic_light_<name>.
+class: carla::client::TrafficLight
+prefix: traffic_light
+self: {type: tsc_traffic_light_t, name: light, get: light_of}
+blocks:
+  traffic_light:
+    set_state: {call: SetState, args: {state: traffic_light_state}}
+    set_green_time: {call: SetGreenTime, args: {t: non_negative}}
+    set_yellow_time: {call: SetYellowTime, args: {t: non_negative}}
+    set_red_time: {call: SetRedTime, args: {t: non_negative}}
+    freeze: {call: Freeze, args: {freeze: bool}}
+    reset_group: {call: ResetGroup}

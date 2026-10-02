@@ -13,6 +13,8 @@ cmake -S . -B build -DTSC_BACKEND=mock && cmake --build build -j
 ctest --test-dir build                                    # C ABI tests
 uv run pytest                                             # compile-pass/fail, runtime, launcher, architecture
 uv run typesafe-codon run examples/connect.py
+uv run python -m tools.bindgen generate                   # after editing bindings/*.yaml
+uv run python -m tools.bindgen validate --build-dir build # spec vs LibCarla/mock headers (docs/bindgen.md)
 
 # Real LibCarla (CARLA UE5; default ref ue5-dev). Slow first build.
 cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-carla -j
@@ -29,6 +31,10 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
 - New API needs both a `tests/compile/pass` and, where misuse is possible, a
   `tests/compile/fail` case with an `# expect-error:` line. Test programs must
   *call* their functions: Codon only type-checks functions that are called.
+- A C function that only checks a handle, converts arguments and calls one
+  LibCarla method belongs in `bindings/*.yaml` (generated), not hand-written.
+  Never edit generated code (`native/src/generated/`, marked blocks in
+  `ffi.h` and `_ffi.codon`).
 - The mock (`native/mock`) mirrors LibCarla UE5 signatures; keep it in sync
   with any LibCarla API the shim starts using.
 - Versions: `python/typesafe_carla/__init__.py` and

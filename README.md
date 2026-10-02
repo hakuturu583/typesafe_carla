@@ -30,7 +30,7 @@ Milestones (design section 43):
 | 2: sensors | ✅ verified against a CARLA 0.10.0 server |
 | 3: distribution | ✅ release pipeline verified end to end (manylinux wheels from CI, clean-container `uv sync` → `build` → `./main` against a CARLA server); publishing to PyPI needs the one-time setup in [docs/releasing.md](docs/releasing.md) |
 | 4: broader compatibility | ✅ verified against a CARLA 0.10.0 server |
-| 5: binding generation | not started |
+| 5: binding generation | ✅ 44 C ABI functions generated from `bindings/*.yaml`, spec validated against LibCarla 0.10.0 and ue5-dev with libclang, [coverage report](docs/coverage.md) |
 
 | Area | Implemented |
 |---|---|
@@ -50,13 +50,24 @@ Milestones (design section 43):
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, indexing, iteration), `ActorBlueprint` (`id`, `has_tag`, `has_attribute`, `get_attribute`, `set_attribute`), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`) |
 | Values | `Location`, `Rotation`, `Transform`, `Vector2D`, `Vector3D`, `BoundingBox`, `VehicleControl`, `VehiclePhysicsControl`, `WheelPhysicsControl`, `WorldSettings`, `Color` |
 | Errors | `CarlaError`, `TimeoutError`, `ActorTypeError`, `VersionError` (plus `IndexError` for lookups by key or index) |
-| Tooling | `typesafe-codon` launcher, `typesafe-carla-toolchain` (bundled Codon), uv workspace + `uv.lock`, CI, PyPI release workflow |
+| Tooling | `typesafe-codon` launcher, `typesafe-carla-toolchain` (bundled Codon), uv workspace + `uv.lock`, CI, PyPI release workflow, binding generator ([docs/bindgen.md](docs/bindgen.md)) |
 
 Notes on Milestone 4:
 - **C ABI 2.0.** `tsc_command_t` gained a field (walker speed), an incompatible change made before the first release. The Codon module checks the major version on import.
 - **Weather depends on the server.** It can be disabled there: CARLA 0.10.0 (the Docker image used for testing) reports `is_weather_enabled() == False`, and `set_weather` has no effect, exactly as with the official Python API.
 - **Traffic Manager.** It runs inside LibCarla in the client process. In synchronous mode, call `tm.set_synchronous_mode(True)` as well.
 - **Enumerations.** `TrafficLightState`, `VehicleLightState` and `LaneType` are integer constants, as in the Python API (`VehicleLightState` values combine with `|`).
+
+Notes on Milestone 5:
+- **Generated plumbing, hand-written API.** 44 C ABI functions are generated from
+  `bindings/*.yaml`: the C declarations, the C++ shim and the Codon FFI. Each one is a handle check,
+  argument conversions and a single LibCarla call. The ABI is unchanged; libclang compared every
+  prototype and struct size before and after the migration. See [docs/bindgen.md](docs/bindgen.md).
+- **Validated against LibCarla.** `tools.bindgen validate` parses the shim with libclang
+  and checks each spec'd method's existence, arity and types. It runs against the mock
+  headers and LibCarla ue5-dev in CI, and was run locally against 0.10.0.
+- **Coverage.** [docs/coverage.md](docs/coverage.md) lists the public methods of the main
+  LibCarla client classes and whether the shim calls them (generated, hand-written or not yet).
 
 Notes on Milestone 2:
 - **No callbacks on LibCarla threads (design §15).** `listen()` starts a bounded per-sensor queue; the program reads it with `poll()` / `wait_for_data()`. When the queue is full, the oldest measurement is dropped (`dropped_count`). Call `stop()` (or destroy the sensor) when done.
@@ -195,6 +206,9 @@ native/mock/               in-memory LibCarla stand-in (mock backend)
 python/typesafe_carla/     typesafe-codon launcher, path and toolchain discovery
 toolchain/                 typesafe-carla-toolchain: pinned Codon as a wheel
 tools/check_wheel.py       release checks on a built wheel
+tools/bindgen/             binding generator, libclang spec validation, coverage
+bindings/                  binding spec (YAML) for the generated C ABI functions
+native/src/generated/      generated C++ shim (do not edit)
 .github/workflows/         CI (mock + LibCarla builds) and PyPI release
 tests/native/              C ABI tests (ctest)
 tests/compile/pass|fail/   programs that must / must not compile

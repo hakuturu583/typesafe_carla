@@ -25,10 +25,6 @@ tsc_status_t tsc_vehicle_get_control(tsc_vehicle_t *vehicle, tsc_vehicle_control
   });
 }
 
-tsc_status_t tsc_vehicle_set_autopilot(tsc_vehicle_t *vehicle, int32_t enabled, uint16_t tm_port) {
-  return TSC_GUARD({ vehicle_of(vehicle).SetAutopilot(enabled != 0, tm_port); });
-}
-
 tsc_status_t tsc_vehicle_get_physics_control(tsc_vehicle_t *vehicle,
                                              tsc_vehicle_physics_control_t *out) {
   return TSC_GUARD({

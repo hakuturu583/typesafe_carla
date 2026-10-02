@@ -1,0 +1,101 @@
+# Value types the binding generator knows (tools/bindgen).
+#
+#   c          C ABI type. `struct` types cross by pointer (const T * in,
+#              T * out); Codon passes an @tuple by value as separate scalars.
+#   codon      the matching Codon FFI type
+#   to_carla   C++ expression converting the C value `{}` for LibCarla
+#              (`{name}` is the parameter name); default: `{}`
+#   from_carla C++ expression converting the LibCarla value `{}` to C;
+#              default: `{}`
+#   cpp        regexes, one of which the canonical LibCarla parameter or
+#              return type must match (checked with libclang)
+
+bool:
+  c: int32_t
+  codon: i32
+  to_carla: "{} != 0"
+  from_carla: "{} ? 1 : 0"
+  cpp: ["bool"]
+uint16:
+  c: uint16_t
+  codon: u16
+  cpp: ["unsigned short", "uint16_t"]
+uint32:
+  c: uint32_t
+  codon: u32
+  cpp: ["unsigned int", "uint32_t"]
+uint64:
+  c: uint64_t
+  codon: u64
+  cpp: ["unsigned long( long)?", "uint64_t"]
+double:
+  c: double
+  codon: float
+  cpp: ["float", "double"]
+# A finite float; NaN and infinities are rejected.
+finite:
+  c: double
+  codon: float
+  to_carla: 'check_finite({}, "{name}")'
+  cpp: ["float"]
+# A finite, non-negative float (durations, distances, speeds).
+non_negative:
+  c: double
+  codon: float
+  to_carla: 'check_non_negative_float({}, "{name}")'
+  cpp: ["float"]
+vector3d:
+  c: tsc_vector3d_t
+  struct: true
+  codon: CVector3D
+  to_carla: "to_carla_vector({})"
+  from_carla: "from_carla({})"
+  cpp: ["carla::geom::Vector3D"]
+location:
+  c: tsc_location_t
+  struct: true
+  codon: CVector3D
+  to_carla: "to_carla({})"
+  from_carla: "from_carla({})"
+  cpp: ["carla::geom::Location"]
+transform:
+  c: tsc_transform_t
+  struct: true
+  codon: CTransform
+  to_carla: "to_carla({})"
+  from_carla: "from_carla({})"
+  cpp: ["carla::geom::Transform"]
+bounding_box:
+  c: tsc_bounding_box_t
+  struct: true
+  codon: CBoundingBox
+  from_carla: "from_carla({})"
+  cpp: ["carla::geom::BoundingBox"]
+string:
+  c: tsc_string_t
+  struct: true
+  codon: CString
+  # Output only: the caller frees it with tsc_string_free.
+  assign: "string_assign({out}, {})"
+  cpp: ["std::(__cxx11::)?basic_string<char.*>"]
+# VehicleLightState bit flags.
+vehicle_light_state:
+  c: uint32_t
+  codon: u32
+  to_carla: "static_cast<carla::client::Vehicle::LightState>({})"
+  from_carla: "static_cast<uint32_t>({})"
+  cpp: ["carla::rpc::VehicleLightState::LightState"]
+# tsc_traffic_light_state_t; out-of-range values are rejected.
+traffic_light_state:
+  c: int32_t
+  codon: i32
+  to_carla: "to_light_state({})"
+  from_carla: "static_cast<int32_t>({})"
+  cpp: ["carla::rpc::TrafficLightState"]
+# A vehicle handle passed to the Traffic Manager.
+vehicle:
+  c: tsc_vehicle_t
+  handle: true
+  codon: cobj
+  to_carla: 'vehicle_ptr({}, "{name}")'
+  cpp: ["(boost|std)::shared_ptr<carla::client::Actor>"]

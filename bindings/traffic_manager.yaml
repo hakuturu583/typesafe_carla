@@ -1,0 +1,21 @@
+# Traffic Manager operations: tsc_traffic_manager_<name>. The per-vehicle
+# numeric settings (tsc_traffic_manager_set_vehicle_value) are hand-written.
+class: carla::traffic_manager::TrafficManager
+prefix: traffic_manager
+self: {type: tsc_traffic_manager_t, name: tm, get: tm_of}
+blocks:
+  traffic_manager:
+    get_port: {call: Port, out: uint16}
+    set_synchronous_mode: {call: SetSynchronousMode, args: {enabled: bool}}
+    set_random_device_seed: {call: SetRandomDeviceSeed, args: {seed: uint64}}
+    set_hybrid_physics_mode: {call: SetHybridPhysicsMode, args: {enabled: bool}}
+    set_global_percentage_speed_difference:
+      call: SetGlobalPercentageSpeedDifference
+      args: {percentage: finite}
+    set_global_distance_to_leading_vehicle:
+      call: SetGlobalDistanceToLeadingVehicle
+      args: {distance: non_negative}
+  traffic_manager_vehicle:
+    set_auto_lane_change: {call: SetAutoLaneChange, args: {vehicle: vehicle, enabled: bool}}
+    force_lane_change: {call: SetForceLaneChange, args: {vehicle: vehicle, to_left: bool}}
+    set_update_vehicle_lights: {call: SetUpdateVehicleLights, args: {vehicle: vehicle, enabled: bool}}

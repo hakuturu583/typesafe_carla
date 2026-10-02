@@ -1,0 +1,26 @@
+# Actor operations: tsc_actor_<name>, accepting any actor handle.
+class: carla::client::Actor
+prefix: actor
+self: {type: tsc_actor_t, name: actor, get: actor_of}
+blocks:
+  actor:
+    get_id: {call: GetId, out: {type: uint32, name: out_id}}
+    get_type_id: {call: GetTypeId, out: string}
+    is_alive: {call: IsAlive, out: {type: bool, name: out_alive}}
+    get_transform: {call: GetTransform, out: transform}
+    set_transform: {call: SetTransform, args: {transform: transform}}
+    get_location: {call: GetLocation, out: location}
+    set_location: {call: SetLocation, args: {location: location}}
+    get_velocity: {call: GetVelocity, out: vector3d}
+    set_target_velocity: {call: SetTargetVelocity, args: {velocity: vector3d}}
+    get_acceleration: {call: GetAcceleration, out: vector3d}
+    get_angular_velocity: {call: GetAngularVelocity, out: vector3d}
+  actor_physics:
+    get_bounding_box: {call: GetBoundingBox, out: bounding_box}
+    set_target_angular_velocity: {call: SetTargetAngularVelocity, args: {v: vector3d}}
+    add_impulse: {call: AddImpulse, args: {impulse: vector3d}}
+    add_force: {call: AddForce, args: {force: vector3d}}
+    add_angular_impulse: {call: AddAngularImpulse, args: {impulse: vector3d}}
+    add_torque: {call: AddTorque, args: {torque: vector3d}}
+    set_simulate_physics: {call: SetSimulatePhysics, args: {enabled: bool}}
+    set_enable_gravity: {call: SetEnableGravity, args: {enabled: bool}}

@@ -30,7 +30,11 @@ Issues = "https://github.com/hakuturu583/typesafe_carla/issues"
 typesafe-codon = "typesafe_carla.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "libclang>=18",
+    "pytest>=8",
+    "pyyaml>=6.0.3",
+]
 
 # ---------------------------------------------------------------------------
 # uv workspace: the toolchain package is built from ./toolchain, so `uv sync`
@@ -79,3 +83,4 @@ TSC_BUILD_TESTS = "OFF"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # tools.bindgen

@@ -1,0 +1,19 @@
+# Vehicle operations: tsc_vehicle_<name>, accepting vehicle handles.
+class: carla::client::Vehicle
+prefix: vehicle
+self: {type: tsc_vehicle_t, name: vehicle, get: vehicle_of}
+blocks:
+  vehicle:
+    set_autopilot: {call: SetAutopilot, args: {enabled: bool, tm_port: uint16}}
+  vehicle_lights:
+    set_light_state:
+      call: SetLightState
+      args: {light_state: vehicle_light_state}
+      doc: "light_state: CARLA VehicleLightState bit flags."
+    get_light_state: {call: GetLightState, out: vehicle_light_state}
+    get_speed_limit: {call: GetSpeedLimit, out: double}
+    get_traffic_light_state:
+      call: GetTrafficLightState
+      out: traffic_light_state
+      doc: "state: tsc_traffic_light_state_t"
+    is_at_traffic_light: {call: IsAtTrafficLight, out: bool}
