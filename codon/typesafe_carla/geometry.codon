@@ -8,11 +8,6 @@ from .errors import _check
 # 2 * FLT_EPSILON: LibCarla's default threshold for a zero-length vector.
 _UNIT_EPSILON = 2.0 * 1.1920928955078125e-07
 
-@tuple
-class _NoArg:
-    """Default of an optional keyword: tells "not passed" apart statically."""
-    pass
-
 class Vector3D:
     """A 3D vector (velocity, force, direction, ...), as carla.Vector3D.
 
@@ -70,18 +65,15 @@ class Vector3D:
             return Vector3D(self.x, self.y, self.z)
         return Vector3D(self.x / n, self.y / n, self.z / n)
 
-    def distance(self, vector = _NoArg(), location = _NoArg()) -> float:
-        """The Python API names the parameter `vector` here and `location` in
-        Location.distance. Codon dispatches an override in Location virtually,
-        which rejects keywords, so both names are accepted here (on any vector)."""
-        if isinstance(location, _NoArg):
-            if isinstance(vector, _NoArg):
-                compile_error("distance() missing its argument: vector (or location)")
+    def distance(self, vector = None, location = None) -> float:
+        """Takes `vector` (Vector3D.distance's official name) or `location`
+        (Location.distance's), exactly one. Not a Location override: Codon
+        dispatches that virtually, which rejects keywords."""
+        if isinstance(vector, Optional[NoneType]) == isinstance(location, Optional[NoneType]):
+            compile_error("distance() takes exactly one argument: vector or location")
+        if isinstance(location, Optional[NoneType]):
             return self.distance_squared(vector) ** 0.5
-        else:
-            if not isinstance(vector, _NoArg):
-                compile_error("distance() takes one argument: vector or location, not both")
-            return self.distance_squared(location) ** 0.5
+        return self.distance_squared(location) ** 0.5
 
     def distance_squared(self, vector) -> float:
         vector = _upcast_vector(vector)
@@ -513,9 +505,8 @@ class BoundingBox:
 
     def contains(self, world_point, point: Transform) -> bool:
         """Whether `world_point` (a Location) is inside this box placed by the
-        transform `point` (box space to world). As in LibCarla, the box's own
-        rotation is not applied. The Python API names the Transform `point`
-        (and the Location is positional-only), so the names follow it."""
+        transform `point` (box space to world; the official name). As in
+        LibCarla, the box's own rotation is not applied."""
         p = _location_arg(world_point, "[tsc-compat] a Vector3D passed as a Location to BoundingBox.contains")
         x, y, z = _apply(_matrix(point._to_c(), True), p.x, p.y, p.z, 1.0)
         x -= self.location.x
