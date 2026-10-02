@@ -169,4 +169,17 @@ assert type(loc).__name__ == "Location" and loc == carla.Location(0.0, 0.0, 3.0)
 pos = carla.Location(1.0, 0.0, 0.0).as_vector()
 pos += carla.Vector3D(1.0, 0.0, 0.0)
 assert pos == carla.Vector3D(2.0, 0.0, 0.0)
+
+# An Optional holding None, passed to a required vector or location parameter,
+# raises Codon's usual unpack error (it used to dereference None and crash).
+def unpack_error(f) -> str:
+    try:
+        f()
+    except ValueError as e:
+        return e.message
+    return ""
+none_loc: Optional[carla.Location] = None
+none_vec: Optional[carla.Vector3D] = None
+assert unpack_error(lambda: vehicle.add_force(none_loc)) == "optional unpack failed: expected Location, got None"
+assert unpack_error(lambda: vehicle.set_location(none_vec)) == "optional unpack failed: expected Vector3D, got None"
 print("OK")

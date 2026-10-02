@@ -197,7 +197,7 @@ def _vector_arg(v, what: Literal[str]) -> Vector3D:
     Other types fail to compile with "'T' does not match expected type 'Vector3D'".
     """
     if isinstance(v, Optional):
-        return _vector_arg(v.__val__(), what)
+        return _vector_arg(unwrap(v), what)
     elif isinstance(v, Location):
         compat_shortcut("Location as Vector3D", what, "convert with location.as_vector()")
         return v.as_vector()
@@ -228,7 +228,7 @@ def _location_arg(v, what: Literal[str]) -> Location:
     Other types fail with "'T' does not match expected type 'Location'".
     """
     if isinstance(v, Optional):
-        return _location_arg(v.__val__(), what)
+        return _location_arg(unwrap(v), what)
     elif isinstance(v, Location):
         return v
     elif isinstance(v, Vector3D):
