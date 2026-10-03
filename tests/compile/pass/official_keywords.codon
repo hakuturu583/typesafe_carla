@@ -1,0 +1,65 @@
+# Issue #41: keyword arguments use the official Python API's parameter names,
+# so code ported from scenario_official.py compiles when it calls with keywords.
+import typesafe_carla as carla
+
+def traffic_manager(tm: carla.TrafficManager, v: carla.Vehicle):
+    tm.set_synchronous_mode(mode_switch=True)
+    tm.set_random_device_seed(value=7)
+    tm.auto_lane_change(actor=v, enable=False)
+    tm.distance_to_leading_vehicle(actor=v, distance=3.0)
+    tm.force_lane_change(actor=v, direction=True)
+    tm.ignore_lights_percentage(actor=v, perc=10.0)
+    tm.ignore_signs_percentage(actor=v, perc=10.0)
+    tm.ignore_vehicles_percentage(actor=v, perc=10.0)
+    tm.ignore_walkers_percentage(actor=v, perc=10.0)
+    tm.keep_right_rule_percentage(actor=v, perc=10.0)
+    tm.keep_slow_lane_rule_percentage(actor=v, perc=10.0)
+    tm.random_left_lanechange_percentage(actor=v, percentage=10.0)
+    tm.random_right_lanechange_percentage(actor=v, percentage=10.0)
+    tm.set_desired_speed(actor=v, speed=30.0)
+    tm.update_vehicle_lights(actor=v, do_update=True)
+    tm.vehicle_lane_offset(actor=v, offset=0.5)
+    tm.vehicle_percentage_speed_difference(actor=v, percentage=-20.0)
+    # The official binding leaves the wheel positional and names the angle `wheel_location`.
+    v.set_wheel_steer_direction(carla.VehicleWheelLocation.FR_Wheel, wheel_location=10.0)
+
+def traffic_light(light: carla.TrafficLight, actor: carla.Actor):
+    light.set_green_time(green_time=5.0)
+    light.set_yellow_time(yellow_time=2.0)
+    light.set_red_time(red_time=4.0)
+    # The plain-Actor compatibility shortcuts forward keywords unchanged.
+    actor.set_green_time(green_time=5.0)
+    actor.set_yellow_time(yellow_time=2.0)
+    actor.set_red_time(red_time=4.0)
+
+def actors(world: carla.World) -> bool:
+    return world.get_actors().find(id=42) is None
+
+def geometry() -> float:
+    a = carla.Location(1.0, 2.0, 0.0)
+    b = carla.Location(4.0, 6.0, 0.0)
+    v = carla.Vector3D(1.0, 0.0, 0.0)
+    w = carla.Vector3D(0.0, 1.0, 0.0)
+    total = a.distance(location=b)
+    total += a.distance_2d(vector=b) + a.distance_squared(vector=b) + a.dot(vector=b)
+    total += v.distance(vector=w) + v.distance_squared(vector=w)
+    total += v.distance_2d(vector=w) + v.distance_squared_2d(vector=w)
+    total += v.dot(vector=w) + v.dot_2d(vector=w) + v.get_vector_angle(vector=w)
+    total += v.cross(vector=w).z
+    t = carla.Transform(carla.Location(1.0, 0.0, 0.0), carla.Rotation(yaw=90.0))
+    total += t.transform_vector(in_point=v).y
+    box = carla.BoundingBox(carla.Location(), carla.Vector3D(1.0, 1.0, 1.0))
+    # The official binding leaves the Location positional and names the Transform `point`.
+    if box.contains(carla.Location(1.0, 0.5, 0.0), point=t):
+        total += 1.0
+    return total
+
+print(geometry())
+_client = carla.Client("localhost", 2000)
+_world = _client.get_world()
+_vehicle = _world.spawn_actor(_world.get_blueprint_library().find("vehicle.audi.tt"),
+                              carla.Transform()).as_vehicle()
+traffic_manager(_client.get_trafficmanager(8000), _vehicle)
+_light = _world.get_actors().filter("traffic.traffic_light")[0]
+traffic_light(_light.as_traffic_light(), _light)
+print(actors(_world))

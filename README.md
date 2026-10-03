@@ -384,6 +384,22 @@ in every mode, strict or not:
 ## Differences from the CARLA Python API
 
 Most code ports by changing `import carla` to `import typesafe_carla as carla`.
+Keyword arguments use the official parameter names (issue #41), so calls
+with keywords port too: `TrafficManager`'s per-vehicle methods take `actor`
+(and `perc` or `percentage`, as each official method does),
+`set_random_device_seed(value)`, `set_synchronous_mode(mode_switch)`,
+`TrafficLight.set_green_time(green_time)` & co., `ActorList.find(id)`,
+`Vector3D`'s methods `vector`, `Transform.transform_vector(in_point)`. Where
+the official binding leaves the first argument positional-only and gives
+its name to the next one, so do these: `BoundingBox.contains(world_point,
+point)` (`point` is the Transform) and
+`Vehicle.set_wheel_steer_direction(wheel, wheel_location)` (`wheel_location`
+is the angle). The names used before issue #41 (`vehicle=`, `percentage=`
+where the official name is `perc`, `seed=`, `enabled=` for
+`set_synchronous_mode`, `seconds=`, `other=`, `actor_id=` for
+`ActorList.find`, `in_vector=`, `bbox_transform=`, `angle_in_deg=`) are now
+compile errors ("... is an invalid keyword argument").
+
 Deliberate differences, all in favour of static checking:
 
 * **Subclass methods on a plain `Actor` are checked at run time.** As in the
@@ -416,6 +432,11 @@ Deliberate differences, all in favour of static checking:
 * **`get_landmarks_of_type(distance, type)`**: pass the type by position.
   Codon 0.19 cannot compile these methods with a parameter named `type`, so
   it is `landmark_type` (as in `Map.get_all_landmarks_of_type`).
+* **`distance` takes either keyword.** The Python API names the argument
+  `vector` in `Vector3D.distance` and `location` in `Location.distance`.
+  Codon dispatches a `Location` override virtually, which rejects keywords,
+  so here `distance` accepts `vector=` or `location=` (exactly one) on any
+  vector, a superset of the Python API.
 * **Attribute values are typed.** `ActorAttribute.as_int()` raises when the
   attribute is not an int; `str(attribute)` gives the raw value.
 * **Sensor callbacks run at dispatch points, not on CARLA's threads.**

@@ -60,14 +60,15 @@ n = wp.next(10.0)[0].transform.location
 out("next10", f"{n.x:.3f},{n.y:.3f}")
 out("generated", len(m.generate_waypoints(20.0)))
 # Issue #10: Location derives from Vector3D (result types and Vector3D methods).
+# Some calls here and below pass the official keyword names (issue #41).
 dl = n - p0.location
 u = dl.make_unit_vector()
-cr = dl.cross(carla.Vector3D(0.0, 0.0, 1.0))
+cr = dl.cross(vector=carla.Vector3D(0.0, 0.0, 1.0))
 out("location_vector_types", f"{type(dl).__name__},{type(dl * 2.0).__name__},"
     f"{type(carla.Vector3D() + dl).__name__},{type(abs(dl)).__name__},{type(u).__name__}")
 out("location_vector", f"{dl.length():.3f},{dl.squared_length():.3f},"
-    f"{dl.dot(carla.Vector3D(1.0, 1.0, 0.0)):.3f},{cr.x:.3f},{cr.y:.3f},{u.x:.3f},{u.y:.3f},"
-    f"{n.distance_2d(p0.location):.3f},{abs(dl).x:.3f}")
+    f"{dl.dot(vector=carla.Vector3D(1.0, 1.0, 0.0)):.3f},{cr.x:.3f},{cr.y:.3f},{u.x:.3f},{u.y:.3f},"
+    f"{n.distance_2d(vector=p0.location):.3f},{abs(dl).x:.3f}")
 r = client.apply_batch_sync([carla.command.DestroyActor(999999)])
 out("batch_error", r[0].error)
 
@@ -95,7 +96,7 @@ out("junction", f"{jn.id},{len(jn.get_waypoints(carla.LaneType.Driving))}")
 # Lookups that can miss return None (issue #9).
 offroad = m.get_waypoint(carla.Location(10000.0, 10000.0, 0.0), project_to_road=False)
 out("none_lookups", f"{int(world.get_actor(999999) is None)},"
-    f"{int(world.get_snapshot().find(999999) is None)},{int(world.get_actors().find(999999) is None)},"
+    f"{int(world.get_snapshot().find(999999) is None)},{int(world.get_actors().find(id=999999) is None)},"
     f"{int(offroad is None)},{int(wp.get_junction() is None)}")
 
 # Issue #22: geo-reference, XODR waypoints, lane markings, landmarks, light geometry.
@@ -428,12 +429,12 @@ geometry = [",".join(f"{x:.3f}" for row in t23.get_matrix() for x in row),
 p23 = carla.Location(1.0, 0.0, 0.0)
 t23.transform(p23)
 v23 = carla.Vector3D(1.0, 0.0, 0.0)
-t23.transform_vector(v23)
+t23.transform_vector(in_point=v23)
 geometry += [vec(p23), vec(v23)]
 bb23 = carla.BoundingBox(carla.Location(0.5, 0.0, 0.0), carla.Vector3D(1.0, 2.0, 3.0))
 bb23.rotation = carla.Rotation(yaw=90.0)
 geometry += [vec(x) for x in bb23.get_local_vertices()] + [vec(x) for x in bb23.get_world_vertices(t23)]
-geometry += [str(int(bb23.contains(carla.Location(1.0, 2.0, 3.0), t23))),
+geometry += [str(int(bb23.contains(carla.Location(1.0, 2.0, 3.0), point=t23))),
              str(int(bb23.contains(carla.Location(10.0, 2.0, 3.0), t23)))]
 out("geometry_yaw", ",".join(geometry))
 n23 = carla.Rotation(-190.0, 370.0, 540.0).get_normalized()
