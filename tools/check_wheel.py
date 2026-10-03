@@ -21,7 +21,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--backend", default="libcarla")
     parser.add_argument("--carla-ref", default=None,
-                        help="CARLA_GIT_REF the wheel was built from (a release passes the SHA)")
+                        help="the CARLA ref the wheel records (its name, e.g. ue5-dev, when "
+                             "built from a SHA resolved from it)")
     parser.add_argument("--carla-commit", default=None,
                         help="the CARLA commit SHA LibCarla must have been built from")
     args = parser.parse_args()
@@ -46,7 +47,7 @@ def main() -> int:
     if args.carla_commit is not None and commit != args.carla_commit:
         errors.append(f"CARLA commit is {commit!r}, expected {args.carla_commit!r}")
     info = paths.build_info()
-    if info.get("carla_git_commit") != commit:
+    if info.get("carla_git_commit") != commit or info.get("carla_git_ref") != ref:
         errors.append(f"BUILD_INFO.json disagrees with the library: {info}")
     try:
         paths.codon_modules_dir()

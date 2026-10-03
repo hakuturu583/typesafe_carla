@@ -13,13 +13,20 @@
 #                             (default: ue5-dev).
 #   TSC_CARLA_REFRESH         Re-fetch even if this ref was fetched before
 #                             (to pick up new commits on a branch).
+#   TSC_CARLA_REF_NAME        [CARLA_REF_NAME] The ref to record (BUILD_INFO,
+#                             libcarla_git_ref(), bindgen's `missing_in`) when
+#                             TSC_CARLA_GIT_REF is a commit SHA resolved from
+#                             it, e.g. "ue5-dev" or "0.10.0"; also names a
+#                             TSC_CARLA_SOURCE_DIR build. Default: the ref
+#                             fetched ("local" for TSC_CARLA_SOURCE_DIR).
 #
 # The cache variables carry a TSC_ prefix because CARLA's own project() call
 # defines CARLA_SOURCE_DIR.
 #
 # Outputs:
 #   TSC_CARLA_DIR           Path of the CARLA source tree to add_subdirectory().
-#   TSC_CARLA_RESOLVED_REF  The requested ref ("local" for TSC_CARLA_SOURCE_DIR).
+#   TSC_CARLA_RESOLVED_REF  The ref recorded: TSC_CARLA_REF_NAME, else the
+#                           requested ref ("local" for TSC_CARLA_SOURCE_DIR).
 #   TSC_CARLA_COMMIT        Resolved commit SHA ("unknown" if not a git tree).
 
 include_guard(GLOBAL)
@@ -37,6 +44,17 @@ else()
 endif()
 set(TSC_CARLA_GIT_REF "${_tsc_ref_default}" CACHE STRING
     "CARLA branch, tag or commit SHA to build LibCarla from (UE5 only)")
+set(TSC_CARLA_REF_NAME "$ENV{CARLA_REF_NAME}" CACHE STRING
+    "CARLA ref to record when TSC_CARLA_GIT_REF is a SHA resolved from it; empty: TSC_CARLA_GIT_REF")
+
+# The recorded ref: TSC_CARLA_REF_NAME if given, else `fallback`.
+macro(_tsc_set_resolved_ref fallback)
+  if(TSC_CARLA_REF_NAME)
+    set(TSC_CARLA_RESOLVED_REF "${TSC_CARLA_REF_NAME}")
+  else()
+    set(TSC_CARLA_RESOLVED_REF "${fallback}")
+  endif()
+endmacro()
 
 function(_tsc_git)
   execute_process(
@@ -66,7 +84,7 @@ find_package(Git QUIET)
 if(TSC_CARLA_SOURCE_DIR)
   get_filename_component(TSC_CARLA_DIR "${TSC_CARLA_SOURCE_DIR}" ABSOLUTE)
   _tsc_check_ue5("${TSC_CARLA_DIR}")
-  set(TSC_CARLA_RESOLVED_REF "local")
+  _tsc_set_resolved_ref("local")
   set(TSC_CARLA_COMMIT "unknown")
   if(GIT_FOUND AND EXISTS "${TSC_CARLA_DIR}/.git")
     execute_process(
@@ -110,7 +128,7 @@ endif()
 
 _tsc_git(rev-parse HEAD)
 set(TSC_CARLA_DIR "${_tsc_carla_dir}")
-set(TSC_CARLA_RESOLVED_REF "${TSC_CARLA_GIT_REF}")
+_tsc_set_resolved_ref("${TSC_CARLA_GIT_REF}")
 set(TSC_CARLA_COMMIT "${_tsc_git_out}")
 _tsc_check_ue5("${TSC_CARLA_DIR}")
 message(STATUS "typesafe_carla: CARLA ${TSC_CARLA_RESOLVED_REF} = ${TSC_CARLA_COMMIT}")

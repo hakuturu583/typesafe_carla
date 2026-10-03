@@ -76,22 +76,44 @@ def _clang_args(args: list[str]) -> list[str]:
 
 
 @functools.cache
+def _libclang_major() -> int | None:
+    """The major version of the loaded libclang ("clang version 18.1.1")."""
+    import re
+
+    lib = cindex.conf.lib
+    lib.clang_getClangVersion.restype = cindex._CXString
+    text = cindex._CXString.from_result(lib.clang_getClangVersion())
+    m = re.search(r"version (\d+)", text)
+    return int(m.group(1)) if m else None
+
+
 def _resource_dir() -> str:
     """Clang's builtin headers (stddef.h, the x86 intrinsics...), which the
     libclang wheel does not ship. TSC_CLANG_RESOURCE_DIR, else an installed
-    clang, else the copy inside the `ziglang` package."""
-    def candidates():  # lazily: each clang costs a subprocess
-        yield os.environ.get("TSC_CLANG_RESOURCE_DIR", "")
+    clang of libclang's major version, else the copy inside the `ziglang`
+    package (0.13: clang 18), else any installed clang. Newer headers than
+    libclang use builtins it does not know (clang 21's AVX-512 headers fail
+    under libclang 18), so a matching version comes first."""
+    want = _libclang_major()
+
+    def installed():  # lazily: each clang costs a subprocess
         for clang in ("clang", *(f"clang-{v}" for v in range(22, 13, -1))):
             if shutil.which(clang):
-                yield subprocess.run([clang, "-print-resource-dir"], capture_output=True,
+                out = subprocess.run([clang, "-print-resource-dir"], capture_output=True,
                                      text=True).stdout.strip()
+                if out:
+                    yield out
+
+    def candidates():
+        yield os.environ.get("TSC_CLANG_RESOURCE_DIR", "")
+        yield from (d for d in installed() if Path(d).name == str(want))
         try:
             import ziglang
 
             yield str(Path(ziglang.__file__).parent / "lib")
         except ImportError:
             pass
+        yield from installed()
 
     for c in candidates():
         if c and (Path(c) / "include" / "stddef.h").exists():
@@ -281,13 +303,21 @@ def _cache_var(build_dir: Path, name: str) -> str:
     return m.group(1) if m else "unknown"
 
 
+def _carla_ref(build_dir: Path) -> str:
+    """The CARLA ref `missing_in` is matched against: TSC_CARLA_REF_NAME (the
+    ref a commit SHA was resolved from, e.g. "0.10.0", as CI and releases
+    build), else TSC_CARLA_GIT_REF."""
+    name = _cache_var(build_dir, "TSC_CARLA_REF_NAME")
+    return name if name not in ("", "unknown") else _cache_var(build_dir, "TSC_CARLA_GIT_REF")
+
+
 def validate(spec: Spec, build_dir: Path) -> int:
     source, args = _shim_tu(build_dir)
     defs = _class_definitions(_parse(source, args, bodies=False))
     methods = {cls: _methods(defs, cls) for cls in spec.classes()}
     failures = []
     backend = _cache_var(build_dir, "TSC_BACKEND")
-    ref = _cache_var(build_dir, "TSC_CARLA_GIT_REF")
+    ref = _carla_ref(build_dir)
     for f in spec.functions:
         overloads = (_constructors(defs, f.cpp_class) if f.constructor
                      else methods[f.cpp_class].get(f.call, []))
@@ -455,7 +485,7 @@ def coverage(spec: Spec, build_dir: Path, output: Path | None) -> int:
     # and at (bindings/lists.yaml, through list_at).
     spec_calls = {f"{f.cpp_class}::{f.call}" for f in spec.functions}
     generated_calls = {key for key, gen in calls if gen}
-    ref = _cache_var(build_dir, "TSC_CARLA_GIT_REF")
+    ref = _carla_ref(build_dir)
 
     lines = ["# LibCarla API coverage", "",
              f"Which public methods of the main LibCarla client classes the C shim calls, "
