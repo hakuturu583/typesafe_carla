@@ -178,7 +178,6 @@ tsc_cam_message_t from_carla(const data::CAMData &m) {
       break;
     case CAMContainer::HighFrequencyContainer_PR_rsuContainerHighFrequency:
       r.high_frequency_present = TSC_CAM_HF_RSU;
-      r.protected_zone_count = protected_zones(cam).size();
       break;
     default:
       r.high_frequency_present = TSC_CAM_HF_NONE;
@@ -189,18 +188,15 @@ tsc_cam_message_t from_carla(const data::CAMData &m) {
     r.has_low_frequency = 1;
     r.vehicle_role = low.vehicleRole;
     r.exterior_lights = low.exteriorLights;
-    r.path_point_count = path_history(cam).size();
   }
   return r;
 }
 
 tsc_custom_v2x_data_t from_carla(const data::CustomV2XData &m) {
-  const carla::rpc::CustomV2XBytes &bytes = m.Message.data;
   tsc_custom_v2x_data_t r{};
   r.power = m.Power;
+  r.data_size = std::min<uint32_t>(m.Message.data.data_size, TSC_CUSTOM_V2X_MAX_DATA_SIZE);
   r.header = from_carla(m.Message.header);
-  r.data.data_size = std::min<uint32_t>(bytes.data_size, TSC_CUSTOM_V2X_MAX_DATA_SIZE);
-  std::copy(bytes.bytes.begin(), bytes.bytes.end(), r.data.bytes);
   return r;
 }
 static_assert(sizeof(carla::rpc::CustomV2XBytes{}.bytes) == TSC_CUSTOM_V2X_MAX_DATA_SIZE,
@@ -564,12 +560,18 @@ tsc_status_t tsc_custom_v2x_event_get_message_count(const tsc_sensor_data_t *d, 
 }
 
 tsc_status_t tsc_custom_v2x_event_get_message(const tsc_sensor_data_t *d, size_t index,
-                                              tsc_custom_v2x_data_t *out) {
+                                              tsc_custom_v2x_data_t *out, uint8_t *bytes,
+                                              size_t capacity) {
   return TSC_GUARD({
     require_ptr(out, "out");
+    require_array(bytes, capacity, "bytes");
 #ifdef TSC_HAS_V2X
     const auto &event = sensor_data_as<data::CustomV2XEvent>(d, kCustomV2XEvent);
-    *out = from_carla(list_at(event, index, kCustomV2XEvent));
+    const auto &message = list_at(event, index, kCustomV2XEvent);
+    const tsc_custom_v2x_data_t r = from_carla(message);
+    const auto &payload = message.Message.data.bytes;
+    std::copy_n(payload.begin(), std::min<size_t>(r.data_size, capacity), bytes);
+    *out = r;
 #else
     no_v2x(d, "CustomV2XEvent");
 #endif

@@ -8,5 +8,5 @@ blocks:
   server_side_sensor:
     send:
       call: Send
-      args: {message: custom_v2x_bytes}
+      args: {message: custom_v2x_bytes_in}
       optional: {name: Sensor.send, missing_in: ["0.10.0"]}

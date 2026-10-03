@@ -654,12 +654,13 @@ landmark_handle:
 landmark_info: {c: tsc_landmark_t, struct: true, codon: CLandmark, from_carla: "from_carla(*{})"}
 bone_transform: {c: tsc_bone_transform_out_t, struct: true, codon: CBoneTransformOut, from_carla: "from_carla({})"}
 actor_snapshot: {c: tsc_actor_snapshot_t, struct: true, codon: CActorSnapshot}
-# Issue #42: rpc::CustomV2XBytes (data_size checked against the 100-byte
-# capacity). Codon passes a raw buffer laid out as tsc_custom_v2x_bytes_t.
-# Without V2X (CARLA 0.10.0) it converts to a stand-in that no Send accepts.
-custom_v2x_bytes:
-  c: tsc_custom_v2x_bytes_t
-  struct: true
-  codon: byte
-  to_carla: "to_carla({})"
+# Issue #42: rpc::CustomV2XBytes from (pointer, size); more than its 100
+# bytes is TSC_INVALID_ARGUMENT. Without V2X (CARLA 0.10.0) it converts to a
+# stand-in that no Send accepts, so the optional call raises.
+custom_v2x_bytes_in:
+  c: const uint8_t *
+  c_param: "const uint8_t *{name}, size_t {name}_size"
+  codon: "Ptr[byte], int"
+  to_carla: 'to_custom_v2x_bytes({name}, {name}_size, "{name}")'
+  invalid: "NULL, 1"
   cpp: ["carla::rpc::CustomV2XBytes"]

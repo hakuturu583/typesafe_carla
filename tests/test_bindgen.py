@@ -36,7 +36,9 @@ g: {call: G, args: {flag: bool}, optional: {name: Thing.g, missing_in: ["0.10.0"
                             "int32_t n", "tsc_string_list_t *out"]
     assert f.codon_params() == ["cobj", "cobj, int", "i32", "Ptr[CStringList]"]
     assert g.optional == "Thing.g" and g.missing_in == ("0.10.0",)
-    assert g.body().startswith("TSC_CALL_OPTIONAL(thing_of(thing), G, \"Thing.g\"")
+    # The handle is bound (and checked) before the arguments are converted.
+    assert g.body() == ('auto &&self_ = thing_of(thing);\n'
+                        'TSC_CALL_OPTIONAL(self_, G, "Thing.g", flag != 0);')
 
 
 

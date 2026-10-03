@@ -140,7 +140,13 @@ class Function:
         self_ = f"{self.self_get}({self.self_name})"
         args = [a.to_carla() for a in self.args]
         if self.optional:
-            return f'TSC_CALL_OPTIONAL({", ".join([self_, self.call, chr(34) + self.optional + chr(34)] + args)});'
+            what = chr(34) + self.optional + chr(34)
+            if args:
+                # The handle is checked before the arguments are converted (the
+                # macro's arguments are evaluated in no fixed order).
+                return (f"auto &&self_ = {self_};\n"
+                        f'TSC_CALL_OPTIONAL({", ".join(["self_", self.call, what] + args)});')
+            return f'TSC_CALL_OPTIONAL({", ".join([self_, self.call, what])});'
         if self.expr:
             call = self.expr
         elif self.via and args:

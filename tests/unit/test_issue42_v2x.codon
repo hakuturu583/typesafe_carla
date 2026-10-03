@@ -7,7 +7,7 @@ import typesafe_carla._ffi as ffi
 # The layouts the Codon FFI assumes (tests/native/test_ffi.c checks the C side).
 assert ffi.CItsHeader.__elemsize__ == 24 and ffi.CItsValue.__elemsize__ == 16
 assert ffi.CItsReferencePosition.__elemsize__ == 56
-assert ffi.CCamBasicVehicleHf.__elemsize__ == 248 and ffi.CCamMessage.__elemsize__ == 392
+assert ffi.CCamBasicVehicleHf.__elemsize__ == 248 and ffi.CCamMessage.__elemsize__ == 376
 assert ffi.CItsProtectedZone.__elemsize__ == 64 and ffi.CItsPathPoint.__elemsize__ == 40
 assert carla.SensorDataType.CAM == 12 and carla.SensorDataType.CustomV2X == 13
 
@@ -96,8 +96,7 @@ def test_custom_send():
     assert message.data.get_string() == "hello v2x" and message.data.data_size == 9
     assert message.header.protocol_version == 2 and message.header.message_id == 0
     assert message.header.station_id == vehicle.id  # the sender's parent
-    # 21.5 dBm + 10 dB gain - free-space loss over 12 m at 5.9 GHz.
-    assert -40.0 < first.power < -35.0, first.power
+    assert first.power == 21.5, first.power  # the mock has no path loss
     assert event[-1].get().data.get_bytes() == [0, 1, 255]
     assert [m.get().data.data_size for m in event] == [9, 3]
     assert str(first).startswith("CustomV2XData(power=")
@@ -145,7 +144,7 @@ def test_cam():
     event = data.as_cam_event()
     assert event.get_message_count() == 1 and str(event).startswith("CAMEvent(frame=")
     message = event[0]
-    assert -40.0 < message.power < -35.0 and str(message).startswith("CAMData(power=")
+    assert message.power == 21.5 and str(message).startswith("CAMData(power=")
     cam = message.get()
     assert cam.header.protocol_version == 2 and cam.header.message_id == 2
     assert cam.header.station_id == vehicle.id and cam.station_type == 5
@@ -162,25 +161,13 @@ def test_cam():
     low = unwrap(cam.basic_vehicle_container_low_frequency)
     assert len(low.path_history) == 0 and low.vehicle_role == 0
 
-    # fixed_rate: one CAM every gen_cam_min (0.1 s = 2 ticks); the low-frequency
-    # container at most every 0.5 s.
+    # fixed_rate: one CAM every gen_cam_min (0.1 s = 2 ticks).
     vehicle.set_light_state(carla.VehicleLightState.LowBeam)
     world.tick()
     assert rx.poll() is None
     world.tick()
     cam = rx.wait_for_data(1.0).as_cam_event()[0].get()
-    assert cam.basic_vehicle_container_low_frequency is None
-    for _ in range(8):
-        world.tick()
-    lights = -1
-    while True:
-        d = rx.poll()
-        if d is None:
-            break
-        for m in d.as_cam_event():
-            lf = m.get().basic_vehicle_container_low_frequency
-            if lf is not None:
-                lights = lf.exterior_lights
+    lights = unwrap(cam.basic_vehicle_container_low_frequency).exterior_lights
     assert lights == 0x80, lights  # ETSI bit 0: low beam
 
     # A road-side unit: a V2X sensor without a vehicle parent.

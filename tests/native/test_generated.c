@@ -136,7 +136,7 @@ int main(void) {
   expect_null_rejected(tsc_obstacle_detection_get_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_obstacle_detection_get_actor");
   expect_null_rejected(tsc_obstacle_detection_get_other_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_obstacle_detection_get_other_actor");
   expect_null_rejected(tsc_sensor_is_listening(NULL, (int32_t[1]){0}), "tsc_sensor_is_listening");
-  expect_null_rejected(tsc_sensor_send(NULL, NULL), "tsc_sensor_send");
+  expect_null_rejected(tsc_sensor_send(NULL, NULL, 1), "tsc_sensor_send");
   expect_null_rejected(tsc_traffic_light_set_state(NULL, 99), "tsc_traffic_light_set_state");
   expect_null_rejected(tsc_traffic_light_set_green_time(NULL, NAN), "tsc_traffic_light_set_green_time");
   expect_null_rejected(tsc_traffic_light_set_yellow_time(NULL, NAN), "tsc_traffic_light_set_yellow_time");

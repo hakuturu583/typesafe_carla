@@ -568,9 +568,11 @@ Deliberate differences, all in favour of static checking:
     speed in cm/s, ...), where the Python API turns the enumerations into
     display strings ("Passenger Car", "CAM"). This is the whole CAM that
     LibCarla carries; there is no further ITS tree (DENM etc.) to bind.
-    The power is `CAMMessage.power`, not part of `get()`.
-    `CustomV2XData.get()` likewise returns a `CustomV2XMessage` (`header`,
-    `data`: `CustomV2XBytes`).
+    The power is `CAMMessage.power`, not part of `get()`. An empty path
+    history is `[]` (the Python API gives `None`). `get()` returns the
+    stored object each time, where the Python API builds a new dict per
+    call. `CustomV2XData.get()` likewise returns a `CustomV2XMessage`
+    (`header`, `data`: `CustomV2XBytes`).
   - `CustomV2XBytes.get_bytes()` / `set_bytes()` use `List[int]` (Codon has
     no `bytes`); `set_bytes` rejects values outside [0, 255] with
     `CarlaError`. `data_size` can be set within [0, 100] only (the Python
@@ -581,12 +583,12 @@ Deliberate differences, all in favour of static checking:
     `sensor.other.v2x_custom` only logs a warning; the client-side
     lane-invasion sensor raises `ActorTypeError`.
   - The mock backend mirrors ue5-dev's V2X sensors with synthetic messages:
-    CAMs from each `sensor.other.v2x` (built from the parent vehicle's
-    state; a sensor without a vehicle or walker parent is a road-side unit),
-    custom messages delivered at the next tick to the other
-    `sensor.other.v2x_custom` sensors on the same `channel_id`, and a
-    free-space receive power cut at `filter_distance` and
-    `receiver_sensitivity`.
+    a CAM from each `sensor.other.v2x` every tick (every `gen_cam_min` with
+    `fixed_rate`), built from the parent vehicle's state (a sensor without a
+    vehicle or walker parent is a road-side unit), and custom messages
+    delivered at the next tick to the other `sensor.other.v2x_custom`
+    sensors on the same `channel_id`. Receivers within `filter_distance` get
+    everything at the transmit power (no path-loss model).
   - GBuffer textures (`Sensor.listen_to_gbuffer`) are not supported.
 
 **Not a difference: lookups that can miss return `None`, as in Python.**

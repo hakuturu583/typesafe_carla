@@ -758,9 +758,10 @@ tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out) {
 
 // bindings/server_side_sensor.yaml: carla::client::ServerSideSensor
 
-tsc_status_t tsc_sensor_send(tsc_sensor_t *sensor, const tsc_custom_v2x_bytes_t *message) {
+tsc_status_t tsc_sensor_send(tsc_sensor_t *sensor, const uint8_t *message, size_t message_size) {
   return TSC_GUARD({
-    TSC_CALL_OPTIONAL(server_side_sensor_of(sensor), Send, "Sensor.send", to_carla(*require_ptr(message, "message")));
+    auto &&self_ = server_side_sensor_of(sensor);
+    TSC_CALL_OPTIONAL(self_, Send, "Sensor.send", to_custom_v2x_bytes(message, message_size, "message"));
   });
 }
 
@@ -926,7 +927,8 @@ tsc_status_t tsc_traffic_manager_shut_down(tsc_traffic_manager_t *tm) {
 tsc_status_t tsc_traffic_manager_set_global_large_vehicle_wide_turn(tsc_traffic_manager_t *tm,
                                                                     int32_t enabled) {
   return TSC_GUARD({
-    TSC_CALL_OPTIONAL(tm_of(tm), SetGlobalLargeVehicleWideTurn, "TrafficManager.global_large_vehicle_wide_turn", enabled != 0);
+    auto &&self_ = tm_of(tm);
+    TSC_CALL_OPTIONAL(self_, SetGlobalLargeVehicleWideTurn, "TrafficManager.global_large_vehicle_wide_turn", enabled != 0);
   });
 }
 
@@ -934,7 +936,8 @@ tsc_status_t tsc_traffic_manager_set_large_vehicle_wide_turn(tsc_traffic_manager
                                                              tsc_vehicle_t *vehicle,
                                                              int32_t enabled) {
   return TSC_GUARD({
-    TSC_CALL_OPTIONAL(tm_of(tm), SetLargeVehicleWideTurn, "TrafficManager.vehicle_large_vehicle_wide_turn", vehicle_ptr(vehicle, "vehicle"), enabled != 0);
+    auto &&self_ = tm_of(tm);
+    TSC_CALL_OPTIONAL(self_, SetLargeVehicleWideTurn, "TrafficManager.vehicle_large_vehicle_wide_turn", vehicle_ptr(vehicle, "vehicle"), enabled != 0);
   });
 }
 

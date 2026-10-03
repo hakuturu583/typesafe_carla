@@ -825,14 +825,16 @@ inline carla::client::ServerSideSensor &server_side_sensor_of(tsc_sensor_t *s) {
 }
 
 // rpc::CustomV2XBytes (tsc::CustomV2XBytes: a stand-in without V2X).
-inline CustomV2XBytes to_carla(const tsc_custom_v2x_bytes_t &b) {
+inline CustomV2XBytes to_custom_v2x_bytes(const uint8_t *data, size_t size, const char *name) {
   CustomV2XBytes r;
-  if (b.data_size > r.bytes.size()) {
-    fail(TSC_INVALID_ARGUMENT, "data_size " + std::to_string(b.data_size) + " exceeds " +
-                                   std::to_string(r.bytes.size()) + " bytes");
+  if (size > r.bytes.size()) {
+    fail(TSC_INVALID_ARGUMENT, std::string(name) + ": " + std::to_string(size) +
+                                   " bytes exceed the " + std::to_string(r.bytes.size()) +
+                                   "-byte payload");
   }
-  r.data_size = static_cast<uint8_t>(b.data_size);
-  std::copy(b.bytes, b.bytes + r.bytes.size(), r.bytes.begin());
+  require_array(data, size, name);
+  r.data_size = static_cast<uint8_t>(size);
+  if (size > 0) std::copy(data, data + size, r.bytes.begin());
   return r;
 }
 

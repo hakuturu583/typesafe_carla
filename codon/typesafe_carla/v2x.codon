@@ -14,7 +14,9 @@
 #
 # Built against a LibCarla without V2X (CARLA 0.10.0), send() and the
 # as_*_event() conversions raise CarlaError ("... is not available in LibCarla
-# 0.10.0"); CustomV2XBytes is a plain value and works everywhere.
+# 0.10.0") after their argument checks (send() on the client-side
+# lane-invasion sensor is still ActorTypeError); CustomV2XBytes is a plain
+# value and works everywhere.
 #
 # The Python API's CAMMessage.get() returns a nested dict whose enumerations
 # are display strings ("Passenger Car"). Here get() returns a typed CAM with
@@ -24,9 +26,9 @@
 # and Optional for the optional fields and containers.
 
 from ._ffi import (CItsHeader, CItsValue, CItsReferencePosition, CCamBasicVehicleHf, CCamMessage,
-                   CItsProtectedZone, CItsPathPoint, TSC_CUSTOM_V2X_MAX_DATA_SIZE,
-                   TSC_CUSTOM_V2X_BYTES_SIZE, TSC_CUSTOM_V2X_DATA_SIZE,
-                   TSC_CUSTOM_V2X_DATA_HEADER_OFFSET, TSC_CUSTOM_V2X_DATA_BYTES_OFFSET,
+                   CItsProtectedZone, CItsPathPoint, CCustomV2XData,
+                   TSC_CUSTOM_V2X_MAX_DATA_SIZE, TSC_CAM_MAX_PROTECTED_ZONES,
+                   TSC_CAM_MAX_PATH_POINTS,
                    TSC_CAM_HF_BASIC_VEHICLE, TSC_CAM_HF_RSU, TSC_INVALID_ARGUMENT,
                    tsc_sensor_send, tsc_cam_event_get_message_count, tsc_cam_event_get_message,
                    tsc_cam_event_get_protected_zones, tsc_cam_event_get_path_history,
@@ -192,20 +194,18 @@ class PathPoint:
 class BasicVehicleContainerLowFrequency:
     vehicle_role: int
     exterior_lights: int  # ETSI bit string (bit 0, low beam, is the 0x80 bit)
-    path_history: List[PathPoint]
+    path_history: List[PathPoint]  # [] when empty (the Python API gives None)
 
     def __init__(self, vehicle_role: int, exterior_lights: int, path_history: List[PathPoint]):
         self.vehicle_role = vehicle_role
         self.exterior_lights = exterior_lights
         self.path_history = path_history
 
-def _its_list(fn, data: SensorData, index: int, count: int, T: type) -> List[T]:
-    """Reads a two-call ITS list of CAM `index`, whose length `count` (from
-    the message) is the buffer's size."""
-    if count == 0:
-        return List[T]()
+def _its_list(fn, data: SensorData, index: int, capacity: int, T: type) -> List[T]:
+    """Reads a two-call ITS list of CAM `index` into a buffer of LibITS's
+    fixed capacity (one call)."""
     buf, n = _read_buffer(lambda h, b, cap, out_count: fn(h, index, b, cap, out_count),
-                          data._h.ptr, T, count)
+                          data._h.ptr, T, capacity)
     return [buf[i] for i in range(n)]
 
 class CAM:
@@ -236,12 +236,12 @@ class CAM:
                 c.basic_vehicle)
         elif hf == TSC_CAM_HF_RSU:
             zones = _its_list(tsc_cam_event_get_protected_zones, data, index,
-                              c.protected_zone_count, CItsProtectedZone)
+                              TSC_CAM_MAX_PROTECTED_ZONES, CItsProtectedZone)
             self.protected_communication_zones_rsu = [ProtectedCommunicationZone(z)
                                                       for z in zones]
         if int(c.has_low_frequency) != 0:
-            points = _its_list(tsc_cam_event_get_path_history, data, index, c.path_point_count,
-                               CItsPathPoint)
+            points = _its_list(tsc_cam_event_get_path_history, data, index,
+                               TSC_CAM_MAX_PATH_POINTS, CItsPathPoint)
             self.basic_vehicle_container_low_frequency = BasicVehicleContainerLowFrequency(
                 c.vehicle_role, c.exterior_lights, [PathPoint(p) for p in points])
 
@@ -259,7 +259,9 @@ class CAMMessage:
         self._cam = cam
 
     def get(self) -> CAM:
-        """The message. (The Python API returns a dict that also holds the power.)"""
+        """The message. The Python API builds a new dict (that also holds the
+        power) on each call; this returns the same stored CAM object, so
+        changes to it are seen by later get() calls."""
         return self._cam
 
     def __repr__(self) -> str:
@@ -319,20 +321,6 @@ class CustomV2XBytes:
         for i in range(TSC_CUSTOM_V2X_MAX_DATA_SIZE):
             self._bytes[i] = byte(0)
         self._size = 0
-
-    @staticmethod
-    def _from_c(p: Ptr[byte]) -> CustomV2XBytes:
-        """From a tsc_custom_v2x_bytes_t (u32 data_size, then the bytes)."""
-        b = CustomV2XBytes()
-        str.memcpy(b._bytes, p + 4, TSC_CUSTOM_V2X_MAX_DATA_SIZE)
-        b._size = min(int(Ptr[u32](p)[0]), TSC_CUSTOM_V2X_MAX_DATA_SIZE)
-        return b
-
-    def _to_c(self) -> Ptr[byte]:
-        p = Ptr[byte](TSC_CUSTOM_V2X_BYTES_SIZE)
-        Ptr[u32](p)[0] = u32(self._size)
-        str.memcpy(p + 4, self._bytes, TSC_CUSTOM_V2X_MAX_DATA_SIZE)
-        return p
 
     @property
     def data_size(self) -> int:
@@ -410,7 +398,8 @@ class CustomV2XData:
         self._message = message
 
     def get(self) -> CustomV2XMessage:
-        """The message. (The Python API returns a dict that also holds the power.)"""
+        """The message. The Python API builds a new dict (that also holds the
+        power) on each call; this returns the same stored object."""
         return self._message
 
     def __repr__(self) -> str:
@@ -422,24 +411,28 @@ class CustomV2XEvent(_V2XEvent):
     _WHAT: ClassVar[str] = "CustomV2XEvent"
 
     def _message(self, i: int) -> CustomV2XData:
-        out = Ptr[byte](TSC_CUSTOM_V2X_DATA_SIZE)
-        _check(tsc_custom_v2x_event_get_message(self.data._h.ptr, i, out))
-        header = ItsPduHeader._from_c(Ptr[CItsHeader](out + TSC_CUSTOM_V2X_DATA_HEADER_OFFSET)[0])
-        payload = CustomV2XBytes._from_c(out + TSC_CUSTOM_V2X_DATA_BYTES_OFFSET)
-        return CustomV2XData(float(Ptr[float32](out)[0]), CustomV2XMessage(header, payload))
+        out = Ptr[CCustomV2XData](1)
+        payload = CustomV2XBytes()
+        _check(tsc_custom_v2x_event_get_message(self.data._h.ptr, i, out, payload._bytes,
+                                                TSC_CUSTOM_V2X_MAX_DATA_SIZE))
+        payload._size = int(out[0].data_size)
+        return CustomV2XData(float(out[0].power),
+                             CustomV2XMessage(ItsPduHeader._from_c(out[0].header), payload))
 
 @extend
 class SensorData:
     def as_cam_event(self) -> CAMEvent:
         """Checked conversion (ActorTypeError for another measurement). Raises
-        CarlaError with a LibCarla without V2X (CARLA 0.10.0)."""
+        CarlaError for any measurement with a LibCarla without V2X (CARLA
+        0.10.0)."""
         out = Ptr[int](1)
         _check(tsc_cam_event_get_message_count(self._h.ptr, out))
         return CAMEvent(self, out[0])
 
     def as_custom_v2x_event(self) -> CustomV2XEvent:
         """Checked conversion (ActorTypeError for another measurement). Raises
-        CarlaError with a LibCarla without V2X (CARLA 0.10.0)."""
+        CarlaError for any measurement with a LibCarla without V2X (CARLA
+        0.10.0)."""
         out = Ptr[int](1)
         _check(tsc_custom_v2x_event_get_message_count(self._h.ptr, out))
         return CustomV2XEvent(self, out[0])
@@ -451,9 +444,10 @@ class Sensor:
         (sensor.other.v2x_custom); the other custom V2X sensors on the same
         channel_id and in range receive it at the next tick. On any other
         server-side sensor LibCarla only logs a warning, as in the Python API.
-        Raises ActorTypeError on a client-side sensor (lane invasion), and
-        CarlaError with a LibCarla without V2X (CARLA 0.10.0)."""
-        _check(tsc_sensor_send(self._h.ptr, message._to_c()))
+        Raises ActorTypeError on a client-side sensor (lane invasion), also
+        with a LibCarla without V2X (CARLA 0.10.0); there, any other sensor
+        raises CarlaError ("... is not available in LibCarla 0.10.0")."""
+        _check(tsc_sensor_send(self._h.ptr, message._bytes, message._size))
 
     def send(self, message: str):
         """send(CustomV2XBytes) of the first 100 bytes of message (set_string)."""

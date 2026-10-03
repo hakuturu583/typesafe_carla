@@ -900,25 +900,25 @@ TSC_API tsc_status_t tsc_optical_flow_color_coded(const tsc_sensor_data_t *data,
 /*                                                                          */
 /* LibCarla ue5-dev only. Built against a LibCarla without V2X (CARLA       */
 /* 0.10.0), every function here fails with TSC_ERROR ("... is not available */
-/* in LibCarla 0.10.0"), and no measurement is TSC_SENSOR_DATA_CAM or       */
-/* TSC_SENSOR_DATA_CUSTOM_V2X. The ITS values are LibCarla's (LibITS.h):    */
-/* raw ETSI codes and units, e.g. latitude in 0.1 microdegrees.             */
+/* in LibCarla 0.10.0") after its argument checks (a bad argument is still  */
+/* TSC_INVALID_ARGUMENT, a lane-invasion sensor TSC_TYPE_ERROR), and no     */
+/* measurement is TSC_SENSOR_DATA_CAM or TSC_SENSOR_DATA_CUSTOM_V2X. The    */
+/* ITS values are LibCarla's (LibITS.h): raw ETSI codes and units, e.g.     */
+/* latitude in 0.1 microdegrees.                                            */
 /* ------------------------------------------------------------------------ */
 
-/* LibCarla's rpc::CustomV2XBytes: the payload of the custom V2X sensor. */
+/* Capacity of LibCarla's rpc::CustomV2XBytes, the custom V2X payload. */
 #define TSC_CUSTOM_V2X_MAX_DATA_SIZE 100
-typedef struct {
-  uint32_t data_size; /* bytes used, at most TSC_CUSTOM_V2X_MAX_DATA_SIZE */
-  uint8_t bytes[TSC_CUSTOM_V2X_MAX_DATA_SIZE];
-} tsc_custom_v2x_bytes_t;
 
-/* ServerSideSensor::Send: sends message through a custom V2X sensor
- * (sensor.other.v2x_custom); receivers get it at the next tick. LibCarla
- * only logs a warning for any other server-side sensor. TSC_TYPE_ERROR for a
- * client-side sensor (lane invasion); TSC_INVALID_ARGUMENT if data_size is
- * above TSC_CUSTOM_V2X_MAX_DATA_SIZE. */
+/* ServerSideSensor::Send: sends message_size bytes at message (NULL only
+ * with size 0) through a custom V2X sensor (sensor.other.v2x_custom);
+ * receivers get them at the next tick. LibCarla only logs a warning for any
+ * other server-side sensor. TSC_TYPE_ERROR for a client-side sensor (lane
+ * invasion); TSC_INVALID_ARGUMENT for more than TSC_CUSTOM_V2X_MAX_DATA_SIZE
+ * bytes. */
 /* BEGIN GENERATED server_side_sensor from bindings/server_side_sensor.yaml, do not edit */
-TSC_API tsc_status_t tsc_sensor_send(tsc_sensor_t *sensor, const tsc_custom_v2x_bytes_t *message);
+TSC_API tsc_status_t tsc_sensor_send(tsc_sensor_t *sensor,
+                                     const uint8_t *message, size_t message_size);
 /* END GENERATED server_side_sensor */
 
 /* ITS PDU header (ItsPduHeader). */
@@ -989,10 +989,8 @@ typedef struct {
   int32_t high_frequency_present; /* TSC_CAM_HF_* */
   int32_t has_low_frequency;      /* a BasicVehicleContainerLowFrequency */
   tsc_cam_basic_vehicle_hf_t basic_vehicle; /* when TSC_CAM_HF_BASIC_VEHICLE */
-  size_t protected_zone_count;              /* when TSC_CAM_HF_RSU */
   int64_t vehicle_role;                     /* when has_low_frequency */
   int64_t exterior_lights;                  /* when has_low_frequency; bit string */
-  size_t path_point_count;                  /* when has_low_frequency */
 } tsc_cam_message_t;
 
 /* ProtectedCommunicationZone (the RSU high-frequency container). */
@@ -1024,7 +1022,12 @@ typedef struct {
 TSC_API tsc_status_t tsc_cam_event_get_message_count(const tsc_sensor_data_t *data, size_t *out);
 TSC_API tsc_status_t tsc_cam_event_get_message(const tsc_sensor_data_t *data, size_t index,
                                                tsc_cam_message_t *out);
-/* Two-call buffers: out may be NULL to only count (*out_count). */
+/* Two-call buffers: out may be NULL to only count (*out_count). The lists
+ * hold at most TSC_CAM_MAX_PROTECTED_ZONES / TSC_CAM_MAX_PATH_POINTS (LibITS's
+ * array sizes) and are empty unless their container is present (an RSU
+ * high-frequency container, a low-frequency container). */
+#define TSC_CAM_MAX_PROTECTED_ZONES 16
+#define TSC_CAM_MAX_PATH_POINTS 40
 TSC_API tsc_status_t tsc_cam_event_get_protected_zones(const tsc_sensor_data_t *data,
                                                        size_t index,
                                                        tsc_its_protected_zone_t *out,
@@ -1033,19 +1036,22 @@ TSC_API tsc_status_t tsc_cam_event_get_path_history(const tsc_sensor_data_t *dat
                                                     tsc_its_path_point_t *out, size_t capacity,
                                                     size_t *out_count);
 
-/* One custom V2X message (CustomV2XData) and its receive power. */
+/* One custom V2X message (CustomV2XData): its receive power, header and
+ * payload size; the payload itself goes to a separate buffer. */
 typedef struct {
-  float power; /* dBm */
-  uint32_t reserved0;
+  float power;        /* dBm */
+  uint32_t data_size; /* payload bytes, at most TSC_CUSTOM_V2X_MAX_DATA_SIZE */
   tsc_its_header_t header;
-  tsc_custom_v2x_bytes_t data;
 } tsc_custom_v2x_data_t;
 
 /* CustomV2XEvent (sensor.other.v2x_custom). Errors as for CAM events. */
 TSC_API tsc_status_t tsc_custom_v2x_event_get_message_count(const tsc_sensor_data_t *data,
                                                             size_t *out);
+/* Copies min(data_size, capacity) payload bytes to bytes, which may be NULL
+ * (with capacity 0) to read only *out. */
 TSC_API tsc_status_t tsc_custom_v2x_event_get_message(const tsc_sensor_data_t *data,
-                                                      size_t index, tsc_custom_v2x_data_t *out);
+                                                      size_t index, tsc_custom_v2x_data_t *out,
+                                                      uint8_t *bytes, size_t capacity);
 
 /* ------------------------------------------------------------------------ */
 /* Milestone 4: broader CARLA coverage (ABI 2.0)                            */

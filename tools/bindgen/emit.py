@@ -79,11 +79,12 @@ def shim(spec: Spec) -> str:
             head, tail = f"return new_handle(__func__, {f.out.name}, [&] {{", f"}}{name});"
         else:
             head, tail = "return TSC_GUARD({", "});"
-        one = f"  {head} {f.body()} {tail}"
-        if len(one) <= WIDTH:
+        body = f.body().split("\n")
+        one = f"  {head} {body[0]} {tail}"
+        if len(body) == 1 and len(one) <= WIDTH:
             lines.append(one)
         else:
-            lines += [f"  {head}", f"    {f.body()}", f"  {tail}"]
+            lines += [f"  {head}"] + [f"    {line}" for line in body] + [f"  {tail}"]
         lines.append("}")
     lines += ["", '}  // extern "C"', ""]
     return "\n".join(lines)

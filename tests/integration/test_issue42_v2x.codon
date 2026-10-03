@@ -20,7 +20,6 @@ client.set_timeout(30.0)
 world = client.get_world()
 lib = world.get_blueprint_library()
 server = client.get_server_version()
-libcarla_has_v2x = carla.libcarla_git_ref() != "0.10.0"
 v2x_blueprints = [bp.id for bp in lib.filter("sensor.other.v2x*")]
 print("server", server, "LibCarla", carla.libcarla_git_ref(), "V2X blueprints", v2x_blueprints)
 if server.startswith("0.10.0"):
@@ -62,6 +61,9 @@ try:
     gnss.listen()
     world.tick()
     data = gnss.wait_for_data(5.0)
+    # Whether the linked LibCarla has V2X, from its behaviour: converting a
+    # GNSS measurement is a type error with V2X, "not available" without.
+    outcomes = List[str]()
     for kind in range(2):
         raised = ""
         try:
@@ -70,12 +72,15 @@ try:
             else:
                 data.as_custom_v2x_event()
         except carla.CarlaError as e:
-            assert not libcarla_has_v2x and not_available(e), e.message
+            assert not_available(e), e.message
             raised = "CarlaError"
         except carla.ActorTypeError:
             raised = "ActorTypeError"
         print("conversion", kind, "of a GNSS measurement:", raised)
-        assert raised == ("ActorTypeError" if libcarla_has_v2x else "CarlaError")
+        outcomes.append(raised)
+    assert outcomes[0] != "" and outcomes[0] == outcomes[1], outcomes
+    libcarla_has_v2x = outcomes[0] == "ActorTypeError"
+    print("LibCarla has V2X:", libcarla_has_v2x)
     gnss.stop()
     # send(): unsupported without V2X; with it, LibCarla only warns for a
     # sensor that is not sensor.other.v2x_custom.
