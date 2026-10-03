@@ -99,8 +99,6 @@ and commit; the annotated tag and the GitHub release name the ref and SHA.
 6. Optionally set the repository variable `CARLA_RELEASE_REF` (Settings →
    Secrets and variables → Actions → Variables) to the CARLA ref automatic
    releases build from. The default is `ue5-dev`.
-7. The MIT `LICENSE` file is packaged automatically through
-   `wheel.license-files`; `pyproject.toml` declares `license = "MIT"`.
 
 No API tokens are needed: `release.yml` authenticates through OIDC.
 
