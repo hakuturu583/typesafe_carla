@@ -38,7 +38,7 @@ def matches(view: carla.RawData, ptr: Ptr[u8], n: int) -> bool:
     copy = view.tobytes()
     return (len(view) == n and view.nbytes == n and view.readonly and
             [view[i] for i in range(n)] == expected and view.tolist() == expected and
-            len(copy) == n and view == copy and str(view) == copy and view == view[:])
+            len(copy) == n and view == copy and hash(view) == hash(copy) and view == view[:])
 
 image = next_data(spawn("sensor.camera.rgb", 4, 3)).as_image()
 assert matches(image.raw_data, image.raw_data_ptr(), 48) and image.raw_size() == 48
@@ -70,7 +70,7 @@ try:
 except IndexError:
     raised = True
 assert raised
-assert repr(raw) == "<memory of 48 bytes>"
+assert repr(raw) == "<memory of 48 bytes>" and str(raw) == repr(raw)
 
 # The view sees in-place changes to the measurement, like the Python API's.
 image[0] = carla.Color(9, 8, 7, 6)
@@ -86,7 +86,7 @@ assert int(bgra[2, 3, 2]) == image.pixel(3, 2).r
 points = np.frombuffer(sweep.raw_data.tobytes(), dtype=np.float32).reshape((3200, 4))
 assert float(points[5, 0]) == float(sweep[5].point.x)
 assert float(points[5, 3]) == float(sweep[5].intensity)
-flow_xy = np.frombuffer(str(flow.raw_data), dtype=np.float32)
+flow_xy = np.frombuffer(flow.raw_data.tobytes(), dtype=np.float32)
 assert float(flow_xy[14]) == flow[7].x and float(flow_xy[15]) == flow[7].y
 
 # A view keeps its measurement (and LibCarla's buffer) alive.
@@ -106,9 +106,30 @@ assert carla._live_handle_count() >= baseline + 20, (baseline, carla._live_handl
 for i in range(20):
     assert len(kept[i]) == 256 and kept[i] == copies[i]
 
-# A FakeImage's view keeps showing the bytes it was taken of.
+# A FakeImage's view keeps the buffer it was taken of alive: append / extend
+# move the bytes to a new buffer and leave the old one to the view. Freshly
+# allocated blocks of the old size must not reuse it.
+def churn(size: int) -> int:
+    junk = List[List[u8]]()
+    for k in range(2000):
+        junk.append([u8(k & 0xFF)] * size)
+    return len(junk)
+
+fake = carla.FakeImage(16, 4, 90.0, [u8(i & 0xFF) for i in range(256)])
 before = fake.raw_data
-first = before[0]
-fake.extend([1] * 1000)  # may move the bytes
-assert len(before) == 32 and before[0] == first and len(fake.raw_data) == 1032
+snapshot = before.tobytes()
+fake.extend([1] * 100000)
+assert churn(256) == 2000
+assert len(before) == 256 and before == snapshot and len(fake.raw_data) == 100256
+before = fake.raw_data
+snapshot = before.tobytes()
+for _ in range(200000):  # grows more than once
+    fake.append(2)
+assert churn(100256) == 2000 and before == snapshot
+assert fake[100255] == 1 and fake[100256] == 2 and len(fake) == 300256
+# del shifts the bytes in place: the view sees the shifted bytes.
+small = carla.FakeImage(1, 1, 90.0, [u8(1), u8(2), u8(3), u8(4)])
+view = small.raw_data
+del small[0]
+assert view[:3].tolist() == [2, 3, 4] and len(small) == 3
 print("OK")

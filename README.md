@@ -572,11 +572,16 @@ Deliberate differences, all in favour of static checking:
     `LidarMeasurement`, `SemanticLidarMeasurement`, `RadarMeasurement`,
     `DVSEventArray`, `OpticalFlowImage` and `FakeImage`. It returns a
     `RawData`, a read-only zero-copy view standing in for the `memoryview`
-    (`len`, indexing, slicing with any step, iteration, `in`, `==`, `nbytes`,
-    `readonly`, `tolist()`, `tobytes()`); writing through it is a compile
-    error, and it keeps the measurement's buffer alive. Codon has no
-    `bytes`: `bytes(m.raw_data)` becomes `m.raw_data.tobytes()` or
-    `str(m.raw_data)` (a copy in a `str`), and, as Codon's `np.frombuffer`
+    (`len`, indexing, slicing with any step, iteration, `in`, `==`, `hash`,
+    `nbytes`, `readonly`, `tolist()`, `tobytes()`); writing through it is a
+    compile error, and it keeps the measurement's buffer alive. `repr` /
+    `str` give `<memory of N bytes>` where a `memoryview` gives
+    `<memory at 0x...>`. For a `FakeImage`, `append` / `extend` move the
+    bytes to a new buffer, so an earlier view keeps showing the bytes it was
+    taken of (a Python `memoryview` would block the resize instead); `del`
+    shifts them in place, and an earlier view sees the shifted bytes. Codon
+    has no `bytes`: `bytes(m.raw_data)` becomes `m.raw_data.tobytes()` (a
+    copy in a `str`), and, as Codon's `np.frombuffer`
     takes only a `str`, `np.frombuffer(m.raw_data, dtype=np.uint8)` becomes
     `np.frombuffer(m.raw_data.tobytes(), dtype=np.uint8)`. The zero-copy
     pointer is `raw_data_ptr()` (a `Ptr[u8]`, valid while the measurement is

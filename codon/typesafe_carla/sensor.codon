@@ -165,9 +165,12 @@ class RawData:
     zero-copy view of a measurement's bytes that keeps its owner alive.
     len, indexing, slicing (any step, another view), iteration, `in` and ==
     work; it sees in-place changes such as Image.convert(). Codon has no
-    `bytes`: tobytes() / str(view) copy into a str, so
+    `bytes`: tobytes() copies into a str, so
     `np.frombuffer(image.raw_data, ...)` becomes
-    `np.frombuffer(image.raw_data.tobytes(), ...)`."""
+    `np.frombuffer(image.raw_data.tobytes(), ...)`.
+
+    Views come from the `raw_data` properties; constructing one directly is
+    internal (the constructor does not check its pointer or length)."""
     _owner: cobj  # keeps the buffer's owner alive (the GC scans this field)
     _ptr: Ptr[u8]
     _len: int
@@ -240,12 +243,16 @@ class RawData:
             out.append(b)
         return out
 
-    def __str__(self) -> str:
-        """The bytes (a copy), as bytes(view) gives in Python."""
-        return self.tobytes()
+    def __hash__(self) -> int:
+        """As a read-only memoryview of bytes: the hash of its bytes."""
+        return hash(self.tobytes())
 
     def __repr__(self) -> str:
         return f"<memory of {self._len} bytes>"
+
+    def __str__(self) -> str:
+        """As in Python, the repr (use tobytes() for the bytes)."""
+        return self.__repr__()
 
 class _ArrayMeasurement[T]:
     """A measurement that is an array of T in LibCarla's buffer, viewed
@@ -712,8 +719,10 @@ class FakeImage:
 
     @property
     def raw_data(self) -> RawData:
-        """The bytes as a read-only RawData view; after append / extend / del
-        (which may move them) it keeps showing the old buffer."""
+        """The bytes as a read-only RawData view, which keeps its buffer
+        alive. append / extend move the bytes to a new buffer (see _grow), so
+        an earlier view keeps showing the bytes it was taken of; del shifts
+        them in place, and an earlier view sees the shifted bytes."""
         p = self.raw_data_ptr()
         return RawData(p.as_byte(), p, len(self))
 
@@ -744,13 +753,31 @@ class FakeImage:
     def __contains__(self, value: int) -> bool:
         return 0 <= value <= 255 and u8(value) in self._bytes
 
+    def _grow(self, extra: int):
+        """Makes room for extra more bytes. Never grows the buffer in place:
+        List growth goes through GC_realloc, which frees the old block even
+        while a raw_data view still points into it. A full buffer is copied
+        into a new one instead (with spare capacity, so appends stay
+        amortized O(1)), and the old one stays alive as long as a view does."""
+        n = len(self._bytes)
+        if n + extra <= self._bytes.arr.len:
+            return
+        b = List[u8](max(2 * n, n + extra))
+        str.memcpy(b.arr.ptr.as_byte(), self._bytes.arr.ptr.as_byte(), n)
+        b.len = n
+        self._bytes = b
+
     def append(self, value: int):
-        self._bytes.append(_byte(value))
+        v = _byte(value)
+        self._grow(1)
+        self._bytes.append(v)
 
     def extend(self, values):
         """Appends every byte of an iterable of ints (e.g. a list or another FakeImage)."""
         new = [_byte(v) for v in values]  # all checked before any is added
-        self._bytes.extend(new)
+        self._grow(len(new))
+        for v in new:
+            self._bytes.append(v)
 
     def pixel(self, x: int, y: int) -> Color:
         if 4 * self.width * self.height > len(self._bytes):

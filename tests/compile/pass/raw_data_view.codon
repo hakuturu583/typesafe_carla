@@ -9,12 +9,13 @@ def total(view: carla.RawData) -> int:
     tail: carla.RawData = view[-4:]
     reds: carla.RawData = view[2::4]
     copied: str = view.tobytes()
-    as_str: str = str(view)
+    as_str: str = str(view)  # the repr, as in Python
+    h: int = hash(view)
     values: List[int] = view.tolist()
     s = 0
     for b in reds:
         s += b
-    return (n + first + len(tail) + s + len(copied) + len(as_str) + len(values) + view.nbytes +
+    return (n + first + len(tail) + s + len(copied) + len(as_str) + h + len(values) + view.nbytes +
             int(view.readonly) + int(7 in view) + int(view == copied) + int(view != tail))
 
 def measure(data: carla.SensorData) -> int:
@@ -30,7 +31,7 @@ def measure(data: carla.SensorData) -> int:
     n += total(flow.raw_data)
     fake: carla.FakeImage = flow.get_color_coded_flow()
     n += total(fake.raw_data) + int(fake.raw_data_ptr()[0])
-    xy = np.frombuffer(str(flow.raw_data), dtype=np.float32)
+    xy = np.frombuffer(flow.raw_data.tobytes(), dtype=np.float32)
     return n + int(xy[0])
 
 # Compile-only: Codon type-checks a function only when it is called.
