@@ -1,18 +1,87 @@
 # Expected results of CARLA's own PythonAPI tests (PythonAPI/test) against
-# typesafe_carla, per CARLA ref. See tests/upstream/README.md.
+# typesafe_carla, per mode and CARLA ref. See tests/upstream/README.md.
 #
-#   refs:
+#   <mode: cpython | codon>:
 #     <CARLA ref>:
-#       <suite>/<file>.py: "xfail: <reason>" | "skip: <reason>"   # the whole file
-#       <suite>/<file>.py:
-#         <Class>.<test_method>: pass | "xfail: <reason>" | "skip: <reason>"
+#       <file>.py: "xfail: <reason>" | "skip: <reason>"     # the whole file
+#       <file>.py:
+#         <Class>.<test_method> | <script>: pass | "xfail: <reason>" | "skip: <reason>"
 #
+# cpython: the unmodified tests under CPython, `import carla` = tools/pycarla.
+# codon: the tests converted and compiled with typesafe-codon.
 # A test not listed is expected to pass. pytest (tests/test_upstream.py) and
 # CI fail on an unexpected failure AND on an unexpected pass, so this list only
-# shrinks. `python -m tools.upstream_tests --suite <suite> --update` rewrites
-# the current ref's entries from a run (existing reasons are kept).
+# shrinks. `python -m tools.upstream_tests --mode <mode> --suite <suite> --update`
+# rewrites the current ref's entries from a run (existing reasons are kept).
 
-refs:
+cpython:
+  0.10.0:
+    unit/test_client.py:
+      TestClient.test_client_version: 'xfail: error: subprocess.CalledProcessError: Command ''[''git'', ''describe'', ''--tags'', ''--dirty'', ''--always'']'' returned non-zero exit status 128.'
+    unit/test_transform.py:
+      TestLocation.test_default_values: pass
+      TestLocation.test_named_args: pass
+      TestRotation.test_default_values: pass
+      TestRotation.test_named_args: pass
+      TestTransform.test_values: pass
+      TestTransform.test_print: 'xfail: fail: ? +++++++ +++++++ +++++++ +++++++ +++++++ +++++++'
+      TestTransform.test_translation: pass
+      TestTransform.test_rotation: pass
+      TestTransform.test_rotation_and_translation: pass
+      TestTransform.test_list_rotation_and_translation_location: pass
+      TestTransform.test_list_rotation_and_translation_vector3d: pass
+    unit/test_vehicle.py:
+      TestVehicleControl.test_default_values: pass
+      TestVehicleControl.test_named_args: pass
+      TestVehiclePhysicsControl.test_named_args: 'xfail: error: TypeError: could not find callable method ''WheelPhysicsControl__new'' for given arguments [] [''max_steer_angle'', ''radius'', ''tire_friction'']'
+  ue5-dev:
+    unit/test_boost_version.py:
+      TestBoostInstallVersion.test_cmake_options_pins_correct_version: pass
+      TestBoostInstallVersion.test_no_stale_boost_version_in_options: pass
+      TestNumpyRequirementsCeiling.test_no_numpy_2_ceiling_in_requirements: pass
+      TestCarlaImports.test_carla_imports: pass
+    unit/test_client.py:
+      TestClient.test_client_version: 'xfail: error: subprocess.CalledProcessError: Command ''[''git'', ''describe'', ''--tags'', ''--dirty'', ''--always'']'' returned non-zero exit status 128.'
+    unit/test_lidar_smoke_helpers.py:
+      TestLidarSmokeHelpers.test_get_current_detection_points_is_instance_method: pass
+    unit/test_numpy_compat.py:
+      TestPropControlDvsDtype.test_uses_bool_underscore: pass
+      TestPropControlDvsDtype.test_no_bare_np_bool: pass
+      TestPropControlDvsDtype.test_no_np_matrix: pass
+    unit/test_transform.py:
+      TestLocation.test_default_values: pass
+      TestLocation.test_named_args: pass
+      TestRotation.test_default_values: pass
+      TestRotation.test_named_args: pass
+      TestVector.test_make_unit_vector_3d_no_argument: pass
+      TestVector.test_make_unit_vector_3d_epsilon_keyword: pass
+      TestVector.test_make_unit_vector_3d_zero_length: pass
+      TestVector.test_make_unit_vector_2d_no_argument: pass
+      TestVector.test_make_unit_vector_2d_epsilon_keyword: pass
+      TestTransform.test_values: pass
+      TestTransform.test_print: 'xfail: fail: ? +++++++ +++++++ +++++++ +++++++ +++++++ +++++++'
+      TestTransform.test_translation: pass
+      TestTransform.test_rotation: pass
+      TestTransform.test_rotation_and_translation: pass
+      TestTransform.test_list_rotation_and_translation_location: pass
+      TestTransform.test_list_rotation_and_translation_vector3d: pass
+      TestTransform.test_geo_offset_transform: pass
+      TestTransform.test_geo_offset_transform_translation: pass
+      TestTransform.test_geo_offset_transform_rotation: pass
+      TestTransform.test_geo_offset_transform_and_rotation: pass
+      TestTransform.test_geo_offset_transform_equality: 'xfail: fail: AssertionError: False is not true'
+      TestTransform.test_geo_projection_utm: pass
+      TestTransform.test_geo_projection_utm_offset_none: pass
+      TestTransform.test_geo_projection_utm_with_offset: 'xfail: fail: AssertionError: GeoOf[19 chars]t_x=1, offset_y=2, offset_z=3, offset_cos_h=1, offset_sin_h=-0) != GeoOf[19 chars]t_x=1, offset_y=2, offset_z=3, offset_cos_h=1, offset_sin_h=-0)'
+      TestTransform.test_geo_projection_utm_offset_setter: 'xfail: fail: AssertionError: GeoOf[34 chars]=6, offset_z=7, offset_cos_h=0.995004, offset_sin_h=-0.0998334) != GeoOf[34 chars]=6, offset_z=7, offset_cos_h=0.995004, offset_sin_h=-0.0998334)'
+      TestTransform.test_geo_projection_utm_equality: pass
+      TestTransform.test_geo_projection_utm_constructor_3_args: 'xfail: fail: AssertionError: GeoEllipsoid(a=6.37814e+06, f_inv=298.257) != GeoEllipsoid(a=6.37814e+06, f_inv=298.257)'
+      TestTransform.test_geo_projection_utm_constructor_3_args_positional: 'xfail: fail: AssertionError: GeoEllipsoid(a=6.37814e+06, f_inv=298.257) != GeoEllipsoid(a=6.37814e+06, f_inv=298.257)'
+    unit/test_vehicle.py:
+      TestVehicleControl.test_default_values: pass
+      TestVehicleControl.test_named_args: pass
+      TestVehiclePhysicsControl.test_named_args: 'xfail: error: TypeError: could not find callable method ''WheelPhysicsControl__new'' for given arguments [] [''max_steer_angle'', ''radius'', ''tire_friction'']'
+codon:
   0.10.0:
     unit/test_client.py: 'xfail: compile: unit/test_client.py:12: no module named ''subprocess'''
     unit/test_transform.py:
@@ -58,6 +127,8 @@ refs:
     smoke/test_vehicle_physics.py: 'xfail: compile: smoke/test_vehicle_physics.py:14: no module named ''enum'''
     smoke/test_world.py:
       TestWorld.test_fixed_delta_seconds: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    API/prop_control.py: 'xfail: compile: API/prop_control.py:68: no module named ''argparse'''
+    API/spawn_actor.py: 'xfail: compile: API/spawn_actor.py:8: no module named ''argparse'''
     API/test_apply_textures.py: 'xfail: compile: API/test_apply_textures.py:14: no module named ''argparse'''
     API/test_collision.py: 'xfail: compile: API/test_collision.py:5: no module named ''argparse'''
     API/test_no_rendering_mode.py: 'xfail: compile: API/test_no_rendering_mode.py:9: no module named ''glob'''
@@ -67,6 +138,9 @@ refs:
     API/test_spawn_vehicles.py: {}
     API/test_spawn_walkers.py: {}
     API/test_sync_mode.py: {}
+    test_connection.py: 'xfail: compile: test_connection.py:16: no module named ''argparse'''
+    test_raycast_sensor.py: 'xfail: compile: test_raycast_sensor.py:33: no module named ''argparse'''
+    test_vehicle_physics.py: 'xfail: compile: test_vehicle_physics.py:18: no module named ''argparse'''
   ue5-dev:
     unit/test_boost_version.py: 'xfail: compile: unit/test_boost_version.py:23: cannot import name ''abspath'' from ''os.path'''
     unit/test_client.py: 'xfail: compile: unit/test_client.py:12: no module named ''subprocess'''
@@ -172,6 +246,8 @@ refs:
       TestWalkerNavigation.test_walker_ai_controller_routes_without_crash: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
     smoke/test_world.py:
       TestWorld.test_fixed_delta_seconds: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    API/prop_control.py: 'xfail: compile: API/prop_control.py:68: no module named ''argparse'''
+    API/spawn_actor.py: 'xfail: compile: API/spawn_actor.py:8: no module named ''argparse'''
     API/test_apply_textures.py: 'xfail: compile: API/test_apply_textures.py:14: no module named ''argparse'''
     API/test_collision.py: 'xfail: compile: API/test_collision.py:5: no module named ''argparse'''
     API/test_no_rendering_mode.py: 'xfail: compile: API/test_no_rendering_mode.py:9: no module named ''glob'''
@@ -181,3 +257,7 @@ refs:
     API/test_spawn_vehicles.py: {}
     API/test_spawn_walkers.py: {}
     API/test_sync_mode.py: {}
+    test_connection.py: 'xfail: compile: test_connection.py:16: no module named ''argparse'''
+    test_ground_truth.py: 'xfail: compile: test_ground_truth.py:11: no module named ''cv2'''
+    test_raycast_sensor.py: 'xfail: compile: test_raycast_sensor.py:33: no module named ''argparse'''
+    test_vehicle_physics.py: 'xfail: compile: test_vehicle_physics.py:18: no module named ''argparse'''

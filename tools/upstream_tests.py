@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import ast
 import concurrent.futures
+import json
 import os
 import re
 import shutil
@@ -59,10 +60,14 @@ UPSTREAM_DIR = ROOT / "tests" / "upstream"
 MANIFEST = UPSTREAM_DIR / "expectations.yaml"
 SHIM = UPSTREAM_DIR / "tsc_unittest.codon"
 REPOSITORY = "https://github.com/carla-simulator/carla"
-SUITES = ("unit", "smoke", "API")
-SERVER_SUITES = ("smoke", "API")
+SUITES = ("unit", "smoke", "API", "top")   # top: the files directly in PythonAPI/test
+SERVER_SUITES = ("smoke", "API", "top")
+MODES = ("cpython", "codon")
+RESULTS = UPSTREAM_DIR / "results"
+GAPS = UPSTREAM_DIR / "GAPS.md"
 DEFAULT_MOCK_REF = "ue5-dev"  # the mock mirrors LibCarla ue5-dev
-REASON_MAX = 240
+REASON_MAX = 300
+SCRIPT = "<script>"  # the one "test" of a file without TestCase classes
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 # `file.codon:12 (5-20): error: message`, possibly after a tree prefix (├─ ╰─).
@@ -161,9 +166,10 @@ def _git(*args: str, cwd: Path) -> None:
 def fetch_tests(sha: str, cache: Path | None = None) -> Path:
     """PythonAPI/test of carla-simulator/carla at `sha`, cached per SHA.
 
-    A shallow, blob-filtered, sparse fetch of that directory only (as
-    cmake/FetchCarla.cmake fetches LibCarla). TSC_UPSTREAM_TESTS_DIR names a
-    local PythonAPI/test to use instead.
+    A shallow, blob-filtered, sparse fetch of PythonAPI/ and the few
+    top-level files the unit tests check (as cmake/FetchCarla.cmake fetches
+    LibCarla). TSC_UPSTREAM_TESTS_DIR names a local PythonAPI/test to use
+    instead.
     """
     local = os.environ.get("TSC_UPSTREAM_TESTS_DIR")
     if local:
@@ -174,18 +180,21 @@ def fetch_tests(sha: str, cache: Path | None = None) -> Path:
     cache = cache or cache_root()
     dest = cache / sha
     tests = dest / "PythonAPI" / "test"
-    if (dest / ".complete").is_file():
+    if (dest / ".complete-v2").is_file():
         return tests
     cache.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix=f"{sha}.", dir=cache))
     try:
         _git("init", "-q", ".", cwd=tmp)
         _git("remote", "add", "origin", REPOSITORY, cwd=tmp)
-        _git("sparse-checkout", "set", "--no-cone", "/PythonAPI/test/", cwd=tmp)
+        # PythonAPI/ and the files some unit tests check (CMake options,
+        # requirements); not the multi-GB rest.
+        _git("sparse-checkout", "set", "--no-cone", "/PythonAPI/", "/CMake/", "/requirements.txt",
+             cwd=tmp)
         _git("fetch", "-q", "--depth", "1", "--filter=blob:none", "origin", sha, cwd=tmp)
         _git("checkout", "-q", "FETCH_HEAD", cwd=tmp)
         shutil.rmtree(tmp / ".git")
-        (tmp / ".complete").write_text(sha + "\n")
+        (tmp / ".complete-v2").write_text(sha + "\n")
         shutil.rmtree(dest, ignore_errors=True)
         tmp.rename(dest)
     finally:
@@ -193,9 +202,16 @@ def fetch_tests(sha: str, cache: Path | None = None) -> Path:
     return tests
 
 
+def suite_of(rel: str) -> str:
+    return rel.split("/")[0] if "/" in rel else "top"
+
+
 def test_files(tests: Path, suite: str) -> list[str]:
-    """`suite/test_*.py` paths, relative to PythonAPI/test."""
-    return sorted(f"{suite}/{p.name}" for p in (tests / suite).glob("test_*.py"))
+    """Every Python file of a suite (unittest modules and scripts), relative
+    to PythonAPI/test."""
+    d = tests if suite == "top" else tests / suite
+    return sorted((p.name if suite == "top" else f"{suite}/{p.name}")
+                  for p in d.glob("*.py") if p.name != "__init__.py")
 
 
 # ---------------------------------------------------------------------------
@@ -454,6 +470,7 @@ def run_file(tests: Path, rel: str, work: Path, skip: set[str] = frozenset(),
     """
     result = FileResult(rel)
     ids = [t for t in discover(tests, rel) if t not in skip]
+    script = not discover(tests, rel)
     out_dir = work / Path(rel).parent
     out_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(SHIM, out_dir / SHIM.name)
@@ -467,6 +484,9 @@ def run_file(tests: Path, rel: str, work: Path, skip: set[str] = frozenset(),
         (out_dir / "__init__.codon").write_text(text)
         modules["__init__.codon"] = (f"{Path(rel).parent}/__init__.py", init_offset, text.count("\n"))
     exe = out_dir / Path(rel).stem
+    if script:
+        return _run_script_codon(result, module, modules, source, exe, out_dir, server,
+                                 timeout, compile_only)
     compile_errors: dict[str, str] = {}
     included = list(ids)
     logs = []
@@ -510,6 +530,36 @@ def run_file(tests: Path, rel: str, work: Path, skip: set[str] = frozenset(),
     return result
 
 
+def _run_script_codon(result: FileResult, module: str, modules: dict, source: Path, exe: Path,
+                      cwd: Path, server: bool, timeout: float | None,
+                      compile_only: bool) -> FileResult:
+    """A file without TestCase classes is a script: compiled and run whole."""
+    source.write_text(module)
+    build = _launcher("build", "-o", str(exe), str(source), timeout=900)
+    result.log = ANSI.sub("", build.stderr)
+    if build.returncode != 0:
+        chains = _error_chains(build.stderr)
+        result.file_error = _shorten(_located(chains[0], modules) if chains
+                                     else (result.log.strip().splitlines() or ["compilation failed"])[-1])
+        result.tests = [TestResult(SCRIPT, "compile", result.file_error)]
+        return result
+    if compile_only:
+        result.tests = [TestResult(SCRIPT, "not-run")]
+        return result
+    timeout = timeout or (900 if server else 120)
+    try:
+        proc = subprocess.run([str(exe)], capture_output=True, text=True, timeout=timeout,
+                              cwd=cwd, errors="replace")
+    except subprocess.TimeoutExpired:
+        result.tests = [TestResult(SCRIPT, "timeout", f"timed out after {timeout:g} s")]
+        return result
+    first = next((ln for ln in ANSI.sub("", proc.stderr).splitlines() if ln.strip()), "")
+    outcome = "pass" if proc.returncode == 0 else ("crash" if proc.returncode < 0 else "error")
+    result.tests = [TestResult(SCRIPT, outcome, "" if outcome == "pass"
+                               else _shorten(f"exit {proc.returncode}: {first}"))]
+    return result
+
+
 def _run_one(exe: Path, test_id: str, timeout: float, cwd: Path) -> TestResult:
     try:
         proc = subprocess.run([str(exe), test_id], capture_output=True, text=True,
@@ -531,14 +581,177 @@ def _run_one(exe: Path, test_id: str, timeout: float, cwd: Path) -> TestResult:
 
 
 # ---------------------------------------------------------------------------
+# CPython mode: the unmodified tests, with `import carla` = tools/pycarla
+# ---------------------------------------------------------------------------
+
+# Runs one unittest test by name and prints its outcome as JSON. It runs in
+# the test interpreter, with PythonAPI/test as the working directory and the
+# generated `carla` package first on sys.path.
+_DRIVER = r"""
+import json, os, sys, traceback, unittest
+# The tests must see the generated package, never an installed official one.
+try:
+    import carla
+    ok = os.path.realpath(carla.__file__).startswith(os.path.realpath(os.environ["TSC_PYCARLA_PKG"]))
+    why = f"`import carla` found {carla.__file__}, not the generated package"
+except BaseException as e:
+    ok, why = False, "import carla failed: " + "".join(traceback.format_exception_only(type(e), e)).strip()
+if not ok:
+    print("TSC-RESULT " + json.dumps({"status": "error", "detail": "harness: " + why}), flush=True)
+    sys.exit(0)
+# Untruncated assertion messages ('Tran[13 chars]...' hides the difference).
+import unittest.util
+unittest.util._MAX_LENGTH = 10 ** 6
+name = sys.argv[1]
+if name == "--script":
+    import runpy
+    sys.argv = [sys.argv[2]]
+    runpy.run_path(sys.argv[0], run_name="__main__")
+    sys.exit(0)
+result = unittest.TestResult()
+try:
+    unittest.defaultTestLoader.loadTestsFromName(name).run(result)
+except BaseException as e:
+    result.errors.append((None, traceback.format_exc()))
+def last(tb):
+    # The exception line (not the diff lines unittest appends after it).
+    import re
+    lines = [l for l in tb.strip().splitlines() if l.strip()]
+    for i in range(len(lines) - 1, -1, -1):
+        if re.match(r"^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt|Warning)\b", lines[i]):
+            return lines[i]
+    return lines[-1] if lines else ""
+if result.errors:
+    out = {"status": "error", "detail": last(result.errors[0][1])}
+elif result.failures:
+    out = {"status": "fail", "detail": last(result.failures[0][1])}
+elif result.skipped:
+    out = {"status": "skip", "detail": result.skipped[0][1]}
+elif result.testsRun == 0:
+    out = {"status": "error", "detail": "no test ran"}
+else:
+    out = {"status": "pass", "detail": ""}
+print("TSC-RESULT " + json.dumps(out), flush=True)
+"""
+
+
+def pycarla_dir(build: bool = True) -> Path | None:
+    """The generated `carla` package (tools/pycarla), built if missing or stale
+    (unless `build` is False: then None)."""
+    from tools import pycarla
+
+    explicit = os.environ.get("TSC_PYCARLA_DIR")
+    out = Path(explicit).resolve() if explicit else pycarla.default_out()
+    so = out / "carla" / f"{pycarla.MODULE}.so"
+    sources = [*pycarla.PACKAGE.glob("*.codon"), Path(pycarla.__file__), pycarla.RUNTIME]
+    if not so.is_file() or so.stat().st_mtime < max(p.stat().st_mtime for p in sources):
+        if explicit and so.is_file():
+            return out
+        if not build:
+            return None
+        print(f"building the carla CPython package in {out} (tools/pycarla, ~15 min) ...", flush=True)
+        pycarla.build(out)
+    return out
+
+
+def _python() -> str:
+    """The interpreter the unmodified tests run in (TSC_UPSTREAM_PYTHON)."""
+    return os.environ.get("TSC_UPSTREAM_PYTHON") or sys.executable
+
+
+def _cpython_env(pydir: Path, server: bool) -> dict[str, str]:
+    from typesafe_carla import paths
+
+    env = {**os.environ, "TSC_PYCARLA_PKG": str(pydir / "carla"),
+           # the library this run is about (the package may have been built against another)
+           "TYPESAFE_CARLA_LIB": os.environ.get("TYPESAFE_CARLA_LIB") or str(paths.native_library()),
+           "PYTHONPATH": os.pathsep.join(
+        [str(pydir)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else []))}
+    env.pop("PYTHONHOME", None)
+    if server:
+        env["TSC_PYCARLA_REDIRECT"] = (f"{os.environ.get('TSC_CARLA_HOST', '127.0.0.1')}:"
+                                       f"{os.environ.get('TSC_CARLA_PORT', '2000')}")
+    return env
+
+
+def run_file_cpython(tests: Path, rel: str, pydir: Path, skip: set[str] = frozenset(),
+                     server: bool = False, timeout: float | None = None) -> FileResult:
+    """Runs one upstream file unmodified under CPython, each test in its own process.
+
+    A unittest module runs test by test; a script runs whole (`<script>`).
+    """
+    result = FileResult(rel)
+    env = _cpython_env(pydir, server)
+    timeout = timeout or (900 if server else 120)
+    ids = discover(tests, rel)
+    driver = cache_root() / "tsc_unittest_driver.py"
+    driver.parent.mkdir(parents=True, exist_ok=True)
+    if not driver.is_file() or driver.read_text() != _DRIVER:
+        driver.write_text(_DRIVER)
+    env = {**env, "PYTHONPATH": env["PYTHONPATH"] + os.pathsep + str(tests)}
+    if not ids:
+        result.tests = [_run_script_cpython(tests, rel, env, timeout, driver)]
+        return result
+    module = rel[:-3].replace("/", ".")
+    for test_id in ids:
+        if test_id in skip:
+            continue
+        try:
+            proc = subprocess.run([_python(), str(driver), f"{module}.{test_id}"], cwd=tests, env=env,
+                                  capture_output=True, text=True, timeout=timeout, errors="replace")
+        except subprocess.TimeoutExpired:
+            result.tests.append(TestResult(test_id, "timeout", f"timed out after {timeout:g} s"))
+            continue
+        line = next((ln for ln in reversed(proc.stdout.splitlines()) if ln.startswith("TSC-RESULT ")), None)
+        if proc.returncode < 0:
+            sig = signal.Signals(-proc.returncode).name
+            first = next((ln for ln in proc.stderr.splitlines() if ln.strip()), "")
+            result.tests.append(TestResult(test_id, "crash", _shorten(f"{sig} {first}")))
+        elif line is None:
+            tail = (proc.stderr.strip().splitlines() or [""])[-1]
+            result.tests.append(TestResult(test_id, "error", _shorten(f"exit {proc.returncode}: {tail}")))
+        else:
+            out = json.loads(line[len("TSC-RESULT "):])
+            result.tests.append(TestResult(test_id, out["status"], _shorten(out["detail"])))
+    return result
+
+
+def _run_script_cpython(tests: Path, rel: str, env: dict[str, str], timeout: float,
+                        driver: Path) -> TestResult:
+    try:
+        proc = subprocess.run([_python(), str(driver), "--script", rel], cwd=tests, env=env,
+                              capture_output=True, text=True, timeout=timeout, errors="replace")
+    except subprocess.TimeoutExpired:
+        return TestResult(SCRIPT, "timeout", f"timed out after {timeout:g} s")
+    line = next((ln for ln in reversed(proc.stdout.splitlines()) if ln.startswith("TSC-RESULT ")), None)
+    if line is not None:  # the harness check failed
+        out = json.loads(line[len("TSC-RESULT "):])
+        return TestResult(SCRIPT, out["status"], _shorten(out["detail"]))
+    if proc.returncode == 0:
+        return TestResult(SCRIPT, "pass")
+    if proc.returncode < 0:
+        return TestResult(SCRIPT, "crash", signal.Signals(-proc.returncode).name)
+    lines = [ln for ln in proc.stderr.strip().splitlines() if ln.strip()]
+    detail = next((ln for ln in reversed(lines) if not ln.startswith(" ")), lines[-1] if lines else "")
+    return TestResult(SCRIPT, "error", _shorten(f"exit {proc.returncode}: {detail}"))
+
+
+# ---------------------------------------------------------------------------
 # Expectations
 # ---------------------------------------------------------------------------
 
-def load_manifest(path: Path = MANIFEST) -> dict:
+def _manifest_data(path: Path = MANIFEST) -> dict:
     import yaml
 
-    data = yaml.safe_load(path.read_text()) if path.is_file() else None
-    return (data or {}).get("refs") or {}
+    data = (yaml.safe_load(path.read_text()) if path.is_file() else None) or {}
+    if "refs" in data:  # the format before modes: Codon mode only
+        data = {"codon": data.pop("refs"), **data}
+    return data
+
+
+def load_manifest(mode: str = "cpython", path: Path = MANIFEST) -> dict:
+    """{ref: {file: entry}} for one mode."""
+    return _manifest_data(path).get(mode) or {}
 
 
 def parse_expectation(value) -> tuple[str, str]:
@@ -653,45 +866,260 @@ def updated_entry(result: FileResult, entry):
 
 _MANIFEST_HEADER = """\
 # Expected results of CARLA's own PythonAPI tests (PythonAPI/test) against
-# typesafe_carla, per CARLA ref. See tests/upstream/README.md.
+# typesafe_carla, per mode and CARLA ref. See tests/upstream/README.md.
 #
-#   refs:
+#   <mode: cpython | codon>:
 #     <CARLA ref>:
-#       <suite>/<file>.py: "xfail: <reason>" | "skip: <reason>"   # the whole file
-#       <suite>/<file>.py:
-#         <Class>.<test_method>: pass | "xfail: <reason>" | "skip: <reason>"
+#       <file>.py: "xfail: <reason>" | "skip: <reason>"     # the whole file
+#       <file>.py:
+#         <Class>.<test_method> | <script>: pass | "xfail: <reason>" | "skip: <reason>"
 #
+# cpython: the unmodified tests under CPython, `import carla` = tools/pycarla.
+# codon: the tests converted and compiled with typesafe-codon.
 # A test not listed is expected to pass. pytest (tests/test_upstream.py) and
 # CI fail on an unexpected failure AND on an unexpected pass, so this list only
-# shrinks. `python -m tools.upstream_tests --suite <suite> --update` rewrites
-# the current ref's entries from a run (existing reasons are kept).
+# shrinks. `python -m tools.upstream_tests --mode <mode> --suite <suite> --update`
+# rewrites the current ref's entries from a run (existing reasons are kept).
 """
 
 
-def write_manifest(refs: dict, path: Path = MANIFEST) -> None:
+def _file_order(name: str):
+    return (SUITES.index(suite_of(name)), name)
+
+
+def write_manifest(mode: str, refs: dict, path: Path = MANIFEST) -> None:
     import yaml
 
-    def order(name: str):
-        return (SUITES.index(name.split("/")[0]) if name.split("/")[0] in SUITES else 9, name)
-
-    data = {"refs": {ref: {f: refs[ref][f] for f in sorted(refs[ref], key=order)}
-                     for ref in sorted(refs)}}
-    text = yaml.safe_dump(data, sort_keys=False, width=1000, allow_unicode=True)
+    data = _manifest_data(path)
+    data[mode] = refs
+    out = {m: {ref: {f: data[m][ref][f] for f in sorted(data[m][ref], key=_file_order)}
+               for ref in sorted(data[m])}
+           for m in MODES if data.get(m)}
+    text = yaml.safe_dump(out, sort_keys=False, width=1000, allow_unicode=True)
     path.write_text(_MANIFEST_HEADER + "\n" + text)
+
+
+# ---------------------------------------------------------------------------
+# Results and GAPS.md
+# ---------------------------------------------------------------------------
+
+def results_path(mode: str, ref: str) -> Path:
+    return RESULTS / mode / f"{ref}.json"
+
+
+def load_results(mode: str, ref: str) -> dict:
+    p = results_path(mode, ref)
+    return json.loads(p.read_text()) if p.is_file() else {"files": {}}
+
+
+def record_results(mode: str, target: Target, results: list[FileResult]) -> None:
+    """Merges a run's per-test outcomes into tests/upstream/results/<mode>/<ref>.json."""
+    data = load_results(mode, target.ref)
+    data.update({"ref": target.ref, "sha": target.sha, "backend": target.backend})
+    for r in results:
+        data["files"][r.path] = {"file_error": r.file_error,
+                                 "tests": {t.id: [t.outcome, t.detail] for t in r.tests}}
+    data["files"] = {k: data["files"][k] for k in sorted(data["files"], key=_file_order)}
+    p = results_path(mode, target.ref)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=1) + "\n")
+
+
+# Root cause of a failure, from its outcome and message: (category, cause).
+_CAUSES = [
+    (r"^harness: (.*)", "pycarla", lambda m: f"harness: {m[1]}"),
+    (r"NotImplementedError: pycarla: (\S+) not wrapped: (.*)", "pycarla",
+     lambda m: f"pycarla cannot wrap `{m[1]}` ({m[2]})"),
+    (r"ModuleNotFoundError: No module named '(\w+)'", "infrastructure",
+     lambda m: f"test dependency `{m[1]}` not installed in the test interpreter"),
+    (r"AttributeError: module 'carla(?:\.(\w+))?' has no attribute '(\w+)'", "missing",
+     lambda m: f"missing `carla.{(m[1] + '.') if m[1] else ''}{m[2]}`"),
+    (r"AttributeError: type object '(\w+)' has no attribute '(\w+)'", "missing",
+     lambda m: f"missing `carla.{m[1]}.{m[2]}`"),
+    (r"AttributeError: '(\w+)' object has no attribute '(\w+)'", "missing",
+     lambda m: f"missing `carla.{m[1]}.{m[2]}`"),
+    (r"AttributeError: property '(\w+)' of '(\w+)' object has no setter", "missing",
+     lambda m: f"`carla.{m[2]}.{m[1]}` is read-only"),
+    (r"TypeError: carla\.(\w+) cannot be created from Python", "missing",
+     lambda m: f"`carla.{m[1]}(...)` cannot be constructed"),
+    (r"TypeError: could not find callable method '(\w+?)__(\w+?)(?:__set)?' for given arguments", "signature",
+     lambda m: f"`carla.{m[1]}.{'__init__' if m[2] == 'new' else m[2]}`: these arguments are not accepted"),
+    (r"TypeError: could not find callable method '_f__(\w+)' for given arguments", "signature",
+     lambda m: f"`carla.{m[1]}`: these arguments are not accepted"),
+    (r"TypeError: (\w+?)__(\w+)\(\) got an unexpected keyword argument '(\w+)'", "signature",
+     lambda m: f"`carla.{m[1]}.{'__init__' if m[2] == 'new' else m[2]}` has no keyword `{m[3]}`"),
+    (r"CalledProcessError: Command '\['git'", "infrastructure",
+     lambda m: "the test needs a CARLA git checkout (`git describe`)"),
+    (r"AssertionError: (?P<a>.+) != (?P=a)$", "missing",
+     lambda m: f"no value equality: equal-looking `{_class_of(m['a'])}` objects compare unequal (missing `__eq__`?)"),
+    (r"AssertionError: '(\w+)\(.*' != '\1\(.*'$", "behaviour",
+     lambda m: f"`str(carla.{m[1]})` differs from CARLA's (number formatting?)"),
+    (r"RuntimeError: (.*)", "behaviour", lambda m: f"RuntimeError: {re.sub(r'[0-9]+', 'N', m[1])[:120]}"),
+]
+
+
+def _class_of(text: str) -> str:
+    m = re.match(r"(\w+)(?:\[\d+ chars\])?", text)
+    return ("carla." + m[1]) if m and "[" not in text[:len(m[0])] else text[:40]
+
+
+def root_cause(mode: str, outcome: str, detail: str) -> tuple[str, str]:
+    """(category, cause) of a failed test. Categories: missing, signature,
+    behaviour (typesafe_carla); pycarla, codon (the harness); infrastructure."""
+    if outcome == "compile":
+        cause = re.sub(r"^\S+:\d+: ", "", detail)
+        cause = re.sub(r" \[\S+:\d+\]$", "", cause)
+        return "codon", f"does not compile: {cause}"
+    if outcome in ("timeout", "crash"):
+        return "behaviour", outcome + (f": {detail.split(':')[0]}" if outcome == "crash" else "")
+    for pattern, cat, fmt in _CAUSES:
+        m = re.search(pattern, detail)
+        if m:
+            return cat, fmt(m)
+    if outcome == "fail":
+        return "behaviour", f"assertion: {detail[:140]}"
+    exc = re.match(r"(?:exit -?\d+: )?(\w+(?:Error|Exception))\b", detail)
+    return "behaviour", (f"{exc[1]}: {detail[len(exc[0]):].strip(': ')[:120]}" if exc
+                         else f"{outcome}: {detail[:140]}")
+
+
+_CATEGORY_TITLES = {
+    "missing": "typesafe_carla lacks this (missing API)",
+    "signature": "typesafe_carla has it, with an incompatible signature",
+    "behaviour": "behaviour differs (assertions, errors, crashes)",
+    "pycarla": "the pycarla wrapper cannot express this yet (harness)",
+    "codon": "Codon-direct mode: does not compile",
+    "infrastructure": "infrastructure",
+}
+
+CODON_PYEXT_LIMITS = """\
+Found while building tools/pycarla with Codon 0.19 `--pyext`. They shape the
+wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
+
+- Only the compiled module's own classes and functions are exported, every
+  one of them (private ones, lambdas and top-level code included). Imported
+  classes are not exported, so the wrapper defines one box class per library
+  class.
+- "Python extension types cannot be polymorphic": no class of a dynamic
+  inheritance hierarchy (Vector3D/Location, Actor/Vehicle/..., ...) can be
+  exported. Hence the opaque boxes, and the Python classes of
+  carla/__init__.py, which restore inheritance.
+- A function or method with a static parameter (`T: type`, `Literal[str]`,
+  the `self: S, S: type` pattern) crashes the compiler (segfault in
+  transformStaticFnWrapCallArgs) or does not compile. Such members are not
+  exported (listed as pycarla stubs).
+- An untyped parameter is exported as `pyobj`: its attributes can be read
+  but not assigned, and `isinstance`/`hasattr` see a pyobj. The wrapper
+  exports one overload per type the parameter accepts (`GENERIC_PARAMS`). It
+  drops the combinations the library rejects at compile time
+  (`compat/pycarla/pruned.json`).
+- Top-level functions do not overload (a redefinition shadows), so each
+  overload gets its own name and the runtime tries them in order.
+- The exporter's default for a parameter typed `NoneType` fails to unpack
+  ("optional unpack failed"); `Optional[NoneType]` works.
+- A call through a virtual method's dispatch thunk rejects keyword arguments,
+  and with Actor's Python-API shortcuts an instance call can be ambiguous
+  ("cannot typecheck"), so the wrapper calls methods positionally through
+  their class.
+- The virtual-method tables are filled only from what is realized while the
+  module is type-checked; the exporter realizes its functions later, and a
+  virtual call made only from them crashes. The wrapper realizes every
+  library call in a function that never runs.
+- The exporter regenerates `__to_py__`/`__from_py__` of exported classes; a
+  call realized against its version returns NULL, and so does a virtual
+  `__to_py__` on a polymorphic library class. The wrapper converts results
+  itself (`_c_<Class>`, with an RTTI dispatch to the concrete class).
+- A property setter is not exported (attributes are read-only), so setters
+  are exported as functions.
+- `Static[Exception]` classes reach Python as plain BaseException; the
+  runtime re-raises them as RuntimeError, as CARLA's Python API does.
+- `--pyext` emits an object file, to be linked with `cc -shared ... -lcodonrt`.
+- The module is large: it takes about 15 minutes and 7 GB to compile.
+"""
+
+
+def write_gaps(primary: str = "ue5-dev") -> Path:
+    """GAPS.md from tests/upstream/results: every test, its outcome per mode,
+    and the failures grouped by root cause (each group a candidate issue)."""
+    refs = sorted({p.stem for m in MODES for p in (RESULTS / m).glob("*.json")},
+                  key=lambda r: (r != primary, r))
+    lines = ["# typesafe_carla vs CARLA's own PythonAPI tests: gaps", "",
+             "Generated by `python -m tools.upstream_tests --gaps` from",
+             "`tests/upstream/results/`; do not edit. See tests/upstream/README.md.", "",
+             "Modes: **cpython**, the unmodified tests under CPython with `import carla` =",
+             "typesafe_carla through tools/pycarla (primary); **codon**, the tests compiled",
+             "with typesafe-codon. *not run*: no result recorded (e.g. needs a server).", "",
+             "## Summary", "", "| ref | mode | commit | pass | fail | skip | not run |",
+             "|---|---|---|---:|---:|---:|---:|"]
+    data = {(m, r): load_results(m, r) for m in MODES for r in refs}
+    for r in refs:
+        for m in MODES:
+            d = data[(m, r)]
+            outs = [o for f in d["files"].values() for o, _ in f["tests"].values()]
+            lines.append(f"| {r} | {m} | {d.get('sha', '')[:10]} | {outs.count('pass')} | "
+                         f"{sum(o in FAILURES for o in outs)} | {outs.count('skip')} | "
+                         f"{outs.count('not-run')} |")
+    for r in refs:
+        for m in MODES:
+            groups: dict[tuple[str, str], list[str]] = {}
+            for rel, f in data[(m, r)]["files"].items():
+                for tid, (o, detail) in f["tests"].items():
+                    if o in FAILURES:
+                        groups.setdefault(root_cause(m, o, detail), []).append(f"{rel}::{tid}")
+            if not groups:
+                continue
+            lines += ["", f"## Root causes: {r}, {m} mode", ""]
+            for cat in _CATEGORY_TITLES:
+                items = sorted(((cause, tests) for (c, cause), tests in groups.items() if c == cat),
+                               key=lambda x: (-len(x[1]), x[0]))
+                if not items:
+                    continue
+                lines += [f"### {_CATEGORY_TITLES[cat]} ({len(items)} causes, "
+                          f"{sum(len(t) for _, t in items)} tests)", ""]
+                for cause, tests in items:
+                    shown = ", ".join(f"`{t}`" for t in tests[:8]) + (f", +{len(tests) - 8} more" if len(tests) > 8 else "")
+                    lines.append(f"- **{cause}**: {len(tests)} tests: {shown}")
+                lines.append("")
+    lines += ["", "## Codon `--pyext` limitations (harness, not typesafe_carla gaps)", "", CODON_PYEXT_LIMITS]
+    lines += ["## Infrastructure limits", "",
+              "- CI has no CARLA server: it runs only `unit`; `smoke`, `API` and the top-level",
+              "  files need `TSC_CARLA_PORT` (results here come from local runs).",
+              "- A test that also fails on its own ref's official Python API, or needs a",
+              "  server feature the test server lacks, is listed under its cause above; the",
+              "  0.10.0 server's limitations are those failing only in the 0.10.0 results.", ""]
+    for r in refs:
+        lines += [f"## Every test: {r}", "", "| test | cpython | codon | root cause (cpython, else codon) |",
+                  "|---|---|---|---|"]
+        files = sorted(set(data[("cpython", r)]["files"]) | set(data[("codon", r)]["files"]), key=_file_order)
+        for rel in files:
+            ids = list(dict.fromkeys(list(data[("cpython", r)]["files"].get(rel, {}).get("tests", {}))
+                                     + list(data[("codon", r)]["files"].get(rel, {}).get("tests", {}))))
+            for tid in ids:
+                cells, cause = [], ""
+                for m in MODES:
+                    o, detail = data[(m, r)]["files"].get(rel, {}).get("tests", {}).get(tid, ["not run", ""])
+                    cells.append(o)
+                    if not cause and o in FAILURES:
+                        cause = root_cause(m, o, detail)[1]
+                lines.append(f"| `{rel}::{tid}` | {cells[0]} | {cells[1]} | {cause.replace('|', '/')} |")
+        lines.append("")
+    GAPS.write_text("\n".join(lines) + "\n")
+    return GAPS
 
 
 # ---------------------------------------------------------------------------
 # Command line (CI)
 # ---------------------------------------------------------------------------
 
-def _summary(target: Target, rows: list[tuple[str, Check]], known_ref: bool) -> str:
+def _summary(mode: str, target: Target, rows: list[tuple[str, Check]], known_ref: bool) -> str:
     total = Check()
     for _, c in rows:
         total.passed += c.passed
         total.xfailed += c.xfailed
         total.skipped += c.skipped
         total.problems += c.problems
-    lines = [f"### CARLA PythonAPI tests vs typesafe_carla: {target.ref} @ {target.sha[:12]} ({target.backend})",
+    lines = [f"### CARLA PythonAPI tests vs typesafe_carla ({mode} mode): "
+             f"{target.ref} @ {target.sha[:12]} ({target.backend})",
              "", f"**{total.counts()}**" + ("" if known_ref else f" (no expectations for {target.ref}: report only)"),
              "", "| file | pass | xfail | skip | unexpected |", "|---|---:|---:|---:|---:|"]
     for rel, c in rows:
@@ -701,47 +1129,32 @@ def _summary(target: Target, rows: list[tuple[str, Check]], known_ref: bool) -> 
     return "\n".join(lines) + "\n"
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m tools.upstream_tests", description=__doc__.split("\n\n")[0])
-    parser.add_argument("--suite", action="append", choices=SUITES,
-                        help="suite(s) to run (default: unit, plus smoke and API when TSC_CARLA_PORT is set)")
-    parser.add_argument("--summary", help="append a Markdown summary to this file ($GITHUB_STEP_SUMMARY)")
-    parser.add_argument("--update", action="store_true",
-                        help="rewrite this ref's expectations from the results")
-    parser.add_argument("--compile-only", action="store_true",
-                        help="only compile (smoke and API then need no server); with --update, "
-                             "records compile failures only")
-    parser.add_argument("-j", "--jobs", type=int, default=min(4, os.cpu_count() or 1))
-    parser.add_argument("-v", "--verbose", action="store_true", help="print every test's outcome")
-    args = parser.parse_args(argv)
-    suites = args.suite or (["unit"] + (list(SERVER_SUITES) if os.environ.get("TSC_CARLA_PORT") else []))
-    if (any(s in SERVER_SUITES for s in suites) and not os.environ.get("TSC_CARLA_PORT")
-            and not args.compile_only):
-        parser.error("smoke and API need a CARLA server: set TSC_CARLA_PORT (and TSC_CARLA_HOST)")
-
-    target = resolve_target()
-    tests = fetch_tests(target.sha)
-    manifest = load_manifest()
+def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> tuple[list, bool]:
+    """Runs `files` in one mode; returns (rows, known_ref)."""
+    manifest = load_manifest(mode)
     known_ref = target.ref in manifest
     work = cache_root() / target.sha / "build"
-    files = [rel for s in suites for rel in test_files(tests, s)]
-    print(f"CARLA {target.ref} @ {target.sha} ({target.backend}): {len(files)} files", flush=True)
+    pydir = pycarla_dir() if mode == "cpython" else None
 
     def one(rel: str):
         entry = file_expectations(manifest, target.ref, rel)
-        ids = discover(tests, rel)
+        ids = discover(tests, rel) or [SCRIPT]
         if isinstance(entry, str) and parse_expectation(entry)[0] == "skip":
             return rel, None, entry, ids
-        server = rel.split("/")[0] in SERVER_SUITES
+        server = suite_of(rel) in SERVER_SUITES
+        if mode == "cpython":
+            return rel, run_file_cpython(tests, rel, pydir, skipped_ids(entry), server), entry, ids
         return rel, run_file(tests, rel, work, skipped_ids(entry), server,
                              compile_only=args.compile_only), entry, ids
 
-    rows = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
+    rows, results = [], []
+    # Server tests share one server: one file at a time.
+    jobs = 1 if any(suite_of(f) in SERVER_SUITES for f in files) and not args.compile_only else args.jobs
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
         for rel, result, entry, ids in pool.map(one, files):
             c = check(result, entry, ids)
             rows.append((rel, c))
-            print(f"{rel}: {c.counts()}", flush=True)
+            print(f"[{mode}] {rel}: {c.counts()}", flush=True)
             if result and (args.verbose or c.problems):
                 if result.file_error:
                     print(f"  (file does not compile) {result.file_error}")
@@ -749,16 +1162,59 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  {t.id}: {t.outcome}{': ' + t.detail if t.detail else ''}")
             for p in c.problems:
                 print(f"  UNEXPECTED {p}")
-            if args.update and result is not None:
-                manifest.setdefault(target.ref, {})[rel] = updated_entry(result, entry)
+            if result is not None:
+                results.append(result)
+                if args.update:
+                    manifest.setdefault(target.ref, {})[rel] = updated_entry(result, entry)
     if args.update:
-        write_manifest(manifest)
-        print(f"updated {MANIFEST.relative_to(ROOT)} for {target.ref}")
-    text = _summary(target, rows, known_ref)
-    if args.summary:
-        with open(args.summary, "a") as f:
-            f.write(text)
-    failed = known_ref and not args.update and not args.compile_only and any(c.problems for _, c in rows)
+        write_manifest(mode, manifest)
+        record_results(mode, target, results)
+        print(f"updated {MANIFEST.relative_to(ROOT)} and {results_path(mode, target.ref).relative_to(ROOT)}")
+    return rows, known_ref
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="python -m tools.upstream_tests", description=__doc__.split("\n\n")[0])
+    parser.add_argument("--mode", choices=MODES + ("all",), default="cpython",
+                        help="cpython: unmodified tests, carla = tools/pycarla (default); "
+                             "codon: converted and compiled with typesafe-codon; all: both")
+    parser.add_argument("--suite", action="append", choices=SUITES,
+                        help="suite(s) to run (default: unit, plus smoke, API and top when TSC_CARLA_PORT is set)")
+    parser.add_argument("--file", action="append", help="only these files (relative to PythonAPI/test)")
+    parser.add_argument("--summary", help="append a Markdown summary to this file ($GITHUB_STEP_SUMMARY)")
+    parser.add_argument("--update", action="store_true",
+                        help="rewrite this ref's expectations and recorded results from the run, "
+                             "and regenerate GAPS.md")
+    parser.add_argument("--gaps", action="store_true", help="only regenerate GAPS.md from the recorded results")
+    parser.add_argument("--compile-only", action="store_true",
+                        help="codon mode: only compile (smoke/API/top then need no server)")
+    parser.add_argument("-j", "--jobs", type=int, default=min(4, os.cpu_count() or 1))
+    parser.add_argument("-v", "--verbose", action="store_true", help="print every test's outcome")
+    args = parser.parse_args(argv)
+    if args.gaps:
+        print(write_gaps())
+        return 0
+    modes = list(MODES) if args.mode == "all" else [args.mode]
+    suites = args.suite or (["unit"] + (list(SERVER_SUITES) if os.environ.get("TSC_CARLA_PORT") else []))
+    if (any(s in SERVER_SUITES for s in suites) and not os.environ.get("TSC_CARLA_PORT")
+            and not (args.compile_only and modes == ["codon"])):
+        parser.error("smoke, API and top need a CARLA server: set TSC_CARLA_PORT (and TSC_CARLA_HOST)")
+
+    target = resolve_target()
+    tests = fetch_tests(target.sha)
+    files = [rel for s in suites for rel in test_files(tests, s)
+             if not args.file or rel in args.file]
+    print(f"CARLA {target.ref} @ {target.sha} ({target.backend}): {len(files)} files", flush=True)
+    failed = False
+    for mode in modes:
+        rows, known_ref = run_mode(mode, target, tests, files, args)
+        text = _summary(mode, target, rows, known_ref)
+        if args.summary:
+            with open(args.summary, "a") as f:
+                f.write(text)
+        failed |= known_ref and not args.update and not args.compile_only and any(c.problems for _, c in rows)
+    if args.update:
+        print(write_gaps())
     return 1 if failed else 0
 
 

@@ -1,0 +1,82 @@
+{
+ "files": {
+  "unit/test_client.py": {
+   "file_error": null,
+   "tests": {
+    "TestClient.test_client_version": [
+     "error",
+     "subprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
+    ]
+   }
+  },
+  "unit/test_transform.py": {
+   "file_error": null,
+   "tests": {
+    "TestLocation.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestLocation.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestRotation.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestRotation.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_values": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_print": [
+     "fail",
+     "AssertionError: 'Transform(Location(x=1, y=2, z=3), Rotation(pitch=4, yaw=5, roll=6))' != 'Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pitch=4.000000, yaw=5.000000, roll=6.000000))'"
+    ],
+    "TestTransform.test_translation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_rotation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_rotation_and_translation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_list_rotation_and_translation_location": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_list_rotation_and_translation_vector3d": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "unit/test_vehicle.py": {
+   "file_error": null,
+   "tests": {
+    "TestVehicleControl.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestVehicleControl.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestVehiclePhysicsControl.test_named_args": [
+     "error",
+     "TypeError: could not find callable method 'WheelPhysicsControl__new' for given arguments [] ['max_steer_angle', 'radius', 'tire_friction']"
+    ]
+   }
+  }
+ },
+ "ref": "0.10.0",
+ "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+ "backend": "libcarla"
+}
