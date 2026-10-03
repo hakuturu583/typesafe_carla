@@ -206,6 +206,7 @@ jobs:
       proceed: ${{ steps.r.outputs.proceed }}
       publish: ${{ steps.r.outputs.publish }}
       index: ${{ steps.r.outputs.index }}
+      upload_url: ${{ steps.r.outputs.upload_url }}
       ref: ${{ steps.r.outputs.ref }}
       tag: ${{ steps.r.outputs.tag }}
       version: ${{ steps.r.outputs.version }}
@@ -271,8 +272,10 @@ jobs:
           fi
           # What CMake fetches (CARLA_GIT_REF): the resolved SHA for a release.
           carla_build_ref="${carla_commit:-$carla_ref}"
+          upload_url=https://upload.pypi.org/legacy/
+          if [ "$index" = testpypi ]; then upload_url=https://test.pypi.org/legacy/; fi
           {
-            echo "proceed=$proceed"; echo "publish=$publish"; echo "index=$index"
+            echo "proceed=$proceed"; echo "publish=$publish"; echo "index=$index"; echo "upload_url=$upload_url"
             echo "ref=$ref"; echo "tag=$tag"; echo "version=$version"; echo "carla_ref=$carla_ref"
             echo "carla_build_ref=$carla_build_ref"; echo "carla_commit=$carla_commit"
           } | tee -a "$GITHUB_OUTPUT"
@@ -414,7 +417,7 @@ jobs:
       - run: pipx run twine check --strict dist/*
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.resolve.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          repository-url: ${{ needs.resolve.outputs.upload_url }}
           # The toolchain version only changes with Codon; most releases skip it.
           skip-existing: true
 
@@ -439,7 +442,7 @@ jobs:
       - run: pipx run twine check --strict dist/*
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.resolve.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          repository-url: ${{ needs.resolve.outputs.upload_url }}
           # An existing file is an error, so a version is never "released"
           # without uploading anything; only a re-run may finish a partial upload.
           skip-existing: ${{ github.run_attempt > 1 }}
