@@ -1,0 +1,10 @@
+# Issue #77: Vector2D and the Vector3D family do not mix, in place either
+# (Boost.Python.ArgumentError in Python).
+# expect-error: 'Vector2D' does not match expected type 'Vector3D'
+import typesafe_carla as carla
+
+def accelerate(v: carla.Velocity, dv: carla.Vector2D) -> carla.Velocity:
+    v += dv
+    return v
+
+accelerate(carla.Velocity(1.0, 2.0, 3.0), carla.Vector2D(1.0, 2.0))

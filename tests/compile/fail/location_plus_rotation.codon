@@ -1,0 +1,9 @@
+# Issue #77: + takes a Vector3D-family operand; a Rotation is a TypeError in
+# Python and a compile error here.
+# expect-error: 'Rotation' does not match expected type 'Vector3D'
+import typesafe_carla as carla
+
+def shifted(loc: carla.Location, rot: carla.Rotation) -> carla.Vector3D:
+    return loc + rot
+
+shifted(carla.Location(1.0, 2.0, 3.0), carla.Rotation())

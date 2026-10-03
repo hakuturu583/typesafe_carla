@@ -1,0 +1,99 @@
+# Issue #77: arithmetic across the Vector3D family (Vector3D, Location,
+# Velocity, AngularVelocity, Acceleration) and Vector2D, as the official module.
+from ..compatibility.arithmetic_cases import arithmetic_cases
+import typesafe_carla as carla
+
+# tests/compatibility/arithmetic_cases.py run with the official module
+# (/mnt/sata_ssd/carla-venv, the ue5-dev build): per operator, the result of
+# each pair (see that file for the format).
+OFFICIAL = "+:Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),E,Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),E,Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),E,Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),E,Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),Vector3D(32,-20,16),E,E,E,E,E,E,Vector2D(32,-20);-:Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),E,Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),E,Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),E,Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),E,Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),Vector3D(16,-52,112),E,E,E,E,E,E,Vector2D(16,-52);+=:Vector3D(32,-20,16)&,Vector3D(32,-20,16)&,Vector3D(32,-20,16)&,Vector3D(32,-20,16)&,Vector3D(32,-20,16)&,E,Location(32,-20,16)&,Location(32,-20,16)&,Location(32,-20,16)&,Location(32,-20,16)&,Location(32,-20,16)&,E,Velocity(32,-20,16)&,Velocity(32,-20,16)&,Velocity(32,-20,16)&,Velocity(32,-20,16)&,Velocity(32,-20,16)&,E,AngularVelocity(32,-20,16)&,AngularVelocity(32,-20,16)&,AngularVelocity(32,-20,16)&,AngularVelocity(32,-20,16)&,AngularVelocity(32,-20,16)&,E,Acceleration(32,-20,16)&,Acceleration(32,-20,16)&,Acceleration(32,-20,16)&,Acceleration(32,-20,16)&,Acceleration(32,-20,16)&,E,E,E,E,E,E,Vector2D(32,-20)&;-=:Vector3D(16,-52,112)&,Vector3D(16,-52,112)&,Vector3D(16,-52,112)&,Vector3D(16,-52,112)&,Vector3D(16,-52,112)&,E,Location(16,-52,112)&,Location(16,-52,112)&,Location(16,-52,112)&,Location(16,-52,112)&,Location(16,-52,112)&,E,Velocity(16,-52,112)&,Velocity(16,-52,112)&,Velocity(16,-52,112)&,Velocity(16,-52,112)&,Velocity(16,-52,112)&,E,AngularVelocity(16,-52,112)&,AngularVelocity(16,-52,112)&,AngularVelocity(16,-52,112)&,AngularVelocity(16,-52,112)&,AngularVelocity(16,-52,112)&,E,Acceleration(16,-52,112)&,Acceleration(16,-52,112)&,Acceleration(16,-52,112)&,Acceleration(16,-52,112)&,Acceleration(16,-52,112)&,E,E,E,E,E,E,Vector2D(16,-52)&;*:Vector3D(96,-144,256),Vector3D(12,-18,32),Vector3D(96,-144,256),Vector3D(12,-18,32),Vector3D(96,-144,256),Vector3D(12,-18,32),Vector3D(96,-144,256),Vector3D(12,-18,32),Vector3D(96,-144,256),Vector3D(12,-18,32),Vector2D(96,-144),Vector2D(12,-18);/:Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector2D(6,-9),Vector2D(48,-72);*=:Vector3D(96,-144,256)&,Vector3D(12,-18,32)&,Location(96,-144,256)&,Location(12,-18,32)&,Velocity(96,-144,256)&,Velocity(12,-18,32)&,AngularVelocity(96,-144,256)&,AngularVelocity(12,-18,32)&,Acceleration(96,-144,256)&,Acceleration(12,-18,32)&,Vector2D(96,-144)&,Vector2D(12,-18)&;/=:Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector2D(6,-9),Vector2D(48,-72);r*:Vector3D(96,-144,256),Vector3D(12,-18,32),Vector3D(96,-144,256),Vector3D(12,-18,32),Vector3D(96,-144,256),Vector3D(12,-18,32),Vector3D(96,-144,256),Vector3D(12,-18,32),Vector3D(96,-144,256),Vector3D(12,-18,32),Vector2D(96,-144),Vector2D(12,-18);r/:Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector2D(6,-9),Vector2D(48,-72)"
+
+# The one divergence: `v /= k` on a Location, Velocity, AngularVelocity or
+# Acceleration rebinds `v` to a new Vector3D in Python; a variable keeps its
+# static type here, so it is a compile error (tests/compile/fail/
+# location_itruediv.codon) and arithmetic_cases writes "C" for it.
+OFFICIAL_ITRUEDIV = "/=:Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector3D(6,-9,16),Vector3D(48,-72,128),Vector2D(6,-9),Vector2D(48,-72)"
+TYPESAFE_ITRUEDIV = "/=:Vector3D(6,-9,16),Vector3D(48,-72,128),C,C,C,C,C,C,C,C,Vector2D(6,-9),Vector2D(48,-72)"
+assert OFFICIAL_ITRUEDIV in OFFICIAL
+expected = OFFICIAL.replace(OFFICIAL_ITRUEDIV, TYPESAFE_ITRUEDIV)
+
+got = arithmetic_cases()
+if got != expected:
+    a = got.split(";")
+    b = expected.split(";")
+    for i in range(min(len(a), len(b))):
+        if a[i] != b[i]:
+            print("typesafe_carla " + a[i] + "\n!= official " + b[i])
+assert got == expected
+
+def check(v, x: float, y: float, z: float):
+    assert v.x == x and v.y == y and v.z == z, str(v)
+
+def test_binary():
+    loc = carla.Location(1.0, 2.0, 3.0)
+    vec = carla.Vector3D(0.5, 0.5, 0.5)
+    # Every binary operator gives a Vector3D, in either order.
+    r1 = loc + vec
+    r2 = vec + loc
+    r3 = loc - vec
+    r4 = carla.Velocity(1.0, 1.0, 1.0) - carla.Acceleration(1.0, 2.0, 3.0)
+    r5 = carla.AngularVelocity(1.0, 2.0, 3.0) + loc
+    assert isinstance(r1, carla.Vector3D) and not isinstance(r1, carla.Location)
+    assert not isinstance(r3, carla.Location) and not isinstance(r4, carla.Velocity)
+    check(r1, 1.5, 2.5, 3.5)
+    check(r2, 1.5, 2.5, 3.5)
+    check(r3, 0.5, 1.5, 2.5)
+    check(r4, 0.0, -1.0, -2.0)
+    check(r5, 2.0, 4.0, 6.0)
+    m1 = loc * 2
+    m2 = 2.0 * loc
+    d1 = loc / 2
+    d2 = 2 / loc     # v / k, as LibCarla's operator/(float, Vector3D)
+    assert not isinstance(m1, carla.Location) and not isinstance(d2, carla.Location)
+    check(m1, 2.0, 4.0, 6.0)
+    check(m2, 2.0, 4.0, 6.0)
+    check(d1, 0.5, 1.0, 1.5)
+    check(d2, 0.5, 1.0, 1.5)
+
+def test_in_place():
+    loc = carla.Location(1.0, 2.0, 3.0)
+    alias = loc
+    loc += carla.Vector3D(1.0, 1.0, 1.0)     # stays a Location, updated in place
+    loc -= carla.Velocity(0.5, 0.5, 0.5)
+    loc *= 2
+    assert isinstance(loc, carla.Location) and loc is alias
+    check(alias, 3.0, 5.0, 7.0)
+    vel = carla.Velocity(1.0, 1.0, 1.0)
+    vel += loc
+    assert isinstance(vel, carla.Velocity)
+    check(vel, 4.0, 6.0, 8.0)
+    # /= is not in place: it rebinds a Vector3D to a new one.
+    vec = carla.Vector3D(2.0, 4.0, 8.0)
+    before = vec
+    vec /= 2
+    assert vec is not before
+    check(vec, 1.0, 2.0, 4.0)
+    check(before, 2.0, 4.0, 8.0)
+
+def test_vector2d():
+    a = carla.Vector2D(1.0, 2.0)
+    b = carla.Vector2D(0.5, -1.0)
+    s = a + b
+    assert s.x == 1.5 and s.y == 1.0
+    d = a - b
+    assert d.x == 0.5 and d.y == 3.0
+    m = 2 * a
+    assert m.x == 2.0 and m.y == 4.0
+    q = 4.0 / a
+    assert q.x == 0.25 and q.y == 0.5
+    alias = a
+    a += b
+    a *= 2
+    assert a is alias and a.x == 3.0 and a.y == 2.0
+    a /= 2
+    assert a is not alias and a.x == 1.5 and alias.x == 3.0
+
+test_binary()
+test_in_place()
+test_vector2d()
+print("OK")

@@ -482,11 +482,23 @@ Deliberate differences, all in favour of static checking:
   each with `'Vector3D' does not match expected type 'Location'`:
   - a field: `t.location = loc + offset`;
   - a rebound local: `loc = actor.get_location()` followed by
-    `loc += offset`, `loc = loc + offset` in a loop, or a conditional
-    `loc = loc + offset`.
+    `loc = loc + offset` in a loop, or a conditional `loc = loc + offset`;
+  - `loc /= k` (on a `Velocity`, `AngularVelocity` or `Acceleration` too):
+    the Python API has no in-place `/=`, so it rebinds `loc` to the
+    `Vector3D` `loc / k`.
 
-  Write `loc = carla.Location(loc + offset)`, or start from a vector
+  Write `loc += offset` (in place: `loc` stays a `Location`, as in Python),
+  `loc = carla.Location(loc + offset)`, or start from a vector
   (`pos = actor.get_location().as_vector()`, then `pos += offset`).
+  Otherwise arithmetic across `Vector3D`, `Location`, `Velocity`,
+  `AngularVelocity`, `Acceleration` and `Vector2D` matches the Python API
+  (`tests/compatibility/arithmetic_cases.py`): `+` and `-` mix any of the
+  Vector3D family and give a `Vector3D`; `*` and `/` by a scalar give a
+  `Vector3D` (a `Vector2D` for one), and `k / v` is `v / k`, as LibCarla
+  computes it; `+=`, `-=` and `*=` update the left operand in place and keep
+  its type. Mixing a `Vector2D` with the Vector3D family, or any other type
+  (`loc + rotation`), is a compile error. One difference: a `bool` scalar
+  (`v * True`) does not compile.
 * **`get_landmarks_of_type(distance, type)`**: pass the type by position.
   Codon 0.19 cannot compile these methods with a parameter named `type`, so
   it is `landmark_type` (as in `Map.get_all_landmarks_of_type`).
