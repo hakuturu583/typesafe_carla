@@ -26,6 +26,7 @@ from .spec import ROOT, Function, Spec
 
 SHIM_SOURCES = ROOT / "native" / "src"
 COMPAT_HEADER = (SHIM_SOURCES / "carla_compat.hpp").resolve()
+GENERATED_SOURCES = (SHIM_SOURCES / "generated").resolve()
 # LibCarla classes whose public methods the coverage report lists.
 COVERAGE_CLASSES = [
     "carla::client::Client", "carla::client::World", "carla::client::Map",
@@ -284,42 +285,123 @@ def validate(spec: Spec, build_dir: Path) -> int:
     return 0
 
 
-def _calls(tu: cindex.TranslationUnit, classes: set[str]) -> set[str]:
-    """"Class::Method" for every method of `classes` the translation unit calls."""
+def _in_shim(cursor: cindex.Cursor) -> Path | None:
+    """The shim source `cursor` is in, or None (LibCarla, the standard library...)."""
+    f = cursor.location.file
+    path = Path(f.name).resolve() if f is not None else None
+    return path if path is not None and SHIM_SOURCES.resolve() in path.parents else None
+
+
+def _location(cursor: cindex.Cursor) -> tuple[str, int, int]:
+    loc = cursor.location
+    return (str(Path(loc.file.name).resolve()) if loc.file else "", loc.line, loc.column)
+
+
+def _member_name(call: cindex.Cursor) -> tuple[cindex.Cursor | None, str | None]:
+    """For a dependent member call `x.name(...)` (libclang resolves neither the
+    method nor its spelling): the MEMBER_REF_EXPR and `name`, its last token."""
+    member = next((c for c in call.get_children() if c.kind == cindex.CursorKind.MEMBER_REF_EXPR),
+                  None)
+    tokens = list(member.get_tokens()) if member else []
+    if tokens and tokens[-1].kind == cindex.TokenKind.IDENTIFIER:
+        return member, tokens[-1].spelling
+    return member, None
+
+
+def _param_members(template: cindex.Cursor) -> list[tuple[int, str]]:
+    """(parameter index, method name) for each dependent member call a shim
+    function template makes on one of its parameters, e.g. (0, "at") for
+    `items.at(index)` in list_at(const Items &items, ...)."""
+    params = [c for c in template.get_children() if c.kind == cindex.CursorKind.PARM_DECL]
+    index = {_location(p): i for i, p in enumerate(params)}
+    out = []
+    for node in template.walk_preorder():
+        if node.kind != cindex.CursorKind.CALL_EXPR or node.referenced is not None:
+            continue
+        member, name = _member_name(node)
+        base = next(member.get_children(), None) if member else None
+        while base is not None and base.kind == cindex.CursorKind.UNEXPOSED_EXPR:
+            base = next(base.get_children(), None)
+        if name and base is not None and base.kind == cindex.CursorKind.DECL_REF_EXPR \
+                and base.referenced is not None and _location(base.referenced) in index:
+            out.append((index[_location(base.referenced)], name))
+    return out
+
+
+def _declaring_classes(cls: cindex.Cursor, name: str) -> set[str]:
+    """The classes declaring the method `name` that a call on `cls` finds:
+    `cls` itself, else the nearest bases declaring it."""
+    cls = cls.get_definition() or cls
+    if any(c.kind == cindex.CursorKind.CXX_METHOD and c.spelling == name
+           for c in cls.get_children()):
+        return {_qualified(cls)}
+    return set().union(*(_declaring_classes(c.type.get_canonical().get_declaration(), name)
+                         for c in cls.get_children()
+                         if c.kind == cindex.CursorKind.CXX_BASE_SPECIFIER))
+
+
+def _calls(tu: cindex.TranslationUnit, classes: set[str]) -> set[tuple[str, bool]]:
+    """("Class::Method", generated) for every method of `classes` the
+    translation unit calls; `generated` if the call is made by the generated
+    code (native/src/generated), directly or through a shim function template
+    it instantiates (e.g. list_at's `items.at(index)`)."""
     called = set()
+    templates: dict[tuple[str, int, int], list[tuple[int, str]]] = {}
+    instantiations = []  # (call, its template's location, generated)
     for node in tu.cursor.walk_preorder():
+        if node.kind == cindex.CursorKind.FUNCTION_TEMPLATE and node.is_definition() \
+                and _in_shim(node):
+            templates[_location(node)] = _param_members(node)
         if node.kind != cindex.CursorKind.CALL_EXPR:
             continue
         # Only calls the shim makes, not those inside LibCarla's inline code.
-        f = node.location.file
-        if f is None or SHIM_SOURCES.resolve() not in Path(f.name).resolve().parents:
+        source = _in_shim(node)
+        if source is None:
             continue
+        generated = GENERATED_SOURCES in source.parents
         ref = node.referenced
         if ref is None:
             # A dependent call in carla_compat.hpp, which picks between
             # methods renamed across CARLA versions: only the name is known,
             # and libclang leaves it unspelled (it is the member's last token).
-            if Path(f.name).resolve() == COMPAT_HEADER:
-                member = next((c for c in node.get_children()
-                               if c.kind == cindex.CursorKind.MEMBER_REF_EXPR), None)
-                tokens = list(member.get_tokens()) if member else []
-                if tokens and tokens[-1].kind == cindex.TokenKind.IDENTIFIER:
-                    called.add(f"*::{tokens[-1].spelling}")
+            if source == COMPAT_HEADER:
+                _, name = _member_name(node)
+                if name:
+                    called.add((f"*::{name}", generated))
             continue
         if ref.kind == cindex.CursorKind.CXX_METHOD:
             cls = _qualified(ref.semantic_parent)
             if cls in classes:
-                called.add(f"{cls}::{ref.spelling}")
+                called.add((f"{cls}::{ref.spelling}", generated))
+        elif ref.kind == cindex.CursorKind.FUNCTION_DECL and _in_shim(ref):
+            # Possibly an instantiation of a shim function template: its
+            # location is the template's.
+            instantiations.append((node, _location(ref), generated))
+    # The template's dependent member calls, on the classes of the arguments
+    # this call passes to those parameters.
+    for node, where, generated in instantiations:
+        args = list(node.get_arguments())
+        for i, name in templates.get(where, ()):
+            if i >= len(args):
+                continue
+            t = args[i].type.get_canonical()
+            if t.kind in (cindex.TypeKind.LVALUEREFERENCE, cindex.TypeKind.RVALUEREFERENCE):
+                t = t.get_pointee().get_canonical()
+            decl = t.get_declaration()
+            if decl.kind == cindex.CursorKind.NO_DECL_FOUND:
+                continue
+            called |= {(f"{cls}::{name}", generated) for cls in _declaring_classes(decl, name)
+                       if cls in classes}
     return called
 
 
-def _calls_in(source: Path, args: list[str], classes: set[str]) -> set[str]:
+def _calls_in(source: Path, args: list[str], classes: set[str]) -> set[tuple[str, bool]]:
     return _calls(_parse(source, args), classes)
 
 
-def _called_methods(build_dir: Path, classes: set[str], exclude: Path) -> set[str]:
-    """"Class::Method" for every LibCarla method a shim source other than
-    `exclude` (already parsed by the caller) calls."""
+def _called_methods(build_dir: Path, classes: set[str], exclude: Path) -> set[tuple[str, bool]]:
+    """_calls() of every shim source other than `exclude` (already parsed by
+    the caller)."""
     sources = {s: a for s, a in _compile_commands(build_dir).items()
                if SHIM_SOURCES.resolve() in s.parents and s != exclude}
     with ProcessPoolExecutor() as pool:  # each parse takes seconds
@@ -338,8 +420,13 @@ def coverage(spec: Spec, build_dir: Path, output: Path | None) -> int:
     by_class = {cls: _methods(defs, cls, stop=classes - {cls}) for cls in COVERAGE_CLASSES}
     owners = {m.cls for methods in by_class.values() for overloads in methods.values()
               for m in overloads}
-    called = _calls(tu, owners) | _called_methods(build_dir, owners, exclude=source)
-    generated = {f"{f.cpp_class}::{f.call}" for f in spec.functions}
+    calls = _calls(tu, owners) | _called_methods(build_dir, owners, exclude=source)
+    called = {key for key, _ in calls}
+    # Generated: a spec'd method (even one called through a `via` helper),
+    # or one the generated code calls itself, e.g. the list accessors' size
+    # and at (bindings/lists.yaml, through list_at).
+    spec_calls = {f"{f.cpp_class}::{f.call}" for f in spec.functions}
+    generated_calls = {key for key, gen in calls if gen}
     ref = _cache_var(build_dir, "TSC_CARLA_GIT_REF")
 
     lines = ["# LibCarla API coverage", "",
@@ -361,7 +448,9 @@ def coverage(spec: Spec, build_dir: Path, output: Path | None) -> int:
             deprecated = all(m.deprecated for m in methods[name])
             is_called = f"*::{name}" in called or any(f"{m.cls}::{name}" in called
                                                        for m in methods[name])
-            status = "generated" if key in generated else "hand-written" if is_called else "—"
+            is_generated = key in spec_calls or any(f"{m.cls}::{name}" in generated_calls
+                                                     for m in methods[name])
+            status = "generated" if is_generated else "hand-written" if is_called else "—"
             if status != "—":
                 cls_bound += 1
             gen += status == "generated"

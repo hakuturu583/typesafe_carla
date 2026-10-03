@@ -203,7 +203,11 @@ tsc_status_t tsc_waypoint_list_get(const tsc_waypoint_list_t *list, size_t index
 }
 ```
 
-They call no LibCarla method, so `validate` and `coverage` skip them.
+They name no LibCarla method in the spec, so `validate` skips them. `coverage`
+still counts the container's `size` and `at` (e.g. `ActorList::at`) as
+generated: it attributes a call to the generated code when that code makes it,
+directly or through a shim function template it instantiates such as
+`list_at`, whose dependent calls it resolves on the call site's argument types.
 
 A call that differs between LibCarla versions names a `carla_compat.hpp`
 helper with `via`; the function then calls `via(self, args...)`, and
