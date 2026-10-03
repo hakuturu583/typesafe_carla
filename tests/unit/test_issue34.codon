@@ -1,0 +1,51 @@
+# Issue #34 on the mock backend: World.spawn_actor / try_spawn_actor's
+# attachment_type.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+def invalid(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError as e:
+        return e.status == ffi.TSC_INVALID_ARGUMENT
+    return False
+
+assert int(carla.AttachmentType.Rigid) == 0 and int(carla.AttachmentType.SpringArm) == 1
+assert int(carla.AttachmentType.SpringArmGhost) == 2
+assert str(carla.AttachmentType.SpringArm) == "SpringArm"
+assert str(carla.AttachmentType(7)) == "AttachmentType(7)"
+assert carla.AttachmentType.Rigid != carla.AttachmentType.SpringArm
+
+world = carla.Client("localhost", 2020).get_world()
+lib = world.get_blueprint_library()
+vehicle = world.spawn_actor(lib.find("vehicle.audi.tt"),
+                            world.get_map().get_spawn_points()[3]).as_vehicle()
+camera_bp = lib.find("sensor.camera.rgb")
+offset = carla.Transform(carla.Location(-5.0, 0.0, 3.0))
+
+arm = world.spawn_actor(camera_bp, offset, attach_to=vehicle,
+                        attachment_type=carla.AttachmentType.SpringArm)
+p = arm.parent
+assert p is not None and p.id == vehicle.id
+ghost = world.try_spawn_actor(camera_bp, offset, vehicle, carla.AttachmentType.SpringArmGhost)
+assert ghost is not None
+gp = ghost.parent
+assert gp is not None and gp.id == vehicle.id
+rigid = world.spawn_actor(camera_bp, offset, attach_to=vehicle)  # default Rigid
+rp = rigid.parent
+assert rp is not None and rp.id == vehicle.id
+
+# Without a parent the attachment type is ignored, as in LibCarla.
+free = world.spawn_actor(camera_bp, offset, attachment_type=carla.AttachmentType.SpringArm)
+assert free.parent is None
+
+# Values outside the enumeration are rejected, by try_spawn_actor too.
+assert invalid(lambda: world.spawn_actor(camera_bp, offset, attach_to=vehicle,
+                                         attachment_type=carla.AttachmentType(3)))
+assert invalid(lambda: world.try_spawn_actor(camera_bp, offset, attach_to=vehicle,
+                                             attachment_type=carla.AttachmentType(-1)))
+
+for a in [arm, unwrap(ghost), rigid, free]:
+    a.destroy()
+vehicle.destroy()
+print("OK")

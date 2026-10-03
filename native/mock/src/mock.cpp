@@ -761,7 +761,7 @@ SharedPtr<Actor> World::GetActor(rpc::ActorId id) const {
 
 SharedPtr<Actor> World::SpawnActor(const ActorBlueprint &blueprint,
                                    const geom::Transform &transform, Actor *parent,
-                                   rpc::AttachmentType, const std::string &) {
+                                   rpc::AttachmentType) {
   mock::ActorData data;
   {
     std::lock_guard<std::mutex> lock(_episode->mutex);
@@ -775,10 +775,9 @@ SharedPtr<Actor> World::SpawnActor(const ActorBlueprint &blueprint,
 
 SharedPtr<Actor> World::TrySpawnActor(const ActorBlueprint &blueprint,
                                       const geom::Transform &transform, Actor *parent,
-                                      rpc::AttachmentType attachment_type,
-                                      const std::string &socket_name) noexcept {
+                                      rpc::AttachmentType attachment_type) noexcept {
   try {
-    return SpawnActor(blueprint, transform, parent, attachment_type, socket_name);
+    return SpawnActor(blueprint, transform, parent, attachment_type);
   } catch (const std::exception &) {
     return nullptr;
   }

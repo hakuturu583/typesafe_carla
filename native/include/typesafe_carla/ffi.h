@@ -50,10 +50,11 @@ extern "C" {
  *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24).
  * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37).
  * 3.8: tsc_world_get_actors_by_id (#38).
- * 3.9: tsc_client_create worker_threads; map_layers on load_world and
+ * 4.0: tsc_world_spawn_actor / try_spawn_actor take a tsc_attachment_type_t (#34).
+ * 4.1: tsc_client_create worker_threads; map_layers on load_world and
  *      load_world_if_different (#35). */
-#define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 9
+#define TSC_ABI_VERSION_MAJOR 4
+#define TSC_ABI_VERSION_MINOR 1
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -253,6 +254,14 @@ TSC_API tsc_status_t tsc_client_reload_world(tsc_client_t *client, int32_t reset
 /* World                                                                    */
 /* ------------------------------------------------------------------------ */
 
+/* carla.AttachmentType (LibCarla rpc::AttachmentType), how a spawned actor
+ * attaches to its parent; other values are rejected. */
+typedef enum {
+  TSC_ATTACHMENT_RIGID = 0,
+  TSC_ATTACHMENT_SPRING_ARM = 1,
+  TSC_ATTACHMENT_SPRING_ARM_GHOST = 2
+} tsc_attachment_type_t;
+
 /* BEGIN GENERATED world_core from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_id(tsc_world_t *world, uint64_t *out_id);
 TSC_API tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_list);
@@ -262,16 +271,17 @@ TSC_API tsc_status_t tsc_world_get_actors_by_id(tsc_world_t *world,
                                                 tsc_actor_list_t **out_list);
 TSC_API tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
                                                      tsc_blueprint_library_t **out_library);
-/* parent may be NULL. */
+/* attachment_type: tsc_attachment_type_t, always checked; used only with a parent (may be NULL). */
 TSC_API tsc_status_t tsc_world_spawn_actor(tsc_world_t *world,
                                            const tsc_actor_blueprint_t *blueprint,
                                            const tsc_transform_t *transform, tsc_actor_t *parent,
-                                           tsc_actor_t **out_actor);
-/* TSC_OK with *out_actor == NULL when the spawn location is occupied. */
+                                           int32_t attachment_type, tsc_actor_t **out_actor);
+/* TSC_OK with *out_actor == NULL if the spawn fails; bad attachment_type: TSC_INVALID_ARGUMENT. */
 TSC_API tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world,
                                                const tsc_actor_blueprint_t *blueprint,
                                                const tsc_transform_t *transform,
-                                               tsc_actor_t *parent, tsc_actor_t **out_actor);
+                                               tsc_actor_t *parent, int32_t attachment_type,
+                                               tsc_actor_t **out_actor);
 TSC_API tsc_status_t tsc_world_tick(tsc_world_t *world, double timeout_seconds,
                                     uint64_t *out_frame);
 /* END GENERATED world_core */

@@ -13,8 +13,8 @@ from internal.gc import register_finalizer
 LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
-TSC_ABI_VERSION_MAJOR = 3
-TSC_ABI_VERSION_MINOR = 9
+TSC_ABI_VERSION_MAJOR = 4
+TSC_ABI_VERSION_MINOR = 1
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -629,8 +629,8 @@ from C import LIB.tsc_world_get_id(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_world_get_actors(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_actors_by_id(cobj, Ptr[u32], int, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_blueprint_library(cobj, Ptr[cobj]) -> i32
-from C import LIB.tsc_world_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
-from C import LIB.tsc_world_try_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_try_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, i32, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_tick(cobj, float, Ptr[u64]) -> i32
 # END GENERATED world_core
 from C import LIB.tsc_world_get_actor(cobj, u32, Ptr[cobj]) -> i32

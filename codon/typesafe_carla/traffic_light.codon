@@ -62,20 +62,20 @@ class TrafficLight(Actor):
     def get_green_time(self) -> float:
         return self._info().green_time
 
-    def set_green_time(self, seconds: float):
-        _check(tsc_traffic_light_set_green_time(self._h.ptr, seconds))
+    def set_green_time(self, green_time: float):
+        _check(tsc_traffic_light_set_green_time(self._h.ptr, green_time))
 
     def get_yellow_time(self) -> float:
         return self._info().yellow_time
 
-    def set_yellow_time(self, seconds: float):
-        _check(tsc_traffic_light_set_yellow_time(self._h.ptr, seconds))
+    def set_yellow_time(self, yellow_time: float):
+        _check(tsc_traffic_light_set_yellow_time(self._h.ptr, yellow_time))
 
     def get_red_time(self) -> float:
         return self._info().red_time
 
-    def set_red_time(self, seconds: float):
-        _check(tsc_traffic_light_set_red_time(self._h.ptr, seconds))
+    def set_red_time(self, red_time: float):
+        _check(tsc_traffic_light_set_red_time(self._h.ptr, red_time))
 
     def get_elapsed_time(self) -> float:
         return self._info().elapsed_time

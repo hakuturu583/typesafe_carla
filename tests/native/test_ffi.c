@@ -220,7 +220,7 @@ static void test_mock_issue23(void) {
   CHECK_OK(tsc_world_get_blueprint_library(world, &library));
   CHECK_OK(tsc_blueprint_library_find(library, "vehicle.audi.tt", 15, &bp));
   tsc_transform_t at = {{10.0, 0.0, 0.6}, {0.0, 0.0, 0.0}};
-  CHECK_OK(tsc_world_spawn_actor(world, bp, &at, NULL, &actor));
+  CHECK_OK(tsc_world_spawn_actor(world, bp, &at, NULL, TSC_ATTACHMENT_RIGID, &actor));
   CHECK_OK(tsc_actor_as_vehicle(actor, &vehicle));
   const uint8_t bad_route[] = {TSC_ROAD_OPTION_LEFT, 8};
   CHECK(tsc_traffic_manager_set_route(tm, vehicle, bad_route, 2, 1) == TSC_INVALID_ARGUMENT);
@@ -403,12 +403,12 @@ static void test_mock_session(void) {
   CHECK(attribute.type == TSC_ATTRIBUTE_RGB_COLOR);
   tsc_actor_attribute_free(&attribute);
   tsc_transform_t spawn = {{100.0, 0.0, 0.5}, {0.0, 90.0, 0.0}};
-  CHECK_OK(tsc_world_spawn_actor(world, bp, &spawn, NULL, &spawned));
+  CHECK_OK(tsc_world_spawn_actor(world, bp, &spawn, NULL, TSC_ATTACHMENT_RIGID, &spawned));
   CHECK(spawned != NULL);
   tsc_actor_t *blocked = (tsc_actor_t *)0x1;
-  CHECK_OK(tsc_world_try_spawn_actor(world, bp, &spawn, NULL, &blocked));
+  CHECK_OK(tsc_world_try_spawn_actor(world, bp, &spawn, NULL, TSC_ATTACHMENT_RIGID, &blocked));
   CHECK(blocked == NULL);
-  CHECK(tsc_world_spawn_actor(world, bp, &spawn, NULL, &blocked) == TSC_ERROR);
+  CHECK(tsc_world_spawn_actor(world, bp, &spawn, NULL, TSC_ATTACHMENT_RIGID, &blocked) == TSC_ERROR);
   int32_t destroyed = 0;
   CHECK_OK(tsc_actor_destroy(spawned, &destroyed));
   CHECK(destroyed == 1);
@@ -693,8 +693,31 @@ static void test_mock_sensors(void) {
   tsc_transform_t at = {{0, 0, 2}, {0, 0, 0}};
   tsc_actor_t *actor = NULL;
   tsc_sensor_t *camera = NULL;
-  CHECK_OK(tsc_world_spawn_actor(world, bp, &at, vehicle, &actor));
+  CHECK_OK(tsc_world_spawn_actor(world, bp, &at, vehicle, TSC_ATTACHMENT_RIGID, &actor));
   CHECK(tsc_handle_kind(H(actor)) == TSC_KIND_SENSOR);
+
+  /* Attachment types (issue #34): SpringArm attaches; out-of-range values fail,
+   * from try_spawn too, and leave the output NULL. */
+  {
+    tsc_actor_t *arm = NULL, *arm_parent = NULL, *bad = (tsc_actor_t *)0x1;
+    uint32_t vehicle_id = 0, parent_id = 1;
+    int32_t destroyed = 0;
+    CHECK_OK(tsc_world_spawn_actor(world, bp, &at, vehicle, TSC_ATTACHMENT_SPRING_ARM, &arm));
+    CHECK_OK(tsc_actor_get_parent(arm, &arm_parent));
+    CHECK(arm_parent != NULL);
+    CHECK_OK(tsc_actor_get_id(vehicle, &vehicle_id));
+    CHECK_OK(tsc_actor_get_id(arm_parent, &parent_id));
+    CHECK(parent_id == vehicle_id);
+    CHECK(tsc_world_spawn_actor(world, bp, &at, vehicle, 3, &bad) ==
+              TSC_INVALID_ARGUMENT && bad == NULL);
+    bad = (tsc_actor_t *)0x1;
+    CHECK(tsc_world_try_spawn_actor(world, bp, &at, vehicle, -1, &bad) ==
+              TSC_INVALID_ARGUMENT && bad == NULL);
+    CHECK_OK(tsc_actor_destroy(arm, &destroyed));
+    CHECK(destroyed == 1);
+    tsc_handle_release(H(arm_parent));
+    tsc_handle_release(H(arm));
+  }
   CHECK_OK(tsc_actor_as_sensor(actor, &camera));
   tsc_sensor_t *not_sensor = (tsc_sensor_t *)0x1;
   CHECK(tsc_actor_as_sensor(vehicle, &not_sensor) == TSC_TYPE_ERROR && not_sensor == NULL);
@@ -856,9 +879,11 @@ static void test_mock_milestone4(void) {
   CHECK(found == 1);
   tsc_transform_t at_nav = {nav, {0, 0, 0}};
   tsc_transform_t origin = {{0, 0, 0}, {0, 0, 0}};
-  CHECK_OK(tsc_world_spawn_actor(world, walker_bp, &at_nav, NULL, &walker_actor));
+  CHECK_OK(tsc_world_spawn_actor(world, walker_bp, &at_nav, NULL, TSC_ATTACHMENT_RIGID,
+                                 &walker_actor));
   CHECK_OK(tsc_actor_as_walker(walker_actor, &walker));
-  CHECK_OK(tsc_world_spawn_actor(world, ai_bp, &origin, walker_actor, &ai_actor));
+  CHECK_OK(tsc_world_spawn_actor(world, ai_bp, &origin, walker_actor, TSC_ATTACHMENT_RIGID,
+                                 &ai_actor));
   CHECK_OK(tsc_actor_as_walker_ai_controller(ai_actor, &ai));
   tsc_location_t target = {nav.x + 3.0, nav.y, nav.z};
   CHECK_OK(tsc_walker_ai_controller_start(ai));
@@ -1226,7 +1251,8 @@ static void test_mock_issue20(void) {
   CHECK_OK(tsc_world_get_blueprint_library(world, &library));
   CHECK_OK(tsc_blueprint_library_find(library, "walker.pedestrian.0001", 22, &walker_bp));
   tsc_transform_t at = {{20.0, 20.0, 1.0}, {0, 0, 0}};
-  CHECK_OK(tsc_world_spawn_actor(world, walker_bp, &at, NULL, &walker_actor));
+  CHECK_OK(tsc_world_spawn_actor(world, walker_bp, &at, NULL, TSC_ATTACHMENT_RIGID,
+                                 &walker_actor));
   CHECK_OK(tsc_actor_as_walker(walker_actor, &walker));
   tsc_bone_list_t *list = NULL;
   CHECK_OK(tsc_walker_get_bones(walker, &list));
