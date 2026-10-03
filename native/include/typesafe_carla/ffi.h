@@ -49,9 +49,14 @@ extern "C" {
  * 3.6: sensor data frame_number, image convert/save, point cloud save, collision
  *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24).
  * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37).
- * 3.8: tsc_client_replay_file_ex, tsc_client_start_recorder_ex (#36). */
-#define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 8
+ * 3.8: tsc_world_get_actors_by_id (#38).
+ * 4.0: tsc_world_spawn_actor / try_spawn_actor take a tsc_attachment_type_t (#34).
+ * 4.1: tsc_client_create worker_threads; map_layers on load_world and
+ *      load_world_if_different (#35).
+ * 4.2: tsc_map_new_from_opendrive, a client-side Map from an OpenDRIVE string (#39).
+ * 4.3: tsc_client_replay_file_ex, tsc_client_start_recorder_ex (#36). */
+#define TSC_ABI_VERSION_MAJOR 4
+#define TSC_ABI_VERSION_MINOR 3
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -230,8 +235,9 @@ TSC_API void tsc_actor_attribute_free(tsc_actor_attribute_t *attribute);
 /* Client                                                                   */
 /* ------------------------------------------------------------------------ */
 
+/* worker_threads: LibCarla's asynchronous worker threads, 0 for all cores. */
 TSC_API tsc_status_t tsc_client_create(const char *host, size_t host_len, uint16_t port,
-                                       tsc_client_t **out_client);
+                                       size_t worker_threads, tsc_client_t **out_client);
 /* BEGIN GENERATED client from bindings/client.yaml, do not edit */
 TSC_API tsc_status_t tsc_client_set_timeout(tsc_client_t *client, double seconds);
 TSC_API tsc_status_t tsc_client_get_timeout(tsc_client_t *client, double *out_seconds);
@@ -240,7 +246,8 @@ TSC_API tsc_status_t tsc_client_get_server_version(tsc_client_t *client, tsc_str
 TSC_API tsc_status_t tsc_client_get_world(tsc_client_t *client, tsc_world_t **out_world);
 TSC_API tsc_status_t tsc_client_load_world(tsc_client_t *client,
                                            const char *map_name, size_t map_name_len,
-                                           int32_t reset_settings, tsc_world_t **out_world);
+                                           int32_t reset_settings, uint16_t map_layers,
+                                           tsc_world_t **out_world);
 TSC_API tsc_status_t tsc_client_reload_world(tsc_client_t *client, int32_t reset_settings,
                                              tsc_world_t **out_world);
 /* END GENERATED client */
@@ -249,21 +256,34 @@ TSC_API tsc_status_t tsc_client_reload_world(tsc_client_t *client, int32_t reset
 /* World                                                                    */
 /* ------------------------------------------------------------------------ */
 
+/* carla.AttachmentType (LibCarla rpc::AttachmentType), how a spawned actor
+ * attaches to its parent; other values are rejected. */
+typedef enum {
+  TSC_ATTACHMENT_RIGID = 0,
+  TSC_ATTACHMENT_SPRING_ARM = 1,
+  TSC_ATTACHMENT_SPRING_ARM_GHOST = 2
+} tsc_attachment_type_t;
+
 /* BEGIN GENERATED world_core from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_id(tsc_world_t *world, uint64_t *out_id);
 TSC_API tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_list);
+/* In request order; ids that name no actor are left out (as in LibCarla). Destroyed actors may still be listed (LibCarla's actor cache is only cleared when an episode starts). */
+TSC_API tsc_status_t tsc_world_get_actors_by_id(tsc_world_t *world,
+                                                const uint32_t *actor_ids, size_t count,
+                                                tsc_actor_list_t **out_list);
 TSC_API tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
                                                      tsc_blueprint_library_t **out_library);
-/* parent may be NULL. */
+/* attachment_type: tsc_attachment_type_t, always checked; used only with a parent (may be NULL). */
 TSC_API tsc_status_t tsc_world_spawn_actor(tsc_world_t *world,
                                            const tsc_actor_blueprint_t *blueprint,
                                            const tsc_transform_t *transform, tsc_actor_t *parent,
-                                           tsc_actor_t **out_actor);
-/* TSC_OK with *out_actor == NULL when the spawn location is occupied. */
+                                           int32_t attachment_type, tsc_actor_t **out_actor);
+/* TSC_OK with *out_actor == NULL if the spawn fails; bad attachment_type: TSC_INVALID_ARGUMENT. */
 TSC_API tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world,
                                                const tsc_actor_blueprint_t *blueprint,
                                                const tsc_transform_t *transform,
-                                               tsc_actor_t *parent, tsc_actor_t **out_actor);
+                                               tsc_actor_t *parent, int32_t attachment_type,
+                                               tsc_actor_t **out_actor);
 TSC_API tsc_status_t tsc_world_tick(tsc_world_t *world, double timeout_seconds,
                                     uint64_t *out_frame);
 /* END GENERATED world_core */
@@ -431,6 +451,12 @@ typedef struct tsc_waypoint_list tsc_waypoint_list_t;
 /* BEGIN GENERATED world_map from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_map(tsc_world_t *world, tsc_map_t **out);
 /* END GENERATED world_map */
+/* BEGIN GENERATED map_new from bindings/map.yaml, do not edit */
+/* carla.Map(name, xodr_content), no server. TSC_ERROR when the XML does not parse; bad OpenDRIVE may give another status, or crash LibCarla (a road without planView). */
+TSC_API tsc_status_t tsc_map_new_from_opendrive(const char *name, size_t name_len,
+                                                const char *xodr_content, size_t xodr_content_len,
+                                                tsc_map_t **out);
+/* END GENERATED map_new */
 /* BEGIN GENERATED map_core from bindings/map.yaml, do not edit */
 TSC_API tsc_status_t tsc_map_get_name(const tsc_map_t *map, tsc_string_t *out);
 TSC_API tsc_status_t tsc_map_to_opendrive(const tsc_map_t *map, tsc_string_t *out);
@@ -1591,10 +1617,11 @@ TSC_API tsc_status_t tsc_client_set_files_base_folder(tsc_client_t *client,
 /* END GENERATED client_files */
 /* LibCarla's LoadWorldIfDifferent: loads `map_name` unless it is the current
  * map (with or without the "Carla/Maps/" prefix). *out is the new world, or
- * NULL when the map was already loaded. */
+ * NULL when the map was already loaded. map_layers: CARLA MapLayer bit flags. */
 TSC_API tsc_status_t tsc_client_load_world_if_different(tsc_client_t *client,
                                                         const char *map_name, size_t map_name_len,
-                                                        int32_t reset_settings, tsc_world_t **out);
+                                                        int32_t reset_settings, uint16_t map_layers,
+                                                        tsc_world_t **out);
 
 /* --- Traffic Manager ------------------------------------------------------------ */
 

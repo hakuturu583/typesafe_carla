@@ -12,7 +12,7 @@ blocks:
     get_world: {call: GetWorld, out: {type: world_handle, name: out_world}}
     load_world:
       call: LoadWorld
-      args: {map_name: string_in, reset_settings: bool}
+      args: {map_name: string_in, reset_settings: bool, map_layers: map_layer}
       out: {type: world_handle, name: out_world}
     reload_world:
       call: ReloadWorld

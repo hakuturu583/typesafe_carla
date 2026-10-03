@@ -62,7 +62,7 @@ def test_environment(launcher):
 def test_info(launcher):
     result = launcher("info")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "native ABI         3.8" in result.stdout
+    assert "native ABI         4.3" in result.stdout
     assert "carla ref" in result.stdout
 
 

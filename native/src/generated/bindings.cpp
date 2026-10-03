@@ -353,9 +353,10 @@ tsc_status_t tsc_client_get_world(tsc_client_t *client, tsc_world_t **out_world)
 }
 
 tsc_status_t tsc_client_load_world(tsc_client_t *client, const char *map_name, size_t map_name_len,
-                                   int32_t reset_settings, tsc_world_t **out_world) {
+                                   int32_t reset_settings, uint16_t map_layers,
+                                   tsc_world_t **out_world) {
   return new_handle(__func__, out_world, [&] {
-    return new tsc_world(client_of(client).LoadWorld(to_string(map_name, map_name_len, "map_name"), reset_settings != 0));
+    return new tsc_world(client_of(client).LoadWorld(to_string(map_name, map_name_len, "map_name"), reset_settings != 0, static_cast<carla::rpc::MapLayer>(map_layers)));
   }, "out_world");
 }
 
@@ -657,6 +658,14 @@ tsc_status_t tsc_light_manager_set_day_night_cycle(tsc_light_manager_t *manager,
 }
 
 // bindings/map.yaml: carla::client::Map
+
+tsc_status_t tsc_map_new_from_opendrive(const char *name, size_t name_len,
+                                        const char *xodr_content, size_t xodr_content_len,
+                                        tsc_map_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_map(new_map_from_opendrive(to_string(name, name_len, "name"), to_string(xodr_content, xodr_content_len, "xodr_content")));
+  });
+}
 
 tsc_status_t tsc_map_get_name(const tsc_map_t *map, tsc_string_t *out) {
   return TSC_GUARD({ require_ptr(out, "out"); string_assign(out, map_of(map).GetName()); });
@@ -1304,6 +1313,13 @@ tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_lis
   }, "out_list");
 }
 
+tsc_status_t tsc_world_get_actors_by_id(tsc_world_t *world, const uint32_t *actor_ids, size_t count,
+                                        tsc_actor_list_t **out_list) {
+  return new_handle(__func__, out_list, [&] {
+    return new tsc_actor_list(world_of(world).GetActors(to_vector(actor_ids, count, "actor_ids")));
+  }, "out_list");
+}
+
 tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
                                              tsc_blueprint_library_t **out_library) {
   return new_handle(__func__, out_library, [&] {
@@ -1313,17 +1329,17 @@ tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
 
 tsc_status_t tsc_world_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
                                    const tsc_transform_t *transform, tsc_actor_t *parent,
-                                   tsc_actor_t **out_actor) {
+                                   int32_t attachment_type, tsc_actor_t **out_actor) {
   return new_handle(__func__, out_actor, [&] {
-    return make_actor_handle(spawned(world_of(world).SpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent"))));
+    return make_actor_handle(spawned(world_of(world).SpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent"), to_enum<carla::rpc::AttachmentType>(attachment_type, TSC_ATTACHMENT_RIGID, TSC_ATTACHMENT_SPRING_ARM_GHOST, "attachment type"))));
   }, "out_actor");
 }
 
 tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
                                        const tsc_transform_t *transform, tsc_actor_t *parent,
-                                       tsc_actor_t **out_actor) {
+                                       int32_t attachment_type, tsc_actor_t **out_actor) {
   return new_handle(__func__, out_actor, [&] {
-    return make_actor_handle(world_of(world).TrySpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent")));
+    return make_actor_handle(world_of(world).TrySpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent"), to_enum<carla::rpc::AttachmentType>(attachment_type, TSC_ATTACHMENT_RIGID, TSC_ATTACHMENT_SPRING_ARM_GHOST, "attachment type")));
   }, "out_actor");
 }
 

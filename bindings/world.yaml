@@ -6,19 +6,26 @@ blocks:
   world_core:
     get_id: {call: GetId, out: {type: uint64, name: out_id}}
     get_actors: {call: GetActors, out: {type: actor_list_handle, name: out_list}}
+    get_actors_by_id:
+      call: GetActors
+      args: {actor_ids: uint32_array}
+      out: {type: actor_list_handle, name: out_list}
+      doc: "In request order; ids that name no actor are left out (as in LibCarla). Destroyed actors may still be listed (LibCarla's actor cache is only cleared when an episode starts)."
     get_blueprint_library:
       call: GetBlueprintLibrary
       out: {type: blueprint_library_handle, name: out_library}
     spawn_actor:
       call: SpawnActor
-      args: {blueprint: blueprint, transform: transform, parent: nullable_actor}
+      args: {blueprint: blueprint, transform: transform, parent: nullable_actor,
+             attachment_type: attachment_type}
       out: {type: spawned_actor, name: out_actor}
-      doc: "parent may be NULL."
+      doc: "attachment_type: tsc_attachment_type_t, always checked; used only with a parent (may be NULL)."
     try_spawn_actor:
       call: TrySpawnActor
-      args: {blueprint: blueprint, transform: transform, parent: nullable_actor}
+      args: {blueprint: blueprint, transform: transform, parent: nullable_actor,
+             attachment_type: attachment_type}
       out: {type: actor_handle, name: out_actor}
-      doc: "TSC_OK with *out_actor == NULL when the spawn location is occupied."
+      doc: "TSC_OK with *out_actor == NULL if the spawn fails; bad attachment_type: TSC_INVALID_ARGUMENT."
     tick:
       call: Tick
       args: {timeout_seconds: timeout}

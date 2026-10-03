@@ -1,0 +1,10 @@
+# Vector3D.distance takes `vector` (Location.distance's official name,
+# `location`, is accepted too, issue #41), but not both at once.
+# expect-error: distance() takes exactly one argument: vector or location
+import typesafe_carla as carla
+
+def gap(a: carla.Location, b: carla.Location) -> float:
+    return a.distance(vector=b, location=b)
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(gap(carla.Location(), carla.Location(1.0, 0.0, 0.0)))

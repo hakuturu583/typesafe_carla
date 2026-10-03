@@ -60,25 +60,41 @@ n = wp.next(10.0)[0].transform.location
 out("next10", f"{n.x:.3f},{n.y:.3f}")
 out("generated", len(m.generate_waypoints(20.0)))
 # Issue #10: Location derives from Vector3D (result types and Vector3D methods).
+# Some calls here and below pass the official keyword names (issue #41).
 dl = n - p0.location
 u = dl.make_unit_vector()
-cr = dl.cross(carla.Vector3D(0.0, 0.0, 1.0))
+cr = dl.cross(vector=carla.Vector3D(0.0, 0.0, 1.0))
 out("location_vector_types", f"{type(dl).__name__},{type(dl * 2.0).__name__},"
     f"{type(carla.Vector3D() + dl).__name__},{type(abs(dl)).__name__},{type(u).__name__}")
 out("location_vector", f"{dl.length():.3f},{dl.squared_length():.3f},"
-    f"{dl.dot(carla.Vector3D(1.0, 1.0, 0.0)):.3f},{cr.x:.3f},{cr.y:.3f},{u.x:.3f},{u.y:.3f},"
-    f"{n.distance_2d(p0.location):.3f},{abs(dl).x:.3f}")
+    f"{dl.dot(vector=carla.Vector3D(1.0, 1.0, 0.0)):.3f},{cr.x:.3f},{cr.y:.3f},{u.x:.3f},{u.y:.3f},"
+    f"{n.distance_2d(vector=p0.location):.3f},{abs(dl).x:.3f}")
 r = client.apply_batch_sync([carla.command.DestroyActor(999999)])
 out("batch_error", r[0].error)
 
 # Milestone 4: map queries, traffic lights, weather.
 out("topology", len(m.get_topology()))
+# Issue #39: carla.Map(name, xodr_content) from the server map's OpenDRIVE.
+xm = carla.Map("copy", m.to_opendrive())
+xwp = xm.get_waypoint(p0.location)
+try:
+    carla.Map("bad", "")
+    xbad = 0
+except RuntimeError:
+    xbad = 1
+out("map_from_xodr", f"{xm.name},{len(xm.get_spawn_points())},{len(xm.get_topology())},"
+                     f"{len(xm.generate_waypoints(2.0))},{xwp.road_id},{xwp.lane_id},{xwp.s:.3f},{xbad}")
 out("crosswalk_points", len(m.get_crosswalks()))
 lms = m.get_all_landmarks()
 out("landmarks", len(lms))
 out("landmark0", f"{lms[0].id},{lms[0].name},{lms[0].type},{lms[0].road_id}")
 lights = [a for a in world.get_actors() if a.type_id == "traffic.traffic_light"]
 out("traffic_lights", len(lights))
+# Issue #38: get_actors(actor_ids) keeps request order and leaves unknown ids out.
+unknown_id = max(a.id for a in world.get_actors()) + 100000
+by_id = world.get_actors([lights[1].id, unknown_id, lights[0].id])
+out("actors_by_id", f"{len(by_id)},{int(by_id[0].id == lights[1].id)},"
+    f"{int(by_id[1].id == lights[0].id)},{by_id[0].type_id}")
 out("light0_times", f"{lights[0].get_green_time():.3f},{lights[0].get_yellow_time():.3f},{lights[0].get_red_time():.3f}")
 wthr = world.get_weather()
 out("weather", f"{wthr.cloudiness:.3f},{wthr.precipitation:.3f},{wthr.sun_altitude_angle:.3f},{wthr.rayleigh_scattering_scale:.3f}")
@@ -90,7 +106,7 @@ out("junction", f"{jn.id},{len(jn.get_waypoints(carla.LaneType.Driving))}")
 # Lookups that can miss return None (issue #9).
 offroad = m.get_waypoint(carla.Location(10000.0, 10000.0, 0.0), project_to_road=False)
 out("none_lookups", f"{int(world.get_actor(999999) is None)},"
-    f"{int(world.get_snapshot().find(999999) is None)},{int(world.get_actors().find(999999) is None)},"
+    f"{int(world.get_snapshot().find(999999) is None)},{int(world.get_actors().find(id=999999) is None)},"
     f"{int(offroad is None)},{int(wp.get_junction() is None)}")
 
 # Issue #22: geo-reference, XODR waypoints, lane markings, landmarks, light geometry.
@@ -371,6 +387,13 @@ try:
     out("actor_parent", f"{int(vehicle.parent is None)},{int(cam.parent.id == vehicle.id)},"
                         f"{sorted(cam.semantic_tags)}")
     cam.destroy()
+    # Issue #34: attachment_type.
+    arms = [world.spawn_actor(cam_bp, carla.Transform(carla.Location(-5.0, 0.0, 3.0)),
+                              attach_to=vehicle, attachment_type=kind)
+            for kind in (carla.AttachmentType.SpringArm, carla.AttachmentType.SpringArmGhost)]
+    out("attachment_type", ",".join(str(int(a.parent.id == vehicle.id)) for a in arms))
+    for a in arms:
+        a.destroy()
     signs = [a for a in world.get_actors() if isinstance(a, carla.TrafficSign)]
     plain = sorted(a.type_id for a in signs if not isinstance(a, carla.TrafficLight))
     out("traffic_signs", f"{len(signs)},{'|'.join(sorted(set(plain)))}")
@@ -423,12 +446,12 @@ geometry = [",".join(f"{x:.3f}" for row in t23.get_matrix() for x in row),
 p23 = carla.Location(1.0, 0.0, 0.0)
 t23.transform(p23)
 v23 = carla.Vector3D(1.0, 0.0, 0.0)
-t23.transform_vector(v23)
+t23.transform_vector(in_point=v23)
 geometry += [vec(p23), vec(v23)]
 bb23 = carla.BoundingBox(carla.Location(0.5, 0.0, 0.0), carla.Vector3D(1.0, 2.0, 3.0))
 bb23.rotation = carla.Rotation(yaw=90.0)
 geometry += [vec(x) for x in bb23.get_local_vertices()] + [vec(x) for x in bb23.get_world_vertices(t23)]
-geometry += [str(int(bb23.contains(carla.Location(1.0, 2.0, 3.0), t23))),
+geometry += [str(int(bb23.contains(carla.Location(1.0, 2.0, 3.0), point=t23))),
              str(int(bb23.contains(carla.Location(10.0, 2.0, 3.0), t23)))]
 out("geometry_yaw", ",".join(geometry))
 n23 = carla.Rotation(-190.0, 370.0, 540.0).get_normalized()
