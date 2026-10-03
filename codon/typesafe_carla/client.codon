@@ -227,13 +227,14 @@ class Client:
         if not _is_actor_id(follow_id):
             raise CarlaError(f"follow_id {follow_id} is out of range", TSC_INVALID_ARGUMENT)
         out = Ptr[CString](1)
+        off = offset if offset is not None else Transform()
         # At the defaults, the call LibCarla 0.10.0 also has (same behaviour).
-        if not replay_weather and (offset is None or offset == Transform()) and not map_override:
+        if not replay_weather and off == Transform() and not map_override:
             _check(tsc_client_replay_file(self._h.ptr, name.ptr, name.len, time_start, duration,
                                           u32(follow_id), i32(int(replay_sensors)), out))
         else:
             t = Ptr[CTransform](1)
-            t[0] = (offset if offset is not None else Transform())._to_c()
+            t[0] = off._to_c()
             _check(tsc_client_replay_file_ex(self._h.ptr, name.ptr, name.len, time_start,
                                              duration, u32(follow_id), i32(int(replay_sensors)),
                                              i32(int(replay_weather)), t, map_override.ptr,

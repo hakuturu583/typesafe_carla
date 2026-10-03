@@ -134,6 +134,15 @@ class Function:
             params.append(t.codon if t.c_param_template else f"Ptr[{t.codon}]")
         return params
 
+    def _assign_out(self, value: str) -> tuple[str, str]:
+        """The checks of an `assign` output, and the statement writing `value`
+        to it. The checks go before the call (C++17 evaluates the right side
+        of `=` first): a NULL output must fail before any side effect."""
+        name, t = self.out.name, self.out.type
+        checks = "".join(f'require_ptr({r}, "{r}"); ' for r in
+                         (r.replace("{out}", name) for r in t.require))
+        return checks, t.assign.replace("{out}", name).replace("{}", value)
+
     def body(self) -> str:
         if self.ret != "tsc_status_t":
             return self.expr
@@ -143,16 +152,14 @@ class Function:
             what = f'"{self.optional}"'
             # As for `via` below, the handle is checked before the arguments.
             obj = "self_" if args else self_
+            checks = ""
             if self.out is None:
                 call = f'TSC_CALL_OPTIONAL({", ".join([obj, self.call, what] + args)})'
-                checks = ""
             else:
-                # An `assign` output (checked before the call), written by
-                # `use` with the result where the method exists.
-                name, t = self.out.name, self.out.type
-                checks = "".join(f'require_ptr({r}, "{r}"); ' for r in
-                                 (r.replace("{out}", name) for r in t.require))
-                use = f"([&](auto &&r_) {{ {t.assign.replace('{out}', name).replace('{}', 'r_')}; }})"
+                # An `assign` output, written by `use` with the result where
+                # the method exists.
+                checks, assign = self._assign_out("r_")
+                use = f"([&](auto &&r_) {{ {assign}; }})"
                 call = f'TSC_CALL_OPTIONAL_THEN({", ".join([use, obj, self.call, what] + args)})'
             if args:
                 call = f"[&](auto &self_) {{ {call}; }}({self_})"
@@ -172,12 +179,9 @@ class Function:
         t = self.out.type
         if t.handle:  # the statement of new_handle's lambda (see emit.shim)
             return f"return {t.from_carla.replace('{}', call)};"
-        # The output is checked before the call (C++17 evaluates the right
-        # side of `=` first): a NULL output must fail before any side effect.
         if t.assign:
-            checks = [f'require_ptr({r}, "{r}"); ' for r in
-                      (r.replace("{out}", self.out.name) for r in t.require)]
-            return "".join(checks) + t.assign.replace("{out}", self.out.name).replace("{}", call) + ";"
+            checks, assign = self._assign_out(call)
+            return f"{checks}{assign};"
         # assign_out: checks the output, and zeroes it if the call fails.
         name = self.out.name
         return f'assign_out({name}, "{name}", [&] {{ return {t.from_carla.replace("{}", call)}; }});'
