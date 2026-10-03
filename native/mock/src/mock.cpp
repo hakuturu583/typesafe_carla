@@ -1252,6 +1252,18 @@ double AttributeDouble(const ActorData &a, const std::string &key, double fallba
   return it == a.attributes.end() ? fallback : std::strtod(it->second.c_str(), nullptr);
 }
 
+// A camera's image size and field of view (its blueprint's defaults).
+struct CameraGeometry {
+  size_t w = 0, h = 0;
+  float fov = 0.0f;
+};
+
+CameraGeometry CameraGeometryOf(const ActorData &a) {
+  return {static_cast<size_t>(AttributeInt(a, "image_size_x", 800)),
+          static_cast<size_t>(AttributeInt(a, "image_size_y", 600)),
+          static_cast<float>(AttributeDouble(a, "fov", 90.0))};
+}
+
 // A mock LiDAR sweep: `per_channel` points evenly around each channel's ring
 // at the sensor's range, made by make(location, channel, elevation).
 template <typename Point, typename Make>
@@ -1288,9 +1300,7 @@ std::vector<Delivery> Episode::SenseLocked() {
     SharedPtr<sensor::SensorData> data;
     namespace sd = sensor::data;
     const bool is_camera = a.type_id.rfind("sensor.camera.", 0) == 0;
-    const auto w = is_camera ? static_cast<size_t>(AttributeInt(a, "image_size_x", 800)) : 0;
-    const auto h = is_camera ? static_cast<size_t>(AttributeInt(a, "image_size_y", 600)) : 0;
-    const auto fov = is_camera ? static_cast<float>(AttributeDouble(a, "fov", 90.0)) : 0.0f;
+    const auto [w, h, fov] = is_camera ? CameraGeometryOf(a) : CameraGeometry{};
     if (a.type_id == "sensor.camera.rgb" || a.type_id == "sensor.camera.depth" ||
         a.type_id == "sensor.camera.semantic_segmentation") {
       const bool semantic = a.type_id == "sensor.camera.semantic_segmentation";
@@ -1484,9 +1494,7 @@ std::vector<Delivery> Episode::SenseLocked() {
     auto it = actors.find(entry.first.first);
     if (it == actors.end()) continue;
     const ActorData &a = it->second;
-    const auto w = static_cast<size_t>(AttributeInt(a, "image_size_x", 800));
-    const auto h = static_cast<size_t>(AttributeInt(a, "image_size_y", 600));
-    const auto fov = static_cast<float>(AttributeDouble(a, "fov", 90.0));
+    const auto [w, h, fov] = CameraGeometryOf(a);
     const auto id = static_cast<uint8_t>(entry.first.second);
     out.push_back([cb = entry.second.callback, f = frame, timestamp, t = a.transform, w, h, fov,
                    id]() {

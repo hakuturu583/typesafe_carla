@@ -15,6 +15,25 @@ SensorQueue &queue_of(tsc_sensor_t *s) {
   return *h.queue;
 }
 
+// A new queue that listen(callback) feeds. The callback runs on LibCarla
+// threads: it only touches the queue, which it shares, so late data is safe.
+template <typename Listen>
+std::shared_ptr<SensorQueue> listen_into_queue(size_t capacity, Listen &&listen) {
+  auto queue = std::make_shared<SensorQueue>(capacity);
+  listen([queue](carla::SharedPtr<carla::sensor::SensorData> d) { queue->push(std::move(d)); });
+  return queue;
+}
+
+// The oldest queued item as a new handle, or nullptr (also for no queue).
+tsc_sensor_data *pop_handle(SensorQueue *queue) {
+  auto item = queue == nullptr ? nullptr : queue->pop();
+  return item == nullptr ? nullptr : new tsc_sensor_data(std::move(item));
+}
+
+SensorQueue *gbuffer_queue_of(tsc_sensor_t *s, uint32_t gbuffer_id) {
+  return sensor_handle(s).gbuffer_queues[check_gbuffer_id(gbuffer_id)].get();
+}
+
 // Calls f with the measurement as the first of Ts that it is, or fails with
 // TSC_TYPE_ERROR ("sensor data is not <what>").
 template <typename T, typename... Ts, typename F>
@@ -83,12 +102,7 @@ tsc_status_t tsc_sensor_listen(tsc_sensor_t *sensor, size_t queue_capacity) {
     // LibCarla does not replace an existing subscription: a second Listen()
     // would leave an orphaned stream that Stop() cannot reach. Stop first.
     if (s.IsListening()) s.Stop();
-    auto queue = std::make_shared<SensorQueue>(queue_capacity);
-    // The callback runs on LibCarla threads: it only touches the queue.
-    s.Listen([queue](carla::SharedPtr<carla::sensor::SensorData> d) {
-      queue->push(std::move(d));
-    });
-    h.queue = std::move(queue);
+    h.queue = listen_into_queue(queue_capacity, [&](auto cb) { s.Listen(std::move(cb)); });
   });
 }
 
@@ -110,11 +124,8 @@ tsc_status_t tsc_sensor_listen_to_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer
     const uint32_t id = check_gbuffer_id(gbuffer_id);
     // As tsc_sensor_listen: never leave an orphaned subscription behind.
     if (s.IsListeningGBuffer(id)) s.StopGBuffer(id);
-    auto queue = std::make_shared<SensorQueue>(queue_capacity);
-    s.ListenToGBuffer(id, [queue](carla::SharedPtr<carla::sensor::SensorData> d) {
-      queue->push(std::move(d));
-    });
-    h.gbuffer_queues[id] = std::move(queue);
+    h.gbuffer_queues[id] =
+        listen_into_queue(queue_capacity, [&](auto cb) { s.ListenToGBuffer(id, std::move(cb)); });
   });
 }
 
@@ -122,18 +133,14 @@ tsc_status_t tsc_sensor_gbuffer_pending_count(tsc_sensor_t *sensor, uint32_t gbu
                                               size_t *out) {
   return TSC_GUARD({
     require_ptr(out, "out");
-    const auto &queue = sensor_handle(sensor).gbuffer_queues[check_gbuffer_id(gbuffer_id)];
+    const SensorQueue *queue = gbuffer_queue_of(sensor, gbuffer_id);
     *out = queue == nullptr ? 0 : queue->size();
   });
 }
 
 tsc_status_t tsc_sensor_gbuffer_poll(tsc_sensor_t *sensor, uint32_t gbuffer_id,
                                      tsc_sensor_data_t **out) {
-  return new_handle(__func__, out, [&]() -> tsc_sensor_data * {
-    const auto &queue = sensor_handle(sensor).gbuffer_queues[check_gbuffer_id(gbuffer_id)];
-    auto item = queue == nullptr ? nullptr : queue->pop();
-    return item == nullptr ? nullptr : new tsc_sensor_data(std::move(item));
-  });
+  return new_handle(__func__, out, [&] { return pop_handle(gbuffer_queue_of(sensor, gbuffer_id)); });
 }
 
 tsc_status_t tsc_sensor_dropped_count(tsc_sensor_t *sensor, uint64_t *out) {
@@ -145,10 +152,7 @@ tsc_status_t tsc_sensor_pending_count(tsc_sensor_t *sensor, size_t *out) {
 }
 
 tsc_status_t tsc_sensor_poll(tsc_sensor_t *sensor, tsc_sensor_data_t **out) {
-  return new_handle(__func__, out, [&]() -> tsc_sensor_data * {
-    auto item = queue_of(sensor).pop();
-    return item == nullptr ? nullptr : new tsc_sensor_data(std::move(item));
-  });
+  return new_handle(__func__, out, [&] { return pop_handle(&queue_of(sensor)); });
 }
 
 tsc_status_t tsc_sensor_wait_for_data(tsc_sensor_t *sensor, double timeout_seconds,

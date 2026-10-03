@@ -156,10 +156,10 @@ class LightManager:
         """Every light, or those of one LightGroup."""
         return self._lights(tsc_light_manager_get_all_lights, light_group)
 
-    def get_turned_on_lights(self, light_group: int = 0) -> List[Light]:
+    def get_turned_on_lights(self, light_group: int = 0) -> List[Light]:  # LightGroup.NONE
         return self._lights(tsc_light_manager_get_turned_on_lights, light_group)
 
-    def get_turned_off_lights(self, light_group: int = 0) -> List[Light]:
+    def get_turned_off_lights(self, light_group: int = 0) -> List[Light]:  # LightGroup.NONE
         return self._lights(tsc_light_manager_get_turned_off_lights, light_group)
 
     def turn_on(self, lights: List[Light]):

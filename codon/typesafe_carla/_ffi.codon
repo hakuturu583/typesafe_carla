@@ -1041,10 +1041,10 @@ from C import LIB.tsc_actor_get_actor_state(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_is_active(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_is_dormant(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_get_parent(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_actor_get_semantic_tags(cobj, Ptr[u8], int, Ptr[int]) -> i32
 # END GENERATED actor_state
 # BEGIN GENERATED actor_world from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_get_world(cobj, Ptr[cobj]) -> i32
-from C import LIB.tsc_actor_get_semantic_tags(cobj, Ptr[u8], int, Ptr[int]) -> i32
 # END GENERATED actor_world
 from C import LIB.tsc_actor_get_attributes(cobj, Ptr[CStringList], Ptr[CStringList]) -> i32
 # BEGIN GENERATED actor_physics_at_location from bindings/actor.yaml, do not edit

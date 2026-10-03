@@ -237,7 +237,7 @@ class Map:
         return [Transform._from_c(buf[i]) for i in range(n)]
 
     def get_waypoint(self, location, project_to_road: bool = True,
-                     lane_type: int = 2) -> Optional[Waypoint]:
+                     lane_type: int = 2) -> Optional[Waypoint]:  # LaneType.Driving
         """None when no lane of `lane_type` matches.
 
         location: Location (a Vector3D is accepted as in the Python API)."""
@@ -277,7 +277,7 @@ class Junction:
         _check(tsc_junction_get_bounding_box(self._h.ptr, out))
         return BoundingBox._from_c(out[0])
 
-    def get_waypoints(self, lane_type: int = 2) -> List[Tuple[Waypoint, Waypoint]]:  # Driving
+    def get_waypoints(self, lane_type: int = 2) -> List[Tuple[Waypoint, Waypoint]]:  # LaneType.Driving
         """(entry, exit) waypoint pairs of the lanes through the junction."""
         out = Ptr[cobj](1)
         _check(tsc_junction_get_waypoints(self._h.ptr, i32(lane_type), out))

@@ -38,13 +38,13 @@ blocks:
     is_active: {call: IsActive, out: {type: bool, name: out_active}}
     is_dormant: {call: IsDormant, out: {type: bool, name: out_dormant}}
     get_parent: {call: GetParent, out: actor_handle, doc: "*out = NULL (TSC_OK) when the actor has no parent."}
-  # Issue #33.
-  actor_world:
-    get_world: {call: GetWorld, out: world_handle, doc: "The world (episode) the actor belongs to."}
     get_semantic_tags:
       call: GetSemanticTags
       out: uint8_buffer
       doc: "CityObjectLabel values (client-side data, no RPC)."
+  # Issue #33.
+  actor_world:
+    get_world: {call: GetWorld, out: world_handle, doc: "The world (episode) the actor belongs to."}
   actor_physics_at_location:
     set_collisions: {call: SetCollisions, args: {enabled: bool}}
     enable_constant_velocity: {call: EnableConstantVelocity, args: {velocity: vector3d}}

@@ -46,8 +46,8 @@ int main(void) {
   expect_null_rejected(tsc_actor_is_active(NULL, (int32_t[1]){0}), "tsc_actor_is_active");
   expect_null_rejected(tsc_actor_is_dormant(NULL, (int32_t[1]){0}), "tsc_actor_is_dormant");
   expect_null_rejected(tsc_actor_get_parent(NULL, (tsc_actor_t *[1]){NULL}), "tsc_actor_get_parent");
-  expect_null_rejected(tsc_actor_get_world(NULL, (tsc_world_t *[1]){NULL}), "tsc_actor_get_world");
   expect_null_rejected(tsc_actor_get_semantic_tags(NULL, (uint8_t[1]){0}, 0, (size_t[1]){0}), "tsc_actor_get_semantic_tags");
+  expect_null_rejected(tsc_actor_get_world(NULL, (tsc_world_t *[1]){NULL}), "tsc_actor_get_world");
   expect_null_rejected(tsc_actor_set_collisions(NULL, 0), "tsc_actor_set_collisions");
   expect_null_rejected(tsc_actor_enable_constant_velocity(NULL, NULL), "tsc_actor_enable_constant_velocity");
   expect_null_rejected(tsc_actor_disable_constant_velocity(NULL), "tsc_actor_disable_constant_velocity");

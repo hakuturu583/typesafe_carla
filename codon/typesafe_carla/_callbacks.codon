@@ -82,6 +82,25 @@ def _pop(h: Handle, gbuffer: int = -1) -> cobj:
         _check(tsc_sensor_gbuffer_poll(h.ptr, u32(gbuffer), out))
     return out[0]
 
+def _pending(listener: _Listener) -> int:
+    """How many items are queued for the listener."""
+    out = Ptr[int](1)
+    if listener.tick:
+        _check(tsc_tick_listener_pending_count(listener.handle.ptr, out))
+    elif listener.gbuffer < 0:
+        _check(tsc_sensor_pending_count(listener.handle.ptr, out))
+    else:
+        _check(tsc_sensor_gbuffer_pending_count(listener.handle.ptr, u32(listener.gbuffer), out))
+    return out[0]
+
+def _stop_stream(h: Handle, gbuffer: int):
+    """Stops a sensor's measurements (gbuffer < 0) or one G-buffer texture;
+    best effort: the stream may already be gone."""
+    if gbuffer < 0:
+        tsc_sensor_stop(h.ptr)
+    else:
+        tsc_sensor_stop_gbuffer(h.ptr, u32(gbuffer))
+
 def _discard_pending(h: Handle, gbuffer: int = -1):
     while True:
         p = _pop(h, gbuffer)
@@ -97,12 +116,9 @@ def _remove(i: int):
     if listener.tick:
         tsc_tick_listener_stop(listener.handle.ptr)  # also drops the queued snapshots
         listener.handle.release()
-    elif listener.gbuffer >= 0:
-        tsc_sensor_stop_gbuffer(listener.handle.ptr, u32(listener.gbuffer))
-        _discard_pending(listener.handle, listener.gbuffer)
     else:
-        tsc_sensor_stop(listener.handle.ptr)
-        _discard_pending(listener.handle)
+        _stop_stream(listener.handle, listener.gbuffer)
+        _discard_pending(listener.handle, listener.gbuffer)
 
 def _unregister_stream(actor_id: int, gbuffer: int = -1) -> bool:
     """Drops the callback of one stream of this sensor actor (its measurements,
@@ -168,15 +184,7 @@ def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
 def _deliver(listener: _Listener) -> int:
     """Delivers what was queued when the listener's turn began, in arrival order."""
     count = 0
-    pending = Ptr[int](1)
-    if listener.tick:
-        _check(tsc_tick_listener_pending_count(listener.handle.ptr, pending))
-    elif listener.gbuffer >= 0:
-        _check(tsc_sensor_gbuffer_pending_count(listener.handle.ptr, u32(listener.gbuffer),
-                                                pending))
-    else:
-        _check(tsc_sensor_pending_count(listener.handle.ptr, pending))
-    for _ in range(pending[0]):
+    for _ in range(_pending(listener)):
         if not listener.active:
             break
         p = _pop_item(listener)

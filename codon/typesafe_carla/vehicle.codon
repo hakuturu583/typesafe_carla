@@ -27,9 +27,13 @@ from .actor import Vehicle
 from .control import _fields_eq, _fields_repr
 from ._enum import _member_names, _member_values
 
-def _enum_repr(name: str, names: List[str], value: int) -> str:
-    """The member's name, as the Python API prints it, else name(value)."""
-    return names[value] if 0 <= value < len(names) else f"{name}({value})"
+def _enum_repr(name: str, members: List[Tuple[str, T]], value: int, T: type) -> str:
+    """The first member's name with this value, as the Python API prints it
+    (an alias prints as the member it repeats), else name(value)."""
+    for member_name, member in members:
+        if int(member) == value:
+            return member_name
+    return f"{name}({value})"
 
 @tuple
 class VehicleDoor:
@@ -51,8 +55,7 @@ class VehicleDoor:
 
     def __repr__(self) -> str:
         # LibCarla's Hood (4) and Trunk (5) have no Python API name.
-        return _enum_repr("VehicleDoor", ["FL", "FR", "RL", "RR", "VehicleDoor(4)",
-                                          "VehicleDoor(5)", "All"], self.value)
+        return _enum_repr("VehicleDoor", VehicleDoor._MEMBERS, self.value)
 
 @tuple
 class VehicleWheelLocation:
@@ -81,8 +84,7 @@ class VehicleWheelLocation:
     def __repr__(self) -> str:
         # str() of the Python API's attributes; Front_Wheel and Back_Wheel are
         # the same values as FL_Wheel and FR_Wheel and print as those here.
-        return _enum_repr("VehicleWheelLocation",
-                          ["FL_Wheel", "FR_Wheel", "BL_Wheel", "BR_Wheel"], self.value)
+        return _enum_repr("VehicleWheelLocation", VehicleWheelLocation._MEMBERS, self.value)
 
 @tuple
 class VehicleFailureState:
@@ -104,8 +106,7 @@ class VehicleFailureState:
         return self.value
 
     def __repr__(self) -> str:
-        return _enum_repr("VehicleFailureState", ["NONE", "Rollover", "Engine", "TirePuncture"],
-                          self.value)
+        return _enum_repr("VehicleFailureState", VehicleFailureState._MEMBERS, self.value)
 
 class VehicleAckermannControl:
     """Target steering and speed for the server's Ackermann controller, as

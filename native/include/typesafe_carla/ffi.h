@@ -1772,13 +1772,13 @@ TSC_API tsc_status_t tsc_actor_is_active(tsc_actor_t *actor, int32_t *out_active
 TSC_API tsc_status_t tsc_actor_is_dormant(tsc_actor_t *actor, int32_t *out_dormant);
 /* *out = NULL (TSC_OK) when the actor has no parent. */
 TSC_API tsc_status_t tsc_actor_get_parent(tsc_actor_t *actor, tsc_actor_t **out);
+/* CityObjectLabel values (client-side data, no RPC). */
+TSC_API tsc_status_t tsc_actor_get_semantic_tags(tsc_actor_t *actor,
+                                                 uint8_t *out, size_t capacity, size_t *out_count);
 /* END GENERATED actor_state */
 /* BEGIN GENERATED actor_world from bindings/actor.yaml, do not edit */
 /* The world (episode) the actor belongs to. */
 TSC_API tsc_status_t tsc_actor_get_world(tsc_actor_t *actor, tsc_world_t **out);
-/* CityObjectLabel values (client-side data, no RPC). */
-TSC_API tsc_status_t tsc_actor_get_semantic_tags(tsc_actor_t *actor,
-                                                 uint8_t *out, size_t capacity, size_t *out_count);
 /* END GENERATED actor_world */
 
 /* The actor's attributes (as spawned): out_ids->items[i] has the value

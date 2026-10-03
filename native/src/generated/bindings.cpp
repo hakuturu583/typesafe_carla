@@ -146,15 +146,15 @@ tsc_status_t tsc_actor_get_parent(tsc_actor_t *actor, tsc_actor_t **out) {
   return new_handle(__func__, out, [&] { return make_actor_handle(actor_of(actor).GetParent()); });
 }
 
-tsc_status_t tsc_actor_get_world(tsc_actor_t *actor, tsc_world_t **out) {
-  return new_handle(__func__, out, [&] { return new tsc_world(actor_of(actor).GetWorld()); });
-}
-
 tsc_status_t tsc_actor_get_semantic_tags(tsc_actor_t *actor,
                                          uint8_t *out, size_t capacity, size_t *out_count) {
   return TSC_GUARD({
     require_ptr(out_count, "out_count"); copy_out(actor_of(actor).GetSemanticTags(), out, capacity, out_count);
   });
+}
+
+tsc_status_t tsc_actor_get_world(tsc_actor_t *actor, tsc_world_t **out) {
+  return new_handle(__func__, out, [&] { return new tsc_world(actor_of(actor).GetWorld()); });
 }
 
 tsc_status_t tsc_actor_set_collisions(tsc_actor_t *actor, int32_t enabled) {
