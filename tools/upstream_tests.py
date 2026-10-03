@@ -424,6 +424,7 @@ class TestResult:
     id: str
     outcome: str  # pass, fail, error, crash, timeout, skip, compile, not-run
     detail: str = ""
+    trace: str = ""  # a failure's last traceback frames and full message
 
 
 @dataclass
@@ -666,12 +667,17 @@ def last(tb):
         if re.match(r"^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt|Warning)\b", lines[i]):
             return lines[i]
     return lines[-1] if lines else ""
+def trace(tb):
+    # The last frames and the whole message (an assertion's diff included).
+    lines = tb.rstrip().splitlines()
+    frames = [i for i, l in enumerate(lines) if l.startswith("  File ")]
+    return "\n".join(lines[frames[-%(FRAMES)d:][0] if frames else 0:])[-%(CHARS)d:]
 if result.errors:
     tb = result.errors[0][1]
-    out = {"status": "error",
+    out = {"status": "error", "trace": trace(tb),
            "detail": ("in tearDown: " if "in tearDown" in tb.split("Traceback")[-1] else "") + last(tb)}
 elif result.failures:
-    out = {"status": "fail", "detail": last(result.failures[0][1])}
+    out = {"status": "fail", "detail": last(result.failures[0][1]), "trace": trace(result.failures[0][1])}
 elif result.skipped:
     out = {"status": "skip", "detail": result.skipped[0][1]}
 elif result.testsRun == 0:
@@ -680,6 +686,17 @@ else:
     out = {"status": "pass", "detail": ""}
 print("TSC-RESULT " + json.dumps(out), flush=True)
 """
+# How much of a failure's traceback the results keep (TestResult.trace).
+TRACE_FRAMES, TRACE_CHARS = 4, 4000
+_DRIVER = _DRIVER.replace("%(FRAMES)d", str(TRACE_FRAMES)).replace("%(CHARS)d", str(TRACE_CHARS))
+
+
+def _trace(text: str) -> str:
+    """A traceback's last TRACE_FRAMES frames and its whole message (as the
+    driver's trace())."""
+    lines = text.rstrip().splitlines()
+    frames = [i for i, ln in enumerate(lines) if ln.startswith("  File ")]
+    return "\n".join(lines[frames[-TRACE_FRAMES:][0] if frames else 0:])[-TRACE_CHARS:]
 
 
 # Run after each server test, with the generated package: a test that fails
@@ -820,10 +837,12 @@ def run_file_cpython(tests: Path, rel: str, pydir: Path, skip: set[str] = frozen
             result.tests.append(TestResult(test_id, "crash", _shorten(f"{sig} {first}")))
         elif line is None:
             tail = (proc.stderr.strip().splitlines() or [""])[-1]
-            result.tests.append(TestResult(test_id, "error", _shorten(f"exit {proc.returncode}: {tail}")))
+            result.tests.append(TestResult(test_id, "error", _shorten(f"exit {proc.returncode}: {tail}"),
+                                           _trace(proc.stderr)))
         else:
             out = json.loads(line[len("TSC-RESULT "):])
-            result.tests.append(TestResult(test_id, out["status"], _shorten(out["detail"])))
+            result.tests.append(TestResult(test_id, out["status"], _shorten(out["detail"]),
+                                           out.get("trace", "")))
         if server:
             _server_cleanup(tests, env)
     return result
@@ -846,7 +865,7 @@ def _run_script_cpython(tests: Path, rel: str, env: dict[str, str], timeout: flo
         return TestResult(SCRIPT, "crash", signal.Signals(-proc.returncode).name)
     lines = [ln for ln in proc.stderr.strip().splitlines() if ln.strip()]
     detail = next((ln for ln in reversed(lines) if not ln.startswith(" ")), lines[-1] if lines else "")
-    return TestResult(SCRIPT, "error", _shorten(f"exit {proc.returncode}: {detail}"))
+    return TestResult(SCRIPT, "error", _shorten(f"exit {proc.returncode}: {detail}"), _trace(proc.stderr))
 
 
 # ---------------------------------------------------------------------------
@@ -865,6 +884,23 @@ def _manifest_data(path: Path = MANIFEST) -> dict:
 def load_manifest(mode: str = "cpython", path: Path = MANIFEST) -> dict:
     """{ref: {file: entry}} for one mode."""
     return _manifest_data(path).get(mode) or {}
+
+
+def run_manifest(mode: str, path: Path = MANIFEST) -> dict:
+    """What a mode's run follows. Official mode has no expectations: it runs
+    what the cpython manifest runs, less the tests in the manifest's `official`
+    section, which the official module cannot run (its own defects, recorded
+    there with the evidence; typesafe_carla still runs them)."""
+    if mode != "official":
+        return load_manifest(mode, path)
+    manifest = load_manifest("cpython", path)
+    for ref, files in load_manifest("official", path).items():
+        refs = manifest.setdefault(ref, {})
+        for rel, tests in files.items():
+            entry = refs.get(rel)
+            if not not_run(entry):
+                refs[rel] = {**(entry if isinstance(entry, dict) else {}), **tests}
+    return manifest
 
 
 def parse_expectation(value) -> tuple[str, str]:
@@ -1009,6 +1045,9 @@ _MANIFEST_HEADER = """\
 #
 # cpython: the unmodified tests under CPython, `import carla` = tools/pycarla.
 # codon: the tests converted and compiled with typesafe-codon.
+# official: only `exclude:` entries, for ported tests the official module
+# cannot run (its own defects, with the evidence). Official runs leave them
+# out; cpython and codon runs still run them.
 # A test not listed is expected to pass. pytest (tests/test_upstream.py) and
 # CI fail on an unexpected failure AND on an unexpected pass, so this list only
 # shrinks. `python -m tools.upstream_tests --mode <mode> --suite <suite> --update`
@@ -1027,7 +1066,7 @@ def write_manifest(mode: str, refs: dict, path: Path = MANIFEST) -> None:
     data[mode] = refs
     out = {m: {ref: {f: data[m][ref][f] for f in sorted(data[m][ref], key=_file_order)}
                for ref in sorted(data[m])}
-           for m in MODES if data.get(m)}
+           for m in MODES + ("official",) if data.get(m)}
     text = yaml.safe_dump(out, sort_keys=False, width=1000, allow_unicode=True)
     path.write_text(_MANIFEST_HEADER + "\n" + text)
 
@@ -1052,6 +1091,9 @@ def record_results(mode: str, target: Target, results: list[FileResult]) -> None
     for r in results:
         data["files"][r.path] = {"file_error": r.file_error,
                                  "tests": {t.id: [t.outcome, t.detail] for t in r.tests}}
+        traces = {t.id: t.trace for t in r.tests if t.trace}
+        if traces:  # failures' last frames and full messages, for diagnosis
+            data["files"][r.path]["traces"] = traces
     data["files"] = {k: data["files"][k] for k in sorted(data["files"], key=_file_order)}
     p = results_path(mode, target.ref)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -1298,7 +1340,7 @@ def write_gaps(primary: str = "ue5-dev") -> Path:
     # Excluded tests (and recorded results from before their exclusion) do
     # not count: drop them.
     for (m, r), d in data.items():
-        manifest = load_manifest("cpython" if m == "official" else m).get(r) or {}
+        manifest = run_manifest(m).get(r) or {}
         for rel in list(d["files"]):
             entry = manifest.get(rel)
             if isinstance(entry, str) and parse_expectation(entry)[0] == "exclude":
@@ -1354,6 +1396,17 @@ def write_gaps(primary: str = "ue5-dev") -> Path:
                   "Not run, and not counted as failures (expectations.yaml `exclude:`).", "",
                   "| ref | file | test | why |", "|---|---|---|---|"]
         lines += [f"| {r} | `{rel}` | {t} | {why} |" for r, rel, t, why in excluded]
+    unmeasured = [(r, rel, t, parse_expectation(v)[1])
+                  for r in refs for rel, tests in (load_manifest("official").get(r) or {}).items()
+                  for t, v in tests.items()]
+    if unmeasured:
+        lines += ["", "## Not run with the official module", "",
+                  "The official module cannot run these (its own defects or this server's",
+                  "behaviour; expectations.yaml `official:`), so typesafe_carla is not compared",
+                  "with it here. typesafe_carla still runs them: a pass is a pass, a failure",
+                  "has no official baseline.", "",
+                  "| ref | file | test | why |", "|---|---|---|---|"]
+        lines += [f"| {r} | `{rel}` | {t} | {why} |" for r, rel, t, why in unmeasured]
     lines += ["", "## Codon `--pyext` limitations (harness, not typesafe_carla gaps)", "", CODON_PYEXT_LIMITS]
     lines += ["## Infrastructure limits", "",
               "- CI has no CARLA server: it runs only `unit`; `smoke`, `API`, the top-level",
@@ -1407,7 +1460,7 @@ def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> 
     """Runs `files` in one mode; returns (rows, known_ref)."""
     # Official mode compares with CARLA's own module: no expectations, but the
     # cpython ones decide what is excluded.
-    manifest = load_manifest("cpython" if mode == "official" else mode)
+    manifest = run_manifest(mode)
     known_ref = target.ref in manifest and mode != "official"
     work = cache_root() / target.sha / "build"
     pydir = pycarla_dir() if mode == "cpython" else None
@@ -1440,6 +1493,8 @@ def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> 
                     print(f"  (file does not compile) {result.file_error}")
                 for t in result.tests:
                     print(f"  {t.id}: {t.outcome}{': ' + t.detail if t.detail else ''}")
+                    if t.trace and args.verbose:
+                        print("    | " + t.trace.replace("\n", "\n    | "))
             for p in c.problems:
                 print(f"  UNEXPECTED {p}")
             if result is not None:

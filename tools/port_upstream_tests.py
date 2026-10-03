@@ -47,6 +47,9 @@ import unittest as _unittest
 # official nightly: EmptyMap, Mine_01, OpenDriveMap, Town10HD_Opt, Town15).
 SHIPPED_MAPS = ("Town10HD_Opt", "Town15", "Mine_01")
 LARGE_MAPS = ("Town15", "Mine_01", "Town10HD_Opt")
+# Maps the ue5-dev server lists but cannot load, with the official module too
+# (RoadgenCross: "unable to parse the OpenDRIVE XML string" in the server log).
+UNLOADABLE_MAPS = ("RoadgenCross",)
 
 
 def shipped_map(client, prefer=SHIPPED_MAPS):
@@ -185,15 +188,26 @@ def _map(t: str):
     t = replace(t, "and map_name != '/Game/Carla/Maps/Town12/Town12':",
                 "and map_name != '/Game/Carla/Maps/Town12/Town12' \\\n"
                 "                    and map_name.split('/')[-1] not in UNLOADABLE_MAPS:")
-    t = replace(t, "import time\n",
-                "import time\n\n"
-                "# port: maps the ue5-dev server lists but cannot load, with the official\n"
-                "# module too (RoadgenCross: \"unable to parse the OpenDRIVE XML string\").\n"
-                "UNLOADABLE_MAPS = {'RoadgenCross'}\n", 1)
+    t = replace(t, "from . import SmokeTest", "from . import SmokeTest, UNLOADABLE_MAPS")
     return t, ["test_load_all_maps also skips the maps in UNLOADABLE_MAPS (RoadgenCross), which "
                "the ue5-dev server lists but cannot load, with the official module too: its "
                "OpenDRIVE does not parse",
                "otherwise copied so that `from . import SmokeTest` uses the ported base"]
+
+
+def _spawnpoints(t: str):
+    t = replace(t, "from . import SyncSmokeTest", "from . import SyncSmokeTest, UNLOADABLE_MAPS")
+    t = replace(t, "and m != '/Game/Carla/Maps/Town12/Town12':",
+                "and m != '/Game/Carla/Maps/Town12/Town12' \\\n"
+                "                    and m.split('/')[-1] not in UNLOADABLE_MAPS:")
+    t = replace(t, "self.assertFalse(any(x.error for x in response))",
+                "self.assertFalse(any(x.error for x in response), \"%s on %s: %s\" % (  # port: say which\n"
+                "                        vehicle.id, m, sorted({(t.location.x, t.location.y, x.error)\n"
+                "                                               for x, t in zip(response, spawn_points) if x.error})))")
+    return t, ["skips the maps in UNLOADABLE_MAPS (RoadgenCross), as test_map does",
+               "the spawn-error assertion names the blueprint, the map and each failing spawn "
+               "point with its error (upstream's only says `True is not false`)",
+               "otherwise copied so that `from . import SyncSmokeTest` uses the ported base"]
 
 
 def _sync(t: str):
@@ -304,7 +318,7 @@ def _top_vehicle_physics(t: str):
 # Smoke tests that fail only through SmokeTest.tearDown (Town03).
 BASE_ONLY = ["test_blueprint", "test_client", "test_collision_sensor", "test_geoconversion",
              "test_lidar", "test_props_loading", "test_sensor_determinism",
-             "test_sensor_tick_time", "test_snapshot", "test_spawnpoints", "test_streamming",
+             "test_sensor_tick_time", "test_snapshot", "test_streamming",
              "test_world"]
 
 RULES = {
@@ -312,6 +326,7 @@ RULES = {
     **{f"smoke/{n}.py": _copy for n in BASE_ONLY},
     "smoke/test_map.py": _map,
     "smoke/test_sync.py": _sync,
+    "smoke/test_spawnpoints.py": _spawnpoints,
     "smoke/test_determinism.py": _determinism,
     "smoke/test_collision_determinism.py": _collision_determinism,
     "smoke/test_vehicle_physics.py": _vehicle_physics,
@@ -322,7 +337,7 @@ RULES = {
 
 # The map each original needs (for its `exclude:` entry).
 NEEDED_MAP = {
-    **{f"smoke/{n}.py": "Town03" for n in BASE_ONLY + ["test_map", "test_sync"]},
+    **{f"smoke/{n}.py": "Town03" for n in BASE_ONLY + ["test_map", "test_sync", "test_spawnpoints"]},
     "smoke/test_determinism.py": "Town03",
     "smoke/test_collision_determinism.py": "Town03",
     "smoke/test_vehicle_physics.py": "Town05_Opt",
@@ -364,6 +379,33 @@ CONTENT_LIMITS = {
 }
 
 
+CONTENT_LIMITS["smoke/test_vehicle_physics.py"] = {
+    "TestVehicleFriction.test_vehicle_zero_friction":
+        "physics on this ue5-dev server: the official module fails it too, with "
+        "vehicle.taxi.ford's velocities after initialisation [27.599, 27.764] against the "
+        "27.778 reference",
+    "TestVehicleTireConfig.test_vehicle_wheel_collision":
+        "physics on this ue5-dev server: the official module fails it too, with "
+        "vehicle.taxi.ford's two velocities after the simulation unequal, [-0.807, -2.364]",
+    "TestVehicleTireConfig.test_vehicle_tire_long_stiff":
+        "physics on this ue5-dev server: the official module fails it too; two identical "
+        "vehicle.firetruck.actors side by side at full throttle drive 29.73 m and 24.11 m "
+        "(the test needs the second to go at least as far)",
+}
+
+
+# Ported tests the official module cannot run because of its own defects
+# (expectations.yaml `official:`): official runs leave them out, typesafe
+# runs keep them (typesafe_carla is just not compared with it there).
+OFFICIAL_DEFECTS = {
+    "smoke/test_vehicle_physics.py": {
+        t: "the official module's bindings fail in get_physics_control(): TypeError: No "
+           "to_python (by-value) converter found for C++ type: std::vector<float>"
+        for t in ("TestApplyVehiclePhysics.test_single_physics_control",
+                  "TestApplyVehiclePhysics.test_multiple_physics_control")},
+}
+
+
 def exclude_originals(refs=("ue5-dev",)) -> None:
     """Marks the ported originals `exclude:` in tests/upstream/expectations.yaml,
     and the ported tests that need reload_world."""
@@ -390,6 +432,11 @@ def exclude_originals(refs=("ue5-dev",)) -> None:
                     ported[tid] = f"exclude: {why}"
                 entries[f"ported/{rel}"] = ported
         up.write_manifest(mode, manifest)
+    official = up.load_manifest("official")
+    for ref in refs:
+        official[ref] = {f"ported/{rel}": {t: f"exclude: {why}" for t, why in tests.items()}
+                         for rel, tests in OFFICIAL_DEFECTS.items()}
+    up.write_manifest("official", official)
 
 
 def header(rel: str, changes: list[str]) -> str:

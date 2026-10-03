@@ -126,6 +126,16 @@ TYPESAFE_CARLA_BUILD_DIR=build-carla TSC_CARLA_HOST=127.0.0.1 TSC_CARLA_PORT=200
 python -m tools.port_upstream_tests --exclude-originals   # regenerate after a rule change
 ```
 
+A ported test that still fails with the official module after a reasonable
+port is not a yardstick for typesafe_carla. It is excluded in both modes, with
+the official failure quoted, when the server's content or physics is at fault
+(`CONTENT_LIMITS`, `NEEDS_RELOAD` in tools/port_upstream_tests.py). When the
+official module's own bindings are at fault (`OFFICIAL_DEFECTS`), it goes in
+the manifest's `official:` section instead: official runs leave it out, while
+typesafe runs keep it, and GAPS.md lists it under "Not run with the official
+module". Failures record their last traceback frames and full message in
+`results/<mode>/<ref>.json` (`traces`), and `-v` prints them.
+
 ## cpython mode: tools/pycarla
 
 Codon 0.19's `--pyext` cannot export typesafe_carla's classes directly; the

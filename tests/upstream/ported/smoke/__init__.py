@@ -82,6 +82,9 @@ import unittest as _unittest
 # official nightly: EmptyMap, Mine_01, OpenDriveMap, Town10HD_Opt, Town15).
 SHIPPED_MAPS = ("Town10HD_Opt", "Town15", "Mine_01")
 LARGE_MAPS = ("Town15", "Mine_01", "Town10HD_Opt")
+# Maps the ue5-dev server lists but cannot load, with the official module too
+# (RoadgenCross: "unable to parse the OpenDRIVE XML string" in the server log).
+UNLOADABLE_MAPS = ("RoadgenCross",)
 
 
 def shipped_map(client, prefer=SHIPPED_MAPS):

@@ -2,7 +2,9 @@
 # by tools/port_upstream_tests.py (typesafe_carla issue #80): the original needs a map
 # (Town03 / Town05 / Town01) that no ue5-dev package ships. Do not edit by hand:
 # change the rules there and regenerate. Changes:
-#   - none: copied so that `from . import SmokeTest` uses the ported base, whose tearDown loads a shipped map instead of Town03
+#   - skips the maps in UNLOADABLE_MAPS (RoadgenCross), as test_map does
+#   - the spawn-error assertion names the blueprint, the map and each failing spawn point with its error (upstream's only says `True is not false`)
+#   - otherwise copied so that `from . import SyncSmokeTest` uses the ported base
 #
 # Copyright (c) 2026 Computer Vision Center (CVC) at the Universitat Autonoma de
 # Barcelona (UAB).
@@ -13,7 +15,7 @@
 import carla
 import time
 
-from . import SyncSmokeTest
+from . import SyncSmokeTest, UNLOADABLE_MAPS
 
 
 class TestSpawnpoints(SyncSmokeTest):
@@ -27,7 +29,8 @@ class TestSpawnpoints(SyncSmokeTest):
         maps = self.client.get_available_maps()
         for m in maps:
 
-            if m != '/Game/Carla/Maps/BaseMap/BaseMap' and m != '/Game/Carla/Maps/Town11/Town11' and m != '/Game/Carla/Maps/Town12/Town12':
+            if m != '/Game/Carla/Maps/BaseMap/BaseMap' and m != '/Game/Carla/Maps/Town11/Town11' and m != '/Game/Carla/Maps/Town12/Town12' \
+                    and m.split('/')[-1] not in UNLOADABLE_MAPS:
 
                 # load the map
                 self.client.load_world(m)
@@ -53,7 +56,9 @@ class TestSpawnpoints(SyncSmokeTest):
                     batch = [carla.command.SpawnActor(*args) for args in batch]
                     response = self.client.apply_batch_sync(batch, False)
 
-                    self.assertFalse(any(x.error for x in response))
+                    self.assertFalse(any(x.error for x in response), "%s on %s: %s" % (  # port: say which
+                        vehicle.id, m, sorted({(t.location.x, t.location.y, x.error)
+                                               for x, t in zip(response, spawn_points) if x.error})))
                     ids = [x.actor_id for x in response]
                     self.assertEqual(len(ids), len(spawn_points))
 

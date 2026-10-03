@@ -9,6 +9,9 @@
 #
 # cpython: the unmodified tests under CPython, `import carla` = tools/pycarla.
 # codon: the tests converted and compiled with typesafe-codon.
+# official: only `exclude:` entries, for ported tests the official module
+# cannot run (its own defects, with the evidence). Official runs leave them
+# out; cpython and codon runs still run them.
 # A test not listed is expected to pass. pytest (tests/test_upstream.py) and
 # CI fail on an unexpected failure AND on an unexpected pass, so this list only
 # shrinks. `python -m tools.upstream_tests --mode <mode> --suite <suite> --update`
@@ -235,11 +238,11 @@ cpython:
     ported/smoke/test_vehicle_physics.py:
       TestApplyVehiclePhysics.test_single_physics_control: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
       TestApplyVehiclePhysics.test_multiple_physics_control: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
-      TestVehicleFriction.test_vehicle_zero_friction: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
+      TestVehicleFriction.test_vehicle_zero_friction: 'exclude: physics on this ue5-dev server: the official module fails it too, with vehicle.taxi.ford''s velocities after initialisation [27.599, 27.764] against the 27.778 reference'
       TestVehicleFriction.test_vehicle_friction_volume: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
       TestVehicleFriction.test_vehicle_friction_values: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
-      TestVehicleTireConfig.test_vehicle_wheel_collision: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
-      TestVehicleTireConfig.test_vehicle_tire_long_stiff: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
+      TestVehicleTireConfig.test_vehicle_wheel_collision: 'exclude: physics on this ue5-dev server: the official module fails it too, with vehicle.taxi.ford''s two velocities after the simulation unequal, [-0.807, -2.364]'
+      TestVehicleTireConfig.test_vehicle_tire_long_stiff: 'exclude: physics on this ue5-dev server: the official module fails it too; two identical vehicle.firetruck.actors side by side at full throttle drive 29.73 m and 24.11 m (the test needs the second to go at least as far)'
       TestStickyControl.test_default: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
       TestStickyControl.test_true: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
       TestStickyControl.test_false: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
@@ -408,10 +411,15 @@ codon:
       TestBlueprintLibrary.test_blueprint_ids: 'exclude: ue5-dev ships blueprint id blueprint.trafficlightexample, which has two dot-separated parts, not the three the test expects (the official module fails the same way)'
     ported/smoke/test_client.py:
       TestClient.test_version: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
-    ported/smoke/test_collision_determinism.py: 'xfail: compile: ported/smoke/test_collision_determinism.py:19: no module named ''filecmp'''
+    ported/smoke/test_collision_determinism.py:
+      TestCollisionDeterminism.test_two_cars: 'exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
+      TestCollisionDeterminism.test_three_cars: 'exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
+      TestCollisionDeterminism.test_car_bike: 'exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
+      TestCollisionDeterminism.test_car_walker: 'exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
     ported/smoke/test_collision_sensor.py:
       TestCollisionSensor.test_single_car: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
-    ported/smoke/test_determinism.py: 'xfail: compile: ported/smoke/test_determinism.py:13: cannot import name ''random'' from ''numpy.__init__'''
+    ported/smoke/test_determinism.py:
+      TestDeterminism.test_determ: 'exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
     ported/smoke/test_geoconversion.py:
       TestGeoLocationConversion.test_geo_reference: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
       TestGeoLocationConversion.test_geo_projection: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
@@ -435,7 +443,8 @@ codon:
       TestMap.test_reload_world: 'exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
     ported/smoke/test_props_loading.py:
       TestPropsLoading.test_spawn_loaded_props: 'exclude: a static prop fails to spawn on ue5-dev (''Unknown error''; the official module fails the same way)'
-    ported/smoke/test_sensor_determinism.py: 'xfail: compile: ported/smoke/test_sensor_determinism.py:18: no module named ''filecmp'''
+    ported/smoke/test_sensor_determinism.py:
+      TestSensorDeterminism.test_all_sensors: 'exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
     ported/smoke/test_sensor_tick_time.py:
       TestSensorTickTime.test_sensor_tick_time: 'exclude: sensors with sensor_tick deliver no data on this server (the official module fails the same way)'
     ported/smoke/test_snapshot.py:
@@ -444,8 +453,17 @@ codon:
       TestSpawnpoints.test_spawn_points: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
     ported/smoke/test_streamming.py:
       TestStreamming.test_multistream: 'exclude: extra clients with wait_for_tick intermittently hang on this server (the official module timed out; a typesafe run passed)'
-    ported/smoke/test_sync.py: 'xfail: compile: ported/smoke/test_sync.py:21: no module named ''queue'''
-    ported/smoke/test_vehicle_physics.py: 'xfail: compile: ported/smoke/test_vehicle_physics.py:21: no module named ''enum'''
+    ported/smoke/test_sync.py:
+      TestSynchronousMode.test_reloading_map: 'exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
+    ported/smoke/test_vehicle_physics.py:
+      TestVehicleFriction.test_vehicle_zero_friction: 'exclude: physics on this ue5-dev server: the official module fails it too, with vehicle.taxi.ford''s velocities after initialisation [27.599, 27.764] against the 27.778 reference'
+      TestVehicleTireConfig.test_vehicle_wheel_collision: 'exclude: physics on this ue5-dev server: the official module fails it too, with vehicle.taxi.ford''s two velocities after the simulation unequal, [-0.807, -2.364]'
+      TestVehicleTireConfig.test_vehicle_tire_long_stiff: 'exclude: physics on this ue5-dev server: the official module fails it too; two identical vehicle.firetruck.actors side by side at full throttle drive 29.73 m and 24.11 m (the test needs the second to go at least as far)'
     ported/smoke/test_world.py:
       TestWorld.test_fixed_delta_seconds: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
     ported/test_vehicle_physics.py: 'xfail: compile: ported/test_vehicle_physics.py:25: no module named ''argparse'''
+official:
+  ue5-dev:
+    ported/smoke/test_vehicle_physics.py:
+      TestApplyVehiclePhysics.test_single_physics_control: 'exclude: the official module''s bindings fail in get_physics_control(): TypeError: No to_python (by-value) converter found for C++ type: std::vector<float>'
+      TestApplyVehiclePhysics.test_multiple_physics_control: 'exclude: the official module''s bindings fail in get_physics_control(): TypeError: No to_python (by-value) converter found for C++ type: std::vector<float>'

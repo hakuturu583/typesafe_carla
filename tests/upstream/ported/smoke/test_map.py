@@ -14,12 +14,8 @@
 import carla
 import random
 
-from . import SmokeTest
+from . import SmokeTest, UNLOADABLE_MAPS
 import time
-
-# port: maps the ue5-dev server lists but cannot load, with the official
-# module too (RoadgenCross: "unable to parse the OpenDRIVE XML string").
-UNLOADABLE_MAPS = {'RoadgenCross'}
 
 class TestMap(SmokeTest):
     def test_reload_world(self):
