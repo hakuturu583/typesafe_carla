@@ -49,7 +49,7 @@ lib = world.get_blueprint_library()
 # Every wheel count the server's vehicles declare (ue5-dev's lincoln.mkz says 3)
 # selects exactly the vehicles that declare it.
 vehicles = lib.filter("vehicle.*")
-counts = sorted(set([str(b.get_attribute("number_of_wheels")) for b in vehicles]))
+counts = sorted(set([str(b.get_attribute("number_of_wheels").as_int()) for b in vehicles]))
 print("wheel counts:", counts)
 assert len(counts) > 0
 selected = 0
@@ -57,7 +57,7 @@ for n in counts:
     matching = lib.filter_by_attribute("number_of_wheels", n)
     assert len(matching) > 0, n
     for b in matching:
-        assert str(b.get_attribute("number_of_wheels")) == n, b.id
+        assert str(b.get_attribute("number_of_wheels").as_int()) == n, b.id
     selected += len(matching)
 assert selected == len(vehicles), (selected, len(vehicles))
 assert len(lib.filter_by_attribute("no_such_attribute", "1")) == 0

@@ -70,7 +70,7 @@ def test_bytes():
         assert raised and b.data_size == 100
     c = carla.CustomV2XBytes()
     c.set_string("x" * 100)
-    assert b == c and str(carla.CustomV2XBytes()).startswith("CustomV2XBytes(max_data_size=100")
+    assert b == c and str(carla.CustomV2XBytes()).startswith("CustomV2XData(max_data_size=100")
 
 def test_custom_send():
     sender = sensor("sensor.other.v2x_custom", vehicle)

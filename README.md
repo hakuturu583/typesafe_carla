@@ -709,6 +709,26 @@ differ at run time:
 * For an id outside the uint32 range (e.g. `-1`), `get_actor` and the `find`
   lookups return `None`; the official API raises `OverflowError`.
 
+`str()` gives the official text, field for field (issue #71):
+`Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(...))`,
+`Actor(id=24, type=vehicle.tesla.model3)` for every actor class,
+`ActorAttribute(id=number_of_wheels,type=int,value=4(const))`, ... Floats
+are printed as the binding does, with `std::to_string` (`%f`, after rounding
+`float` fields to float32) or `std::ostream` (`%g`), by a formatter that
+matches glibc exactly (`-0.000000`, `-nan`, half-to-even ties). `repr()` is
+the same text, where Python gives `<carla.Location object at 0x...>`. Three
+cases differ:
+
+* `WorldSettings` with `fixed_delta_seconds` unset prints
+  `fixed_delta_seconds=None`; the official `str()` raises
+  `RuntimeError: bad_optional_access`.
+* `CollisionEvent` and `ObstacleDetectionEvent` print
+  `other_actor=Actor(id=.., type=..)`; the official binding streams the
+  actor's shared pointer, i.e. a memory address.
+* Classes the official module prints with Python's default repr
+  (`SensorData`, `CAMEvent`, `CustomV2XEvent`, `Junction`, `Landmark`, ...)
+  keep a descriptive typesafe_carla repr.
+
 ## Codon limitations found while building this
 
 These affect how the design's guarantees should be read:
@@ -757,7 +777,8 @@ These affect how the design's guarantees should be read:
    modules. The launcher passes the strict-mode setting to the library
    through a generated module (`_tsc_build_config`) instead.
 8. Float format specifiers (`f"{x:.6f}"`) need an installed `en_US` locale in
-   Codon 0.19.3, so `repr`s use plain `str(float)`.
+   Codon 0.19.3, so `str()` formats floats with its own `%f` / `%g`
+   implementation (`typesafe_carla/_fmt.codon`).
 9. **Class hierarchies two levels deep are miscompiled.** With `class B(A)`
    and `class C(B)`, a method `C` inherits from `B` reads `A`'s fields at the
    wrong offset (a `C(3)` reports `x == 0` through `B`'s methods), and

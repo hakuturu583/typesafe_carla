@@ -3,6 +3,7 @@
 from ._ffi import (CWeather, tsc_world_get_weather, tsc_world_set_weather, tsc_weather_preset,
                    tsc_world_is_weather_enabled)
 from .errors import _check
+from ._fmt import fmt_f32
 from .world import World
 
 class WeatherParameters:
@@ -88,9 +89,20 @@ class WeatherParameters:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return (f"WeatherParameters(cloudiness={self.cloudiness}, precipitation={self.precipitation}, "
-                f"sun_altitude_angle={self.sun_altitude_angle}, fog_density={self.fog_density}, "
-                f"wetness={self.wetness})")
+        return (f"WeatherParameters(cloudiness={fmt_f32(self.cloudiness)}, "
+                f"precipitation={fmt_f32(self.precipitation)}, "
+                f"precipitation_deposits={fmt_f32(self.precipitation_deposits)}, "
+                f"wind_intensity={fmt_f32(self.wind_intensity)}, "
+                f"sun_azimuth_angle={fmt_f32(self.sun_azimuth_angle)}, "
+                f"sun_altitude_angle={fmt_f32(self.sun_altitude_angle)}, "
+                f"fog_density={fmt_f32(self.fog_density)}, "
+                f"fog_distance={fmt_f32(self.fog_distance)}, "
+                f"fog_falloff={fmt_f32(self.fog_falloff)}, "
+                f"wetness={fmt_f32(self.wetness)}, "
+                f"scattering_intensity={fmt_f32(self.scattering_intensity)}, "
+                f"mie_scattering_scale={fmt_f32(self.mie_scattering_scale)}, "
+                f"rayleigh_scattering_scale={fmt_f32(self.rayleigh_scattering_scale)}, "
+                f"dust_storm={fmt_f32(self.dust_storm)})")
 
     def _to_c(self) -> CWeather:
         return CWeather(self.cloudiness, self.precipitation, self.precipitation_deposits,

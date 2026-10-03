@@ -1,0 +1,165 @@
+# Float formatting for str(): the CARLA Python API's text format.
+#
+# The official binding prints floats two ways (PythonAPI/carla/include/PythonAPI.h):
+#   - std::to_string(v), i.e. printf("%f"): fixed, 6 decimals ("1.000000");
+#   - `out << v` on a default std::ostream, i.e. printf("%g"): 6 significant
+#     digits, trailing zeros removed ("0.05", "1e-07", "300").
+# Codon's f"{x:.6f}" needs a locale, so both are implemented here, exactly as
+# glibc does them: the double is expanded to its exact decimal value and
+# rounded half-to-even ("%f" of 0.0078125 is "0.007812"), the sign of -0.0 and
+# of NaN is kept ("-0.000000", "-nan"), and large values print every integer
+# digit ("100000002004087734272.000000").
+#
+# Most LibCarla fields are `float`; C++ widens them to double before
+# formatting, so the *32 variants round to float32 first (Location(x=1e20)
+# prints 100000002004087734272.000000, as in the official module).
+
+import math
+
+_BASE = 1000000000  # limb base for the exact decimal expansion
+
+def _mul_small(limbs: List[int], s: int):
+    """limbs (little-endian, base 1e9) *= s, in place; s < 2**31."""
+    carry = 0
+    for i in range(len(limbs)):
+        v = limbs[i] * s + carry
+        limbs[i] = v % _BASE
+        carry = v // _BASE
+    while carry:
+        limbs.append(carry % _BASE)
+        carry //= _BASE
+
+def _limbs_digits(limbs: List[int]) -> str:
+    parts = [str(limbs[len(limbs) - 1])]
+    for i in range(len(limbs) - 2, -1, -1):
+        t = str(limbs[i])
+        parts.append("0" * (9 - len(t)) + t)
+    return "".join(parts)
+
+def _exact_decimal(a: float) -> Tuple[str, int]:
+    """(digits, k) with a == int(digits) / 10**k exactly; a finite and >= 0."""
+    if a == 0.0:
+        return ("0", 0)
+    m, e = math.frexp(a)
+    mant = int(m * 9007199254740992.0)  # 2**53: exact, also for subnormals
+    e2 = e - 53
+    while mant & 1 == 0:
+        mant >>= 1
+        e2 += 1
+    limbs = [mant % _BASE, mant // _BASE]
+    if limbs[1] == 0:
+        limbs.pop()
+    if e2 >= 0:
+        while e2 > 0:
+            n = min(e2, 30)
+            _mul_small(limbs, 1 << n)
+            e2 -= n
+        return (_limbs_digits(limbs), 0)
+    # mant / 2**k == mant * 5**k / 10**k
+    k = -e2
+    left = k
+    while left > 0:
+        n = min(left, 13)
+        _mul_small(limbs, 5 ** n)
+        left -= n
+    return (_limbs_digits(limbs), k)
+
+def _increment(digits: str) -> str:
+    """digits + 1, as a decimal string."""
+    out = list(digits)
+    i = len(out) - 1
+    while i >= 0:
+        if out[i] == "9":
+            out[i] = "0"
+            i -= 1
+        else:
+            out[i] = chr(ord(out[i]) + 1)
+            return "".join(out)
+    return "1" + "".join(out)
+
+def _drop_digits(digits: str, r: int) -> str:
+    """round(int(digits) / 10**r), half to even, as a decimal string."""
+    if r <= 0:
+        return digits + "0" * (-r)
+    n = len(digits)
+    if r > n:
+        return "0"
+    q = digits[:n - r] if r < n else "0"
+    first = digits[n - r]
+    up = False
+    if first > "5":
+        up = True
+    elif first == "5":
+        rest_zero = True
+        for c in digits[n - r + 1:]:
+            if c != "0":
+                rest_zero = False
+                break
+        up = (not rest_zero) or (ord(q[len(q) - 1]) - ord("0")) % 2 == 1
+    return _increment(q) if up else q
+
+def _special(x: float) -> str:
+    """nan/inf spelled as glibc does ("" for finite values)."""
+    neg = math.copysign(1.0, x) < 0.0
+    if math.isnan(x):
+        return "-nan" if neg else "nan"
+    if math.isinf(x):
+        return "-inf" if neg else "inf"
+    return ""
+
+def fmt_f(x: float, precision: int = 6) -> str:
+    """printf("%.<precision>f", x); with the default, std::to_string(double)."""
+    s = _special(x)
+    if s:
+        return s
+    sign = "-" if math.copysign(1.0, x) < 0.0 else ""
+    digits, k = _exact_decimal(abs(x))
+    q = _drop_digits(digits, k - precision)
+    if len(q) <= precision:
+        q = "0" * (precision + 1 - len(q)) + q
+    if precision == 0:
+        return sign + q
+    return sign + q[:len(q) - precision] + "." + q[len(q) - precision:]
+
+def fmt_g(x: float, precision: int = 6) -> str:
+    """printf("%.<precision>g", x); with the default, `std::ostream << x`."""
+    s = _special(x)
+    if s:
+        return s
+    sign = "-" if math.copysign(1.0, x) < 0.0 else ""
+    p = max(precision, 1)
+    if x == 0.0:
+        return sign + "0"
+    digits, k = _exact_decimal(abs(x))
+    n = len(digits)
+    exp = n - 1 - k  # decimal exponent of the leading digit
+    sig = _drop_digits(digits, n - p)
+    if len(sig) > p:  # rounding carried into a new leading digit
+        exp += 1
+        sig = sig[:p]
+    if -4 <= exp < p:
+        if exp >= 0:
+            ip = sig[:exp + 1]
+            frac = sig[exp + 1:]
+        else:
+            ip = "0"
+            frac = "0" * (-exp - 1) + sig
+        frac = frac.rstrip("0")
+        return sign + ip + ("." + frac if frac else "")
+    frac = sig[1:].rstrip("0")
+    e = str(abs(exp))
+    if len(e) < 2:
+        e = "0" + e
+    return sign + sig[0] + ("." + frac if frac else "") + ("e-" if exp < 0 else "e+") + e
+
+def fmt_f32(x: float) -> str:
+    """std::to_string of a C++ `float` field."""
+    return fmt_f(float(float32(x)))
+
+def fmt_g32(x: float) -> str:
+    """`std::ostream << v` of a C++ `float` field."""
+    return fmt_g(float(float32(x)))
+
+def fmt_bool(b: bool) -> str:
+    """The binding's boolalpha(): "True" / "False"."""
+    return "True" if b else "False"

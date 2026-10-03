@@ -5,7 +5,8 @@ from ._ffi import (Handle, CVehicleControl, CWalkerControl, CVector2D, CVehicleP
                    CWheelPhysicsControl, tsc_vehicle_get_physics_control,
                    tsc_physics_control_view, tsc_vehicle_apply_physics_control)
 from .errors import _check, _u8, _i32
-from .geometry import Location, Vector2D, Vector3D, _vector_or, _location_or
+from .geometry import Location, Vector2D, Vector3D, _vector_or, _location_or, _fmt_vector3d
+from ._fmt import fmt_f32, fmt_g32, fmt_bool
 
 class VehicleControl:
     throttle: float  # [0, 1]
@@ -37,9 +38,10 @@ class VehicleControl:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return (f"VehicleControl(throttle={self.throttle}, steer={self.steer}, "
-                f"brake={self.brake}, hand_brake={self.hand_brake}, reverse={self.reverse}, "
-                f"manual_gear_shift={self.manual_gear_shift}, gear={self.gear})")
+        return (f"VehicleControl(throttle={fmt_f32(self.throttle)}, steer={fmt_f32(self.steer)}, "
+                f"brake={fmt_f32(self.brake)}, hand_brake={fmt_bool(self.hand_brake)}, "
+                f"reverse={fmt_bool(self.reverse)}, "
+                f"manual_gear_shift={fmt_bool(self.manual_gear_shift)}, gear={self.gear})")
 
     def _to_c(self) -> CVehicleControl:
         return CVehicleControl(self.throttle, self.steer, self.brake, i32(int(self.hand_brake)),
@@ -69,8 +71,8 @@ def _ratios_to_c(ratios: List[float]) -> Ptr[float]:
         out[i] = ratios[i]
     return out
 
-# Field-by-field __eq__ / __repr__ in declaration order, for the classes whose
-# field lists are too long to keep a hand-written copy of in sync.
+# Field-by-field __eq__ in declaration order, for the classes whose field
+# lists are too long to keep a hand-written copy of in sync.
 def _fields_eq(a, b) -> bool:
     for k, v in static.vars(a):
         if not (v == getattr(b, k)):
@@ -78,10 +80,23 @@ def _fields_eq(a, b) -> bool:
     return True
 
 def _fields_repr(name: str, obj) -> str:
+    """`Name(field=value, ...)` in declaration order, floats as C++ `float`
+    through std::to_string (the Python API's format for the all-float types)."""
     parts = List[str]()
     for k, v in static.vars(obj):
-        parts.append(f"{k}={v}")
+        if isinstance(v, float):
+            parts.append(k + "=" + fmt_f32(v))
+        else:
+            parts.append(k + "=" + str(v))
     return name + "(" + ", ".join(parts) + ")"
+
+def _list_str(items) -> str:
+    """The binding's PrintList: `[a, b]`, items as their str()."""
+    return "[" + ", ".join([str(x) for x in items]) + "]"
+
+def _b01(b: bool) -> str:
+    """A C++ bool through std::to_string or `<<` (no boolalpha): "1" / "0"."""
+    return "1" if b else "0"
 
 class WheelPhysicsControl:
     """Per-wheel physics: every field of CARLA's WheelPhysicsControl, with the
@@ -220,7 +235,46 @@ class WheelPhysicsControl:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return _fields_repr("WheelPhysicsControl", self)
+        # As the Python API's str(), quirks included: "offset" has no "=",
+        # bools print as 1/0 and velocity as a Location.
+        return ("WheelPhysicsControl(axle_type=" + str(self.axle_type & 0xFF) +
+                ", offset" + str(self.offset) +
+                ", wheel_radius=" + fmt_f32(self.wheel_radius) +
+                ", wheel_width=" + fmt_f32(self.wheel_width) +
+                ", wheel_mass=" + fmt_f32(self.wheel_mass) +
+                ", cornering_stiffness=" + fmt_f32(self.cornering_stiffness) +
+                ", friction_force_multiplier=" + fmt_f32(self.friction_force_multiplier) +
+                ", side_slip_modifier=" + fmt_f32(self.side_slip_modifier) +
+                ", slip_threshold=" + fmt_f32(self.slip_threshold) +
+                ", skid_threshold=" + fmt_f32(self.skid_threshold) +
+                ", max_steer_angle=" + fmt_f32(self.max_steer_angle) +
+                ", affected_by_steering=" + _b01(self.affected_by_steering) +
+                ", affected_by_brake=" + _b01(self.affected_by_brake) +
+                ", affected_by_handbrake=" + _b01(self.affected_by_handbrake) +
+                ", affected_by_engine=" + _b01(self.affected_by_engine) +
+                ", abs_enabled=" + _b01(self.abs_enabled) +
+                ", traction_control_enabled=" + _b01(self.traction_control_enabled) +
+                ", max_wheelspin_rotation=" + fmt_f32(self.max_wheelspin_rotation) +
+                ", external_torque_combine_method=" + str(self.external_torque_combine_method & 0xFF) +
+                ", lateral_slip_graph=" + _list_str(self.lateral_slip_graph) +
+                ", suspension_axis=" + str(self.suspension_axis) +
+                ", suspension_force_offset=" + str(self.suspension_force_offset) +
+                ", suspension_max_raise=" + fmt_f32(self.suspension_max_raise) +
+                ", suspension_max_drop=" + fmt_f32(self.suspension_max_drop) +
+                ", suspension_damping_ratio=" + fmt_f32(self.suspension_damping_ratio) +
+                ", wheel_load_ratio=" + fmt_f32(self.wheel_load_ratio) +
+                ", spring_rate=" + fmt_f32(self.spring_rate) +
+                ", spring_preload=" + fmt_f32(self.spring_preload) +
+                ", suspension_smoothing=" + str(self.suspension_smoothing) +
+                ", rollbar_scaling=" + fmt_f32(self.rollbar_scaling) +
+                ", sweep_shape=" + str(self.sweep_shape & 0xFF) +
+                ", sweep_type=" + str(self.sweep_type & 0xFF) +
+                ", max_brake_torque=" + fmt_f32(self.max_brake_torque) +
+                ", max_hand_brake_torque=" + fmt_f32(self.max_hand_brake_torque) +
+                ", wheel_index=" + str(self.wheel_index) +
+                ", location=" + str(self.location) +
+                ", old_location=" + str(self.old_location) +
+                ", velocity=" + _fmt_vector3d("Location", self.velocity) + ")")
 
     def _to_c(self, slip: Ptr[CVector2D]) -> CWheelPhysicsControl:
         """slip: lateral_slip_graph in C layout; it must outlive the C call."""
@@ -398,7 +452,38 @@ class VehiclePhysicsControl:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return _fields_repr("VehiclePhysicsControl", self)
+        # As the Python API's str(): scalars through `ostream <<` (%g, bools as
+        # 1/0, differential_type as a raw uint8_t char).
+        return ("VehiclePhysicsControl(torque_curve=" + _list_str(self.torque_curve) +
+                ", max_torque=" + fmt_g32(self.max_torque) +
+                ", max_rpm=" + fmt_g32(self.max_rpm) +
+                ", idle_rpm=" + fmt_g32(self.idle_rpm) +
+                ", brake_effect=" + fmt_g32(self.brake_effect) +
+                ", rev_up_moi=" + fmt_g32(self.rev_up_moi) +
+                ", rev_down_rate=" + fmt_g32(self.rev_down_rate) +
+                ", differential_type=" + chr(self.differential_type & 0xFF) +
+                ", front_rear_split=" + fmt_g32(self.front_rear_split) +
+                ", use_automatic_gears=" + _b01(self.use_automatic_gears) +
+                ", gear_change_time=" + fmt_g32(self.gear_change_time) +
+                ", final_ratio=" + fmt_g32(self.final_ratio) +
+                ", forward_gear_ratios=" + _list_str([fmt_g32(x) for x in self.forward_gear_ratios]) +
+                ", reverse_gear_ratios=" + _list_str([fmt_g32(x) for x in self.reverse_gear_ratios]) +
+                ", change_up_rpm=" + fmt_g32(self.change_up_rpm) +
+                ", change_down_rpm=" + fmt_g32(self.change_down_rpm) +
+                ", transmission_efficiency=" + fmt_g32(self.transmission_efficiency) +
+                ", mass=" + fmt_g32(self.mass) +
+                ", drag_coefficient=" + fmt_g32(self.drag_coefficient) +
+                ", center_of_mass=" + str(self.center_of_mass) +
+                ", chassis_width=" + fmt_g32(self.chassis_width) +
+                ", chassis_height=" + fmt_g32(self.chassis_height) +
+                ", downforce_coefficient=" + fmt_g32(self.downforce_coefficient) +
+                ", drag_area=" + fmt_g32(self.drag_area) +
+                ", inertia_tensor_scale=" + str(self.inertia_tensor_scale) +
+                ", sleep_threshold=" + fmt_g32(self.sleep_threshold) +
+                ", sleep_slope_limit=" + fmt_g32(self.sleep_slope_limit) +
+                ", steering_curve=" + _list_str(self.steering_curve) +
+                ", wheels=" + _list_str(self.wheels) +
+                ", use_sweep_wheel_collision=" + _b01(self.use_sweep_wheel_collision) + ")")
 
     @staticmethod
     def _get(vehicle: cobj) -> VehiclePhysicsControl:
@@ -484,7 +569,8 @@ class WalkerControl:
         self.jump = jump
 
     def __repr__(self) -> str:
-        return f"WalkerControl(direction={self.direction}, speed={self.speed}, jump={self.jump})"
+        return (f"WalkerControl(direction={self.direction}, speed={fmt_f32(self.speed)}, "
+                f"jump={fmt_bool(self.jump)})")
 
     def _to_c(self) -> CWalkerControl:
         return CWalkerControl(self.direction._to_c(), self.speed, i32(int(self.jump)), i32(0))

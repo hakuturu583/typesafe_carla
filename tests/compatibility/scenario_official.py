@@ -510,3 +510,12 @@ out("i33_weather_presets", ";".join(
     f"{w.rayleigh_scattering_scale:.3f},{w.dust_storm:.3f}"
     for w in (getattr(carla.WeatherParameters, n) for n in PRESETS33)))
 sys.stdout.flush()
+# Issue #71: str() in the Python API's format, for server objects.
+m71 = world.get_map()
+bp71 = lib.find("vehicle.lincoln.mkz")
+attrs71 = [bp71.get_attribute(a) for a in ("number_of_wheels", "role_name", "color", "sticky_control")
+           if bp71.has_attribute(a)]
+attrs71.append(lib.find("sensor.camera.rgb").get_attribute("fov"))
+out("i71_str", " | ".join([str(m71.get_waypoint(p0.location)), str(world.get_spectator()), str(m71)] +
+                          [str(a) for a in attrs71]))
+out("i71_timestamp", "".join("#" if c.isdigit() else c for c in str(world.get_snapshot().timestamp)))

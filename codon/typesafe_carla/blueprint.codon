@@ -12,6 +12,7 @@ from ._ffi import (CStringList, take_string_list, tsc_actor_blueprint_get_tags,
 from ._ffi import (tsc_actor_blueprint_size, tsc_actor_blueprint_get_attribute_ids,
                    tsc_actor_blueprint_get_recommended_values)
 from .errors import _check, _normalize_index, CarlaError
+from ._fmt import fmt_g32, fmt_bool
 
 class _ActorAttributeType(_IntEnum):
     Bool: int = 0
@@ -57,7 +58,7 @@ class Color:
         return CColor(u8(self.r), u8(self.g), u8(self.b), u8(self.a))
 
     def __repr__(self) -> str:
-        return f"Color(r={self.r}, g={self.g}, b={self.b}, a={self.a})"
+        return f"Color({self.r},{self.g},{self.b},{self.a})"
 
 def _no_values() -> List[str]:
     # Not inline in ActorAttribute.__init__: its parameter `type` shadows the
@@ -110,12 +111,25 @@ class ActorAttribute:
         return Color(int(parts[0].strip()), int(parts[1].strip()), int(parts[2].strip()),
                      int(parts[3].strip()) if len(parts) > 3 else 255)
 
-    def __str__(self) -> str:
-        """The raw value, whatever the type (like str(attribute) in Python)."""
-        return self._value
-
     def __repr__(self) -> str:
-        return f"ActorAttribute(id={self.id}, type={_type_name(self.type)}, value={self._value})"
+        """As the Python API's str(): `ActorAttribute(id=..,type=..,value=..)`,
+        with "(const)" before the ")" for a non-modifiable attribute. (The
+        binding registers both `As<std::string>` and the ostream form as
+        __str__; boost.python tries the later one first.)"""
+        t = self.type
+        if t == ActorAttributeType.Bool:
+            v = ",type=bool,value=" + fmt_bool(self.as_bool())
+        elif t == ActorAttributeType.Int:
+            v = ",type=int,value=" + str(self.as_int())
+        elif t == ActorAttributeType.Float:
+            v = ",type=float,value=" + fmt_g32(self.as_float())
+        elif t == ActorAttributeType.String:
+            v = ",type=str,value=" + self._value
+        elif t == ActorAttributeType.RGBColor:
+            v = ",type=Color,value=" + str(self.as_color())
+        else:
+            v = ",INVALID"
+        return "ActorAttribute(id=" + self.id + v + ("" if self.is_modifiable else "(const)") + ")"
 
 class ActorBlueprint:
     """A copy of a library blueprint; set_attribute does not affect the library."""
@@ -187,7 +201,7 @@ class ActorBlueprint:
                                                  value.len))
 
     def __repr__(self) -> str:
-        return f"ActorBlueprint(id={self.id})"
+        return f"ActorBlueprint(id={self.id},tags=[{', '.join(self.tags)}])"
 
 class BlueprintLibrary:
     _h: Handle
@@ -231,4 +245,4 @@ class BlueprintLibrary:
         return BlueprintLibrary(Handle(out[0]))
 
     def __repr__(self) -> str:
-        return f"BlueprintLibrary(size={len(self)})"
+        return "[" + ", ".join([str(bp) for bp in self]) + "]"

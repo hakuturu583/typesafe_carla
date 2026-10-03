@@ -1,0 +1,215 @@
+# Issue #71: str() / repr() in the official CARLA Python API's format.
+# Expected strings were produced by the official module (CARLA ue5-dev build).
+import math
+import typesafe_carla as carla
+from typesafe_carla._fmt import fmt_f, fmt_g, fmt_f32, fmt_g32
+
+def check(got: str, want: str):
+    assert got == want, "\n got:  " + got + "\n want: " + want
+
+# The upstream unit/test_transform.py::TestTransform.test_print.
+t = carla.Transform(carla.Location(x=1.0, y=2.0, z=3.0), carla.Rotation(pitch=4.0, yaw=5.0, roll=6.0))
+check(str(t), "Transform(Location(x=1.000000, y=2.000000, z=3.000000), "
+              "Rotation(pitch=4.000000, yaw=5.000000, roll=6.000000))")
+check(repr(t), str(t))
+
+# The shared formatter: printf("%f") / printf("%g"), as glibc does them.
+check(fmt_f(0.0), "0.000000")
+check(fmt_f(-0.0), "-0.000000")                   # negative zero keeps its sign
+check(fmt_f(-1e-9), "-0.000000")                  # so does a negative value rounding to zero
+check(fmt_f(0.0078125), "0.007812")               # exact tie: half to even
+check(fmt_f(0.0000025), "0.000003")               # 2.5e-6 is a bit above the tie in binary
+check(fmt_f(5e-7), "0.000000")                    # 0.5e-6 is a bit below the tie
+check(fmt_f(1.5e-6), "0.000002")
+check(fmt_f(0.9999995), "1.000000")               # a bit above the tie: carries
+check(fmt_f(999999.9999995), "999999.999999")
+check(fmt_f(999999.9999996), "1000000.000000")    # carry into the integer part
+check(fmt_f(1e20), "100000000000000000000.000000")
+check(fmt_f(1.7976931348623157e308)[:20], "17976931348623157081")
+check(fmt_f(5e-324), "0.000000")
+check(fmt_f(float("nan")), "nan")
+check(fmt_f(-float("nan")), "-nan")
+check(fmt_f(math.inf), "inf")
+check(fmt_f(-math.inf), "-inf")
+check(fmt_f(2.5, 0), "2")
+check(fmt_f(1.0005, 3), "1.000")                  # 1.0005 is below the tie in binary
+check(fmt_g(0.05), "0.05")
+check(fmt_g(1e-7), "1e-07")
+check(fmt_g(300.0), "300")
+check(fmt_g(1234567.0), "1.23457e+06")
+check(fmt_g(999999.5), "1e+06")
+check(fmt_g(0.0001), "0.0001")
+check(fmt_g(0.00001), "1e-05")
+check(fmt_g(-0.0), "-0")
+check(fmt_g(1e300), "1e+300")
+check(fmt_g(-float("nan")), "-nan")
+check(fmt_g(math.inf), "inf")
+check(fmt_f32(1e20), "100000002004087734272.000000")  # C++ float fields round to float32 first
+check(fmt_f32(0.1), "0.100000")
+check(fmt_f32(123456.789), "123456.789062")
+check(fmt_g32(0.866), "0.866")
+check(fmt_f32(1e39), "inf")                       # beyond float32
+
+# Value types.
+check(str(carla.Vector3D(1.5, -0.0, 0.0078125)),
+      "Vector3D(x=1.500000, y=-0.000000, z=0.007812)")
+check(str(carla.Vector2D(1e20, -1e-9)),
+      "Vector2D(x=100000002004087734272.000000, y=-0.000000)")
+check(str(carla.Location(1.0, 2.0, 3.0)),
+      "Location(x=1.000000, y=2.000000, z=3.000000)")
+check(str(carla.Velocity(0.1, 0.2, 0.3)),
+      "Velocity(x=0.100000, y=0.200000, z=0.300000)")
+check(str(carla.AngularVelocity(-1.0, 1e-7, 123456.789)),
+      "AngularVelocity(x=-1.000000, y=0.000000, z=123456.789062)")
+check(str(carla.Acceleration(3.4e38, -3.4e38, 0.5e-6)),
+      "Acceleration(x=339999995214436424907732413799364296704.000000, y=-339999995214436424907732413799364296704.000000, z=0.000000)")
+check(str(carla.Rotation(4.0, 5.0, 6.0)),
+      "Rotation(pitch=4.000000, yaw=5.000000, roll=6.000000)")
+check(str(carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(4.0, 5.0, 6.0))),
+      "Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pitch=4.000000, yaw=5.000000, roll=6.000000))")
+check(str(carla.BoundingBox(carla.Location(1.0, 2.0, 3.0), carla.Vector3D(0.5, 0.25, 0.125))),
+      "BoundingBox(Location(x=1.000000, y=2.000000, z=3.000000), Extent(x=0.500000, y=0.250000, z=0.125000), Rotation(pitch=0.000000, yaw=0.000000, roll=0.000000))")
+check(str(carla.GeoLocation(48.123456789, -2.0000005, 1e20)),
+      "GeoLocation(latitude=48.123457, longitude=-2.000001, altitude=100000000000000000000.000000)")
+check(str(carla.Quaternion(0.1, 0.2, 0.3, 0.9)),
+      "Quaternion(x=0.100000, y=0.200000, z=0.300000, w=0.900000)")
+check(str(carla.Color(1, 2, 3, 4)),
+      "Color(1,2,3,4)")
+check(str(carla.OpticalFlowPixel(0.25, -1.5)),
+      "Color(0.250000,-1.500000)")
+check(str(carla.VehicleControl(0.5, -0.25, 0.1, True, False, True, 3)),
+      "VehicleControl(throttle=0.500000, steer=-0.250000, brake=0.100000, hand_brake=True, reverse=False, manual_gear_shift=True, gear=3)")
+check(str(carla.WalkerControl(carla.Vector3D(0.0, 1.0, 0.0), 1.4, True)),
+      "WalkerControl(direction=Vector3D(x=0.000000, y=1.000000, z=0.000000), speed=1.400000, jump=True)")
+check(str(carla.VehicleAckermannControl(0.1, 0.2, 0.3, 0.4, 0.5)),
+      "VehicleAckermannControl(steer=0.100000, steer_speed=0.200000, speed=0.300000, acceleration=0.400000, jerk=0.500000)")
+check(str(carla.AckermannControllerSettings(0.1, 0.2, 0.3, 0.4, 0.5, 0.6)),
+      "AckermannControllerSettings(speed_kp=0.100000, speed_ki=0.200000, speed_kd=0.300000, accel_kp=0.400000, accel_ki=0.500000, accel_kd=0.600000)")
+check(str(carla.WheelTelemetryData(0.1, 0.2, 0.3)),
+      "WheelTelemetryData(lat_slip=0.100000, long_slip=0.200000, omega=0.300000)")
+check(str(carla.Timestamp(42, 1.5, 0.05, 1234567.000001)),
+      "Timestamp(frame=42,elapsed_seconds=1.500000,delta_seconds=0.050000,platform_timestamp=1234567.000001)")
+check(str(carla.RadarDetection(1.0, 0.1, 0.2, 30.0)),
+      "RadarDetection(velocity=1.000000, azimuth=0.100000, altitude=0.200000, depth=30.000000)")
+check(str(carla.LidarDetection(carla.Location(1.0, 2.0, 3.0), 0.75)),
+      "LidarDetection(x=1.000000, y=2.000000, z=3.000000, intensity=0.750000)")
+check(str(carla.SemanticLidarDetection(carla.Location(1.0, 2.0, 3.0), 0.5, 7, 12)),
+      "SemanticLidarDetection(x=1.000000, y=2.000000, z=3.000000, cos_inc_angle=0.500000, object_idx=7, object_tag=12)")
+check(str(carla.WorldSettings(True, False, 0.05)),
+      "WorldSettings(synchronous_mode=True,no_rendering_mode=False,fixed_delta_seconds=0.05,substepping=True,max_substep_delta_time=0.01,max_substeps=10,max_culling_distance=0,deterministic_ragdolls=False)")
+check(str(carla.WeatherParameters(10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 0.9, 10.0, 1.0, 0.03, 0.0331, 0.5)),
+      "WeatherParameters(cloudiness=10.000000, precipitation=20.000000, precipitation_deposits=30.000000, wind_intensity=40.000000, sun_azimuth_angle=50.000000, sun_altitude_angle=60.000000, fog_density=70.000000, fog_distance=80.000000, fog_falloff=0.900000, wetness=10.000000, scattering_intensity=1.000000, mie_scattering_scale=0.030000, rayleigh_scattering_scale=0.033100, dust_storm=0.500000)")
+check(str(carla.Location(5e-7, -5e-7, 1.5e-6)), "Location(x=0.000000, y=-0.000000, z=0.000002)")
+check(str(carla.GeoLocation(5e-7, -5e-7, 1.5e-6)),
+      "GeoLocation(latitude=0.000000, longitude=-0.000000, altitude=0.000002)")
+check(str(carla.Location(float("nan"), math.inf, -math.inf)), "Location(x=nan, y=inf, z=-inf)")
+check(str(carla.Timestamp(7, float("nan"), -0.0, -math.inf)),
+      "Timestamp(frame=7,elapsed_seconds=nan,delta_seconds=-0.000000,platform_timestamp=-inf)")
+ws = carla.WorldSettings(True, False, 1e-7)
+ws.max_culling_distance = -0.0
+ws.max_substep_delta_time = 123456789.0
+check(str(ws), "WorldSettings(synchronous_mode=True,no_rendering_mode=False,fixed_delta_seconds=1e-07,"
+               "substepping=True,max_substep_delta_time=1.23457e+08,max_substeps=10,"
+               "max_culling_distance=-0,deterministic_ragdolls=False)")
+# The official str() raises bad_optional_access here; typesafe_carla prints None.
+check(str(carla.WorldSettings()), "WorldSettings(synchronous_mode=False,no_rendering_mode=False,"
+      "fixed_delta_seconds=None,substepping=True,max_substep_delta_time=0.01,max_substeps=10,"
+      "max_culling_distance=0,deterministic_ragdolls=False)")
+check(str(carla.DVSEvent()), "Event(x=0, y=0, t=0, pol=0)")
+check(str(carla.DVSEvent(3, 4, 123456789, True)), "Event(x=3, y=4, t=123456789, pol=1)")
+check(str(carla.OpticalFlowPixel()), "Color(0.000000,0.000000)")
+check(str(carla.VehicleControl()), "VehicleControl(throttle=0.000000, steer=0.000000, brake=0.000000, "
+      "hand_brake=False, reverse=False, manual_gear_shift=False, gear=0)")
+v = carla.VehicleTelemetryData()
+v.speed = 1.5
+v.gear = 2
+v.wheels = [carla.WheelTelemetryData(0.1, 0.2, 0.3)]
+check(str(v), "VehicleTelemetryData(speed=1.500000, steer=0.000000, throttle=0.000000, brake=0.000000, engine_rpm=0.000000, gear=2, wheels=[WheelTelemetryData(lat_slip=0.100000, long_slip=0.200000, omega=0.300000)])")
+check(str(carla.WheelPhysicsControl()), "WheelPhysicsControl(axle_type=0, offsetVector3D(x=0.000000, y=0.000000, z=0.000000), wheel_radius=30.000000, wheel_width=30.000000, wheel_mass=30.000000, cornering_stiffness=1000.000000, friction_force_multiplier=3.000000, side_slip_modifier=1.000000, slip_threshold=20.000000, skid_threshold=20.000000, max_steer_angle=70.000000, affected_by_steering=1, affected_by_brake=1, affected_by_handbrake=1, affected_by_engine=1, abs_enabled=0, traction_control_enabled=0, max_wheelspin_rotation=30.000000, external_torque_combine_method=0, lateral_slip_graph=[], suspension_axis=Vector3D(x=0.000000, y=0.000000, z=-1.000000), suspension_force_offset=Vector3D(x=0.000000, y=0.000000, z=0.000000), suspension_max_raise=10.000000, suspension_max_drop=10.000000, suspension_damping_ratio=0.500000, wheel_load_ratio=0.500000, spring_rate=250.000000, spring_preload=50.000000, suspension_smoothing=0, rollbar_scaling=0.150000, sweep_shape=0, sweep_type=0, max_brake_torque=1500.000000, max_hand_brake_torque=3000.000000, wheel_index=-1, location=Location(x=0.000000, y=0.000000, z=0.000000), old_location=Location(x=0.000000, y=0.000000, z=0.000000), velocity=Location(x=0.000000, y=0.000000, z=0.000000))")
+p = carla.VehiclePhysicsControl()
+p.wheels = [carla.WheelPhysicsControl()]
+check(repr(str(p)), "'VehiclePhysicsControl(torque_curve=[Vector2D(x=0.000000, y=500.000000), Vector2D(x=5000.000000, y=500.000000)], max_torque=300, max_rpm=5000, idle_rpm=1, brake_effect=1, rev_up_moi=1, rev_down_rate=600, differential_type=\\x00, front_rear_split=0.5, use_automatic_gears=1, gear_change_time=0.5, final_ratio=4, forward_gear_ratios=[2.85, 2.02, 1.35, 1, 2.85, 2.02, 1.35, 1], reverse_gear_ratios=[2.86, 2.86], change_up_rpm=4500, change_down_rpm=2000, transmission_efficiency=0.9, mass=1000, drag_coefficient=0.3, center_of_mass=Location(x=0.000000, y=0.000000, z=0.000000), chassis_width=180, chassis_height=140, downforce_coefficient=0.3, drag_area=0, inertia_tensor_scale=Vector3D(x=1.000000, y=1.000000, z=1.000000), sleep_threshold=10, sleep_slope_limit=0.866, steering_curve=[Vector2D(x=0.000000, y=1.000000), Vector2D(x=10.000000, y=0.500000)], wheels=[WheelPhysicsControl(axle_type=0, offsetVector3D(x=0.000000, y=0.000000, z=0.000000), wheel_radius=30.000000, wheel_width=30.000000, wheel_mass=30.000000, cornering_stiffness=1000.000000, friction_force_multiplier=3.000000, side_slip_modifier=1.000000, slip_threshold=20.000000, skid_threshold=20.000000, max_steer_angle=70.000000, affected_by_steering=1, affected_by_brake=1, affected_by_handbrake=1, affected_by_engine=1, abs_enabled=0, traction_control_enabled=0, max_wheelspin_rotation=30.000000, external_torque_combine_method=0, lateral_slip_graph=[], suspension_axis=Vector3D(x=0.000000, y=0.000000, z=-1.000000), suspension_force_offset=Vector3D(x=0.000000, y=0.000000, z=0.000000), suspension_max_raise=10.000000, suspension_max_drop=10.000000, suspension_damping_ratio=0.500000, wheel_load_ratio=0.500000, spring_rate=250.000000, spring_preload=50.000000, suspension_smoothing=0, rollbar_scaling=0.150000, sweep_shape=0, sweep_type=0, max_brake_torque=1500.000000, max_hand_brake_torque=3000.000000, wheel_index=-1, location=Location(x=0.000000, y=0.000000, z=0.000000), old_location=Location(x=0.000000, y=0.000000, z=0.000000), velocity=Location(x=0.000000, y=0.000000, z=0.000000))], use_sweep_wheel_collision=0)'")
+check(str(carla.WalkerBoneControlIn([("a", carla.Transform(carla.Location(1.0, 2.0, 3.0)))])),
+      "WalkerBoneControlIn(bone_transforms((name=a, transform=Transform(Location(x=1.000000, "
+      "y=2.000000, z=3.000000), Rotation(pitch=0.000000, yaw=0.000000, roll=0.000000)))))")
+check(str(carla.bone_transform()), "(,Transform(Location(x=0.000000, y=0.000000, z=0.000000), "
+      "Rotation(pitch=0.000000, yaw=0.000000, roll=0.000000)))")
+z = "Transform(Location(x=0.000000, y=0.000000, z=0.000000), Rotation(pitch=0.000000, yaw=0.000000, roll=0.000000))"
+check(str(carla.bone_transform_out()),
+      "BoneTransformDataOut(name=, world=" + z + ", component=" + z + ", relative=" + z + ")")
+check(str(carla.WalkerBoneControlOut()), "WalkerBoneControlOut(bone_transforms())")
+b = carla.CustomV2XBytes()
+b.set_bytes([1, 15, 16, 255])
+check(str(b), "CustomV2XData(max_data_size=100, data_size=4, bytes=[1, f, 10, ff])")
+check(str(carla.Color(1, 2, 3)), "Color(1,2,3,255)")
+
+# Server objects (the mock server).
+world = carla.Client("localhost", 2000).get_world()
+check(str(world), "World(id=" + str(world.id) + ")")
+check(str(world.get_map()), "Map(name=Carla/Maps/MockTown)")
+check(str(world.get_actors()), "[Actor(id=1, type=vehicle.tesla.model3), Actor(id=2, type=spectator), "
+      "Actor(id=3, type=traffic.traffic_light), Actor(id=4, type=traffic.stop)]")
+lib = world.get_blueprint_library()
+bp = lib.find("vehicle.lincoln.mkz_2020")
+check(str(bp), "ActorBlueprint(id=vehicle.lincoln.mkz_2020,tags=[vehicle, lincoln, mkz_2020])")
+check(str(lib.filter("vehicle.audi.*")), "[ActorBlueprint(id=vehicle.audi.tt,tags=[vehicle, audi, tt])]")
+check(str(bp.get_attribute("number_of_wheels")), "ActorAttribute(id=number_of_wheels,type=int,value=4(const))")
+check(str(bp.get_attribute("color")), "ActorAttribute(id=color,type=Color,value=Color(0,0,0,255))")
+check(str(bp.get_attribute("sticky_control")), "ActorAttribute(id=sticky_control,type=bool,value=True)")
+check(str(bp.get_attribute("base_mass")), "ActorAttribute(id=base_mass,type=float,value=1500(const))")
+check(str(bp.get_attribute("role_name")), "ActorAttribute(id=role_name,type=str,value=autopilot)")
+vehicle = world.spawn_actor(bp, carla.Transform(carla.Location(10.0, 20.0, 0.5)))
+s = "Actor(id=" + str(vehicle.id) + ", type=vehicle.lincoln.mkz_2020)"
+check(str(vehicle), s)
+check(str(vehicle.as_vehicle()), s)   # subclasses print as Actor, as in the Python API
+check(repr(vehicle), s)
+check(str(world.get_spectator()), "Actor(id=2, type=spectator)")
+snap = world.get_snapshot()
+check(str(snap), "WorldSnapshot(frame=" + str(snap.frame) + ")")
+check(str(snap[0]), "ActorSnapshot(id=" + str(snap[0].id) + ")")
+check(str(carla.Timestamp(12, 0.6, 0.05, 1.25)),
+      "Timestamp(frame=12,elapsed_seconds=0.600000,delta_seconds=0.050000,platform_timestamp=1.250000)")
+wp = world.get_map().get_waypoint(carla.Location(10.0, 20.0, 0.5))
+check(str(wp), "Waypoint(" + str(wp.transform) + ")")
+check(str(wp), "Waypoint(Transform(Location(x=10.000000, y=3.500000, z=0.000000), "
+               "Rotation(pitch=0.000000, yaw=0.000000, roll=0.000000)))")
+
+# Measurements (the mock's sensors): `Name(frame=N, timestamp=%f, ...)`.
+def next_data(id: str) -> carla.SensorData:
+    sensor = world.spawn_actor(lib.find(id), carla.Transform(), attach_to=vehicle).as_sensor()
+    check(str(sensor), "Actor(id=" + str(sensor.id) + ", type=" + id + ")")
+    sensor.listen()
+    world.tick()
+    d = sensor.wait_for_data(1.0)
+    sensor.stop()
+    sensor.destroy()
+    return d
+
+def head(name: str, d) -> str:
+    return name + "(frame=" + str(d.frame) + ", timestamp=" + fmt_f(d.timestamp)
+
+img = next_data("sensor.camera.rgb").as_image()
+check(str(img), head("Image", img) + ", size=" + str(img.width) + "x" + str(img.height) + ")")
+lidar = next_data("sensor.lidar.ray_cast").as_lidar()
+check(str(lidar), head("LidarMeasurement", lidar) + ", number_of_points=" + str(len(lidar)) + ")")
+semantic = next_data("sensor.lidar.ray_cast_semantic").as_semantic_lidar()
+check(str(semantic), head("SemanticLidarMeasurement", semantic) + ", number_of_points=" +
+      str(len(semantic)) + ")")
+radar = next_data("sensor.other.radar").as_radar()
+check(str(radar), head("RadarMeasurement", radar) + ", point_count=" + str(len(radar)) + ")")
+gnss = next_data("sensor.other.gnss").as_gnss()
+check(str(gnss), head("GnssMeasurement", gnss) + ", lat=" + fmt_f(gnss.latitude) + ", lon=" +
+      fmt_f(gnss.longitude) + ", alt=" + fmt_f(gnss.altitude) + ")")
+imu = next_data("sensor.other.imu").as_imu()
+check(str(imu), head("IMUMeasurement", imu) + ", accelerometer=" + str(imu.accelerometer) +
+      ", gyroscope=" + str(imu.gyroscope) + ", compass=" + fmt_f32(imu.compass) + ")")
+assert str(imu.accelerometer).startswith("Vector3D(x=")
+dvs = next_data("sensor.camera.dvs").as_dvs()
+check(str(dvs), head("EventArray", dvs) + ", dimensions=" + str(dvs.width) + "x" + str(dvs.height) +
+      ", number_of_events=" + str(len(dvs)) + ")")
+flow = next_data("sensor.camera.optical_flow").as_optical_flow()
+check(str(flow), head("OpticalFlowImage", flow) + ", size=" + str(flow.width) + "x" +
+      str(flow.height) + ")")
+
+vehicle.destroy()
+print("OK")
