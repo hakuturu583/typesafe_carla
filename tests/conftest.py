@@ -11,6 +11,10 @@ import pytest
 from typesafe_carla import paths, toolchain
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# CARLA's own tests (tests/upstream/ported) run through tests/test_upstream.py
+# under the harness, not as pytest modules.
+collect_ignore_glob = ["upstream/*"]
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
