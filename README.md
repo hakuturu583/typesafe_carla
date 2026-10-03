@@ -640,7 +640,7 @@ These affect how the design's guarantees should be read:
 
 ## License
 
-No license has been chosen yet; one is required before the first PyPI
-release. LibCarla (MIT) is linked into the native library and its license is
-shipped as `_native/LICENSE.CARLA`. Codon (Apache-2.0) is redistributed by
+typesafe_carla is released under the [MIT License](LICENSE). LibCarla (MIT)
+is linked into the native library and its license is shipped as
+`_native/LICENSE.CARLA`. Codon (Apache-2.0) is redistributed by
 `typesafe-carla-toolchain` with its license.
