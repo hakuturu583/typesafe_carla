@@ -1,0 +1,8 @@
+# persistent_lines is a bool, not a string.
+# expect-error: 'str' does not match expected type 'bool'
+import typesafe_carla as carla
+
+def draw(world: carla.World, here: carla.Location):
+    world.debug.draw_line(here, here, persistent_lines="no")
+
+draw(carla.Client("localhost", 2000).get_world(), carla.Location())

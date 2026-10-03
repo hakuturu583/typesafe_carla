@@ -1,0 +1,20 @@
+# DebugHelper.draw_* take persistent_lines (default True), as carla.DebugHelper,
+# by keyword and as the last positional argument.
+import typesafe_carla as carla
+
+def draw(world: carla.World, here: carla.Location, box: carla.BoundingBox):
+    debug = world.debug
+    debug.draw_point(here, persistent_lines=False)
+    debug.draw_point(here, 0.1, carla.Color(255, 0, 0), -1.0, False)
+    debug.draw_line(here, here, persistent_lines=False)
+    debug.draw_line(here, here, 0.1, carla.Color(255, 0, 0), -1.0, False)
+    debug.draw_arrow(here, here, persistent_lines=False)
+    debug.draw_arrow(here, here, 0.1, 0.1, carla.Color(255, 0, 0), -1.0, False)
+    debug.draw_box(box, carla.Rotation(), persistent_lines=False)
+    debug.draw_box(box, carla.Rotation(), 0.1, carla.Color(255, 0, 0), -1.0, False)
+    debug.draw_string(here, "x", persistent_lines=False)
+    debug.draw_string(here, "x", False, carla.Color(255, 0, 0), -1.0, False)
+    debug.draw_point(here, life_time=1.0, persistent_lines=True)
+
+draw(carla.Client("localhost", 2000).get_world(), carla.Location(),
+     carla.BoundingBox(carla.Location(), carla.Vector3D(1.0, 1.0, 1.0)))

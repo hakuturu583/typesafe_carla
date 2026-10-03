@@ -6,9 +6,12 @@ blocks:
   map_new:
     new_from_opendrive:
       new: true
+      via: new_map_from_opendrive
       args: {name: string_in, xodr_content: string_in}
       out: map_handle
-      doc: "carla.Map(name, xodr_content), no server needed. TSC_ERROR if the XODR does not parse."
+      doc: >-
+        carla.Map(name, xodr_content), no server. TSC_ERROR when the XML does not parse;
+        bad OpenDRIVE may give another status, or crash LibCarla (a road without planView).
   map_core:
     get_name: {call: GetName, out: string}
     to_opendrive: {call: GetOpenDrive, out: string}

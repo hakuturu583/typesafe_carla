@@ -105,11 +105,11 @@ int main(void) {
   expect_null_rejected(tsc_client_set_files_base_folder(NULL, NULL, 1, (int32_t[1]){0}), "tsc_client_set_files_base_folder");
   expect_null_rejected(tsc_collision_event_get_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_collision_event_get_actor");
   expect_null_rejected(tsc_collision_event_get_other_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_collision_event_get_other_actor");
-  expect_null_rejected(tsc_debug_draw_point(NULL, NULL, 0, NULL, NAN), "tsc_debug_draw_point");
-  expect_null_rejected(tsc_debug_draw_line(NULL, NULL, NULL, 0, NULL, NAN), "tsc_debug_draw_line");
-  expect_null_rejected(tsc_debug_draw_arrow(NULL, NULL, NULL, 0, 0, NULL, NAN), "tsc_debug_draw_arrow");
-  expect_null_rejected(tsc_debug_draw_box(NULL, NULL, NULL, 0, NULL, NAN), "tsc_debug_draw_box");
-  expect_null_rejected(tsc_debug_draw_string(NULL, NULL, NULL, 1, 0, NULL, NAN), "tsc_debug_draw_string");
+  expect_null_rejected(tsc_debug_draw_point(NULL, NULL, 0, NULL, NAN, 0), "tsc_debug_draw_point");
+  expect_null_rejected(tsc_debug_draw_line(NULL, NULL, NULL, 0, NULL, NAN, 0), "tsc_debug_draw_line");
+  expect_null_rejected(tsc_debug_draw_arrow(NULL, NULL, NULL, 0, 0, NULL, NAN, 0), "tsc_debug_draw_arrow");
+  expect_null_rejected(tsc_debug_draw_box(NULL, NULL, NULL, 0, NULL, NAN, 0), "tsc_debug_draw_box");
+  expect_null_rejected(tsc_debug_draw_string(NULL, NULL, NULL, 1, 0, NULL, NAN, 0), "tsc_debug_draw_string");
   expect_null_rejected(tsc_debug_clear_shapes(NULL), "tsc_debug_clear_shapes");
   expect_null_rejected(tsc_debug_clear_strings(NULL), "tsc_debug_clear_strings");
   expect_null_rejected(tsc_junction_get_id(NULL, (int32_t[1]){0}), "tsc_junction_get_id");
@@ -235,6 +235,7 @@ int main(void) {
   expect_null_rejected(tsc_waypoint_get_landmarks_of_type(NULL, NAN, NULL, 1, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks_of_type");
   expect_null_rejected(tsc_world_get_id(NULL, (uint64_t[1]){0}), "tsc_world_get_id");
   expect_null_rejected(tsc_world_get_actors(NULL, (tsc_actor_list_t *[1]){NULL}), "tsc_world_get_actors");
+  expect_null_rejected(tsc_world_get_actors_by_id(NULL, NULL, 1, (tsc_actor_list_t *[1]){NULL}), "tsc_world_get_actors_by_id");
   expect_null_rejected(tsc_world_get_blueprint_library(NULL, (tsc_blueprint_library_t *[1]){NULL}), "tsc_world_get_blueprint_library");
   expect_null_rejected(tsc_world_spawn_actor(NULL, NULL, NULL, NULL, (tsc_actor_t *[1]){NULL}), "tsc_world_spawn_actor");
   expect_null_rejected(tsc_world_try_spawn_actor(NULL, NULL, NULL, NULL, (tsc_actor_t *[1]){NULL}), "tsc_world_try_spawn_actor");
@@ -290,6 +291,6 @@ int main(void) {
   if (tsc_world_snapshot_size(NULL) != 0) { fputs("tsc_world_snapshot_size(NULL)\n", stderr); ++g_failures; }
   expect_null_rejected(tsc_world_snapshot_get(NULL, 0, (tsc_actor_snapshot_t[1]){0}), "tsc_world_snapshot_get");
   if (g_failures != 0) return 1;
-  printf("test_generated: 256 generated functions reject NULL handles\n");
+  printf("test_generated: 257 generated functions reject NULL handles\n");
   return 0;
 }

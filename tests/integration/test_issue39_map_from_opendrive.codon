@@ -36,7 +36,8 @@ for t in spawn[:5]:
         assert abs(a.s - b.s) < 1e-6, (a.s, b.s)
         assert a.transform.location.distance(b.transform.location) < 1e-3
 
-# A document that does not parse raises (LibCarla: "failed to generate map").
+# A document that does not parse raises, with the shim's message (LibCarla's
+# own is a bare "std::exception").
 for bad in ("", "<OpenDRIVE><header"):
     raised = False
     try:
@@ -44,6 +45,7 @@ for bad in ("", "<OpenDRIVE><header"):
     except carla.CarlaError as e:
         raised = True
         print("invalid XODR:", e.message)
+        assert "the OpenDRIVE document does not parse" in e.message
     assert raised
 
 print("OK")

@@ -144,6 +144,12 @@ world.debug.draw_line(nav, carla.Location(0.0, 0.0, 0.0), 0.1, carla.Color(0, 0,
 world.debug.draw_arrow(nav, carla.Location(1.0, 0.0, 0.0))
 world.debug.draw_box(vehicle.bounding_box, carla.Rotation())
 world.debug.draw_string(nav, "typesafe_carla")
+# persistent_lines (default True, as carla.DebugHelper); False draws for one frame
+world.debug.draw_point(nav, life_time=0.0, persistent_lines=False)
+world.debug.draw_line(nav, carla.Location(0.0, 0.0, 0.0), persistent_lines=False)
+world.debug.draw_arrow(nav, carla.Location(1.0, 0.0, 0.0), 0.1, 0.1, carla.Color(0, 255, 0), 1.0, False)
+world.debug.draw_box(vehicle.bounding_box, carla.Rotation(), persistent_lines=False)
+world.debug.draw_string(nav, "typesafe_carla", True, carla.Color(255, 255, 255), -1.0, False)
 raised = False
 try:
     world.debug.draw_point(nav, color=carla.Color(300, 0, 0))

@@ -732,6 +732,21 @@ SharedPtr<ActorList> World::GetActors() const {
   return std::make_shared<ActorList>(std::move(actors));
 }
 
+// Like LibCarla (Episode::GetActorsById over CachedActorList): in request
+// order, repeated ids repeated, unknown ids left out.
+SharedPtr<ActorList> World::GetActors(const std::vector<rpc::ActorId> &actor_ids) const {
+  std::vector<mock::ActorData> snapshot;
+  {
+    std::lock_guard<std::mutex> lock(_episode->mutex);
+    for (rpc::ActorId id : actor_ids) {
+      if (const mock::ActorData *known = _episode->KnownLocked(id)) snapshot.push_back(*known);
+    }
+  }
+  std::vector<SharedPtr<Actor>> actors;
+  for (const auto &data : snapshot) actors.push_back(mock::MakeActor(_episode, data));
+  return std::make_shared<ActorList>(std::move(actors));
+}
+
 SharedPtr<Actor> World::GetActor(rpc::ActorId id) const {
   mock::ActorData data;
   {
@@ -922,8 +937,10 @@ Map::Map() : _name("Carla/Maps/MockTown") {
   }
 }
 
-// LibCarla parses the document client-side and throws "failed to generate
-// map" when the XML does not parse. The mock has no XML parser: it accepts a
+// LibCarla parses the document client-side and, when the XML does not parse,
+// throws a plain std::exception (throw_exception slices its "failed to
+// generate map" runtime_error); the mock throws the same. It has no XML
+// parser: it accepts a
 // document with a closed <OpenDRIVE> element (<OpenDRIVE .../> or
 // <OpenDRIVE>...</OpenDRIVE>) and models it as its own two-lane road, under
 // the given name and with the given OpenDRIVE text. As in LibCarla, such a
@@ -934,7 +951,7 @@ Map::Map(std::string name, std::string xodr_content) : Map() {
   if (tag_end == std::string::npos ||
       (xodr_content[tag_end - 1] != '/' &&
        xodr_content.find("</OpenDRIVE>", tag_end) == std::string::npos)) {
-    throw std::runtime_error("failed to generate map");
+    throw std::exception();
   }
   _name = std::move(name);
   _xodr = std::move(xodr_content);

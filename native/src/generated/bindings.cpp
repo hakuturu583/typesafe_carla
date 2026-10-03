@@ -485,41 +485,46 @@ tsc_status_t tsc_collision_event_get_other_actor(const tsc_sensor_data_t *data, 
 // bindings/debug.yaml: carla::client::DebugHelper
 
 tsc_status_t tsc_debug_draw_point(tsc_world_t *world, const tsc_location_t *location, double size,
-                                  const tsc_color_t *color, double life_time) {
+                                  const tsc_color_t *color, double life_time,
+                                  int32_t persistent_lines) {
   return TSC_GUARD({
-    debug_of(world).DrawPoint(to_carla(*require_ptr(location, "location")), size, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"));
+    debug_of(world).DrawPoint(to_carla(*require_ptr(location, "location")), size, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"), persistent_lines != 0);
   });
 }
 
 tsc_status_t tsc_debug_draw_line(tsc_world_t *world, const tsc_location_t *begin,
                                  const tsc_location_t *end, double thickness,
-                                 const tsc_color_t *color, double life_time) {
+                                 const tsc_color_t *color, double life_time,
+                                 int32_t persistent_lines) {
   return TSC_GUARD({
-    debug_of(world).DrawLine(to_carla(*require_ptr(begin, "begin")), to_carla(*require_ptr(end, "end")), thickness, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"));
+    debug_of(world).DrawLine(to_carla(*require_ptr(begin, "begin")), to_carla(*require_ptr(end, "end")), thickness, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"), persistent_lines != 0);
   });
 }
 
 tsc_status_t tsc_debug_draw_arrow(tsc_world_t *world, const tsc_location_t *begin,
                                   const tsc_location_t *end, double thickness, double arrow_size,
-                                  const tsc_color_t *color, double life_time) {
+                                  const tsc_color_t *color, double life_time,
+                                  int32_t persistent_lines) {
   return TSC_GUARD({
-    debug_of(world).DrawArrow(to_carla(*require_ptr(begin, "begin")), to_carla(*require_ptr(end, "end")), thickness, arrow_size, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"));
+    debug_of(world).DrawArrow(to_carla(*require_ptr(begin, "begin")), to_carla(*require_ptr(end, "end")), thickness, arrow_size, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"), persistent_lines != 0);
   });
 }
 
 tsc_status_t tsc_debug_draw_box(tsc_world_t *world, const tsc_bounding_box_t *box,
                                 const tsc_rotation_t *rotation, double thickness,
-                                const tsc_color_t *color, double life_time) {
+                                const tsc_color_t *color, double life_time,
+                                int32_t persistent_lines) {
   return TSC_GUARD({
-    debug_of(world).DrawBox(to_carla(*require_ptr(box, "box")), to_carla(*require_ptr(rotation, "rotation")), thickness, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"));
+    debug_of(world).DrawBox(to_carla(*require_ptr(box, "box")), to_carla(*require_ptr(rotation, "rotation")), thickness, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"), persistent_lines != 0);
   });
 }
 
 tsc_status_t tsc_debug_draw_string(tsc_world_t *world, const tsc_location_t *location,
                                    const char *text, size_t text_len, int32_t draw_shadow,
-                                   const tsc_color_t *color, double life_time) {
+                                   const tsc_color_t *color, double life_time,
+                                   int32_t persistent_lines) {
   return TSC_GUARD({
-    debug_of(world).DrawString(to_carla(*require_ptr(location, "location")), to_string(text, text_len, "text"), draw_shadow != 0, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"));
+    debug_of(world).DrawString(to_carla(*require_ptr(location, "location")), to_string(text, text_len, "text"), draw_shadow != 0, to_carla(*require_ptr(color, "color")), check_finite(life_time, "life_time"), persistent_lines != 0);
   });
 }
 
@@ -638,7 +643,7 @@ tsc_status_t tsc_map_new_from_opendrive(const char *name, size_t name_len,
                                         const char *xodr_content, size_t xodr_content_len,
                                         tsc_map_t **out) {
   return new_handle(__func__, out, [&] {
-    return new tsc_map(std::make_shared<carla::client::Map>(to_string(name, name_len, "name"), to_string(xodr_content, xodr_content_len, "xodr_content")));
+    return new tsc_map(new_map_from_opendrive(to_string(name, name_len, "name"), to_string(xodr_content, xodr_content_len, "xodr_content")));
   });
 }
 
@@ -1285,6 +1290,13 @@ tsc_status_t tsc_world_get_id(tsc_world_t *world, uint64_t *out_id) {
 tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_list) {
   return new_handle(__func__, out_list, [&] {
     return new tsc_actor_list(world_of(world).GetActors());
+  }, "out_list");
+}
+
+tsc_status_t tsc_world_get_actors_by_id(tsc_world_t *world, const uint32_t *actor_ids, size_t count,
+                                        tsc_actor_list_t **out_list) {
+  return new_handle(__func__, out_list, [&] {
+    return new tsc_actor_list(world_of(world).GetActors(to_vector(actor_ids, count, "actor_ids")));
   }, "out_list");
 }
 

@@ -219,6 +219,18 @@ try:
     world.debug.draw_arrow(here, carla.Location(here + carla.Vector3D(3.0, 0.0, 0.0)), life_time=1.0)
     world.debug.draw_box(car.bounding_box, car.get_transform().rotation, life_time=1.0)
     world.debug.draw_string(here, "typesafe_carla", True, carla.Color(255, 255, 0), 1.0)
+    # persistent_lines both ways (#37): the server accepts either.
+    for persistent in (True, False):
+        world.debug.draw_point(here, 0.2, carla.Color(0, 255, 0), 1.0, persistent)
+        world.debug.draw_line(here, carla.Location(here + carla.Vector3D(0.0, 0.0, 3.0)),
+                              persistent_lines=persistent, life_time=1.0)
+        world.debug.draw_arrow(here, carla.Location(here + carla.Vector3D(3.0, 0.0, 0.0)), 0.1, 0.1,
+                               carla.Color(255, 0, 0), 1.0, persistent)
+        world.debug.draw_box(car.bounding_box, car.get_transform().rotation, life_time=1.0,
+                             persistent_lines=persistent)
+        world.debug.draw_string(here, "persistent=" + str(persistent), False,
+                                carla.Color(255, 255, 0), 1.0, persistent)
+    world.tick()
 finally:
     tm.set_synchronous_mode(False)
     world.apply_settings(original_settings)

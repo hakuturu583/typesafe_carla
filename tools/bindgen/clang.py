@@ -225,7 +225,7 @@ def _missing_allowed(f: Function, backend: str, ref: str) -> str | None:
     may: through a `via` helper (any ref), or an `optional` method on a ref the
     spec lists as lacking it. The mock mirrors the newest LibCarla and must have
     every method, so a misspelt `call` still fails there."""
-    if f.via:
+    if f.via and not f.constructor:  # a constructor's `via` wraps it; it must exist
         return None if backend == "libcarla" else "no such method (a `via` call must exist in the mock)"
     if f.optional:
         if backend == "libcarla" and ref in f.missing_in:

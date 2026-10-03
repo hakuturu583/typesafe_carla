@@ -16,6 +16,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <typeinfo>
 #include <utility>
 #include <vector>
 
@@ -376,6 +377,21 @@ inline carla::client::DebugHelper debug_of(tsc_world_t *w) { return world_of(w).
 
 inline const carla::client::Map &map_of(const tsc_map_t *m) {
   return *check_handle(m, "map", TSC_KIND_MAP)->map;
+}
+
+// carla.Map(name, xodr_content) (bindings/map.yaml). When the XML does not
+// parse, LibCarla's throw_exception rethrows its runtime_error by value as a
+// plain std::exception, whose message is just "std::exception"; that one
+// error gets a readable message. Any other error (e.g. out_of_range from a
+// well-formed but inconsistent document) passes through unchanged.
+inline carla::SharedPtr<carla::client::Map> new_map_from_opendrive(std::string name,
+                                                                   std::string xodr_content) {
+  try {
+    return std::make_shared<carla::client::Map>(std::move(name), std::move(xodr_content));
+  } catch (const std::exception &e) {
+    if (typeid(e) != typeid(std::exception)) throw;
+    throw std::runtime_error("the OpenDRIVE document does not parse");
+  }
 }
 
 inline const carla::client::BlueprintLibrary &blueprint_library_of(
@@ -761,7 +777,12 @@ inline tsc_traffic_light *make_traffic_light_handle(carla::SharedPtr<carla::clie
 std::vector<carla::SharedPtr<carla::client::TrafficLight>> traffic_lights_of(
     const std::vector<carla::SharedPtr<carla::client::Actor>> &actors);
 std::vector<std::string> to_names(const tsc_string_t *names, size_t count, const char *name);
-std::vector<uint64_t> to_vector(const uint64_t *values, size_t count, const char *name);
+// An input array (NULL only with count 0) as a vector.
+template <typename T>
+std::vector<T> to_vector(const T *values, size_t count, const char *name) {
+  require_array(values, count, name);
+  return values == nullptr ? std::vector<T>() : std::vector<T>(values, values + count);
+}
 // The `via` helper of World.get_traffic_lights_in_junction: empty for an id
 // that names no junction (LibCarla would dereference NULL).
 std::vector<carla::SharedPtr<carla::client::Actor>> traffic_lights_in_junction(

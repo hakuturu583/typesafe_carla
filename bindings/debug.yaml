@@ -6,22 +6,24 @@ blocks:
   debug_draw:
     draw_point:
       call: DrawPoint
-      args: {location: location, size: double, color: color, life_time: finite}
+      args: {location: location, size: double, color: color, life_time: finite,
+             persistent_lines: bool}
     draw_line:
       call: DrawLine
-      args: {begin: location, end: location, thickness: double, color: color, life_time: finite}
+      args: {begin: location, end: location, thickness: double, color: color, life_time: finite,
+             persistent_lines: bool}
     draw_arrow:
       call: DrawArrow
       args: {begin: location, end: location, thickness: double, arrow_size: double, color: color,
-             life_time: finite}
+             life_time: finite, persistent_lines: bool}
     draw_box:
       call: DrawBox
       args: {box: bounding_box, rotation: rotation, thickness: double, color: color,
-             life_time: finite}
+             life_time: finite, persistent_lines: bool}
     draw_string:
       call: DrawString
       args: {location: location, text: string_in, draw_shadow: bool, color: color,
-             life_time: finite}
+             life_time: finite, persistent_lines: bool}
   debug_clear:
     clear_shapes:
       call: ClearDebugShape

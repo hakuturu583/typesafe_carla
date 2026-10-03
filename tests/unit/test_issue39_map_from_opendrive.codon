@@ -31,15 +31,15 @@ assert carla.Map("tiny", "<OpenDRIVE/>").to_opendrive() == "<OpenDRIVE/>"
 k = carla.Map(name="", xodr_content=xodr)
 assert k.name == "" and len(k.get_topology()) == len(server_map.get_topology())
 
-# Text that does not parse raises CarlaError (TSC_ERROR), as LibCarla's
-# "failed to generate map".
+# Text that does not parse raises CarlaError (TSC_ERROR). LibCarla (and the
+# mock) throw a bare std::exception; the shim gives it a readable message.
 for bad in ("", "not xml at all", "<OpenDRIVE><header", "<OpenDRIVE>"):
     raised = False
     try:
         carla.Map("bad", bad)
     except carla.CarlaError as e:
         raised = True
-        assert e.status == ffi.TSC_ERROR and "failed to generate map" in e.message
+        assert e.status == ffi.TSC_ERROR and "the OpenDRIVE document does not parse" in e.message
     assert raised
 
 print("OK")

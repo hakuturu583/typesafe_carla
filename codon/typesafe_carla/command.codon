@@ -12,7 +12,7 @@
 
 from ._ffi import CCommand, CCommandResponse, CString, take_string, TSC_INVALID_ARGUMENT
 from .errors import (CarlaError, _check_light_state, _check_port, _check_traffic_light_state,
-                     _is_actor_id)
+                     _actor_id)
 from .geometry import Location, Transform, Vector3D, _vector_arg, _location_arg
 from .control import VehicleControl, WalkerControl
 from .vehicle import VehicleAckermannControl
@@ -46,11 +46,6 @@ _NAMES = ["", "SpawnActor", "DestroyActor", "ApplyVehicleControl", "ApplyTransfo
           "ApplyTargetAngularVelocity", "ApplyImpulse", "ApplyForce", "ApplyAngularImpulse",
           "ApplyTorque", "SetEnableGravity", "SetVehicleLightState", "ApplyLocation",
           "SetTrafficLightState", "ApplyVehicleAckermannControl", "ShowDebugTelemetry"]
-
-def _actor_id(actor_id: int) -> u32:
-    if not _is_actor_id(actor_id):
-        raise CarlaError(f"actor id {actor_id} is out of range", TSC_INVALID_ARGUMENT)
-    return u32(actor_id)
 
 class Command:
     _type: int

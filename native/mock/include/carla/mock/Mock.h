@@ -882,8 +882,8 @@ class Waypoint : public std::enable_shared_from_this<Waypoint> {
 class Map : public std::enable_shared_from_this<Map> {
  public:
   Map();
-  // carla.Map(name, xodr_content) (issue #39); throws std::runtime_error, as
-  // LibCarla does, when the document does not parse (see mock.cpp).
+  // carla.Map(name, xodr_content) (issue #39); throws a plain std::exception,
+  // as LibCarla does, when the document does not parse (see mock.cpp).
   explicit Map(std::string name, std::string xodr_content);
   const std::string &GetName() const { return _name; }
   const std::string &GetOpenDrive() const { return _xodr; }
@@ -1286,6 +1286,7 @@ class World {
   uint64_t GetId() const;
   SharedPtr<BlueprintLibrary> GetBlueprintLibrary() const;
   SharedPtr<ActorList> GetActors() const;
+  SharedPtr<ActorList> GetActors(const std::vector<rpc::ActorId> &actor_ids) const;
   SharedPtr<Actor> GetActor(rpc::ActorId id) const;
   SharedPtr<Actor> SpawnActor(const ActorBlueprint &blueprint, const geom::Transform &transform,
                               Actor *parent = nullptr,

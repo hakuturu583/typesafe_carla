@@ -38,7 +38,11 @@ is such a value.
 `string_list` (output) is a `tsc_string_list_t`, filled by `string_list_assign`
 and freed with `tsc_string_list_free`. Arrays cross with `c_param` as a
 pointer and a count (`location_path`, `road_option_route`: `const T *{name},
-size_t count`); NULL is accepted for a count of 0.
+size_t count`); NULL is accepted for a count of 0. Plain integer arrays use
+`uint32_array` (e.g. actor ids, `World::GetActors(actor_ids)`) and
+`uint64_array` (environment object ids); both convert with the
+`to_vector<T>` template in `internal.hpp`, so another width needs only a
+new entry in `types.yaml`.
 
 Each remaining file binds one LibCarla class:
 
@@ -83,13 +87,19 @@ A function has:
 A constructor has `new: true` instead of `call` (issue #39): the C function
 has no self parameter, makes the class's object from the arguments
 (`std::make_shared<class>(args...)`) and returns it through a handle output,
-which it requires. `validate` checks the arguments against the class's public
-constructors (`call` is set to the class's own name), and `test_generated`
-checks that the invalid arguments are rejected and leave `*out` NULL:
+which it requires and which must be a handle of that class. With `via`, a
+shim helper makes the object from the arguments instead (`via(args...)`, e.g.
+to give a LibCarla error a readable message); `validate` still checks the
+arguments against the class's public constructors (`call` is set to the
+class's own name), which must exist on every backend. `test_generated` passes
+every argument invalid and checks that the call fails with
+TSC_INVALID_ARGUMENT and leaves `*out` NULL, so at least one argument must
+have an invalid value (a pointer, or a type with `invalid` in `types.yaml`):
 
 ```yaml
 new_from_opendrive:
   new: true
+  via: new_map_from_opendrive
   args: {name: string_in, xodr_content: string_in}
   out: map_handle
 ```
@@ -98,7 +108,7 @@ tsc_status_t tsc_map_new_from_opendrive(const char *name, size_t name_len,
                                         const char *xodr_content, size_t xodr_content_len,
                                         tsc_map_t **out) {
   return new_handle(__func__, out, [&] {
-    return new tsc_map(std::make_shared<carla::client::Map>(to_string(name, name_len, "name"), ...));
+    return new tsc_map(new_map_from_opendrive(to_string(name, name_len, "name"), ...));
   });
 }
 ```
