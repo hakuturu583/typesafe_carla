@@ -13,6 +13,7 @@ client = carla.Client(host, port)
 client.set_timeout(120.0)
 original_map = client.get_world().get_map().name
 xodr = open(here + "/data/straight_road.xodr").read()
+unsupported = False
 try:
     try:
         world = client.generate_opendrive_world(
@@ -24,8 +25,8 @@ try:
         if not e.message.endswith(": std::exception"):
             raise e
         print("note: the server cannot generate OpenDRIVE worlds:", e.message)
-        print("OK")
-        sys.exit(0)
+        unsupported = True
+        sys.exit(0)  # the outer finally restores the map and prints OK
     m = world.get_map()
     print("generated", m.name, "spawn points", len(m.get_spawn_points()))
     assert "OpenDriveMap" in m.name
@@ -62,4 +63,6 @@ finally:
     restored = client.load_world(original_map.split("/")[-1])
     print("restored", restored.get_map().name)
     assert restored.get_map().name == original_map
+    if unsupported:
+        print("OK")
 print("OK")
