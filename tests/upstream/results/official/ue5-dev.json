@@ -1,0 +1,197 @@
+{
+ "files": {
+  "unit/test_boost_version.py": {
+   "file_error": null,
+   "tests": {
+    "TestBoostInstallVersion.test_cmake_options_pins_correct_version": [
+     "pass",
+     ""
+    ],
+    "TestBoostInstallVersion.test_no_stale_boost_version_in_options": [
+     "pass",
+     ""
+    ],
+    "TestNumpyRequirementsCeiling.test_no_numpy_2_ceiling_in_requirements": [
+     "pass",
+     ""
+    ],
+    "TestCarlaImports.test_carla_imports": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "unit/test_client.py": {
+   "file_error": null,
+   "tests": {
+    "TestClient.test_client_version": [
+     "error",
+     "subprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
+    ]
+   }
+  },
+  "unit/test_lidar_smoke_helpers.py": {
+   "file_error": null,
+   "tests": {
+    "TestLidarSmokeHelpers.test_get_current_detection_points_is_instance_method": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "unit/test_numpy_compat.py": {
+   "file_error": null,
+   "tests": {
+    "TestPropControlDvsDtype.test_uses_bool_underscore": [
+     "pass",
+     ""
+    ],
+    "TestPropControlDvsDtype.test_no_bare_np_bool": [
+     "pass",
+     ""
+    ],
+    "TestPropControlDvsDtype.test_no_np_matrix": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "unit/test_transform.py": {
+   "file_error": null,
+   "tests": {
+    "TestLocation.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestLocation.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestRotation.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestRotation.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestVector.test_make_unit_vector_3d_no_argument": [
+     "pass",
+     ""
+    ],
+    "TestVector.test_make_unit_vector_3d_epsilon_keyword": [
+     "pass",
+     ""
+    ],
+    "TestVector.test_make_unit_vector_3d_zero_length": [
+     "pass",
+     ""
+    ],
+    "TestVector.test_make_unit_vector_2d_no_argument": [
+     "pass",
+     ""
+    ],
+    "TestVector.test_make_unit_vector_2d_epsilon_keyword": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_values": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_print": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_translation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_rotation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_rotation_and_translation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_list_rotation_and_translation_location": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_list_rotation_and_translation_vector3d": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_offset_transform": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_offset_transform_translation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_offset_transform_rotation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_offset_transform_and_rotation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_offset_transform_equality": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_offset_none": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_with_offset": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_offset_setter": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_equality": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_constructor_3_args": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_constructor_3_args_positional": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "unit/test_vehicle.py": {
+   "file_error": null,
+   "tests": {
+    "TestVehicleControl.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestVehicleControl.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestVehiclePhysicsControl.test_named_args": [
+     "error",
+     "AttributeError: 'VehiclePhysicsControl' object has no attribute 'moi'"
+    ]
+   }
+  }
+ },
+ "ref": "ue5-dev",
+ "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+ "backend": "libcarla"
+}

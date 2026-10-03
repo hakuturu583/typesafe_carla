@@ -277,8 +277,24 @@ NEEDED_MAP = {
 }
 
 
+# Ported tests that also call reload_world, which fails on the ue5-dev server
+# build (OpenDRIVE parse error; the official module too): a map cannot fix
+# them, so they stay excluded.
+NEEDS_RELOAD = {
+    "smoke/test_map.py": ["TestMap.test_reload_world"],
+    "smoke/test_snapshot.py": ["TestSnapshot.test_spawn_points"],
+    "smoke/test_sync.py": ["TestSynchronousMode.test_reloading_map"],
+    "smoke/test_sensor_determinism.py": ["TestSensorDeterminism.test_all_sensors"],
+    "smoke/test_determinism.py": ["TestDeterminism.test_determ"],
+    "smoke/test_collision_determinism.py": [
+        "TestCollisionDeterminism.test_two_cars", "TestCollisionDeterminism.test_three_cars",
+        "TestCollisionDeterminism.test_car_bike", "TestCollisionDeterminism.test_car_walker"],
+}
+
+
 def exclude_originals(refs=("ue5-dev",)) -> None:
-    """Marks the ported originals `exclude:` in tests/upstream/expectations.yaml."""
+    """Marks the ported originals `exclude:` in tests/upstream/expectations.yaml,
+    and the ported tests that need reload_world."""
     from tools import upstream_tests as up
 
     for mode in up.MODES:
@@ -288,6 +304,13 @@ def exclude_originals(refs=("ue5-dev",)) -> None:
             for rel, name in NEEDED_MAP.items():
                 entries[rel] = (f"exclude: map {name} not shipped in ue5-dev packages; "
                                 f"ported to tests/upstream/ported/{rel}")
+            for rel, tests in NEEDS_RELOAD.items():
+                ported = entries.get(f"ported/{rel}")
+                ported = ported if isinstance(ported, dict) else {}
+                for tid in tests:
+                    ported[tid] = ("exclude: needs reload_world, which fails on the ue5-dev server "
+                                   "build (OpenDRIVE parse error; the official module too)")
+                entries[f"ported/{rel}"] = ported
         up.write_manifest(mode, manifest)
 
 

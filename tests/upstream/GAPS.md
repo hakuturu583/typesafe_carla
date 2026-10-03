@@ -22,6 +22,7 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 | ue5-dev | codon | smoke | 0a5ce0d5b4 | 0 | 22 | 0 | 0 |
 | ue5-dev | codon | API | 0a5ce0d5b4 | 0 | 26 | 0 | 0 |
 | ue5-dev | codon | top | 0a5ce0d5b4 | 0 | 3 | 0 | 0 |
+| ue5-dev | official | unit | 0a5ce0d5b4 | 38 | 2 | 0 | 0 |
 | 0.10.0 | cpython | unit | ada75f9206 | 13 | 2 | 0 | 0 |
 | 0.10.0 | codon | unit | ada75f9206 | 13 | 2 | 0 | 0 |
 | 0.10.0 | codon | smoke | ada75f9206 | 0 | 35 | 0 | 0 |
@@ -50,15 +51,15 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 - **pycarla cannot wrap `CAMEvent.get_message_count` (self-typed generic method (Codon exporter))**: 1 tests: `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation`
 - **pycarla cannot wrap `CustomV2XEvent.get_message_count` (self-typed generic method (Codon exporter))**: 1 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive`
 
-### the upstream test itself (fails with the official module too) (1 causes, 1 tests)
+### the upstream test itself (fails with the official module too) (2 causes, 2 tests)
 
+- **fails with the official module too: the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
 - **stale upstream test: uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction raises AttributeError**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
 
-### infrastructure (3 causes, 3 tests)
+### infrastructure (2 causes, 2 tests)
 
 - **a script that needs command-line arguments (API/Tests.md documents them)**: 1 tests: `API/spawn_actor.py::<script>`
 - **test dependency `cv2` not installed in the test interpreter**: 1 tests: `test_ground_truth.py::<script>`
-- **the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
 
 
 ## Root causes: ue5-dev, codon mode
@@ -88,6 +89,17 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 ### infrastructure (1 causes, 1 tests)
 
 - **an interactive script (a pygame loop; the official module also runs until the time-out)**: 1 tests: `test_raycast_sensor.py::<script>`
+
+
+## Root causes: ue5-dev, official mode
+
+### the upstream test itself (fails with the official module too) (1 causes, 1 tests)
+
+- **stale upstream test: uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction raises AttributeError**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
+
+### infrastructure (1 causes, 1 tests)
+
+- **the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
 
 
 ## Root causes: 0.10.0, cpython mode
@@ -148,6 +160,15 @@ Not run, and not counted as failures (expectations.yaml `exclude:`).
 | ue5-dev | `smoke/test_world.py` | (all its tests) | map Town03 not shipped in ue5-dev packages; ported to tests/upstream/ported/smoke/test_world.py |
 | ue5-dev | `API/test_collision.py` | (all its tests) | map Town01 not shipped in ue5-dev packages; ported to tests/upstream/ported/API/test_collision.py |
 | ue5-dev | `test_vehicle_physics.py` | (all its tests) | map Town05 not shipped in ue5-dev packages; ported to tests/upstream/ported/test_vehicle_physics.py |
+| ue5-dev | `ported/smoke/test_collision_determinism.py` | TestCollisionDeterminism.test_two_cars | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_collision_determinism.py` | TestCollisionDeterminism.test_three_cars | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_collision_determinism.py` | TestCollisionDeterminism.test_car_bike | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_collision_determinism.py` | TestCollisionDeterminism.test_car_walker | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_determinism.py` | TestDeterminism.test_determ | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_map.py` | TestMap.test_reload_world | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_sensor_determinism.py` | TestSensorDeterminism.test_all_sensors | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_snapshot.py` | TestSnapshot.test_spawn_points | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_sync.py` | TestSynchronousMode.test_reloading_map | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
 
 ## Codon `--pyext` limitations (harness, not typesafe_carla gaps)
 
@@ -205,46 +226,46 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 
 | test | cpython | codon | official | root cause |
 |---|---|---|---|---|
-| `unit/test_boost_version.py::TestBoostInstallVersion.test_cmake_options_pins_correct_version` | pass | compile | not run | does not compile: cannot import name 'abspath' from 'os.path' |
-| `unit/test_boost_version.py::TestBoostInstallVersion.test_no_stale_boost_version_in_options` | pass | compile | not run | does not compile: cannot import name 'abspath' from 'os.path' |
-| `unit/test_boost_version.py::TestNumpyRequirementsCeiling.test_no_numpy_2_ceiling_in_requirements` | pass | compile | not run | does not compile: cannot import name 'abspath' from 'os.path' |
-| `unit/test_boost_version.py::TestCarlaImports.test_carla_imports` | pass | compile | not run | does not compile: cannot import name 'abspath' from 'os.path' |
-| `unit/test_client.py::TestClient.test_client_version` | error | compile | not run | the test needs a CARLA git checkout (`git describe`) |
-| `unit/test_lidar_smoke_helpers.py::TestLidarSmokeHelpers.test_get_current_detection_points_is_instance_method` | pass | compile | not run | does not compile: no module named 'ast' |
-| `unit/test_numpy_compat.py::TestPropControlDvsDtype.test_uses_bool_underscore` | pass | compile | not run | does not compile: cannot import name 'abspath' from 'os.path' |
-| `unit/test_numpy_compat.py::TestPropControlDvsDtype.test_no_bare_np_bool` | pass | compile | not run | does not compile: cannot import name 'abspath' from 'os.path' |
-| `unit/test_numpy_compat.py::TestPropControlDvsDtype.test_no_np_matrix` | pass | compile | not run | does not compile: cannot import name 'abspath' from 'os.path' |
-| `unit/test_transform.py::TestLocation.test_default_values` | pass | pass | not run |  |
-| `unit/test_transform.py::TestLocation.test_named_args` | pass | pass | not run |  |
-| `unit/test_transform.py::TestRotation.test_default_values` | pass | pass | not run |  |
-| `unit/test_transform.py::TestRotation.test_named_args` | pass | pass | not run |  |
-| `unit/test_transform.py::TestVector.test_make_unit_vector_3d_no_argument` | pass | pass | not run |  |
-| `unit/test_transform.py::TestVector.test_make_unit_vector_3d_epsilon_keyword` | pass | pass | not run |  |
-| `unit/test_transform.py::TestVector.test_make_unit_vector_3d_zero_length` | pass | pass | not run |  |
-| `unit/test_transform.py::TestVector.test_make_unit_vector_2d_no_argument` | pass | pass | not run |  |
-| `unit/test_transform.py::TestVector.test_make_unit_vector_2d_epsilon_keyword` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_values` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_print` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_translation` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_rotation` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_rotation_and_translation` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_list_rotation_and_translation_location` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_list_rotation_and_translation_vector3d` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_offset_transform` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_offset_transform_translation` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_offset_transform_rotation` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_offset_transform_and_rotation` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_offset_transform_equality` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_offset_none` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_with_offset` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_offset_setter` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_equality` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args` | pass | pass | not run |  |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args_positional` | pass | pass | not run |  |
-| `unit/test_vehicle.py::TestVehicleControl.test_default_values` | pass | pass | not run |  |
-| `unit/test_vehicle.py::TestVehicleControl.test_named_args` | pass | pass | not run |  |
-| `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args` | error | compile | not run | stale upstream test: uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction raises AttributeError |
+| `unit/test_boost_version.py::TestBoostInstallVersion.test_cmake_options_pins_correct_version` | pass | compile | pass | does not compile: cannot import name 'abspath' from 'os.path' |
+| `unit/test_boost_version.py::TestBoostInstallVersion.test_no_stale_boost_version_in_options` | pass | compile | pass | does not compile: cannot import name 'abspath' from 'os.path' |
+| `unit/test_boost_version.py::TestNumpyRequirementsCeiling.test_no_numpy_2_ceiling_in_requirements` | pass | compile | pass | does not compile: cannot import name 'abspath' from 'os.path' |
+| `unit/test_boost_version.py::TestCarlaImports.test_carla_imports` | pass | compile | pass | does not compile: cannot import name 'abspath' from 'os.path' |
+| `unit/test_client.py::TestClient.test_client_version` | error | compile | error | fails with the official module too: the test needs a CARLA git checkout (`git describe`) |
+| `unit/test_lidar_smoke_helpers.py::TestLidarSmokeHelpers.test_get_current_detection_points_is_instance_method` | pass | compile | pass | does not compile: no module named 'ast' |
+| `unit/test_numpy_compat.py::TestPropControlDvsDtype.test_uses_bool_underscore` | pass | compile | pass | does not compile: cannot import name 'abspath' from 'os.path' |
+| `unit/test_numpy_compat.py::TestPropControlDvsDtype.test_no_bare_np_bool` | pass | compile | pass | does not compile: cannot import name 'abspath' from 'os.path' |
+| `unit/test_numpy_compat.py::TestPropControlDvsDtype.test_no_np_matrix` | pass | compile | pass | does not compile: cannot import name 'abspath' from 'os.path' |
+| `unit/test_transform.py::TestLocation.test_default_values` | pass | pass | pass |  |
+| `unit/test_transform.py::TestLocation.test_named_args` | pass | pass | pass |  |
+| `unit/test_transform.py::TestRotation.test_default_values` | pass | pass | pass |  |
+| `unit/test_transform.py::TestRotation.test_named_args` | pass | pass | pass |  |
+| `unit/test_transform.py::TestVector.test_make_unit_vector_3d_no_argument` | pass | pass | pass |  |
+| `unit/test_transform.py::TestVector.test_make_unit_vector_3d_epsilon_keyword` | pass | pass | pass |  |
+| `unit/test_transform.py::TestVector.test_make_unit_vector_3d_zero_length` | pass | pass | pass |  |
+| `unit/test_transform.py::TestVector.test_make_unit_vector_2d_no_argument` | pass | pass | pass |  |
+| `unit/test_transform.py::TestVector.test_make_unit_vector_2d_epsilon_keyword` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_values` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_print` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_translation` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_rotation` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_rotation_and_translation` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_list_rotation_and_translation_location` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_list_rotation_and_translation_vector3d` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_offset_transform` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_offset_transform_translation` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_offset_transform_rotation` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_offset_transform_and_rotation` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_offset_transform_equality` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_offset_none` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_with_offset` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_offset_setter` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_equality` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args` | pass | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args_positional` | pass | pass | pass |  |
+| `unit/test_vehicle.py::TestVehicleControl.test_default_values` | pass | pass | pass |  |
+| `unit/test_vehicle.py::TestVehicleControl.test_named_args` | pass | pass | pass |  |
+| `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args` | error | compile | error | stale upstream test: uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction raises AttributeError |
 | `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_components` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_sockets_consistent` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_actor_introspection.py::TestActorIntrospection.test_walker_bones` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
