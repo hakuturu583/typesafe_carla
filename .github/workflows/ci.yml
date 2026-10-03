@@ -64,6 +64,8 @@ jobs:
       # The release's default GCC, never a newer one the runner image adds.
       CC: gcc-${{ matrix.os.gcc }}
       CXX: g++-${{ matrix.os.gcc }}
+      # What the source build and the build from the prebuilt both build.
+      SHIM_TARGETS: typesafe_carla_ffi test_ffi test_generated test_image_converter
     strategy:
       fail-fast: false
       matrix:
@@ -121,7 +123,7 @@ jobs:
           -DTSC_CARLA_REF_NAME=${{ matrix.carla_ref }}
       - name: Build (cache ${{ steps.cache.outputs.cache-hit == 'true' && 'hit' || steps.cache.outputs.cache-hit == 'false' && 'partial hit' || 'miss' }})
         # A bare -j means unlimited jobs; LibCarla/Boost TUs need ~1-2 GB each.
-        run: cmake --build build -j "$(nproc)" --target typesafe_carla_ffi test_ffi test_generated test_image_converter
+        run: cmake --build build -j "$(nproc)" --target ${{ env.SHIM_TARGETS }}
       # Saved as soon as it is built (a failing test still keeps the build),
       # but not from pull requests: their entries are visible to that PR only
       # and would push main's out of the repository's 10 GB.
@@ -163,7 +165,7 @@ jobs:
         run: |
           cmake -S . -B build-prebuilt -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF="$SHA" \
             -DTSC_CARLA_REF_NAME="$CARLA_REF" -DTSC_CARLA_PREBUILT_DIR="$RUNNER_TEMP/libcarla-prebuilt"
-          cmake --build build-prebuilt -j "$(nproc)" --target typesafe_carla_ffi test_ffi test_generated test_image_converter
+          cmake --build build-prebuilt -j "$(nproc)" --target ${{ env.SHIM_TARGETS }}
           ctest --test-dir build-prebuilt --output-on-failure
       - name: Publish the LibCarla prebuilt
         if: steps.prebuilt.outcome == 'success'

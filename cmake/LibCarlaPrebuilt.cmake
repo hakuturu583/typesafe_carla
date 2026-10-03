@@ -14,7 +14,7 @@
 #     Checks the prefix's manifest against this build (compiler ABI, CARLA
 #     repository and commit) and defines the imported target carla-client.
 #     Sets TSC_CARLA_RESOLVED_REF, TSC_CARLA_COMMIT, TSC_CARLA_VERSION,
-#     TSC_CARLA_LICENSE_FILE and TSC_CARLA_NOTICES_COMPONENTS in the caller.
+#     TSC_CARLA_LICENSE_FILE and TSC_CARLA_NOTICES_COMPONENTS_TEXT in the caller.
 #
 # Prefix layout:
 #   prebuilt.json                    manifest: CARLA repository, ref, commit and
@@ -33,16 +33,24 @@ include_guard(GLOBAL)
 set(_TSC_PB_FORMAT 1)
 set(_TSC_PB_GUARD "${CMAKE_CURRENT_LIST_DIR}/../tools/libcarla_cache_guard.sh")
 set(_TSC_PB_RESOLVE "${CMAKE_CURRENT_LIST_DIR}/../tools/resolve_carla_ref.sh")
+set(_TSC_PB_FETCH "${CMAKE_CURRENT_LIST_DIR}/../tools/fetch_libcarla_prebuilt.py")
 set(_TSC_PB_ASSEMBLE "${CMAKE_CURRENT_LIST_DIR}/LibCarlaPrebuiltAssemble.cmake")
+
+# Sets <out> to a command prefix that runs a command with this build's C and
+# C++ compilers and flags as CC, CXX, CFLAGS and CXXFLAGS: the inputs of
+# `tools/libcarla_cache_guard.sh --abi`.
+macro(_tsc_pb_abi_env out)
+  set(${out} "${CMAKE_COMMAND}" -E env
+             "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}"
+             "CFLAGS=${CMAKE_C_FLAGS}" "CXXFLAGS=${CMAKE_CXX_FLAGS}")
+endmacro()
 
 # Sets <out> to `tools/libcarla_cache_guard.sh --abi` for this build's C and
 # C++ compilers and flags. Fails if it cannot, or with SOFT sets it empty.
 function(tsc_abi_fingerprint out)
+  _tsc_pb_abi_env(_env)
   execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E env
-            "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}"
-            "CFLAGS=${CMAKE_C_FLAGS}" "CXXFLAGS=${CMAKE_CXX_FLAGS}"
-            bash "${_TSC_PB_GUARD}" --abi
+    COMMAND ${_env} bash "${_TSC_PB_GUARD}" --abi
     RESULT_VARIABLE _rc OUTPUT_VARIABLE _fp ERROR_VARIABLE _err
     OUTPUT_STRIP_TRAILING_WHITESPACE)
   if(NOT _rc EQUAL 0)
@@ -79,8 +87,14 @@ set(_TSC_PB_SYSTEM_LINKS "^(Threads::Threads|m|dl|rt|pthread|-pthread|-lm|-ldl|-
 # Anything the prefix could not reproduce (a shared or object library, an
 # absolute path, an unknown generator expression) fails the configure step.
 function(_tsc_pb_walk)
-  string(CONCAT _e "")
-      set(_tsc_pb_error "${_e}" PARENT_SCOPE)
+  # Sets _tsc_pb_error to the message (the arguments, concatenated) and returns.
+  macro(_tsc_pb_fail)
+    string(CONCAT _e "typesafe_carla: " ${ARGN})
+    set(_tsc_pb_error "${_e}" PARENT_SCOPE)
+    return()
+  endmacro()
+
+  set(_tsc_pb_error "" PARENT_SCOPE)
   set(_todo carla-client)
   set(_targets "")
   set(_i 0)
@@ -92,10 +106,8 @@ function(_tsc_pb_walk)
     list(APPEND _targets "${_t}")
     get_target_property(_type "${_t}" TYPE)
     if(NOT _type MATCHES "^(STATIC_LIBRARY|INTERFACE_LIBRARY)$")
-      string(CONCAT _e "typesafe_carla: carla-client links ${_t}, a ${_type}; "
-                          "the LibCarla prebuilt only supports static and interface libraries")
-      set(_tsc_pb_error "${_e}" PARENT_SCOPE)
-      return()
+      _tsc_pb_fail("carla-client links ${_t}, a ${_type}; "
+                   "the LibCarla prebuilt only supports static and interface libraries")
     endif()
     get_target_property(_links "${_t}" INTERFACE_LINK_LIBRARIES)
     if(NOT _links)
@@ -108,11 +120,9 @@ function(_tsc_pb_walk)
       elseif(_d MATCHES "^\\$<INSTALL_INTERFACE:")
         continue()
       elseif(_d MATCHES "\\$<")
-        string(CONCAT _e "typesafe_carla: ${_t} links '${_d}'; the LibCarla prebuilt "
-                            "cannot reproduce this generator expression (update "
-                            "cmake/LibCarlaPrebuilt.cmake)")
-      set(_tsc_pb_error "${_e}" PARENT_SCOPE)
-      return()
+        _tsc_pb_fail("${_t} links '${_d}'; the LibCarla prebuilt "
+                     "cannot reproduce this generator expression (update "
+                     "cmake/LibCarlaPrebuilt.cmake)")
       endif()
       if(_d MATCHES "^/(usr/)?lib[^ ]*/lib(m|dl|rt|pthread)\\.(so|a)$")
         # A system library by path (libpng: .../libm.so): by name, so the
@@ -133,10 +143,8 @@ function(_tsc_pb_walk)
         endif()
       endif()
       if(NOT TARGET "${_d}")
-        string(CONCAT _e "typesafe_carla: ${_t} links '${_d}', which is neither a target "
-                            "nor a system library; the LibCarla prebuilt cannot ship it")
-      set(_tsc_pb_error "${_e}" PARENT_SCOPE)
-      return()
+        _tsc_pb_fail("${_t} links '${_d}', which is neither a target "
+                     "nor a system library; the LibCarla prebuilt cannot ship it")
       endif()
       get_target_property(_alias "${_d}" ALIASED_TARGET)
       if(_alias)
@@ -151,10 +159,8 @@ function(_tsc_pb_walk)
         if(_itype STREQUAL "INTERFACE_LIBRARY" AND NOT _ilinks AND NOT _iinc)
           continue()
         endif()
-        string(CONCAT _e "typesafe_carla: ${_t} links the imported target ${_d}; the "
-                            "LibCarla prebuilt cannot ship it")
-      set(_tsc_pb_error "${_e}" PARENT_SCOPE)
-      return()
+        _tsc_pb_fail("${_t} links the imported target ${_d}; the "
+                     "LibCarla prebuilt cannot ship it")
       endif()
       list(APPEND _deps "${_d}")
       list(APPEND _todo "${_d}")
@@ -239,14 +245,9 @@ function(_tsc_pb_json json out)
 endfunction()
 
 # Sets <out> to the commit the requested CARLA ref (TSC_CARLA_GIT_REF in
-# TSC_CARLA_GIT_REPOSITORY) points at: the ref itself for a full SHA, else
-# `git ls-remote` through tools/resolve_carla_ref.sh.
+# TSC_CARLA_GIT_REPOSITORY) points at, from tools/resolve_carla_ref.sh (a full
+# SHA as given, else `git ls-remote`).
 function(_tsc_pb_resolve_ref out)
-  string(LENGTH "${TSC_CARLA_GIT_REF}" _len)
-  if(TSC_CARLA_GIT_REF MATCHES "^[0-9a-f]+$" AND _len EQUAL 40)
-    set(${out} "${TSC_CARLA_GIT_REF}" PARENT_SCOPE)
-    return()
-  endif()
   execute_process(
     COMMAND bash "${_TSC_PB_RESOLVE}" "${TSC_CARLA_GIT_REF}" "${TSC_CARLA_GIT_REPOSITORY}"
     RESULT_VARIABLE _rc OUTPUT_VARIABLE _sha ERROR_VARIABLE _err
@@ -329,13 +330,9 @@ function(tsc_import_libcarla_prebuilt prefix verified_sha)
   endif()
   set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_manifest}")
 
-  # The recorded ref: TSC_CARLA_REF_NAME, else the requested ref, as for a
-  # source build of the same ref.
-  if(TSC_CARLA_REF_NAME)
-    set(_rec "${TSC_CARLA_REF_NAME}")
-  else()
-    set(_rec "${TSC_CARLA_GIT_REF}")
-  endif()
+  # The recorded ref, as for a source build of the same ref.
+  _tsc_set_resolved_ref("${TSC_CARLA_GIT_REF}")
+  set(_rec "${TSC_CARLA_RESOLVED_REF}")
   set(TSC_CARLA_RESOLVED_REF "${_rec}" PARENT_SCOPE)
   set(TSC_CARLA_COMMIT "${_commit}" PARENT_SCOPE)
   set(TSC_CARLA_VERSION "${_version}" PARENT_SCOPE)
@@ -378,11 +375,9 @@ function(tsc_fetch_libcarla_prebuilt out_prefix out_sha)
     return()
   endif()
   message(STATUS "typesafe_carla: looking for a LibCarla prebuilt of CARLA ${TSC_CARLA_GIT_REF}")
+  _tsc_pb_abi_env(_env)
   execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E env
-            "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}"
-            "CFLAGS=${CMAKE_C_FLAGS}" "CXXFLAGS=${CMAKE_CXX_FLAGS}"
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../tools/fetch_libcarla_prebuilt.py"
+    COMMAND ${_env} "${Python3_EXECUTABLE}" "${_TSC_PB_FETCH}"
             --repository "${TSC_CARLA_GIT_REPOSITORY}" "${TSC_CARLA_GIT_REF}"
     RESULT_VARIABLE _rc OUTPUT_VARIABLE _out ERROR_VARIABLE _err
     OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_STRIP_TRAILING_WHITESPACE)

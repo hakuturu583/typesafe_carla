@@ -122,7 +122,7 @@ if(TSC_CARLA_PREBUILT STREQUAL "auto")
       return()
     endif()
   endif()
-elseif(TSC_CARLA_PREBUILT AND NOT TSC_CARLA_PREBUILT MATCHES "^(OFF|off|0|NO|no|FALSE|false)$")
+elseif(TSC_CARLA_PREBUILT)  # anything but auto or a false constant
   message(FATAL_ERROR "TSC_CARLA_PREBUILT must be auto or empty/OFF, not '${TSC_CARLA_PREBUILT}'")
 endif()
 

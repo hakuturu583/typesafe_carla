@@ -46,6 +46,7 @@ from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
 ARTIFACT_REPO = "hakuturu583/typesafe_carla"
+CARLA_REPOSITORY = "https://github.com/carla-simulator/carla"
 WORKFLOW_PATH = ".github/workflows/ci.yml"
 EVENTS = {"push", "schedule"}
 FORMAT = 1
@@ -91,7 +92,7 @@ def artifact_name(sha: str, abi: str) -> str:
     return f"libcarla-prebuilt-{os_label()}-{compiler}{major}-{digest}-{sha}"
 
 
-def gh(*args: str, binary: bool = False, out=None):
+def gh(*args: str, out=None):
     try:
         if out is not None:
             subprocess.run(["gh", *args], check=True, stdout=out, stderr=subprocess.PIPE)
@@ -101,7 +102,7 @@ def gh(*args: str, binary: bool = False, out=None):
     except subprocess.CalledProcessError as e:
         err = e.stderr.decode(errors="replace").strip() if e.stderr else ""
         raise Unavailable(f"gh {' '.join(args[:2])} failed: {err}") from e
-    return res.stdout if binary else json.loads(res.stdout)
+    return json.loads(res.stdout)
 
 
 def find_artifact(repo: str, name: str) -> dict:
@@ -137,6 +138,11 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def norm_repo(url: str) -> str:
+    """Repository URLs compare without a trailing "/" or ".git"."""
+    return url.rstrip("/").removesuffix(".git")
+
+
 def check_manifest(prefix: Path, sha: str, abi: str, repository: str) -> dict:
     """Fails (ValueError) unless the prefix is the prebuilt asked for."""
     manifest = json.loads((prefix / "prebuilt.json").read_text())
@@ -146,8 +152,7 @@ def check_manifest(prefix: Path, sha: str, abi: str, repository: str) -> dict:
         raise ValueError(f"prebuilt is CARLA {manifest.get('carla_commit')}, expected {sha}")
     if manifest.get("abi", "") + "\n" != abi:
         raise ValueError(f"prebuilt ABI\n{manifest.get('abi')}\ndiffers from this compiler's\n{abi}")
-    norm = lambda u: u.rstrip("/").removesuffix(".git")  # noqa: E731
-    if norm(manifest.get("carla_repository", "")) != norm(repository):
+    if norm_repo(manifest.get("carla_repository", "")) != norm_repo(repository):
         raise ValueError(f"prebuilt is from {manifest.get('carla_repository')}, not {repository}")
     return manifest
 
@@ -205,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("ref", help="CARLA branch, tag or commit SHA")
     ap.add_argument("dest", nargs="?", type=Path,
                     help="where to unpack (default: the user's cache, keyed by name)")
-    ap.add_argument("--repository", default="https://github.com/carla-simulator/carla",
+    ap.add_argument("--repository", default=CARLA_REPOSITORY,
                     help="the CARLA repository <ref> is in (prebuilts are only built from "
                          "carla-simulator/carla)")
     ap.add_argument("--artifact-repo", default=ARTIFACT_REPO,
@@ -221,9 +226,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.print_name:
             print(name)
             return 0
-        norm = args.repository.rstrip("/").removesuffix(".git")
-        if norm != "https://github.com/carla-simulator/carla":
-            raise Unavailable(f"CI builds prebuilts of carla-simulator/carla only, not {norm}")
+        if norm_repo(args.repository) != CARLA_REPOSITORY:
+            raise Unavailable("CI builds prebuilts of carla-simulator/carla only, not "
+                              f"{norm_repo(args.repository)}")
         dest = args.dest or cache_root() / name
         if (dest / "prebuilt.json").exists():
             check_manifest(dest, sha, abi, args.repository)

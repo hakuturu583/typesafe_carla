@@ -37,7 +37,7 @@ FILES = {"lib/libcarla-client.a": b"!<arch>\n", "include/carla/Version.h": b"#pr
 
 
 def fake_gh(archive: bytes):
-    def gh(*args, binary=False, out=None):
+    def gh(*args, out=None):
         assert args[0] == "api" and args[1].endswith("/zip")
         out.write(archive)
     return gh
@@ -109,7 +109,7 @@ def test_find_artifact_takes_successful_main_runs_only(monkeypatch):
              "conclusion": "success"},
     }
 
-    def gh(*args, binary=False, out=None):
+    def gh(*args, out=None):
         if "repos/o/r/actions/artifacts" in args:
             return {"artifacts": arts}
         return runs[int(args[-1].rsplit("/", 1)[1])]
