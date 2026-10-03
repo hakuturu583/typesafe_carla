@@ -86,12 +86,24 @@ and commit; the annotated tag and the GitHub release name the ref and SHA.
 2. For each project on both indexes, add a **Trusted Publisher**:
    - owner/repository: `hakuturu583/typesafe_carla`
    - workflow: `release.yml`
-   - environment: `pypi` (PyPI) or `testpypi` (TestPyPI)
-3. In the GitHub repository settings, create the environments `pypi` and
-   `testpypi`. Protecting `pypi` with required reviewers is recommended. If
-   `pypi` has deployment branch/tag rules, they must allow both `main` (the
-   auto-release run is a push to `main`) and the release tags
-   (`[0-9]*.[0-9]*.[0-9]*-*`, for hand-cut tags).
+   - environment:
+
+     | | PyPI | TestPyPI |
+     |---|---|---|
+     | `typesafe-carla` | `pypi` | `testpypi` |
+     | `typesafe-carla-toolchain` | `pypi-toolchain` | `testpypi-toolchain` |
+
+   The two projects need different environments. Trusted publishers match on
+   (repository, workflow, environment); with identical claims the first upload
+   turns one project's pending publisher into a real one, every later token is
+   scoped to that project, and the other project can never be created ("400
+   Non-user identities cannot create new projects").
+3. In the GitHub repository settings, create the environments `pypi`,
+   `pypi-toolchain`, `testpypi` and `testpypi-toolchain`. Protecting `pypi`
+   and `pypi-toolchain` with required reviewers is recommended. If they have
+   deployment branch/tag rules, they must allow both `main` (the auto-release
+   run is a push to `main`) and, for hand-cut tags, the release tags
+   (`[0-9]*.[0-9]*.[0-9]*-*`).
 4. Create the labels `release:major`, `release:minor` and `release:patch`.
 5. The `release` job pushes the version bump to `main` and the tag with
    `GITHUB_TOKEN`: if `main` is protected, allow GitHub Actions to push to it
