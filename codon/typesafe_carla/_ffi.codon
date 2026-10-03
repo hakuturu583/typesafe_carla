@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 4
-TSC_ABI_VERSION_MINOR = 3
+TSC_ABI_VERSION_MINOR = 4
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -606,6 +606,12 @@ from C import LIB.tsc_build_commit() -> cobj
 from C import LIB.tsc_backend_name() -> cobj
 from C import LIB.tsc_string_free(Ptr[CString]) -> None
 from C import LIB.tsc_actor_attribute_free(Ptr[CActorAttribute]) -> None
+# Issue #33.
+from C import LIB.tsc_actor_blueprint_get_attribute_ids(cobj, Ptr[CStringList]) -> i32
+from C import LIB.tsc_actor_blueprint_get_recommended_values(cobj, cobj, int, Ptr[CStringList]) -> i32
+# BEGIN GENERATED actor_blueprint_size from bindings/actor_blueprint.yaml, do not edit
+from C import LIB.tsc_actor_blueprint_size(cobj, Ptr[int]) -> i32
+# END GENERATED actor_blueprint_size
 
 from C import LIB.tsc_handle_retain(cobj) -> None
 from C import LIB.tsc_handle_release(cobj) -> None
@@ -745,6 +751,20 @@ from C import LIB.tsc_sensor_is_listening(cobj, Ptr[i32]) -> i32
 # END GENERATED sensor
 from C import LIB.tsc_sensor_dropped_count(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_sensor_pending_count(cobj, Ptr[int]) -> i32  # ABI 2.1
+# Issue #33: ServerSideSensor.
+TSC_GBUFFER_TEXTURE_COUNT = 13
+# BEGIN GENERATED sensor_ros from bindings/server_side_sensor.yaml, do not edit
+from C import LIB.tsc_sensor_enable_for_ros(cobj) -> i32
+from C import LIB.tsc_sensor_disable_for_ros(cobj) -> i32
+from C import LIB.tsc_sensor_is_enabled_for_ros(cobj, Ptr[i32]) -> i32
+# END GENERATED sensor_ros
+# BEGIN GENERATED sensor_gbuffer from bindings/server_side_sensor.yaml, do not edit
+from C import LIB.tsc_sensor_is_listening_gbuffer(cobj, u32, Ptr[i32]) -> i32
+from C import LIB.tsc_sensor_stop_gbuffer(cobj, u32) -> i32
+# END GENERATED sensor_gbuffer
+from C import LIB.tsc_sensor_listen_to_gbuffer(cobj, u32, int) -> i32
+from C import LIB.tsc_sensor_gbuffer_pending_count(cobj, u32, Ptr[int]) -> i32
+from C import LIB.tsc_sensor_gbuffer_poll(cobj, u32, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_poll(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_wait_for_data(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_data_get_info(cobj, Ptr[CSensorDataInfo]) -> i32
@@ -1028,6 +1048,9 @@ from C import LIB.tsc_actor_is_dormant(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_get_parent(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_actor_get_semantic_tags(cobj, Ptr[u8], int, Ptr[int]) -> i32
 # END GENERATED actor_state
+# BEGIN GENERATED actor_world from bindings/actor.yaml, do not edit
+from C import LIB.tsc_actor_get_world(cobj, Ptr[cobj]) -> i32
+# END GENERATED actor_world
 from C import LIB.tsc_actor_get_attributes(cobj, Ptr[CStringList], Ptr[CStringList]) -> i32
 # BEGIN GENERATED actor_physics_at_location from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_set_collisions(cobj, i32) -> i32

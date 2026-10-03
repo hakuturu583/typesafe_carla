@@ -153,6 +153,10 @@ tsc_status_t tsc_actor_get_semantic_tags(tsc_actor_t *actor,
   });
 }
 
+tsc_status_t tsc_actor_get_world(tsc_actor_t *actor, tsc_world_t **out) {
+  return new_handle(__func__, out, [&] { return new tsc_world(actor_of(actor).GetWorld()); });
+}
+
 tsc_status_t tsc_actor_set_collisions(tsc_actor_t *actor, int32_t enabled) {
   return TSC_GUARD({ actor_of(actor).SetCollisions(enabled != 0); });
 }
@@ -274,6 +278,12 @@ tsc_status_t tsc_actor_blueprint_has_attribute(const tsc_actor_blueprint_t *blue
                                                const char *id, size_t id_len, int32_t *out_has) {
   return TSC_GUARD({
     assign_out(out_has, "out_has", [&] { return blueprint_of(blueprint).ContainsAttribute(to_string(id, id_len, "id")) ? 1 : 0; });
+  });
+}
+
+tsc_status_t tsc_actor_blueprint_size(const tsc_actor_blueprint_t *blueprint, size_t *out_count) {
+  return TSC_GUARD({
+    assign_out(out_count, "out_count", [&] { return blueprint_of(blueprint).size(); });
   });
 }
 
@@ -782,6 +792,33 @@ tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out) {
   return TSC_GUARD({
     assign_out(out, "out", [&] { return sensor_of(sensor).IsListening() ? 1 : 0; });
   });
+}
+
+// bindings/server_side_sensor.yaml: carla::client::ServerSideSensor
+
+tsc_status_t tsc_sensor_enable_for_ros(tsc_sensor_t *sensor) {
+  return TSC_GUARD({ server_side_sensor_of(sensor).EnableForROS(); });
+}
+
+tsc_status_t tsc_sensor_disable_for_ros(tsc_sensor_t *sensor) {
+  return TSC_GUARD({ server_side_sensor_of(sensor).DisableForROS(); });
+}
+
+tsc_status_t tsc_sensor_is_enabled_for_ros(tsc_sensor_t *sensor, int32_t *out) {
+  return TSC_GUARD({
+    assign_out(out, "out", [&] { return server_side_sensor_of(sensor).IsEnabledForROS() ? 1 : 0; });
+  });
+}
+
+tsc_status_t tsc_sensor_is_listening_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                             int32_t *out) {
+  return TSC_GUARD({
+    assign_out(out, "out", [&] { return server_side_sensor_of(sensor).IsListeningGBuffer(check_gbuffer_id(gbuffer_id)) ? 1 : 0; });
+  });
+}
+
+tsc_status_t tsc_sensor_stop_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id) {
+  return TSC_GUARD({ server_side_sensor_of(sensor).StopGBuffer(check_gbuffer_id(gbuffer_id)); });
 }
 
 // bindings/traffic_light.yaml: carla::client::TrafficLight

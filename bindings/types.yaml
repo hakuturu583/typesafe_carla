@@ -33,6 +33,13 @@ uint32:
   c: uint32_t
   codon: u32
   cpp: ["unsigned int", "uint32_t"]
+# A GBufferTextureID (issue #33): below TSC_GBUFFER_TEXTURE_COUNT.
+gbuffer_id:
+  c: uint32_t
+  codon: u32
+  to_carla: "check_gbuffer_id({})"
+  invalid: 13
+  cpp: ["unsigned int", "uint32_t"]
 uint64:
   c: uint64_t
   codon: u64

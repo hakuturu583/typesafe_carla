@@ -32,6 +32,9 @@
 #define TSC_MOCK_HOOK extern "C" __attribute__((visibility("default")))
 TSC_MOCK_HOOK size_t tsc_mock_last_worker_threads(void);  // Client(host, port, worker_threads)
 TSC_MOCK_HOOK uint16_t tsc_mock_last_map_layers(void);    // LoadWorld / LoadWorldIfDifferent
+// Live G-buffer subscriptions of the process (ListenToGBuffer minus a
+// successful StopGBuffer), leaked ones included.
+TSC_MOCK_HOOK size_t tsc_mock_gbuffer_subscriptions(void);
 #undef TSC_MOCK_HOOK
 
 namespace carla {
@@ -809,6 +812,7 @@ struct ActorData;
 
 class Junction;
 class Landmark;
+class World;
 class LightManager;
 
 class Timestamp {
@@ -924,11 +928,13 @@ class Map : public std::enable_shared_from_this<Map> {
 class ActorAttribute {
  public:
   ActorAttribute(std::string id, rpc::ActorAttributeType type, std::string value,
-                 bool is_modifiable)
-      : _id(std::move(id)), _type(type), _value(std::move(value)), _modifiable(is_modifiable) {}
+                 bool is_modifiable, std::vector<std::string> recommended_values = {})
+      : _id(std::move(id)), _type(type), _value(std::move(value)), _modifiable(is_modifiable),
+        _recommended_values(std::move(recommended_values)) {}
   const std::string &GetId() const { return _id; }
   rpc::ActorAttributeType GetType() const { return _type; }
   const std::string &GetValue() const { return _value; }
+  const std::vector<std::string> &GetRecommendedValues() const { return _recommended_values; }
   bool IsModifiable() const { return _modifiable; }
   // Throws std::invalid_argument when not modifiable or not parseable.
   void Set(std::string value);
@@ -938,6 +944,7 @@ class ActorAttribute {
   rpc::ActorAttributeType _type;
   std::string _value;
   bool _modifiable;
+  std::vector<std::string> _recommended_values;
 };
 
 class ActorBlueprint {
@@ -953,6 +960,22 @@ class ActorBlueprint {
   const ActorAttribute &GetAttribute(const std::string &id) const;
   void SetAttribute(const std::string &id, std::string value);
   size_t size() const { return _attributes.size(); }
+  // Iterates the attributes (ActorAttribute values), as LibCarla's
+  // make_map_values_const_iterator over its attribute map.
+  class const_iterator {
+   public:
+    explicit const_iterator(std::map<std::string, ActorAttribute>::const_iterator it) : _it(it) {}
+    const ActorAttribute &operator*() const { return _it->second; }
+    const ActorAttribute *operator->() const { return &_it->second; }
+    const_iterator &operator++() { ++_it; return *this; }
+    bool operator==(const const_iterator &other) const { return _it == other._it; }
+    bool operator!=(const const_iterator &other) const { return _it != other._it; }
+
+   private:
+    std::map<std::string, ActorAttribute>::const_iterator _it;
+  };
+  const_iterator begin() const { return const_iterator(_attributes.begin()); }
+  const_iterator end() const { return const_iterator(_attributes.end()); }
   rpc::ActorDescription MakeActorDescription() const;
 
  private:
@@ -971,7 +994,7 @@ class BlueprintLibrary : public std::enable_shared_from_this<BlueprintLibrary> {
   explicit BlueprintLibrary(std::vector<ActorBlueprint> blueprints)
       : _blueprints(std::move(blueprints)) {}
   SharedPtr<BlueprintLibrary> Filter(const std::string &wildcard_pattern) const;
-  // The mock's attributes have no recommended values: matches the value.
+  // As LibCarla: matches a recommended value, or the value when there are none.
   SharedPtr<BlueprintLibrary> FilterByAttribute(const std::string &name,
                                                 const std::string &value) const;
   const_pointer Find(const std::string &key) const;
@@ -1049,6 +1072,8 @@ class Actor : public std::enable_shared_from_this<Actor> {
   std::vector<geom::Transform> GetSocketWorldTransforms() const;
   std::vector<geom::Transform> GetSocketRelativeTransforms() const;
   std::vector<std::string> GetSocketNames() const;
+  // Issue #33: the world the actor lives in (ActorState::GetWorld in LibCarla).
+  World GetWorld() const;
 
  protected:
   // Locks the episode and returns the live actor record, or throws.
@@ -1119,7 +1144,37 @@ class Sensor : public Actor {
   ~Sensor() override;  // stops listening, like LibCarla's ServerSideSensor
   void Listen(CallbackFunctionType callback);
   void Stop();
+  // As LibCarla's ServerSideSensor: also true after ListenToGBuffer, until Stop().
   bool IsListening() const;
+
+ protected:
+  bool _listening_gbuffer = false;  // LibCarla's listening_mask bit 0 set by a G-buffer
+};
+
+// Issue #33: the sensors the server simulates (every "sensor.*" but lane
+// invasion), with LibCarla UE5's ROS2 and G-buffer methods. The mock server
+// publishes to "ROS2" (it records the flag) and sends G-buffer textures of
+// RGB cameras: one Image per tick, every pixel (id, id, id, 255).
+class ServerSideSensor : public Sensor {
+ public:
+  using Sensor::Sensor;
+  ~ServerSideSensor() override;  // stops the G-buffer streams, as LibCarla
+  bool Destroy() override;
+  void ListenToGBuffer(uint32_t GBufferId, CallbackFunctionType callback);
+  void StopGBuffer(uint32_t GBufferId);
+  bool IsListeningGBuffer(uint32_t id) const;
+  void EnableForROS();
+  void DisableForROS();
+  bool IsEnabledForROS();
+
+ private:
+  std::vector<uint32_t> OwnGBuffers() const;  // the textures this object listens to
+};
+
+// Sensors LibCarla computes on the client (lane invasion).
+class ClientSideSensor : public Sensor {
+ public:
+  using Sensor::Sensor;
 };
 
 class ActorList : public std::enable_shared_from_this<ActorList> {

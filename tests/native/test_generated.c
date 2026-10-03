@@ -56,6 +56,7 @@ int main(void) {
   expect_null_rejected(tsc_actor_is_dormant(NULL, (int32_t[1]){0}), "tsc_actor_is_dormant");
   expect_null_rejected(tsc_actor_get_parent(NULL, (tsc_actor_t *[1]){NULL}), "tsc_actor_get_parent");
   expect_null_rejected(tsc_actor_get_semantic_tags(NULL, (uint8_t[1]){0}, 0, (size_t[1]){0}), "tsc_actor_get_semantic_tags");
+  expect_null_rejected(tsc_actor_get_world(NULL, (tsc_world_t *[1]){NULL}), "tsc_actor_get_world");
   expect_null_rejected(tsc_actor_set_collisions(NULL, 0), "tsc_actor_set_collisions");
   expect_null_rejected(tsc_actor_enable_constant_velocity(NULL, NULL), "tsc_actor_enable_constant_velocity");
   expect_null_rejected(tsc_actor_disable_constant_velocity(NULL), "tsc_actor_disable_constant_velocity");
@@ -75,6 +76,7 @@ int main(void) {
   expect_null_rejected(tsc_actor_blueprint_get_id(NULL, (tsc_string_t[1]){0}), "tsc_actor_blueprint_get_id");
   expect_null_rejected(tsc_actor_blueprint_has_tag(NULL, NULL, 1, (int32_t[1]){0}), "tsc_actor_blueprint_has_tag");
   expect_null_rejected(tsc_actor_blueprint_has_attribute(NULL, NULL, 1, (int32_t[1]){0}), "tsc_actor_blueprint_has_attribute");
+  expect_null_rejected(tsc_actor_blueprint_size(NULL, (size_t[1]){0}), "tsc_actor_blueprint_size");
   expect_null_rejected(tsc_actor_list_filter(NULL, NULL, 1, (tsc_actor_list_t *[1]){NULL}), "tsc_actor_list_filter");
   expect_null_rejected(tsc_actor_blueprint_get_tags(NULL, (tsc_string_list_t[1]){0}), "tsc_actor_blueprint_get_tags");
   expect_null_rejected(tsc_actor_blueprint_match_tags(NULL, NULL, 1, (int32_t[1]){0}), "tsc_actor_blueprint_match_tags");
@@ -152,6 +154,11 @@ int main(void) {
   expect_null_rejected(tsc_obstacle_detection_get_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_obstacle_detection_get_actor");
   expect_null_rejected(tsc_obstacle_detection_get_other_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_obstacle_detection_get_other_actor");
   expect_null_rejected(tsc_sensor_is_listening(NULL, (int32_t[1]){0}), "tsc_sensor_is_listening");
+  expect_null_rejected(tsc_sensor_enable_for_ros(NULL), "tsc_sensor_enable_for_ros");
+  expect_null_rejected(tsc_sensor_disable_for_ros(NULL), "tsc_sensor_disable_for_ros");
+  expect_null_rejected(tsc_sensor_is_enabled_for_ros(NULL, (int32_t[1]){0}), "tsc_sensor_is_enabled_for_ros");
+  expect_null_rejected(tsc_sensor_is_listening_gbuffer(NULL, 13, (int32_t[1]){0}), "tsc_sensor_is_listening_gbuffer");
+  expect_null_rejected(tsc_sensor_stop_gbuffer(NULL, 13), "tsc_sensor_stop_gbuffer");
   expect_null_rejected(tsc_traffic_light_set_state(NULL, 99), "tsc_traffic_light_set_state");
   expect_null_rejected(tsc_traffic_light_set_green_time(NULL, NAN), "tsc_traffic_light_set_green_time");
   expect_null_rejected(tsc_traffic_light_set_yellow_time(NULL, NAN), "tsc_traffic_light_set_yellow_time");
@@ -293,6 +300,6 @@ int main(void) {
   if (tsc_world_snapshot_size(NULL) != 0) { fputs("tsc_world_snapshot_size(NULL)\n", stderr); ++g_failures; }
   expect_null_rejected(tsc_world_snapshot_get(NULL, 0, (tsc_actor_snapshot_t[1]){0}), "tsc_world_snapshot_get");
   if (g_failures != 0) return 1;
-  printf("test_generated: 259 generated functions reject NULL handles\n");
+  printf("test_generated: 266 generated functions reject NULL handles\n");
   return 0;
 }

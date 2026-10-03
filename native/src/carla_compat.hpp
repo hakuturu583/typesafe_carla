@@ -21,6 +21,7 @@
 #include <carla/client/LightManager.h>
 #include <carla/client/Map.h>
 #include <carla/client/Sensor.h>
+#include <carla/client/ServerSideSensor.h>
 #include <carla/client/Timestamp.h>
 #include <carla/client/TrafficLight.h>
 #include <carla/client/TrafficSign.h>

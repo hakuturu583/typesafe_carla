@@ -58,6 +58,7 @@ struct ActorData {
   bool chrono = false;
   float pose_blend = 0.0f;                         // walkers
   std::map<std::string, geom::Transform> custom_pose;  // walkers: SetBonesTransform
+  bool ros_enabled = false;  // issue #33: ServerSideSensor::EnableForROS
   // Issue #19.
   std::optional<geom::Vector3D> constant_velocity;  // world frame in the mock
 
@@ -110,6 +111,8 @@ struct Episode : std::enable_shared_from_this<Episode> {
     std::optional<geom::Location> lane_previous;
   };
   std::map<rpc::ActorId, Listener> listeners;
+  // Issue #33: G-buffer subscriptions, by (sensor, texture id).
+  std::map<std::pair<rpc::ActorId, uint32_t>, Listener> gbuffer_listeners;
   rpc::WeatherParameters weather = rpc::WeatherParameters::ClearNoon;
   size_t debug_shapes = 0;      // DebugHelper calls (nothing is drawn)
   std::string recording;        // the active recorder file, if any
@@ -174,6 +177,8 @@ struct Episode : std::enable_shared_from_this<Episode> {
   // Every actor removal goes through here so listeners never outlive their sensor.
   bool EraseActorLocked(rpc::ActorId id) {
     listeners.erase(id);
+    // G-buffer subscriptions stay: on a real client they outlive the actor
+    // unless StopGBuffer ran before the destroy (tsc_mock_gbuffer_subscriptions).
     auto it = actors.find(id);
     if (it == actors.end()) return false;
     destroyed.insert_or_assign(id, it->second);
@@ -415,9 +420,12 @@ std::vector<std::string> SplitTags(const std::string &id) {
 ActorBlueprint VehicleBlueprint(const std::string &id, const std::string &color) {
   return ActorBlueprint(
       id, SplitTags(id),
-      {ActorAttribute("color", rpc::ActorAttributeType::RGBColor, color, true),
-       ActorAttribute("role_name", rpc::ActorAttributeType::String, "autopilot", true),
-       ActorAttribute("number_of_wheels", rpc::ActorAttributeType::Int, "4", false),
+      // Recommended values as CARLA's vehicle blueprints have them (issue #33).
+      {ActorAttribute("color", rpc::ActorAttributeType::RGBColor, color, true,
+                      {color, "255,255,255"}),
+       ActorAttribute("role_name", rpc::ActorAttributeType::String, "autopilot", true,
+                      {"autopilot", "scenario", "ego_vehicle"}),
+       ActorAttribute("number_of_wheels", rpc::ActorAttributeType::Int, "4", false, {"4"}),
        ActorAttribute("sticky_control", rpc::ActorAttributeType::Bool, "true", true),
        ActorAttribute("base_mass", rpc::ActorAttributeType::Float, "1500.0", false)});
 }
@@ -481,7 +489,13 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
 
 SharedPtr<Actor> MakeActor(const std::shared_ptr<Episode> &episode, const ActorData &data) {
   if (data.is_vehicle) return std::make_shared<Vehicle>(episode, data.id);
-  if (data.type_id.rfind("sensor.", 0) == 0) return std::make_shared<Sensor>(episode, data.id);
+  // As LibCarla's ActorFactory: lane invasion is computed on the client.
+  if (data.type_id == "sensor.other.lane_invasion") {
+    return std::make_shared<ClientSideSensor>(episode, data.id);
+  }
+  if (data.type_id.rfind("sensor.", 0) == 0) {
+    return std::make_shared<ServerSideSensor>(episode, data.id);
+  }
   if (data.is_walker()) return std::make_shared<Walker>(episode, data.id);
   if (data.is_walker_ai_controller()) {
     return std::make_shared<WalkerAIController>(episode, data.id);
@@ -587,8 +601,15 @@ SharedPtr<BlueprintLibrary> BlueprintLibrary::Filter(const std::string &wildcard
 SharedPtr<BlueprintLibrary> BlueprintLibrary::FilterByAttribute(const std::string &name,
                                                               const std::string &value) const {
   std::vector<ActorBlueprint> result;
-  for (const auto &bp : _blueprints)
-    if (bp.ContainsAttribute(name) && bp.GetAttribute(name).GetValue() == value) result.push_back(bp);
+  for (const auto &bp : _blueprints) {
+    if (!bp.ContainsAttribute(name)) continue;
+    const ActorAttribute &attribute = bp.GetAttribute(name);
+    const auto &values = attribute.GetRecommendedValues();
+    if (values.empty() ? attribute.GetValue() == value
+                       : std::find(values.begin(), values.end(), value) != values.end()) {
+      result.push_back(bp);
+    }
+  }
   return std::make_shared<BlueprintLibrary>(std::move(result));
 }
 
@@ -832,6 +853,7 @@ uint64_t World::ApplySettings(const rpc::EpisodeSettings &settings, time_duratio
 
 namespace {
 std::atomic<size_t> g_last_worker_threads{0};
+std::atomic<size_t> g_gbuffer_subscriptions{0};  // tsc_mock_gbuffer_subscriptions
 std::atomic<uint16_t> g_last_map_layers{static_cast<uint16_t>(rpc::MapLayer::All)};
 }  // namespace
 
@@ -846,6 +868,9 @@ std::string Client::GetServerVersion() const {
 }
 
 World Client::GetWorld() const { return World(mock::Connect(_endpoint, _timeout)); }
+
+// LibCarla: World{_episode}, the episode the actor was created in.
+World Actor::GetWorld() const { return World(_episode); }
 
 World Client::ReloadWorld(bool reset_settings) const {
   auto episode = mock::Connect(_endpoint, _timeout);
@@ -1169,17 +1194,110 @@ void Sensor::Listen(CallbackFunctionType callback) {
 
 void Sensor::Stop() {
   std::lock_guard<std::mutex> lock(_episode->mutex);
+  _listening_gbuffer = false;
   auto it = _episode->listeners.find(_id);
   if (it != _episode->listeners.end() && it->second.owner == this) _episode->listeners.erase(it);
 }
 
 bool Sensor::IsListening() const {
   std::lock_guard<std::mutex> lock(_episode->mutex);
+  if (_listening_gbuffer) return true;
   auto it = _episode->listeners.find(_id);
   return it != _episode->listeners.end() && it->second.owner == this;
 }
 
 Sensor::~Sensor() { Stop(); }
+
+// --- Issue #33: ServerSideSensor ---------------------------------------------
+
+namespace {
+
+constexpr uint32_t kGBufferTextureCount = 13;  // as LibCarla's ServerSideSensor.cpp
+
+void CheckGBufferId(uint32_t id) {
+  // LibCarla RELEASE_ASSERTs (aborts); the shim checks before calling.
+  if (id >= kGBufferTextureCount) throw std::logic_error("G-buffer id out of range");
+}
+
+}  // namespace
+
+std::vector<uint32_t> ServerSideSensor::OwnGBuffers() const {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  std::vector<uint32_t> ids;
+  for (const auto &entry : _episode->gbuffer_listeners) {
+    if (entry.first.first == _id && entry.second.owner == this) ids.push_back(entry.first.second);
+  }
+  return ids;
+}
+
+// As LibCarla: StopGBuffer for each texture, errors logged (a destroyed
+// actor's subscriptions then stay, see StopGBuffer).
+ServerSideSensor::~ServerSideSensor() {
+  for (uint32_t id : OwnGBuffers()) {
+    try {
+      StopGBuffer(id);
+    } catch (const std::exception &) {
+    }
+  }
+}
+
+// As LibCarla's ServerSideSensor::Destroy: while listening (bit 0, which
+// Stop() clears), stop the G-buffer streams and the measurements first.
+bool ServerSideSensor::Destroy() {
+  if (IsListening()) {
+    for (uint32_t id : OwnGBuffers()) StopGBuffer(id);
+    Stop();
+  }
+  return Actor::Destroy();
+}
+
+void ServerSideSensor::ListenToGBuffer(uint32_t GBufferId, CallbackFunctionType callback) {
+  CheckGBufferId(GBufferId);
+  // LibCarla logs a warning and does nothing for other sensors.
+  if (GetTypeId() != "sensor.camera.rgb") return;
+  // The server's get_gbuffer_token fails for a destroyed actor (WithData throws).
+  WithData([&](mock::ActorData &) {
+    auto &entry = _episode->gbuffer_listeners[{_id, GBufferId}];
+    if (!entry.callback) ++g_gbuffer_subscriptions;
+    entry = mock::Episode::Listener{this, std::move(callback)};
+    _listening_gbuffer = true;
+    return 0;
+  });
+}
+
+void ServerSideSensor::StopGBuffer(uint32_t GBufferId) {
+  CheckGBufferId(GBufferId);
+  if (GetTypeId() != "sensor.camera.rgb") return;
+  // LibCarla asks the server for the stream token first (get_gbuffer_token),
+  // which fails for a destroyed actor: the subscription is then never
+  // removed and the streaming client keeps reconnecting (issue #33 review).
+  WithData([&](mock::ActorData &) {
+    auto it = _episode->gbuffer_listeners.find({_id, GBufferId});
+    if (it != _episode->gbuffer_listeners.end() && it->second.owner == this) {
+      _episode->gbuffer_listeners.erase(it);
+      --g_gbuffer_subscriptions;
+    }
+    return 0;
+  });
+}
+
+bool ServerSideSensor::IsListeningGBuffer(uint32_t id) const {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  auto it = _episode->gbuffer_listeners.find({_id, id});
+  return it != _episode->gbuffer_listeners.end() && it->second.owner == this;
+}
+
+void ServerSideSensor::EnableForROS() {
+  WithData([](mock::ActorData &a) { return a.ros_enabled = true; });
+}
+
+void ServerSideSensor::DisableForROS() {
+  WithData([](mock::ActorData &a) { return a.ros_enabled = false; });
+}
+
+bool ServerSideSensor::IsEnabledForROS() {
+  return WithData([](mock::ActorData &a) { return a.ros_enabled; });
+}
 
 namespace mock {
 
@@ -1193,6 +1311,18 @@ long AttributeInt(const ActorData &a, const std::string &key, long fallback) {
 double AttributeDouble(const ActorData &a, const std::string &key, double fallback) {
   auto it = a.attributes.find(key);
   return it == a.attributes.end() ? fallback : std::strtod(it->second.c_str(), nullptr);
+}
+
+// A camera's image size and field of view (its blueprint's defaults).
+struct CameraGeometry {
+  size_t w = 0, h = 0;
+  float fov = 0.0f;
+};
+
+CameraGeometry CameraGeometryOf(const ActorData &a) {
+  return {static_cast<size_t>(AttributeInt(a, "image_size_x", 800)),
+          static_cast<size_t>(AttributeInt(a, "image_size_y", 600)),
+          static_cast<float>(AttributeDouble(a, "fov", 90.0))};
 }
 
 // A mock LiDAR sweep: `per_channel` points evenly around each channel's ring
@@ -1231,9 +1361,7 @@ std::vector<Delivery> Episode::SenseLocked() {
     SharedPtr<sensor::SensorData> data;
     namespace sd = sensor::data;
     const bool is_camera = a.type_id.rfind("sensor.camera.", 0) == 0;
-    const auto w = is_camera ? static_cast<size_t>(AttributeInt(a, "image_size_x", 800)) : 0;
-    const auto h = is_camera ? static_cast<size_t>(AttributeInt(a, "image_size_y", 600)) : 0;
-    const auto fov = is_camera ? static_cast<float>(AttributeDouble(a, "fov", 90.0)) : 0.0f;
+    const auto [w, h, fov] = is_camera ? CameraGeometryOf(a) : CameraGeometry{};
     if (a.type_id == "sensor.camera.rgb" || a.type_id == "sensor.camera.depth" ||
         a.type_id == "sensor.camera.semantic_segmentation") {
       const bool semantic = a.type_id == "sensor.camera.semantic_segmentation";
@@ -1420,6 +1548,21 @@ std::vector<Delivery> Episode::SenseLocked() {
       continue;
     }
     out.push_back([cb = std::move(callback), data = std::move(data)]() { cb(data); });
+  }
+  // Issue #33: one G-buffer Image per subscription and tick, every pixel
+  // (id, id, id, 255), the camera's size.
+  for (auto &entry : gbuffer_listeners) {
+    auto it = actors.find(entry.first.first);
+    if (it == actors.end()) continue;
+    const ActorData &a = it->second;
+    const auto [w, h, fov] = CameraGeometryOf(a);
+    const auto id = static_cast<uint8_t>(entry.first.second);
+    out.push_back([cb = entry.second.callback, f = frame, timestamp, t = a.transform, w, h, fov,
+                   id]() {
+      auto image = std::make_shared<sensor::data::Image>(f, timestamp, t, w, h, fov);
+      for (size_t i = 0; i < w * h; ++i) image->data()[i] = sensor::data::Color(id, id, id, 255u);
+      cb(std::move(image));
+    });
   }
   return out;
 }
@@ -2293,3 +2436,6 @@ extern "C" size_t tsc_mock_last_worker_threads(void) {
   return carla::client::g_last_worker_threads;
 }
 extern "C" uint16_t tsc_mock_last_map_layers(void) { return carla::client::g_last_map_layers; }
+extern "C" size_t tsc_mock_gbuffer_subscriptions(void) {
+  return carla::client::g_gbuffer_subscriptions;
+}

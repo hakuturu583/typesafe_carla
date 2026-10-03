@@ -1,0 +1,8 @@
+# Enumeration `names` are keyed by name; `values` by value (as in the Python API).
+# expect-error: 'int' does not match expected type 'str'
+import typesafe_carla as carla
+
+def door(i: int) -> carla.VehicleDoor:
+    return carla.VehicleDoor.names[i]
+
+print(door(0))

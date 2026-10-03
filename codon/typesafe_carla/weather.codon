@@ -6,8 +6,8 @@ from .errors import _check
 from .world import World
 
 class WeatherParameters:
-    """Weather of the simulation. Presets: WeatherParameters.preset("ClearNoon"),
-    or the named class attributes (WeatherParameters.ClearNoon, ...)."""
+    """Weather of the simulation. Presets: the class attributes
+    (WeatherParameters.ClearNoon, ...) or WeatherParameters.preset("ClearNoon")."""
     cloudiness: float
     precipitation: float
     precipitation_deposits: float
@@ -22,6 +22,35 @@ class WeatherParameters:
     mie_scattering_scale: float
     rayleigh_scattering_scale: float
     dust_storm: float
+
+    # LibCarla's 23 named presets (issue #33), read from the LibCarla the
+    # library was built with. As in the Python API, each is one shared object:
+    # changing a field of WeatherParameters.ClearNoon changes the preset for
+    # the whole program; copy it first (WeatherParameters.preset("ClearNoon")
+    # returns a new object).
+    ClearNight: ClassVar[WeatherParameters] = WeatherParameters.preset("ClearNight")
+    ClearNoon: ClassVar[WeatherParameters] = WeatherParameters.preset("ClearNoon")
+    ClearSunset: ClassVar[WeatherParameters] = WeatherParameters.preset("ClearSunset")
+    CloudyNight: ClassVar[WeatherParameters] = WeatherParameters.preset("CloudyNight")
+    CloudyNoon: ClassVar[WeatherParameters] = WeatherParameters.preset("CloudyNoon")
+    CloudySunset: ClassVar[WeatherParameters] = WeatherParameters.preset("CloudySunset")
+    Default: ClassVar[WeatherParameters] = WeatherParameters.preset("Default")
+    DustStorm: ClassVar[WeatherParameters] = WeatherParameters.preset("DustStorm")
+    HardRainNight: ClassVar[WeatherParameters] = WeatherParameters.preset("HardRainNight")
+    HardRainNoon: ClassVar[WeatherParameters] = WeatherParameters.preset("HardRainNoon")
+    HardRainSunset: ClassVar[WeatherParameters] = WeatherParameters.preset("HardRainSunset")
+    MidRainSunset: ClassVar[WeatherParameters] = WeatherParameters.preset("MidRainSunset")
+    MidRainyNight: ClassVar[WeatherParameters] = WeatherParameters.preset("MidRainyNight")
+    MidRainyNoon: ClassVar[WeatherParameters] = WeatherParameters.preset("MidRainyNoon")
+    SoftRainNight: ClassVar[WeatherParameters] = WeatherParameters.preset("SoftRainNight")
+    SoftRainNoon: ClassVar[WeatherParameters] = WeatherParameters.preset("SoftRainNoon")
+    SoftRainSunset: ClassVar[WeatherParameters] = WeatherParameters.preset("SoftRainSunset")
+    WetCloudyNight: ClassVar[WeatherParameters] = WeatherParameters.preset("WetCloudyNight")
+    WetCloudyNoon: ClassVar[WeatherParameters] = WeatherParameters.preset("WetCloudyNoon")
+    WetCloudySunset: ClassVar[WeatherParameters] = WeatherParameters.preset("WetCloudySunset")
+    WetNight: ClassVar[WeatherParameters] = WeatherParameters.preset("WetNight")
+    WetNoon: ClassVar[WeatherParameters] = WeatherParameters.preset("WetNoon")
+    WetSunset: ClassVar[WeatherParameters] = WeatherParameters.preset("WetSunset")
 
     def __init__(self, cloudiness: float = 0.0, precipitation: float = 0.0,
                  precipitation_deposits: float = 0.0, wind_intensity: float = 0.0,

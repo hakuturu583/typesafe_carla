@@ -6,6 +6,7 @@
 # the server at the next tick. The official CARLA 0.10.0 Python API does not
 # expose World.get_lightmanager (no night mode in 0.10.0); LibCarla has it.
 
+from ._enum import _IntEnum
 from ._ffi import (Handle, CLight, CLightList, CLightState, TSC_INVALID_ARGUMENT, take_list, array,
                    tsc_world_get_light_manager, tsc_light_list_free, tsc_light_manager_get_all_lights,
                    tsc_light_manager_get_turned_on_lights, tsc_light_manager_get_turned_off_lights,
@@ -19,12 +20,14 @@ from .blueprint import Color
 from .world import World
 
 
-class LightGroup:
-    NONE: ClassVar[int] = 0
-    Vehicle: ClassVar[int] = 1
-    Street: ClassVar[int] = 2
-    Building: ClassVar[int] = 3
-    Other: ClassVar[int] = 4
+class _LightGroup(_IntEnum):
+    NONE: int = 0
+    Vehicle: int = 1
+    Street: int = 2
+    Building: int = 3
+    Other: int = 4
+
+LightGroup = _LightGroup()
 
 class LightState:
     """A light's intensity (lumens), color, group (LightGroup) and on/off state."""
@@ -34,7 +37,7 @@ class LightState:
     active: bool
 
     def __init__(self, intensity: float = 0.0, color: Color = Color(0, 0, 0, 0),
-                 group: int = LightGroup.NONE, active: bool = False):
+                 group: int = 0, active: bool = False):  # LightGroup.NONE
         self.intensity = intensity
         self.color = color
         self.group = group
@@ -149,14 +152,14 @@ class LightManager:
         _check(fn(self._h.ptr, _group(light_group), out))
         return take_list(out, lambda c: Light(self._h, c), tsc_light_list_free)
 
-    def get_all_lights(self, light_group: int = LightGroup.NONE) -> List[Light]:
+    def get_all_lights(self, light_group: int = 0) -> List[Light]:  # LightGroup.NONE
         """Every light, or those of one LightGroup."""
         return self._lights(tsc_light_manager_get_all_lights, light_group)
 
-    def get_turned_on_lights(self, light_group: int = LightGroup.NONE) -> List[Light]:
+    def get_turned_on_lights(self, light_group: int = 0) -> List[Light]:  # LightGroup.NONE
         return self._lights(tsc_light_manager_get_turned_on_lights, light_group)
 
-    def get_turned_off_lights(self, light_group: int = LightGroup.NONE) -> List[Light]:
+    def get_turned_off_lights(self, light_group: int = 0) -> List[Light]:  # LightGroup.NONE
         return self._lights(tsc_light_manager_get_turned_off_lights, light_group)
 
     def turn_on(self, lights: List[Light]):

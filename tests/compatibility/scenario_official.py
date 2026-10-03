@@ -496,4 +496,17 @@ ray = world.cast_ray(p0_above, carla.Location(p0_above.x, p0_above.y, p0_above.z
 out("i21_ground", f"{int(ground.label)},{ground.location.z:.3f},{int(ray[0].label)},{ray[0].location.z:.3f}")
 sky = world.project_point(p0_above, carla.Vector3D(0.0, 0.0, 1.0), 50.0)
 out("i21_projections", f"{int(sky is None)},{len(ray) > 0:d}")
+# Issue #33: Python API members found missing by the survey.
+out("i33_world", f"{int(world.get_spectator().get_world().id == world.id)},"
+                 f"{-1 if tl0 is None else int(tl0.state == tl0.get_state())}")
+bp33 = lib.find("vehicle.lincoln.mkz")
+out("i33_blueprint", f"{len(bp33)};" + ";".join(
+    a.id + ":" + "|".join(a.recommended_values) for a in sorted(bp33, key=lambda a: a.id)))
+PRESETS33 = ['ClearNight', 'ClearNoon', 'ClearSunset', 'CloudyNight', 'CloudyNoon', 'CloudySunset', 'Default', 'DustStorm', 'HardRainNight', 'HardRainNoon', 'HardRainSunset', 'MidRainSunset', 'MidRainyNight', 'MidRainyNoon', 'SoftRainNight', 'SoftRainNoon', 'SoftRainSunset', 'WetCloudyNight', 'WetCloudyNoon', 'WetCloudySunset', 'WetNight', 'WetNoon', 'WetSunset']
+out("i33_weather_presets", ";".join(
+    f"{w.cloudiness:.3f},{w.precipitation:.3f},{w.precipitation_deposits:.3f},{w.wind_intensity:.3f},"
+    f"{w.sun_azimuth_angle:.3f},{w.sun_altitude_angle:.3f},{w.fog_density:.3f},{w.fog_distance:.3f},"
+    f"{w.fog_falloff:.3f},{w.wetness:.3f},{w.scattering_intensity:.3f},{w.mie_scattering_scale:.3f},"
+    f"{w.rayleigh_scattering_scale:.3f},{w.dust_storm:.3f}"
+    for w in (getattr(carla.WeatherParameters, n) for n in PRESETS33)))
 sys.stdout.flush()
