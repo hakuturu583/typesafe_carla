@@ -179,7 +179,7 @@ cpython:
       <script>: 'skip: an interactive script (a pygame loop; the official module also runs until the time-out)'
     test_vehicle_physics.py: 'exclude: map Town05 not shipped in ue5-dev packages; ported to tests/upstream/ported/test_vehicle_physics.py'
     ported/API/test_collision.py:
-      TestCollision.test_collision_against_side_of_car: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world(''Town10HD_Opt'')]'
+      TestCollision.test_collision_against_side_of_car: pass
     ported/smoke/test_blueprint.py:
       TestBlueprintLibrary.test_blueprint_ids: 'exclude: ue5-dev ships blueprint id blueprint.trafficlightexample, which has two dot-separated parts, not the three the test expects (the official module fails the same way)'
     ported/smoke/test_client.py:

@@ -518,12 +518,9 @@
    "file_error": null,
    "tests": {
     "TestCollision.test_collision_against_side_of_car": [
-     "fail",
-     "AssertionError: 0 == 0"
+     "pass",
+     ""
     ]
-   },
-   "traces": {
-    "TestCollision.test_collision_against_side_of_car": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/API/test_collision.py\", line 210, in test_collision_against_side_of_car\n    self.assertNotEqual(self.collisions, 0)\nAssertionError: 0 == 0"
    }
   },
   "ported/smoke/test_blueprint.py": {
