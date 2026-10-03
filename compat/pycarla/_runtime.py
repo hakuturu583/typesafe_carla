@@ -90,6 +90,8 @@ def _unwrap(v):
         return int(v)
     if type(v) in (list, tuple):
         return type(v)(_unwrap(x) for x in v)
+    if isinstance(v, (bytes, bytearray, memoryview)) or type(v).__name__ == "array":
+        return list(v)
     if isinstance(v, dict):
         return {k: _unwrap(x) for k, x in v.items()}
     if callable(v) and not isinstance(v, type):
@@ -197,6 +199,7 @@ def _make_class(name: str, spec: dict, bases: tuple) -> type:
             ns["__iter__"] = lambda self, m=m: iter(m(self))
         else:
             ns[key] = _method(name, key, entry)
+    ns.update(spec.get("constants", {}))
     if "__eq__" in ns and "__hash__" not in ns:
         ns["__hash__"] = None
     return type(name, bases, ns)
@@ -247,6 +250,8 @@ def install(g: dict) -> None:
             setattr(command, name, fn)
         else:
             g[name] = fn
+    for name, value in _SPEC.get("command_constants", {}).items():
+        setattr(command, name, value)
     if "Command" in g:
         command.Command = g["Command"]
     g["command"] = command

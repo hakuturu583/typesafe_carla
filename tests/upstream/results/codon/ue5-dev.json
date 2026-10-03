@@ -762,8 +762,8 @@
    "file_error": null,
    "tests": {
     "TestVehiclesSpawnTest.test_vehicle_spawn": [
-     "not-run",
-     ""
+     "error",
+     "CarlaError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -771,8 +771,8 @@
    "file_error": null,
    "tests": {
     "TestWalkersSpawn.test_walker_spawn": [
-     "not-run",
-     ""
+     "error",
+     "CarlaError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -780,8 +780,8 @@
    "file_error": null,
    "tests": {
     "TestSyncMode.test_sync_mode_set_transform": [
-     "not-run",
-     ""
+     "fail",
+     "-64.6448 != 11"
     ]
    }
   },

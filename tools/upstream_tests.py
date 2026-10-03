@@ -589,8 +589,16 @@ def _run_one(exe: Path, test_id: str, timeout: float, cwd: Path) -> TestResult:
 # generated `carla` package first on sys.path.
 _DRIVER = r"""
 import json, os, sys, traceback, unittest
-# The tests must see the generated package, never an installed official one.
+# The tests must see the generated package, never an installed official one
+# (an editable install's import hook would win over sys.path): load it first.
 try:
+    import importlib.util
+    pkg = os.environ["TSC_PYCARLA_PKG"]
+    spec = importlib.util.spec_from_file_location(
+        "carla", os.path.join(pkg, "__init__.py"), submodule_search_locations=[pkg])
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["carla"] = module
+    spec.loader.exec_module(module)
     import carla
     ok = os.path.realpath(carla.__file__).startswith(os.path.realpath(os.environ["TSC_PYCARLA_PKG"]))
     why = f"`import carla` found {carla.__file__}, not the generated package"
@@ -609,6 +617,7 @@ if name == "--script":
     runpy.run_path(sys.argv[0], run_name="__main__")
     sys.exit(0)
 result = unittest.TestResult()
+sys.argv = [name.split(".")[0]]  # a module parsing sys.argv must not see the driver's
 try:
     unittest.defaultTestLoader.loadTestsFromName(name).run(result)
 except BaseException as e:
@@ -928,6 +937,8 @@ def record_results(mode: str, target: Target, results: list[FileResult]) -> None
 # Root cause of a failure, from its outcome and message: (category, cause).
 _CAUSES = [
     (r"^harness: (.*)", "pycarla", lambda m: f"harness: {m[1]}"),
+    (r"NotImplementedError: pycarla: (\S+) not wrapped: result type Ptr\[(\w+)\]", "signature",
+     lambda m: f"`carla.{m[1]}` returns a raw pointer (Ptr[{m[2]}]), not a buffer / Python object"),
     (r"NotImplementedError: pycarla: (\S+) not wrapped: (.*)", "pycarla",
      lambda m: f"pycarla cannot wrap `{m[1]}` ({m[2]})"),
     (r"ModuleNotFoundError: No module named '(\w+)'", "infrastructure",

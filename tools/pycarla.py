@@ -81,7 +81,7 @@ GENERIC_PARAMS = {
     "actor": ACTOR_CLASSES,
     "other_actor": ACTOR_CLASSES,
     "callback": ["pyobj"],
-    "other": ["@self"],   # operators: the same class
+    "other": ["@self", "Location", "Vector3D"],   # operators (invalid pairs are pruned)
     **{n: VECTOR_CLASSES for n in (
         "offset", "suspension_axis", "suspension_force_offset", "old_location", "center_of_mass",
         "inertia_tensor_scale", "extent")},
@@ -178,6 +178,7 @@ class Inventory:
         self.functions: dict[str, list[Func]] = {}
         self.aliases: dict[str, str] = {}
         self.command: list[str] = []
+        self.constants: dict[str, dict] = {}   # module -> its literal top-level constants
         trees = {p.stem: ast.parse(_source(p.stem)) for p in sorted(PACKAGE.glob("*.codon"))}
         extends = []
         for m, tree in trees.items():
@@ -201,6 +202,11 @@ class Inventory:
                         self.aliases[node.targets[0].id] = node.value.id
                 elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                     names.add(node.target.id)
+                    if node.value is not None and not node.target.id.startswith("_"):
+                        try:
+                            self.constants.setdefault(m, {})[node.target.id] = ast.literal_eval(node.value)
+                        except (ValueError, SyntaxError):
+                            pass
                 elif isinstance(node, (ast.Import, ast.ImportFrom)):
                     names.update(a.asname or a.name.split(".")[0] for a in node.names)
             self.module_names[m] = names
@@ -622,6 +628,14 @@ class Gen:
             api["enum"] = {k: int(m[1]) for k, v in c.classvars.items()
                            if (m := re.fullmatch(rf"{cls}\((-?\d+)\)", v))}
             return
+        # Constant class attributes (e.g. SensorDataType.Image).
+        api["constants"] = {}
+        for k, v in c.classvars.items():
+            if not k.startswith("_"):
+                try:
+                    api["constants"][k] = ast.literal_eval(v)
+                except (ValueError, SyntaxError):
+                    pass
         members = inv.all_members(cls)
         for fname, fann, fmod in inv.all_fields(cls):
             if fname.startswith("_") or fname in members:
@@ -725,17 +739,29 @@ class Gen:
         for kind, cls in (("vehicle", "Vehicle"), ("walker", "Walker"),
                           ("walker_ai_controller", "WalkerAIController"), ("sensor", "Sensor"),
                           ("traffic_light", "TrafficLight"), ("traffic_sign", "TrafficSign")):
-            if cls in self.public and f"as_{kind}" in actor and f"is_{kind}" in actor:
+            if cls not in self.public or f"as_{kind}" not in actor:
+                continue
+            if f"is_{kind}" in actor:
                 lines.append(f"    if a.is_{kind}():\n        return B_{cls}(a.as_{kind}())._tsc_to_py()")
+            else:  # only a checked conversion: try it
+                lines.append(f"    try:\n        return B_{cls}(a.as_{kind}())._tsc_to_py()\n"
+                             f"    except _E_ActorTypeError:\n        pass")
         lines.append("    return B_Actor(a)._tsc_to_py()")
         self.emit("\n".join(lines))
-        lines = ["def _sensor_data_to_py(d: _L_SensorData) -> Ptr[byte]:"]
+        # SensorData: its type() is a SensorDataType value; as_<kind>() gives
+        # the measurement (Image for SensorDataType.Image, ...).
         data = inv.all_members("SensorData")
-        for key, fs in data.items():
-            m = re.fullmatch(r"as_(\w+)", fs[0].name)
-            ret = inv.resolve(fs[0].ret or "")
-            if m and ret in self.public and f"is_{m[1]}" in data:
-                lines.append(f"    if d.is_{m[1]}():\n        return B_{ret}(d.{fs[0].name}())._tsc_to_py()")
+        typ = "d.type" if data.get("type", [Func("", "", [], None)])[0].kind == "property" else "d.type()"
+        lines = ["def _sensor_data_to_py(d: _L_SensorData) -> Ptr[byte]:", f"    t = {typ}"]
+        kinds = inv.classes["SensorDataType"].classvars if "SensorDataType" in inv.classes else {}
+        for kind, value in kinds.items():
+            for key, fs in data.items():
+                ret = inv.resolve(fs[0].ret or "")
+                plain = fs[0].name[3:].replace("_", "")   # as_custom_v2x_event -> customv2xevent
+                if (fs[0].name.startswith("as_") and plain.startswith(kind.lower())
+                        and ret in self.public and not fs[0].params):
+                    lines.append(f"    if t == {value}:\n        return B_{ret}(d.{fs[0].name}())._tsc_to_py()")
+                    break
         lines.append("    return B_SensorData(d)._tsc_to_py()")
         self.emit("\n".join(lines))
 
@@ -1020,6 +1046,7 @@ def write_package(pkg: Path, gen: Gen) -> None:
         "aliases": {n: inv.resolve(n) for n in inv.public if inv.resolve(n) != n},
         "int_enums": {n: inv.int_enums[n] for n in inv.public if n in inv.int_enums},
         "command": inv.command,
+        "command_constants": inv.constants.get("command", {}),
         "exceptions": EXCEPTIONS,
         "stubs": gen.stubs,
         "variants": gen.variant_names,

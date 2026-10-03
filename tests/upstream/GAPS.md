@@ -11,36 +11,60 @@ with typesafe-codon. *not run*: no result recorded (e.g. needs a server).
 
 | ref | mode | commit | pass | fail | skip | not run |
 |---|---|---|---:|---:|---:|---:|
-| ue5-dev | cpython | 0a5ce0d5b4 | 32 | 8 | 0 | 0 |
-| ue5-dev | codon | 0a5ce0d5b4 | 23 | 118 | 0 | 3 |
+| ue5-dev | cpython | 0a5ce0d5b4 | 47 | 97 | 0 | 0 |
+| ue5-dev | codon | 0a5ce0d5b4 | 23 | 121 | 0 | 0 |
 | 0.10.0 | cpython | ada75f9206 | 12 | 3 | 0 | 0 |
 | 0.10.0 | codon | ada75f9206 | 12 | 65 | 0 | 3 |
 
 ## Root causes: ue5-dev, cpython mode
 
-### typesafe_carla lacks this (missing API) (2 causes, 4 tests)
+### typesafe_carla lacks this (missing API) (6 causes, 24 tests)
 
+- **missing `carla.command.FutureActor`**: 14 tests: `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_two_cars`, `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_three_cars`, `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_bike`, `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_walker`, `smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`, `smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`, `smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume`, +6 more
+- **missing `carla.SensorData.raw_data`**: 3 tests: `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids`
+- **missing `carla.SensorData.get_message_count`**: 2 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive`, `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation`
 - **no value equality: equal-looking `carla.GeoEllipsoid` objects compare unequal (missing `__eq__`?)**: 2 tests: `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args`, `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args_positional`
 - **no value equality: equal-looking `carla.GeoOffsetTransform` objects compare unequal (missing `__eq__`?)**: 2 tests: `unit/test_transform.py::TestTransform.test_geo_projection_utm_with_offset`, `unit/test_transform.py::TestTransform.test_geo_projection_utm_offset_setter`
+- **missing `carla.Actor.stop`**: 1 tests: `smoke/test_walker_navigation.py::TestWalkerNavigation.test_walker_ai_controller_routes_without_crash`
 
-### typesafe_carla has it, with an incompatible signature (1 causes, 1 tests)
+### typesafe_carla has it, with an incompatible signature (2 causes, 2 tests)
 
+- **`carla.CustomV2XBytes.set_bytes`: these arguments are not accepted**: 1 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length`
 - **`carla.WheelPhysicsControl.__init__`: these arguments are not accepted**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
 
-### behaviour differs (assertions, errors, crashes) (2 causes, 2 tests)
+### behaviour differs (assertions, errors, crashes) (14 causes, 68 tests)
 
+- **RuntimeError: tsc_client_load_world: std::exception**: 49 tests: `smoke/test_blueprint.py::TestBlueprintLibrary.test_blueprint_ids`, `smoke/test_client.py::TestClient.test_version`, `smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car`, `smoke/test_determinism.py::TestDeterminism.test_determ`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_reference`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_location_to_geo_and_back`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_to_location_and_back`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_zero_conversion`, +41 more
+- **RuntimeError: tsc_client_reload_world: std::exception**: 4 tests: `smoke/test_map.py::TestMap.test_reload_world`, `smoke/test_sensor_determinism.py::TestSensorDeterminism.test_all_sensors`, `smoke/test_snapshot.py::TestSnapshot.test_spawn_points`, `smoke/test_sync.py::TestSynchronousMode.test_reloading_map`
+- **RuntimeError: 'SensorData' object has no attribute 'channels'**: 2 tests: `smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count`, `smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count`
+- **RuntimeError: 'SensorData' object has no attribute 'convert'**: 2 tests: `API/test_apply_textures.py::TestApplyTextures.test_apply_textures`, `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation`
+- **RuntimeError: tsc_world_get_map: std::exception**: 2 tests: `smoke/test_map.py::TestMap.test_load_all_maps`, `smoke/test_props_loading.py::TestPropsLoading.test_spawn_loaded_props`
+- **IndexError: tsc_actor_blueprint_set_attribute: blueprint 'sensor.camera.rgb' has no attribute 'chromatic_aberration_intensity'**: 1 tests: `API/prop_control.py::<script>`
+- **IndexError: tsc_blueprint_library_find: no blueprint with id 'vehicle.ford.mustang'**: 1 tests: `smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode`
+- **RuntimeError: tsc_world_spawn_actor: std::exception**: 1 tests: `test_raycast_sensor.py::<script>`
 - **`str(carla.Transform)` differs from CARLA's (number formatting?)**: 1 tests: `unit/test_transform.py::TestTransform.test_print`
+- **assertion: AssertionError: -64.64484405517578 != 291.0**: 1 tests: `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform`
 - **assertion: AssertionError: False is not true**: 1 tests: `unit/test_transform.py::TestTransform.test_geo_offset_transform_equality`
+- **assertion: AssertionError: unexpectedly None : could not spawn a large vehicle at any spawn point**: 1 tests: `smoke/test_traffic_manager_large_vehicle.py::TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans`
+- **error: _queue.Empty**: 1 tests: `smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison`
+- **error: exit 2: spawn_actor.py: error: the following arguments are required: -b/--blueprint**: 1 tests: `API/spawn_actor.py::<script>`
 
-### infrastructure (1 causes, 1 tests)
+### the pycarla wrapper cannot express this yet (harness) (1 causes, 1 tests)
 
+- **pycarla cannot wrap `Map.get_geoprojection` (result type GeoProjection)**: 1 tests: `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_projection`
+
+### infrastructure (2 causes, 2 tests)
+
+- **test dependency `cv2` not installed in the test interpreter**: 1 tests: `test_ground_truth.py::<script>`
 - **the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
 
 
 ## Root causes: ue5-dev, codon mode
 
-### behaviour differs (assertions, errors, crashes) (1 causes, 1 tests)
+### behaviour differs (assertions, errors, crashes) (3 causes, 4 tests)
 
+- **CarlaError: tsc_client_load_world: std::exception**: 2 tests: `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn`, `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn`
+- **assertion: -64.6448 != 11**: 1 tests: `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform`
 - **assertion: Transform(Location(x=1, y=2, z=3), Rotation(pitch=4, yaw=5, roll=6)) != Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pit**: 1 tests: `unit/test_transform.py::TestTransform.test_print`
 
 ### Codon-direct mode: does not compile (17 causes, 117 tests)
@@ -195,110 +219,110 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `unit/test_vehicle.py::TestVehicleControl.test_default_values` | pass | pass |  |
 | `unit/test_vehicle.py::TestVehicleControl.test_named_args` | pass | pass |  |
 | `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args` | error | compile | `carla.WheelPhysicsControl.__init__`: these arguments are not accepted |
-| `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_components` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_sockets_consistent` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_actor_introspection.py::TestActorIntrospection.test_walker_bones` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_actor_introspection.py::TestActorIntrospection.test_component_not_found_raises` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_blueprint.py::TestBlueprintLibrary.test_blueprint_ids` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_client.py::TestClient.test_version` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_two_cars` | not run | compile | does not compile: no module named 'filecmp' |
-| `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_three_cars` | not run | compile | does not compile: no module named 'filecmp' |
-| `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_bike` | not run | compile | does not compile: no module named 'filecmp' |
-| `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_walker` | not run | compile | does not compile: no module named 'filecmp' |
-| `smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_shape` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_string` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_debug_clear.py::TestDebugClear.test_clear_when_nothing_drawn` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_determinism.py::TestDeterminism.test_determ` | not run | compile | does not compile: cannot import name 'random' from 'numpy.__init__' |
-| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels` | not run | compile | does not compile: no module named 'queue' |
-| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels` | not run | compile | does not compile: no module named 'queue' |
-| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids` | not run | compile | does not compile: no module named 'queue' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_reference` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_projection` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_location_to_geo_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_to_location_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_zero_conversion` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_relative_offset_preserved` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_location_to_geo_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_geo_to_location_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_location_to_geo_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_geo_to_location_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_location_to_geo_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_geo_to_location_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_location_to_geo_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_geo_to_location_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_geo_to_location_and_back` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_lidar.py::TestASyncLidar.test_lidar_point_count` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_lidar.py::TestASyncLidar.test_semlidar_point_count` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_map.py::TestMap.test_reload_world` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_map.py::TestMap.test_load_all_maps` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_props_loading.py::TestPropsLoading.test_spawn_loaded_props` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_recorder.py::TestRecorder.test_record_replay_blueprint_id_round_trips` | not run | compile | does not compile: no module named 'tempfile' |
-| `smoke/test_recorder.py::TestRecorder.test_record_survives_same_tick_actor_destroy` | not run | compile | does not compile: no module named 'tempfile' |
-| `smoke/test_replay_no_actor_aliasing.py::TestReplayNoActorAliasing.test_replayed_actors_have_clean_state` | not run | compile | does not compile: no module named 'tempfile' |
-| `smoke/test_sensor_determinism.py::TestSensorDeterminism.test_all_sensors` | not run | compile | does not compile: no module named 'filecmp' |
-| `smoke/test_sensor_tick_time.py::TestSensorTickTime.test_sensor_tick_time` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_snapshot.py::TestSnapshot.test_spawn_points` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_streamming.py::TestStreamming.test_multistream` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_sync.py::TestSynchronousMode.test_reloading_map` | not run | compile | does not compile: no module named 'queue' |
-| `smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode` | not run | compile | does not compile: no module named 'queue' |
-| `smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync` | not run | compile | does not compile: no module named 'queue' |
-| `smoke/test_traffic_manager_large_vehicle.py::TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_traffic_manager_sync_step.py::TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive` | not run | compile | does not compile: no module named 'array' |
-| `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length` | not run | compile | does not compile: no module named 'array' |
-| `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation` | not run | compile | does not compile: no module named 'array' |
-| `smoke/test_v2x.py::TestV2X.test_v2i_infrastructure_sensor_without_owner` | not run | compile | does not compile: no module named 'array' |
-| `smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_vehicle_physics.py::TestStickyControl.test_default` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_vehicle_physics.py::TestStickyControl.test_true` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_vehicle_physics.py::TestStickyControl.test_false` | not run | compile | does not compile: no module named 'enum' |
-| `smoke/test_vehicle_telemetry.py::TestVehicleTelemetry.test_get_telemetry_data_shape_and_values` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_walker_bounding_box.py::TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_walker_navigation.py::TestWalkerNavigation.test_walker_ai_controller_routes_without_crash` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_world.py::TestWorld.test_fixed_delta_seconds` | not run | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `API/prop_control.py::<script>` | not run | compile | does not compile: no module named 'argparse' |
-| `API/spawn_actor.py::<script>` | not run | compile | does not compile: no module named 'argparse' |
-| `API/test_apply_textures.py::TestApplyTextures.test_apply_textures` | not run | compile | does not compile: no module named 'argparse' |
-| `API/test_collision.py::TestCollision.test_collision_against_side_of_car` | not run | compile | does not compile: no module named 'argparse' |
-| `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation` | not run | compile | does not compile: no module named 'argparse' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_gnss` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_imu` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_radar` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_rgb` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_depth` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_lidar` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_lidar` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_gnss` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_imu` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_radar` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_rgb` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_depth` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_instance_segmentation` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_segmentation` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_lidar` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_lidar` | not run | compile | does not compile: no module named 'glob' |
-| `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn` | not run | not-run |  |
-| `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn` | not run | not-run |  |
-| `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform` | not run | not-run |  |
-| `test_connection.py::<script>` | not run | compile | does not compile: no module named 'argparse' |
-| `test_ground_truth.py::<script>` | not run | compile | does not compile: no module named 'cv2' |
-| `test_raycast_sensor.py::<script>` | not run | compile | does not compile: no module named 'argparse' |
-| `test_vehicle_physics.py::<script>` | not run | compile | does not compile: no module named 'argparse' |
+| `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_components` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_sockets_consistent` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_actor_introspection.py::TestActorIntrospection.test_walker_bones` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_actor_introspection.py::TestActorIntrospection.test_component_not_found_raises` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_blueprint.py::TestBlueprintLibrary.test_blueprint_ids` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_client.py::TestClient.test_version` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_two_cars` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_three_cars` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_bike` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_walker` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_shape` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_string` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_debug_clear.py::TestDebugClear.test_clear_when_nothing_drawn` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_determinism.py::TestDeterminism.test_determ` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels` | error | compile | missing `carla.SensorData.raw_data` |
+| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels` | error | compile | missing `carla.SensorData.raw_data` |
+| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids` | error | compile | missing `carla.SensorData.raw_data` |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_reference` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_projection` | error | compile | pycarla cannot wrap `Map.get_geoprojection` (result type GeoProjection) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_zero_conversion` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_relative_offset_preserved` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count` | error | compile | RuntimeError: 'SensorData' object has no attribute 'channels' |
+| `smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count` | error | compile | RuntimeError: 'SensorData' object has no attribute 'channels' |
+| `smoke/test_lidar.py::TestASyncLidar.test_lidar_point_count` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_lidar.py::TestASyncLidar.test_semlidar_point_count` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | error | compile | error: _queue.Empty |
+| `smoke/test_map.py::TestMap.test_reload_world` | error | compile | RuntimeError: tsc_client_reload_world: std::exception |
+| `smoke/test_map.py::TestMap.test_load_all_maps` | error | compile | RuntimeError: tsc_world_get_map: std::exception |
+| `smoke/test_props_loading.py::TestPropsLoading.test_spawn_loaded_props` | error | compile | RuntimeError: tsc_world_get_map: std::exception |
+| `smoke/test_recorder.py::TestRecorder.test_record_replay_blueprint_id_round_trips` | pass | compile | does not compile: no module named 'tempfile' |
+| `smoke/test_recorder.py::TestRecorder.test_record_survives_same_tick_actor_destroy` | pass | compile | does not compile: no module named 'tempfile' |
+| `smoke/test_replay_no_actor_aliasing.py::TestReplayNoActorAliasing.test_replayed_actors_have_clean_state` | pass | compile | does not compile: no module named 'tempfile' |
+| `smoke/test_sensor_determinism.py::TestSensorDeterminism.test_all_sensors` | error | compile | RuntimeError: tsc_client_reload_world: std::exception |
+| `smoke/test_sensor_tick_time.py::TestSensorTickTime.test_sensor_tick_time` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_snapshot.py::TestSnapshot.test_spawn_points` | error | compile | RuntimeError: tsc_client_reload_world: std::exception |
+| `smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_streamming.py::TestStreamming.test_multistream` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_sync.py::TestSynchronousMode.test_reloading_map` | error | compile | RuntimeError: tsc_client_reload_world: std::exception |
+| `smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode` | error | compile | IndexError: tsc_blueprint_library_find: no blueprint with id 'vehicle.ford.mustang' |
+| `smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_traffic_manager_large_vehicle.py::TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans` | fail | compile | assertion: AssertionError: unexpectedly None : could not spawn a large vehicle at any spawn point |
+| `smoke/test_traffic_manager_sync_step.py::TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive` | error | compile | missing `carla.SensorData.get_message_count` |
+| `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length` | error | compile | `carla.CustomV2XBytes.set_bytes`: these arguments are not accepted |
+| `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation` | error | compile | missing `carla.SensorData.get_message_count` |
+| `smoke/test_v2x.py::TestV2X.test_v2i_infrastructure_sensor_without_owner` | pass | compile | does not compile: no module named 'array' |
+| `smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_vehicle_physics.py::TestStickyControl.test_default` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_vehicle_physics.py::TestStickyControl.test_true` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_vehicle_physics.py::TestStickyControl.test_false` | error | compile | missing `carla.command.FutureActor` |
+| `smoke/test_vehicle_telemetry.py::TestVehicleTelemetry.test_get_telemetry_data_shape_and_values` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_walker_bounding_box.py::TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_walker_navigation.py::TestWalkerNavigation.test_walker_ai_controller_routes_without_crash` | error | compile | missing `carla.Actor.stop` |
+| `smoke/test_world.py::TestWorld.test_fixed_delta_seconds` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/prop_control.py::<script>` | error | compile | IndexError: tsc_actor_blueprint_set_attribute: blueprint 'sensor.camera.rgb' has no attribute 'chromatic_aberration_intensity' |
+| `API/spawn_actor.py::<script>` | error | compile | error: exit 2: spawn_actor.py: error: the following arguments are required: -b/--blueprint |
+| `API/test_apply_textures.py::TestApplyTextures.test_apply_textures` | error | compile | RuntimeError: 'SensorData' object has no attribute 'convert' |
+| `API/test_collision.py::TestCollision.test_collision_against_side_of_car` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation` | error | compile | RuntimeError: 'SensorData' object has no attribute 'convert' |
+| `API/test_sensor_recording.py::TestSensorRecording.test_gnss` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording.py::TestSensorRecording.test_imu` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording.py::TestSensorRecording.test_radar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording.py::TestSensorRecording.test_rgb` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording.py::TestSensorRecording.test_depth` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording.py::TestSensorRecording.test_lidar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_lidar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_gnss` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_imu` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_radar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_rgb` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_depth` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_instance_segmentation` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_segmentation` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_lidar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_lidar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn` | error | error | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn` | error | error | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform` | fail | fail | assertion: AssertionError: -64.64484405517578 != 291.0 |
+| `test_connection.py::<script>` | pass | compile | does not compile: no module named 'argparse' |
+| `test_ground_truth.py::<script>` | error | compile | test dependency `cv2` not installed in the test interpreter |
+| `test_raycast_sensor.py::<script>` | error | compile | RuntimeError: tsc_world_spawn_actor: std::exception |
+| `test_vehicle_physics.py::<script>` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
 
 ## Every test: 0.10.0
 

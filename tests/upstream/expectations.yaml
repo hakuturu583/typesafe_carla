@@ -81,6 +81,153 @@ cpython:
       TestVehicleControl.test_default_values: pass
       TestVehicleControl.test_named_args: pass
       TestVehiclePhysicsControl.test_named_args: 'xfail: error: TypeError: could not find callable method ''WheelPhysicsControl__new'' for given arguments [] [''max_steer_angle'', ''radius'', ''tire_friction'']'
+    smoke/test_actor_introspection.py:
+      TestActorIntrospection.test_vehicle_components: pass
+      TestActorIntrospection.test_vehicle_sockets_consistent: pass
+      TestActorIntrospection.test_walker_bones: pass
+      TestActorIntrospection.test_component_not_found_raises: pass
+    smoke/test_blueprint.py:
+      TestBlueprintLibrary.test_blueprint_ids: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    smoke/test_client.py:
+      TestClient.test_version: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    smoke/test_collision_determinism.py:
+      TestCollisionDeterminism.test_two_cars: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestCollisionDeterminism.test_three_cars: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestCollisionDeterminism.test_car_bike: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestCollisionDeterminism.test_car_walker: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+    smoke/test_collision_sensor.py:
+      TestCollisionSensor.test_single_car: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    smoke/test_debug_clear.py:
+      TestDebugClear.test_clear_debug_shape: pass
+      TestDebugClear.test_clear_debug_string: pass
+      TestDebugClear.test_clear_when_nothing_drawn: pass
+    smoke/test_determinism.py:
+      TestDeterminism.test_determ: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    smoke/test_encoding_cameras.py:
+      TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels: 'xfail: error: AttributeError: ''SensorData'' object has no attribute ''raw_data'''
+      TestEncodingCameras.test_semantic_segmentation_emits_valid_labels: 'xfail: error: AttributeError: ''SensorData'' object has no attribute ''raw_data'''
+      TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids: 'xfail: error: AttributeError: ''SensorData'' object has no attribute ''raw_data'''
+    smoke/test_geoconversion.py:
+      TestGeoLocationConversion.test_geo_reference: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_geo_projection: 'xfail: error: NotImplementedError: pycarla: Map.get_geoprojection not wrapped: result type GeoProjection'
+      TestGeoLocationConversion.test_location_to_geo_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_geo_to_location_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_zero_conversion: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_relative_offset_preserved: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_tm_location_to_geo_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_tm_geo_to_location_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_utm_north_location_to_geo_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_utm_north_geo_to_location_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_utm_south_location_to_geo_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_utm_south_geo_to_location_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_webmerc_location_to_geo_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_webmerc_geo_to_location_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_lcc_location_to_geo_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestGeoLocationConversion.test_lcc_geo_to_location_and_back: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    smoke/test_lidar.py:
+      TestSyncLidar.test_lidar_point_count: 'xfail: error: RuntimeError: ''SensorData'' object has no attribute ''channels'''
+      TestSyncLidar.test_semlidar_point_count: 'xfail: error: RuntimeError: ''SensorData'' object has no attribute ''channels'''
+      TestASyncLidar.test_lidar_point_count: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestASyncLidar.test_semlidar_point_count: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestCompareLidars.test_lidar_comparison: 'xfail: error: _queue.Empty'
+    smoke/test_map.py:
+      TestMap.test_reload_world: 'xfail: error: RuntimeError: tsc_client_reload_world: std::exception'
+      TestMap.test_load_all_maps: 'xfail: error: RuntimeError: tsc_world_get_map: std::exception'
+    smoke/test_props_loading.py:
+      TestPropsLoading.test_spawn_loaded_props: 'xfail: error: RuntimeError: tsc_world_get_map: std::exception'
+    smoke/test_recorder.py:
+      TestRecorder.test_record_replay_blueprint_id_round_trips: pass
+      TestRecorder.test_record_survives_same_tick_actor_destroy: pass
+    smoke/test_replay_no_actor_aliasing.py:
+      TestReplayNoActorAliasing.test_replayed_actors_have_clean_state: pass
+    smoke/test_sensor_determinism.py:
+      TestSensorDeterminism.test_all_sensors: 'xfail: error: RuntimeError: tsc_client_reload_world: std::exception'
+    smoke/test_sensor_tick_time.py:
+      TestSensorTickTime.test_sensor_tick_time: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    smoke/test_snapshot.py:
+      TestSnapshot.test_spawn_points: 'xfail: error: RuntimeError: tsc_client_reload_world: std::exception'
+    smoke/test_spawnpoints.py:
+      TestSpawnpoints.test_spawn_points: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    smoke/test_streamming.py:
+      TestStreamming.test_multistream: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    smoke/test_sync.py:
+      TestSynchronousMode.test_reloading_map: 'xfail: error: RuntimeError: tsc_client_reload_world: std::exception'
+      TestSynchronousMode.test_sensor_transform_on_synchronous_mode: 'xfail: error: IndexError: tsc_blueprint_library_find: no blueprint with id ''vehicle.ford.mustang'''
+      TestSynchronousMode.test_apply_batch_sync: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    smoke/test_traffic_manager_large_vehicle.py:
+      TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans: 'xfail: fail: AssertionError: unexpectedly None : could not spawn a large vehicle at any spawn point'
+    smoke/test_traffic_manager_sync_step.py:
+      TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock: pass
+    smoke/test_v2x.py:
+      TestV2X.test_custom_v2x_send_and_receive: 'xfail: error: AttributeError: ''SensorData'' object has no attribute ''get_message_count'''
+      TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length: 'xfail: error: TypeError: could not find callable method ''CustomV2XBytes__set_bytes'' for given arguments [''B_CustomV2XBytes'', ''array''] []'
+      TestV2X.test_v2x_cam_generation: 'xfail: error: AttributeError: ''SensorData'' object has no attribute ''get_message_count'''
+      TestV2X.test_v2i_infrastructure_sensor_without_owner: pass
+    smoke/test_vehicle_physics.py:
+      TestApplyVehiclePhysics.test_single_physics_control: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestApplyVehiclePhysics.test_multiple_physics_control: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestVehicleFriction.test_vehicle_zero_friction: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestVehicleFriction.test_vehicle_friction_volume: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestVehicleFriction.test_vehicle_friction_values: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestVehicleTireConfig.test_vehicle_wheel_collision: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestVehicleTireConfig.test_vehicle_tire_long_stiff: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestStickyControl.test_default: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestStickyControl.test_true: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+      TestStickyControl.test_false: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''FutureActor'''
+    smoke/test_vehicle_telemetry.py:
+      TestVehicleTelemetry.test_get_telemetry_data_shape_and_values: pass
+    smoke/test_walker_bounding_box.py:
+      TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset: pass
+    smoke/test_walker_navigation.py:
+      TestWalkerNavigation.test_walker_ai_controller_routes_without_crash: 'xfail: error: AttributeError: ''Actor'' object has no attribute ''stop'''
+    smoke/test_world.py:
+      TestWorld.test_fixed_delta_seconds: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    API/prop_control.py:
+      <script>: 'xfail: error: exit 1: IndexError: tsc_actor_blueprint_set_attribute: blueprint ''sensor.camera.rgb'' has no attribute ''chromatic_aberration_intensity'''
+    API/spawn_actor.py:
+      <script>: 'xfail: error: exit 2: spawn_actor.py: error: the following arguments are required: -b/--blueprint'
+    API/test_apply_textures.py:
+      TestApplyTextures.test_apply_textures: 'xfail: error: RuntimeError: ''SensorData'' object has no attribute ''convert'''
+    API/test_collision.py:
+      TestCollision.test_collision_against_side_of_car: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    API/test_no_rendering_mode.py:
+      TestNoRenderingMode.test_no_rendering_mode: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    API/test_semantic_segmentation.py:
+      TestSemanticSegmentation.test_semantic_segmentation: 'xfail: error: RuntimeError: ''SensorData'' object has no attribute ''convert'''
+    API/test_sensor_recording.py:
+      TestSensorRecording.test_gnss: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_imu: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_radar: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_rgb: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_depth: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_instance_segmentation: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_semantic_segmentation: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_lidar: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_semantic_lidar: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    API/test_sensor_recording_fast.py:
+      TestSensorRecording.test_gnss: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_imu: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_radar: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_rgb: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_depth: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_instance_segmentation: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_semantic_segmentation: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_lidar: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+      TestSensorRecording.test_semantic_lidar: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    API/test_spawn_vehicles.py:
+      TestVehiclesSpawnTest.test_vehicle_spawn: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    API/test_spawn_walkers.py:
+      TestWalkersSpawn.test_walker_spawn: 'xfail: error: RuntimeError: tsc_client_load_world: std::exception'
+    API/test_sync_mode.py:
+      TestSyncMode.test_sync_mode_set_transform: 'xfail: fail: AssertionError: -64.64484405517578 != 291.0'
+    test_connection.py:
+      <script>: pass
+    test_ground_truth.py:
+      <script>: 'xfail: error: exit 1: ModuleNotFoundError: No module named ''cv2'''
+    test_raycast_sensor.py:
+      <script>: 'xfail: error: exit 1: RuntimeError: tsc_world_spawn_actor: std::exception'
+    test_vehicle_physics.py:
+      <script>: 'xfail: error: exit 1: RuntimeError: tsc_client_load_world: std::exception'
 codon:
   0.10.0:
     unit/test_client.py: 'xfail: compile: unit/test_client.py:12: no module named ''subprocess'''
@@ -254,9 +401,12 @@ codon:
     API/test_semantic_segmentation.py: 'xfail: compile: API/test_semantic_segmentation.py:14: no module named ''argparse'''
     API/test_sensor_recording.py: 'xfail: compile: API/test_sensor_recording.py:9: no module named ''glob'''
     API/test_sensor_recording_fast.py: 'xfail: compile: API/test_sensor_recording_fast.py:9: no module named ''glob'''
-    API/test_spawn_vehicles.py: {}
-    API/test_spawn_walkers.py: {}
-    API/test_sync_mode.py: {}
+    API/test_spawn_vehicles.py:
+      TestVehiclesSpawnTest.test_vehicle_spawn: 'xfail: error: CarlaError: tsc_client_load_world: std::exception'
+    API/test_spawn_walkers.py:
+      TestWalkersSpawn.test_walker_spawn: 'xfail: error: CarlaError: tsc_client_load_world: std::exception'
+    API/test_sync_mode.py:
+      TestSyncMode.test_sync_mode_set_transform: 'xfail: fail: -64.6448 != 11'
     test_connection.py: 'xfail: compile: test_connection.py:16: no module named ''argparse'''
     test_ground_truth.py: 'xfail: compile: test_ground_truth.py:11: no module named ''cv2'''
     test_raycast_sensor.py: 'xfail: compile: test_raycast_sensor.py:33: no module named ''argparse'''
