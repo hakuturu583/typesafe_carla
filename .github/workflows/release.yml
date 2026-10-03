@@ -1,17 +1,51 @@
-# Builds and publishes typesafe-carla and typesafe-carla-toolchain.
+# Cuts releases of typesafe-carla and publishes them (with
+# typesafe-carla-toolchain) to PyPI.
 #
-#   * push a tag vX.Y.Z (must equal python/typesafe_carla/__init__.py) -> PyPI
-#   * run manually (workflow_dispatch): builds and checks everything; with
-#     publish=true it also uploads to TestPyPI (a dry run otherwise)
+# Release tags are <version>-<CARLA ref>-<YYYYMMDD>, e.g. 0.1.0-ue5-dev-20260915
+# or 0.1.0-0.10.0-20250320: the package version, the carla-simulator/carla ref
+# LibCarla is built from, and the (UTC committer) date of that ref's last
+# commit to build. LibCarla is built from the resolved commit SHA, so a release
+# of a moving branch such as ue5-dev is reproducible. tools/release_tag.py
+# parses the tags and resolves the commits. The PyPI version is <version>
+# alone: PyPI accepts a version once, so every release bumps it, and a run
+# fails early (in `release` and `resolve`) if the version is already published.
+#
+# There are three ways in, and the first is the everyday one:
+#
+#   push to main   the auto-release path. When the merged PR carries exactly one
+#                  `release:major|minor|patch` label, the `release` job bumps the
+#                  version (tools/bump_version.py), resolves the latest commit of
+#                  the CARLA release ref (repository variable CARLA_RELEASE_REF,
+#                  default ue5-dev), tags it and drafts a GitHub release; the
+#                  tag is built and published, all in this one run, and the
+#                  GitHub release is published last. No label, no release.
+#   push a release tag   a hand-cut tag (another CARLA ref, a hotfix) is built
+#                  and published directly, then gets a GitHub release; the
+#                  `release` job is skipped.
+#   workflow_dispatch    a dry run: builds and checks everything from the
+#                  `carla_ref` input without tagging; with publish=true it also
+#                  uploads to TestPyPI.
+#
+# It is one workflow rather than a separate `on: push: tags` one on purpose: the
+# auto-release tag is pushed with GITHUB_TOKEN, and a tag pushed with
+# GITHUB_TOKEN starts no new workflow runs. So the tag is built and published by
+# follow-up jobs of the run that cut it. A hand-pushed tag would trigger a tag
+# workflow, but keeping both paths here means one place to trust.
 #
 # Publishing uses PyPI Trusted Publishing (OIDC): configure the "pypi" and
-# "testpypi" environments and register this workflow as a trusted publisher
-# for both projects on (Test)PyPI. No API tokens are stored.
+# "testpypi" environments and register this workflow as a trusted publisher for
+# both projects on (Test)PyPI. No API tokens are stored. See docs/releasing.md.
+#
+# A version can never be replaced on PyPI, so the mock test suite runs again on
+# the tagged commit rather than trusting that CI was green.
 name: Release
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    # <version>-<CARLA ref>-<YYYYMMDD>. "**" because a ref may contain "/";
+    # the exact format is checked by tools/release_tag.py.
+    tags: ["[0-9]*.[0-9]*.[0-9]*-**"]
   workflow_dispatch:
     inputs:
       carla_ref:
@@ -23,38 +57,290 @@ on:
         type: boolean
         default: false
 
-env:
-  CARLA_GIT_REF: ${{ inputs.carla_ref || 'ue5-dev' }}
+permissions:
+  contents: read
 
 jobs:
-  check-version:
+  # Read the release label off the merged PR and, if there is one, bump the
+  # version and push the tag. Runs only on a push to main; a tag push or a
+  # manual dispatch skips it and falls straight through to `resolve`.
+  release:
+    name: cut the release tag
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: read
+    # Never two release cuts at once; a queued one runs after (and fails on the
+    # non-fast-forward push if main moved).
+    concurrency:
+      group: release-main
+      cancel-in-progress: false
+    outputs:
+      bump: ${{ steps.pr.outputs.bump }}
+      tag: ${{ steps.tag.outputs.tag }}
+      carla_ref: ${{ steps.tag.outputs.carla_ref }}
+      carla_commit: ${{ steps.tag.outputs.carla_commit }}
+    steps:
+      - name: Read the release label off the merged PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # An API error fails the job; only an empty list means "no PR".
+          pr_json=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '.[0] // empty')
+          if [ -z "$pr_json" ]; then
+            echo "No PR associated with this push: nothing to release"
+            echo "bump=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          labels=$(echo "$pr_json" | jq -r '[.labels[].name] | join(",")')
+          bump=none
+          count=0
+          for lvl in major minor patch; do
+            if echo ",$labels," | grep -q ",release:${lvl},"; then
+              bump=$lvl
+              count=$((count + 1))
+            fi
+          done
+          if [ "$count" -gt 1 ]; then
+            echo "::error::More than one release label on the PR: pick exactly one"
+            exit 1
+          fi
+          echo "bump=${bump}" >> "$GITHUB_OUTPUT"
+          echo "Resolved bump level: ${bump}"
+
+      # The pushed commit, not whatever main is now: the bump is pushed to main
+      # without force, so if main has moved since, the push fails loudly
+      # (re-runs included) instead of releasing an unverified commit.
+      - uses: actions/checkout@v4
+        if: steps.pr.outputs.bump != 'none'
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Bump the Python and Codon package versions together
+        if: steps.pr.outputs.bump != 'none'
+        id: bump
+        env:
+          BUMP: ${{ steps.pr.outputs.bump }}
+        run: |
+          set -euo pipefail
+          next=$(python3 tools/bump_version.py "$BUMP")
+          echo "next=${next}" >> "$GITHUB_OUTPUT"
+          echo "Bumped to ${next} (${BUMP})"
+
+      - name: Fail if the version is already tagged or published
+        if: steps.pr.outputs.bump != 'none'
+        env:
+          NEXT: ${{ steps.bump.outputs.next }}
+        run: |
+          set -euo pipefail
+          tags=$(git tag -l "${NEXT}-*")
+          if [ -n "$tags" ]; then
+            echo "::error::Version ${NEXT} is already tagged: ${tags//$'\n'/ }"
+            exit 1
+          fi
+          python3 tools/release_tag.py unpublished --version "$NEXT"
+
+      - name: Resolve the CARLA ref's latest commit and form the tag
+        if: steps.pr.outputs.bump != 'none'
+        id: tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARLA_RELEASE_REF: ${{ vars.CARLA_RELEASE_REF || 'ue5-dev' }}
+        run: python3 tools/release_tag.py make "$CARLA_RELEASE_REF" --github-output "$GITHUB_OUTPUT"
+
+      - name: Fail if the tag already exists
+        if: steps.pr.outputs.bump != 'none'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists"
+            exit 1
+          fi
+
+      - name: Commit, tag and push
+        if: steps.pr.outputs.bump != 'none'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          CARLA_REF: ${{ steps.tag.outputs.carla_ref }}
+          CARLA_COMMIT: ${{ steps.tag.outputs.carla_commit }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add python/typesafe_carla/__init__.py codon/typesafe_carla/__init__.codon
+          git commit -m "chore(release): ${TAG}"
+          git tag -a "${TAG}" -m "Release ${TAG}" \
+            -m "LibCarla: carla-simulator/carla ${CARLA_REF} @ ${CARLA_COMMIT}"
+          git push origin "HEAD:main"
+          git push origin "${TAG}"
+
+      # A draft until `github-release` publishes it, after PyPI.
+      - name: Draft the GitHub release with generated notes
+        if: steps.pr.outputs.bump != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          CARLA_REF: ${{ steps.tag.outputs.carla_ref }}
+          CARLA_COMMIT: ${{ steps.tag.outputs.carla_commit }}
+        run: |
+          gh release create "${TAG}" --draft --verify-tag --title "${TAG}" --generate-notes \
+            --notes "LibCarla built from carla-simulator/carla \`${CARLA_REF}\` at carla-simulator/carla@${CARLA_COMMIT}."
+
+  # One place to work out, for all three entry points, which commit to check
+  # out, which CARLA commit to build, and whether and where to publish. Runs
+  # even when `release` is skipped (tag push, dispatch).
+  resolve:
+    name: resolve what to build
+    needs: [release]
+    if: always()
+    runs-on: ubuntu-24.04
+    outputs:
+      proceed: ${{ steps.r.outputs.proceed }}
+      publish: ${{ steps.r.outputs.publish }}
+      index: ${{ steps.r.outputs.index }}
+      ref: ${{ steps.r.outputs.ref }}
+      tag: ${{ steps.r.outputs.tag }}
+      version: ${{ steps.r.outputs.version }}
+      carla_ref: ${{ steps.r.outputs.carla_ref }}
+      carla_build_ref: ${{ steps.r.outputs.carla_build_ref }}
+      carla_commit: ${{ steps.r.outputs.carla_commit }}
+    steps:
+      # For a tag push this is the tag, so the tag is checked against its own
+      # package version.
+      - uses: actions/checkout@v4
+      - id: r
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          BUMP: ${{ needs.release.outputs.bump }}
+          TAG: ${{ needs.release.outputs.tag }}
+          TAG_CARLA_REF: ${{ needs.release.outputs.carla_ref }}
+          TAG_CARLA_COMMIT: ${{ needs.release.outputs.carla_commit }}
+          INPUT_CARLA_REF: ${{ inputs.carla_ref }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          proceed=false; publish=false; index=pypi; ref="$SHA"; tag=""; version=""
+          carla_ref=""; carla_commit=""
+          if [ "$EVENT" = push ] && [[ "$REF" == refs/tags/* ]]; then
+            # A hand-cut tag: check it, resolve its CARLA commit, build and publish.
+            out=$(mktemp)
+            python3 tools/release_tag.py check "$REF_NAME" --github-output "$out"
+            while IFS='=' read -r k v; do
+              case "$k" in
+                version) version="$v" ;;
+                carla_ref) carla_ref="$v" ;;
+                carla_commit) carla_commit="$v" ;;
+              esac
+            done < "$out"
+            proceed=true; publish=true; ref="$REF_NAME"; tag="$REF_NAME"
+          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+            # The auto-release path: build and publish only if a tag was cut.
+            # The CARLA commit comes from `release`, not resolved a second time.
+            if [ "$RELEASE_RESULT" = success ] && [ "$BUMP" != none ] && [ -n "$TAG" ]; then
+              proceed=true; publish=true; ref="$TAG"; tag="$TAG"; version="${TAG%%-*}"
+              carla_ref="$TAG_CARLA_REF"; carla_commit="$TAG_CARLA_COMMIT"
+            fi
+          elif [ "$EVENT" = workflow_dispatch ]; then
+            # A dry run from the carla_ref input (as given, not resolved to a
+            # SHA); publish=true uploads to TestPyPI.
+            proceed=true; index=testpypi; carla_ref="${INPUT_CARLA_REF:-ue5-dev}"
+            if [ "$INPUT_PUBLISH" = true ]; then publish=true; fi
+          fi
+          # PyPI accepts a version once: fail now, not after the build. A re-run
+          # (attempt > 1) may be finishing a partial upload, so it is let through.
+          if [ "$publish" = true ]; then
+            if [ "$RUN_ATTEMPT" -gt 1 ]; then
+              echo "::notice::Run attempt ${RUN_ATTEMPT}: not checking ${index} for the version"
+            else
+              python3 tools/release_tag.py unpublished --index "$index" ${version:+--version "$version"}
+            fi
+          fi
+          # What CMake fetches (CARLA_GIT_REF): the resolved SHA for a release.
+          carla_build_ref="${carla_commit:-$carla_ref}"
+          {
+            echo "proceed=$proceed"; echo "publish=$publish"; echo "index=$index"
+            echo "ref=$ref"; echo "tag=$tag"; echo "version=$version"; echo "carla_ref=$carla_ref"
+            echo "carla_build_ref=$carla_build_ref"; echo "carla_commit=$carla_commit"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  verify:
+    name: test the tagged commit
+    needs: [resolve]
+    if: always() && needs.resolve.outputs.proceed == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      TSC_BACKEND: mock
+      UV_PYTHON: "3.12"
     steps:
       - uses: actions/checkout@v4
-      - name: Tag matches package version
-        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+      - uses: astral-sh/setup-uv@v6
+
+      - name: The version in the tag must be the version in the package
+        if: needs.resolve.outputs.version != ''
+        env:
+          TAG_VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' python/typesafe_carla/__init__.py)
-          test "v${version}" = "${GITHUB_REF_NAME}" || {
-            echo "tag ${GITHUB_REF_NAME} != package version ${version}"; exit 1; }
+          PY=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' python/typesafe_carla/__init__.py)
+          CODON=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' codon/typesafe_carla/__init__.codon)
+          echo "tag=$TAG_VERSION python=$PY codon=$CODON"
+          test "$TAG_VERSION" = "$PY" && test "$TAG_VERSION" = "$CODON"
+
+      # The mock suite of ci.yml's `test` job, on one Python version.
+      - name: C++ build (mock backend)
+        run: |
+          cmake -S . -B build -DTSC_BACKEND=mock
+          cmake --build build -j "$(nproc)"
+      - name: Native ABI tests
+        run: ctest --test-dir build --output-on-failure
+      - name: uv sync (locked)
+        run: uv sync --frozen
+      - name: Compile-pass, compile-fail, runtime and launcher tests
+        run: uv run pytest -q
 
   sdist:
-    needs: check-version
+    needs: [resolve, verify]
+    if: always() && needs.verify.result == 'success'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
       - uses: astral-sh/setup-uv@v6
       - run: uv build --sdist -o dist
       - uses: actions/upload-artifact@v4
         with: { name: dist-sdist, path: dist/*.tar.gz }
 
   wheel:
-    # LibCarla is built from CARLA sources at $CARLA_GIT_REF inside the
-    # manylinux_2_28 image; the wheel is py3-none (no CPython extension).
-    needs: check-version
+    # LibCarla is built from CARLA sources at $CARLA_GIT_REF (the resolved
+    # commit SHA for a release) inside the manylinux_2_28 image; the wheel is
+    # py3-none (no CPython extension).
+    needs: [resolve, verify]
+    if: always() && needs.verify.result == 'success'
     runs-on: ubuntu-24.04
+    env:
+      CARLA_GIT_REF: ${{ needs.resolve.outputs.carla_build_ref }}
+      CARLA_COMMIT: ${{ needs.resolve.outputs.carla_commit }}
+      CARLA_REF: ${{ needs.resolve.outputs.carla_ref }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+      - name: CARLA ref and commit
+        run: echo "CARLA ${CARLA_REF} -> LibCarla from CARLA_GIT_REF=${CARLA_GIT_REF}"
       - uses: pypa/cibuildwheel@v3.1
         env:
           CIBW_BUILD: cp312-manylinux_x86_64
@@ -70,20 +356,24 @@ jobs:
           output-dir: dist
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - name: Check the wheel (backend, CARLA ref, exports, no libpython)
+      - name: Check the wheel (backend, CARLA ref and commit, exports, no libpython)
         run: |
           python -m venv /tmp/check
           /tmp/check/bin/pip install --no-deps dist/*.whl
           cd /tmp && /tmp/check/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" \
-            --backend libcarla --carla-ref "$CARLA_GIT_REF"
+            --backend libcarla --carla-ref "$CARLA_GIT_REF" \
+            ${CARLA_COMMIT:+--carla-commit "$CARLA_COMMIT"}
       - uses: actions/upload-artifact@v4
         with: { name: dist-wheel, path: dist/*.whl }
 
   toolchain:
-    needs: check-version
+    needs: [resolve, verify]
+    if: always() && needs.verify.result == 'success'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
       - uses: astral-sh/setup-uv@v6
       - run: uv build --wheel --sdist toolchain -o dist
       - name: Bundled Codon runs
@@ -94,27 +384,71 @@ jobs:
         with: { name: dist-toolchain, path: dist/* }
 
   publish:
-    needs: [sdist, wheel, toolchain]
-    # Decided by the event, not the ref: a manual run started from a tag must
-    # stay a dry run unless publish=true, and then it goes to TestPyPI.
-    if: github.event_name == 'push' || inputs.publish
+    name: publish to ${{ needs.resolve.outputs.index }}
+    needs: [resolve, sdist, wheel, toolchain]
+    # Decided by `resolve`, from the event: a release goes to PyPI; a manual
+    # run (even one started from a tag) only with publish=true, to TestPyPI.
+    if: >-
+      always() && needs.resolve.outputs.publish == 'true' &&
+      needs.sdist.result == 'success' && needs.wheel.result == 'success' &&
+      needs.toolchain.result == 'success'
     runs-on: ubuntu-24.04
-    environment: ${{ github.event_name == 'push' && 'pypi' || 'testpypi' }}
+    environment: ${{ needs.resolve.outputs.index }}
     permissions:
-      id-token: write
+      id-token: write  # Trusted Publishing; no token in secrets.
     steps:
+      # Named explicitly rather than "everything in the run", so nothing else a
+      # job uploads ends up in dist/. The toolchain goes to its own directory:
+      # only its upload may skip existing files.
       - uses: actions/download-artifact@v4
-        with: { pattern: dist-*, path: dist, merge-multiple: true }
-      - run: ls -l dist
-      - name: Publish to PyPI
-        if: github.event_name == 'push'
+        with: { name: dist-sdist, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: dist-wheel, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: dist-toolchain, path: dist-toolchain }
+      - run: ls -l dist dist-toolchain
+      # PyPI rejects bad metadata only after the build and the OIDC exchange;
+      # failing here costs nothing.
+      - name: Check the metadata before uploading
+        run: pipx run twine check --strict dist/* dist-toolchain/*
+      # First, so typesafe-carla's dependency is installable when it appears.
+      - name: Publish typesafe-carla-toolchain
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          # The toolchain version only changes with Codon; re-releases skip it.
+          repository-url: ${{ needs.resolve.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          packages-dir: dist-toolchain/
+          # The toolchain version only changes with Codon; most releases skip it.
           skip-existing: true
-      - name: Publish to TestPyPI
-        if: github.event_name != 'push'
+      - name: Publish typesafe-carla
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
+          repository-url: ${{ needs.resolve.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          packages-dir: dist/
+          # An existing file is an error, so a version is never "released"
+          # without uploading anything; only a re-run may finish a partial upload.
+          skip-existing: ${{ github.run_attempt > 1 }}
+
+  # Last: the GitHub release appears only once the packages are on PyPI. The
+  # auto-release path drafted it in `release`; a hand-cut tag gets one here.
+  github-release:
+    name: publish the GitHub release
+    needs: [resolve, publish]
+    if: always() && needs.publish.result == 'success' && needs.resolve.outputs.index == 'pypi'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          CARLA_REF: ${{ needs.resolve.outputs.carla_ref }}
+          CARLA_COMMIT: ${{ needs.resolve.outputs.carla_commit }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$REPO" --draft=false
+          else
+            gh release create "$TAG" --repo "$REPO" --verify-tag --title "$TAG" --generate-notes \
+              --notes "LibCarla built from carla-simulator/carla \`${CARLA_REF}\` at carla-simulator/carla@${CARLA_COMMIT}."
+          fi
