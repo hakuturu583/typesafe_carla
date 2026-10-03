@@ -604,9 +604,12 @@ Deliberate differences, all in favour of static checking:
     `CarlaError` ("the server rejected the G-buffer subscription ...") and
     nothing is registered. With the official 0.10.0 Python API the same call
     aborts the whole process (an uncaught `std::exception` in LibCarla).
-    **Do not call it against a 0.10.0 server:** the rejected subscription
-    takes about 30 s and the server process crashes and restarts, dropping
-    every client's world (check `client.get_server_version()` first).
+    **Do not call it against a 0.10.0 server:** the subscription is rejected
+    only after the client timeout, and the server process then crashes and
+    restarts, dropping every client's world. `get_server_version()` cannot
+    tell such a server apart (ue5-dev servers also report "0.10.0"), so call
+    it only against a server known to stream G-buffers. The integration test
+    runs this check only with `TSC_TEST_GBUFFER=1`.
   - **ROS2 (issue #33).** `enable_for_ros()` / `disable_for_ros()` /
     `is_enabled_for_ros()` call LibCarla's `ServerSideSensor`; a server built
     without ROS2 accepts the requests and reports `False`.

@@ -107,15 +107,14 @@ try:
     print("ros", ros_before, ros_enabled, ros_after)
     assert not ros_after
 
-    # A CARLA 0.10.0 server cannot stream G-buffers, and asking it to is not
-    # harmless: the subscription times out (~30 s) and the server process
-    # crashes and restarts, which breaks every test running after this one.
-    # So the subscription is only attempted on other servers.
-    server = client.get_server_version()
-    print("server", server)
-    if server.startswith("0.10.0"):
-        print("note: CARLA 0.10.0 servers do not stream G-buffers (subscribing "
-              "crashes the server); G-buffer checks skipped")
+    # G-buffer streaming is opt-in (TSC_TEST_GBUFFER=1). A server that cannot
+    # stream G-buffers (CARLA 0.10.0) rejects the subscription only after the
+    # client timeout and then crashes and restarts, breaking every test that
+    # runs after this one. The server version cannot tell it apart: ue5-dev
+    # servers also report "0.10.0".
+    if os.getenv("TSC_TEST_GBUFFER", "") != "1":
+        print("note: G-buffer checks skipped (set TSC_TEST_GBUFFER=1 against a "
+              "server that streams G-buffers; a CARLA 0.10.0 server crashes)")
     else:
         depth = List[int]()
         camera.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth,
