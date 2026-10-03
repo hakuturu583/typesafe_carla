@@ -67,6 +67,8 @@ class SensorDataType:
     Obstacle: ClassVar[int] = 9
     DVS: ClassVar[int] = 10
     OpticalFlow: ClassVar[int] = 11
+    CAM: ClassVar[int] = 12  # LibCarla ue5-dev only (issue #42)
+    CustomV2X: ClassVar[int] = 13  # LibCarla ue5-dev only (issue #42)
 
 class _ColorConverter(_IntEnum):
     """carla.ColorConverter, for Image.convert and Image.save_to_disk."""

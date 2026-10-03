@@ -1,0 +1,9 @@
+# Sensor.send takes a CustomV2XBytes (or a str), not an arbitrary value.
+# expect-error: no function 'Sensor.send' with arguments (Sensor, int)
+import typesafe_carla as carla
+
+def ping(radio: carla.Sensor):
+    radio.send(42)
+
+# Compile-only: Codon type-checks a function only when it is called.
+ping(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor())

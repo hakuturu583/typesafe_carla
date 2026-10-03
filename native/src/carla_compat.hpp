@@ -72,12 +72,32 @@
 #include <carla/geom/GeoProjection.h>
 #define TSC_HAS_GEO_PROJECTION 1
 #endif
+// V2X (issue #42): ServerSideSensor::Send, rpc::CustomV2XBytes and the CAM /
+// custom V2X measurements are in ue5-dev, not in CARLA 0.10.0.
+#if __has_include(<carla/sensor/data/V2XEvent.h>)
+#include <carla/rpc/CustomV2XBytes.h>
+#include <carla/sensor/data/V2XEvent.h>
+#define TSC_HAS_V2X 1
+#endif
+#include <array>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace tsc {
+
+// The payload ServerSideSensor::Send takes. Without V2X, a stand-in of the
+// same shape, which no Send accepts (TSC_CALL_OPTIONAL then raises).
+#ifdef TSC_HAS_V2X
+using CustomV2XBytes = carla::rpc::CustomV2XBytes;
+#else
+struct CustomV2XBytes {
+  uint8_t data_size{0u};
+  std::array<unsigned char, 100> bytes{};
+};
+#endif
 
 // carla::SharedPtr is std::shared_ptr in CARLA UE5 (it was boost::shared_ptr
 // in UE4, which is not supported).
@@ -192,6 +212,12 @@ TSC_SKELETON_QUERY(get_socket_world_transforms, GetSocketWorldTransforms,
 TSC_SKELETON_QUERY(get_socket_relative_transforms, GetSocketRelativeTransforms,
                    std::vector<carla::geom::Transform>)
 #undef TSC_SKELETON_QUERY
+
+// The refs that must have the skeleton queries mirror ue5-dev, so they have
+// V2X too: there, a missing V2X header is a build error, not "unsupported".
+#ifndef TSC_HAS_V2X
+static_assert(!kSkeletonQueriesRequired, "LibCarla V2X headers not found");
+#endif
 
 // World::GetIMUSensorGravity / SetIMUSensorGravity are in ue5-dev, not in
 // LibCarla 0.10.0's source (issue #21); there both throw (TSC_ERROR).

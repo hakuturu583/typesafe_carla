@@ -32,6 +32,10 @@ from .sensor import (Sensor, SensorData, SensorDataType, Image, LidarMeasurement
                      ServerSideSensor, ClientSideSensor,
                      ObstacleDetectionEvent, DVSEventArray, DVSEvent, OpticalFlowImage,
                      OpticalFlowPixel, FakeImage)
+from .v2x import (CAMEvent, CAMMessage, CAM, ItsPduHeader, ValueConfidence, ReferencePosition,
+                  BasicVehicleContainerHighFrequency, BasicVehicleContainerLowFrequency,
+                  CenDsrcTollingZone, ProtectedCommunicationZone, PathPoint, CustomV2XEvent,
+                  CustomV2XData, CustomV2XMessage, CustomV2XBytes)
 from ._callbacks import dispatch_callbacks
 from .client import Client, OpendriveGenerationParameters
 from .walker import (Walker, WalkerAIController, WalkerBoneControlIn, WalkerBoneControlOut,

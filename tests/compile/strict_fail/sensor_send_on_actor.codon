@@ -1,0 +1,10 @@
+# Strict mode: an Actor must be converted with as_sensor() before it sends.
+# (Outside strict mode this compiles: a Python-API compatibility path.)
+# expect-error: strict mode: call as_sensor() first (Actor.send is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def ping(world: carla.World):
+    world.get_actors()[0].send("hello")
+
+# Compile-only: Codon type-checks a function only when it is called.
+ping(carla.Client("localhost", 2000).get_world())

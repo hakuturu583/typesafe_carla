@@ -32,6 +32,7 @@ from .vehicle import VehicleAckermannControl  # Vehicle's issue #20 methods
 from .walker import Walker, WalkerAIController
 from .traffic_light import TrafficSign, TrafficLight
 from .sensor import Sensor
+from .v2x import CustomV2XBytes  # Sensor.send (issue #42)
 
 def _plain_actor_only(actor, name: Literal[str]):
     """Compile error unless `actor` is statically a plain Actor (not a subclass)."""
@@ -398,6 +399,13 @@ class Actor:
         _plain_actor_only(self, "stop_gbuffer()")
         compat_shortcut("Actor.stop_gbuffer", "[tsc-compat] Actor.stop_gbuffer() without as_sensor()", "call as_sensor() first")
         return self.as_sensor().stop_gbuffer(*args, **kwargs)
+
+    # Sensor: V2X (issue #42)
+
+    def send(self: S, message, S: type):
+        _plain_actor_only(self, "send()")
+        compat_shortcut("Actor.send", "[tsc-compat] Actor.send() without as_sensor()", "call as_sensor() first")
+        self.as_sensor().send(message)
 
     # Sensor and WalkerAIController
 

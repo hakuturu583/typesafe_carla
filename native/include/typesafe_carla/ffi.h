@@ -56,9 +56,10 @@ extern "C" {
  * 4.2: tsc_map_new_from_opendrive, a client-side Map from an OpenDRIVE string (#39).
  * 4.3: tsc_client_replay_file_ex, tsc_client_start_recorder_ex (#36).
  * 4.4: actor world, blueprint attribute ids and recommended values, sensor ROS
- *      and G-buffer streams (#33). */
+ *      and G-buffer streams (#33).
+ * 4.5: V2X: tsc_sensor_send, CAM and custom V2X events (#42). */
 #define TSC_ABI_VERSION_MAJOR 4
-#define TSC_ABI_VERSION_MINOR 4
+#define TSC_ABI_VERSION_MINOR 5
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -717,7 +718,10 @@ typedef enum {
   TSC_SENSOR_DATA_LANE_INVASION = 8,
   TSC_SENSOR_DATA_OBSTACLE = 9,
   TSC_SENSOR_DATA_DVS = 10,
-  TSC_SENSOR_DATA_OPTICAL_FLOW = 11
+  TSC_SENSOR_DATA_OPTICAL_FLOW = 11,
+  /* ABI 4.5 (issue #42); only with a LibCarla that has V2X (ue5-dev) */
+  TSC_SENSOR_DATA_CAM = 12,
+  TSC_SENSOR_DATA_CUSTOM_V2X = 13
 } tsc_sensor_data_type_t;
 
 /* Checked downcast. TSC_TYPE_ERROR if the actor is not a sensor. */
@@ -945,6 +949,164 @@ TSC_API tsc_status_t tsc_sensor_data_as_optical_flow(const tsc_sensor_data_t *da
  * as in the Python API), into out, which must hold 4 * width * height bytes. */
 TSC_API tsc_status_t tsc_optical_flow_color_coded(const tsc_sensor_data_t *data, uint8_t *out,
                                                   size_t capacity);
+
+/* ------------------------------------------------------------------------ */
+/* Issue #42: V2X (ABI 4.5)                                                 */
+/*                                                                          */
+/* LibCarla ue5-dev only. Built against a LibCarla without V2X (CARLA       */
+/* 0.10.0), every function here fails with TSC_ERROR ("... is not available */
+/* in LibCarla 0.10.0") after its argument checks (a bad argument is still  */
+/* TSC_INVALID_ARGUMENT, a lane-invasion sensor TSC_TYPE_ERROR), and no     */
+/* measurement is TSC_SENSOR_DATA_CAM or TSC_SENSOR_DATA_CUSTOM_V2X. The    */
+/* ITS values are LibCarla's (LibITS.h): raw ETSI codes and units, e.g.     */
+/* latitude in 0.1 microdegrees.                                            */
+/* ------------------------------------------------------------------------ */
+
+/* Capacity of LibCarla's rpc::CustomV2XBytes, the custom V2X payload. */
+#define TSC_CUSTOM_V2X_MAX_DATA_SIZE 100
+
+/* ServerSideSensor::Send: sends message_size bytes at message (NULL only
+ * with size 0) through a custom V2X sensor (sensor.other.v2x_custom);
+ * receivers get them at the next tick. LibCarla only logs a warning for any
+ * other server-side sensor. TSC_TYPE_ERROR for a client-side sensor (lane
+ * invasion); TSC_INVALID_ARGUMENT for more than TSC_CUSTOM_V2X_MAX_DATA_SIZE
+ * bytes. */
+/* BEGIN GENERATED sensor_v2x from bindings/server_side_sensor.yaml, do not edit */
+TSC_API tsc_status_t tsc_sensor_send(tsc_sensor_t *sensor,
+                                     const uint8_t *message, size_t message_size);
+/* END GENERATED sensor_v2x */
+
+/* ITS PDU header (ItsPduHeader). */
+typedef struct {
+  int64_t protocol_version;
+  int64_t message_id; /* 0 custom, 2 CAM, ... */
+  int64_t station_id;
+} tsc_its_header_t;
+
+/* A value and its confidence code (heading, speed, accelerations, ...). */
+typedef struct {
+  int64_t value;
+  int64_t confidence;
+} tsc_its_value_t;
+
+typedef struct {
+  int64_t latitude;  /* 0.1 microdegree */
+  int64_t longitude; /* 0.1 microdegree */
+  int64_t semi_major_confidence;
+  int64_t semi_minor_confidence;
+  int64_t semi_major_orientation;
+  tsc_its_value_t altitude; /* cm, AltitudeConfidence */
+} tsc_its_reference_position_t;
+
+/* BasicVehicleContainerHighFrequency. Optional fields are valid when their
+ * has_* flag is non-zero. */
+typedef struct {
+  tsc_its_value_t heading;
+  tsc_its_value_t speed;
+  int64_t drive_direction;
+  tsc_its_value_t vehicle_length; /* confidence: VehicleLengthConfidenceIndication */
+  int64_t vehicle_width;
+  tsc_its_value_t longitudinal_acceleration;
+  tsc_its_value_t curvature;
+  int64_t curvature_calculation_mode;
+  tsc_its_value_t yaw_rate;
+  int32_t has_acceleration_control;
+  int32_t has_lane_position;
+  int32_t has_steering_wheel_angle;
+  int32_t has_lateral_acceleration;
+  int32_t has_vertical_acceleration;
+  int32_t has_performance_class;
+  int32_t has_cen_dsrc_tolling_zone;
+  int32_t has_cen_dsrc_tolling_zone_id;
+  int64_t acceleration_control; /* bit string */
+  int64_t lane_position;
+  tsc_its_value_t steering_wheel_angle;
+  tsc_its_value_t lateral_acceleration;
+  tsc_its_value_t vertical_acceleration;
+  int64_t performance_class;
+  int64_t cen_dsrc_tolling_zone_latitude;
+  int64_t cen_dsrc_tolling_zone_longitude;
+  int64_t cen_dsrc_tolling_zone_id;
+} tsc_cam_basic_vehicle_hf_t;
+
+/* One CAM (CAM_t) and its receive power, without the two lists (protected
+ * communication zones, path history), which have their own getters. */
+#define TSC_CAM_HF_NONE 0
+#define TSC_CAM_HF_BASIC_VEHICLE 1
+#define TSC_CAM_HF_RSU 2
+typedef struct {
+  float power; /* dBm */
+  uint32_t reserved0;
+  tsc_its_header_t header;
+  int64_t generation_delta_time; /* ms, modulo 65536 */
+  int64_t station_type;
+  tsc_its_reference_position_t reference_position;
+  int32_t high_frequency_present; /* TSC_CAM_HF_* */
+  int32_t has_low_frequency;      /* a BasicVehicleContainerLowFrequency */
+  tsc_cam_basic_vehicle_hf_t basic_vehicle; /* when TSC_CAM_HF_BASIC_VEHICLE */
+  int64_t vehicle_role;                     /* when has_low_frequency */
+  int64_t exterior_lights;                  /* when has_low_frequency; bit string */
+} tsc_cam_message_t;
+
+/* ProtectedCommunicationZone (the RSU high-frequency container). */
+typedef struct {
+  int64_t protected_zone_type;
+  int32_t has_expiry_time;
+  int32_t has_protected_zone_radius;
+  int32_t has_protected_zone_id;
+  int32_t reserved0;
+  int64_t expiry_time;
+  int64_t protected_zone_latitude;
+  int64_t protected_zone_longitude;
+  int64_t protected_zone_radius;
+  int64_t protected_zone_id;
+} tsc_its_protected_zone_t;
+
+/* PathPoint (the low-frequency container's path history). */
+typedef struct {
+  int64_t delta_latitude;
+  int64_t delta_longitude;
+  int64_t delta_altitude;
+  int32_t has_path_delta_time;
+  int32_t reserved0;
+  int64_t path_delta_time;
+} tsc_its_path_point_t;
+
+/* CAMEvent (sensor.other.v2x). TSC_TYPE_ERROR for another measurement,
+ * TSC_NOT_FOUND for an index past the end. */
+TSC_API tsc_status_t tsc_cam_event_get_message_count(const tsc_sensor_data_t *data, size_t *out);
+TSC_API tsc_status_t tsc_cam_event_get_message(const tsc_sensor_data_t *data, size_t index,
+                                               tsc_cam_message_t *out);
+/* Two-call buffers: out may be NULL to only count (*out_count). The lists
+ * hold at most TSC_CAM_MAX_PROTECTED_ZONES / TSC_CAM_MAX_PATH_POINTS (LibITS's
+ * array sizes) and are empty unless their container is present (an RSU
+ * high-frequency container, a low-frequency container). */
+#define TSC_CAM_MAX_PROTECTED_ZONES 16
+#define TSC_CAM_MAX_PATH_POINTS 40
+TSC_API tsc_status_t tsc_cam_event_get_protected_zones(const tsc_sensor_data_t *data,
+                                                       size_t index,
+                                                       tsc_its_protected_zone_t *out,
+                                                       size_t capacity, size_t *out_count);
+TSC_API tsc_status_t tsc_cam_event_get_path_history(const tsc_sensor_data_t *data, size_t index,
+                                                    tsc_its_path_point_t *out, size_t capacity,
+                                                    size_t *out_count);
+
+/* One custom V2X message (CustomV2XData): its receive power, header and
+ * payload size; the payload itself goes to a separate buffer. */
+typedef struct {
+  float power;        /* dBm */
+  uint32_t data_size; /* payload bytes, at most TSC_CUSTOM_V2X_MAX_DATA_SIZE */
+  tsc_its_header_t header;
+} tsc_custom_v2x_data_t;
+
+/* CustomV2XEvent (sensor.other.v2x_custom). Errors as for CAM events. */
+TSC_API tsc_status_t tsc_custom_v2x_event_get_message_count(const tsc_sensor_data_t *data,
+                                                            size_t *out);
+/* Copies min(data_size, capacity) payload bytes to bytes, which may be NULL
+ * (with capacity 0) to read only *out. */
+TSC_API tsc_status_t tsc_custom_v2x_event_get_message(const tsc_sensor_data_t *data,
+                                                      size_t index, tsc_custom_v2x_data_t *out,
+                                                      uint8_t *bytes, size_t capacity);
 
 /* ------------------------------------------------------------------------ */
 /* Milestone 4: broader CARLA coverage (ABI 2.0)                            */

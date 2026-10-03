@@ -1,0 +1,217 @@
+# Issue #42 on the mock backend, which mirrors LibCarla ue5-dev's V2X:
+# CustomV2XBytes, Sensor.send to custom V2X receivers, and CAM events from
+# vehicles and road-side units, in polling and callback mode.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+# The layouts the Codon FFI assumes (tests/native/test_ffi.c checks the C side).
+assert ffi.CItsHeader.__elemsize__ == 24 and ffi.CItsValue.__elemsize__ == 16
+assert ffi.CItsReferencePosition.__elemsize__ == 56
+assert ffi.CCamBasicVehicleHf.__elemsize__ == 248 and ffi.CCamMessage.__elemsize__ == 376
+assert ffi.CItsProtectedZone.__elemsize__ == 64 and ffi.CItsPathPoint.__elemsize__ == 40
+assert carla.SensorDataType.CAM == 12 and carla.SensorDataType.CustomV2X == 13
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+lib = world.get_blueprint_library()
+vehicle = world.get_actors()[0].as_vehicle()  # parked at (0, 0, 0.5)
+other = world.spawn_actor(lib.find("vehicle.audi.tt"),
+                          carla.Transform(carla.Location(12.0, 0.0, 0.5))).as_vehicle()
+
+def sensor(id: str, parent: Optional[carla.Vehicle], location = carla.Location(),
+           channel: str = "") -> carla.Sensor:
+    bp = lib.find(id)
+    if channel != "":
+        bp.set_attribute("channel_id", channel)
+    if parent is None:
+        return world.spawn_actor(bp, carla.Transform(location)).as_sensor()
+    return world.spawn_actor(bp, carla.Transform(location), attach_to=parent).as_sensor()
+
+def raises_carla_error(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError:
+        return True
+    return False
+
+def raises_actor_type_error(f) -> bool:
+    try:
+        f()
+    except carla.ActorTypeError:
+        return True
+    return False
+
+def test_bytes():
+    b = carla.CustomV2XBytes()
+    assert b.data_size == 0 and b.max_data_size() == 100
+    assert b.get_string() == "" and b.get_bytes() == List[int]()
+    b.set_string("hello")
+    assert b.data_size == 5 and b.get_string() == "hello"
+    assert b.get_bytes() == [104, 101, 108, 108, 111]
+    b.data_size = 2  # shrinking keeps the bytes, as LibCarla's fixed array
+    assert b.get_string() == "he"
+    b.data_size = 5
+    assert b.get_string() == "hello"
+    b.set_bytes([0, 1, 255])
+    assert b.data_size == 3 and b.get_bytes() == [0, 1, 255]
+    b.data_size = 5  # set_bytes zeroed the rest
+    assert b.get_bytes() == [0, 1, 255, 0, 0]
+    b.set_string("x" * 150)  # cut to 100 bytes, as the Python API
+    assert b.data_size == 100 and b.get_string() == "x" * 100
+    assert raises_carla_error(lambda: b.set_bytes([1, 256]))
+    assert raises_carla_error(lambda: b.set_bytes([-1]))
+    assert b.data_size == 100  # unchanged by the failed set_bytes
+    for n in (101, -1):
+        raised = False
+        try:
+            b.data_size = n
+        except carla.CarlaError:
+            raised = True
+        assert raised and b.data_size == 100
+    c = carla.CustomV2XBytes()
+    c.set_string("x" * 100)
+    assert b == c and str(carla.CustomV2XBytes()).startswith("CustomV2XBytes(max_data_size=100")
+
+def test_custom_send():
+    sender = sensor("sensor.other.v2x_custom", vehicle)
+    receiver = sensor("sensor.other.v2x_custom", other)
+    elsewhere = sensor("sensor.other.v2x_custom", other, channel="Other")
+    receiver.listen()
+    sender.listen()
+    elsewhere.listen()
+    world.tick()
+    assert receiver.poll() is None  # nothing sent yet
+
+    sender.send("hello v2x")
+    payload = carla.CustomV2XBytes()
+    payload.set_bytes([0, 1, 255])
+    sender.send(payload)
+    world.tick()
+    data = receiver.wait_for_data(1.0)
+    assert data.type == carla.SensorDataType.CustomV2X
+    event = data.as_custom_v2x_event()
+    assert event.get_message_count() == 2 and len(event) == 2 and event.frame == data.frame
+    first = event[0]
+    message = first.get()
+    assert message.data.get_string() == "hello v2x" and message.data.data_size == 9
+    assert message.header.protocol_version == 2 and message.header.message_id == 0
+    assert message.header.station_id == vehicle.id  # the sender's parent
+    assert first.power == 21.5, first.power  # the mock has no path loss
+    assert event[-1].get().data.get_bytes() == [0, 1, 255]
+    assert [m.get().data.data_size for m in event] == [9, 3]
+    assert str(first).startswith("CustomV2XData(power=")
+    assert str(event).startswith("CustomV2XEvent(frame=")
+    try:
+        event[2]
+        assert False
+    except IndexError:
+        pass
+    assert raises_actor_type_error(lambda: data.as_cam_event())
+    assert sender.poll() is None  # a sensor does not receive its own messages
+    assert elsewhere.poll() is None  # another channel
+    world.tick()
+    assert receiver.poll() is None  # each message is delivered on one tick
+
+    # LibCarla only warns when a non-custom sensor sends; nothing is delivered.
+    gnss = sensor("sensor.other.gnss", vehicle)
+    gnss.send("ignored")
+    world.tick()
+    assert receiver.poll() is None
+    # A sender without a parent: the server never forwards its messages.
+    standalone = sensor("sensor.other.v2x_custom", None, carla.Location(5.0, 0.0, 0.0))
+    standalone.send("unowned")
+    world.tick()
+    assert receiver.poll() is None
+    # The client-side lane-invasion sensor has no send().
+    lane = sensor("sensor.other.lane_invasion", vehicle)
+    assert raises_actor_type_error(lambda: lane.send("x"))
+    # The Python-API shortcut on a plain Actor.
+    world.get_actor(sender.id).send("shortcut")
+    world.tick()
+    assert receiver.wait_for_data(1.0).as_custom_v2x_event()[0].get().data.get_string() == "shortcut"
+    for s in (sender, receiver, elsewhere, gnss, standalone, lane):
+        s.destroy()
+
+def test_cam():
+    bp = lib.find("sensor.other.v2x")
+    bp.set_attribute("fixed_rate", "true")
+    tx = world.spawn_actor(bp, carla.Transform(), attach_to=vehicle).as_sensor()
+    rx = world.spawn_actor(bp, carla.Transform(), attach_to=other).as_sensor()
+    rx.listen()
+    world.tick()
+    data = rx.wait_for_data(1.0)
+    assert data.type == carla.SensorDataType.CAM
+    event = data.as_cam_event()
+    assert event.get_message_count() == 1 and str(event).startswith("CAMEvent(frame=")
+    message = event[0]
+    assert message.power == 21.5 and str(message).startswith("CAMData(power=")
+    cam = message.get()
+    assert cam.header.protocol_version == 2 and cam.header.message_id == 2
+    assert cam.header.station_id == vehicle.id and cam.station_type == 5
+    assert cam.reference_position.latitude == 0 and cam.reference_position.longitude == 0
+    assert cam.reference_position.altitude.value == 50  # cm
+    assert cam.reference_position.semi_major_confidence == 4095
+    assert cam.protected_communication_zones_rsu is None
+    h = unwrap(cam.basic_vehicle_container_high_frequency)  # raises if None
+    assert h.heading.value == 900 and h.speed.value == 0 and h.drive_direction == 0
+    assert h.vehicle_width == 18 and h.curvature.value == 30001
+    assert h.lateral_acceleration is not None and h.vertical_acceleration is not None
+    assert h.steering_wheel_angle is None and h.acceleration_control is None
+    assert h.cen_dsrc_tolling_zone is None and h.performance_class is None
+    low = unwrap(cam.basic_vehicle_container_low_frequency)
+    assert len(low.path_history) == 0 and low.vehicle_role == 0
+
+    # fixed_rate: one CAM every gen_cam_min (0.1 s = 2 ticks).
+    vehicle.set_light_state(carla.VehicleLightState.LowBeam)
+    world.tick()
+    assert rx.poll() is None
+    world.tick()
+    cam = rx.wait_for_data(1.0).as_cam_event()[0].get()
+    lights = unwrap(cam.basic_vehicle_container_low_frequency).exterior_lights
+    assert lights == 0x80, lights  # ETSI bit 0: low beam
+
+    # A road-side unit: a V2X sensor without a vehicle parent.
+    rsu = sensor("sensor.other.v2x", None, carla.Location(20.0, 0.0, 0.0))
+    stations = List[int]()
+    collected = List[carla.CAMMessage]()
+    def keep(d: carla.SensorData):
+        for m in d.as_cam_event():
+            collected.append(m)
+    rx.listen(keep)
+    for _ in range(2):
+        world.tick()
+    for m in collected:
+        stations.append(m.get().station_type)
+    assert 15 in stations and 5 in stations, stations
+    for m in collected:
+        cam = m.get()
+        if cam.station_type == 15:
+            assert cam.header.station_id == rsu.id
+            assert cam.basic_vehicle_container_high_frequency is None
+            zones = unwrap(cam.protected_communication_zones_rsu)
+            assert len(zones) == 16
+            z = zones[0]
+            assert z.protected_zone_latitude == 50 and z.protected_zone_longitude == 50
+            assert z.expiry_time is None and z.protected_zone_id is None
+            assert z.protected_zone_radius is None and z.protected_zone_type == 0
+            assert cam.basic_vehicle_container_low_frequency is None
+    tx.send("a CAM sensor only warns")  # no error, as in LibCarla
+    vehicle.set_light_state(carla.VehicleLightState.NONE)
+    for s in (tx, rx, rsu):
+        s.destroy()
+
+def test_wrong_conversions():
+    gnss = sensor("sensor.other.gnss", vehicle)
+    gnss.listen()
+    world.tick()
+    data = gnss.wait_for_data(1.0)
+    assert raises_actor_type_error(lambda: data.as_cam_event().get_message_count())
+    assert raises_actor_type_error(lambda: data.as_custom_v2x_event().get_message_count())
+    gnss.destroy()
+
+test_bytes()
+test_custom_send()
+test_cam()
+test_wrong_conversions()
+other.destroy()
+print("OK")

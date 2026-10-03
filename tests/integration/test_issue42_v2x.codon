@@ -1,0 +1,155 @@
+# Issue #42 against a real CARLA server: V2X.
+#
+# - A CARLA 0.10.0 server has no V2X sensors: no "sensor.other.v2x*"
+#   blueprint (its sensor registry, LibCarla 0.10.0's, has no V2X types).
+# - Built against LibCarla 0.10.0, Sensor.send and the as_cam_event() /
+#   as_custom_v2x_event() conversions raise CarlaError ("... is not available
+#   in LibCarla 0.10.0"), whatever the server; CustomV2XBytes still works.
+# - Built against LibCarla ue5-dev with a server that has the V2X sensors,
+#   custom messages and CAMs go from one vehicle to another, as in CARLA's
+#   PythonAPI/test/smoke/test_v2x.py.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+lib = world.get_blueprint_library()
+server = client.get_server_version()
+v2x_blueprints = [bp.id for bp in lib.filter("sensor.other.v2x*")]
+print("server", server, "LibCarla", carla.libcarla_git_ref(), "V2X blueprints", v2x_blueprints)
+if server.startswith("0.10.0"):
+    assert len(v2x_blueprints) == 0, v2x_blueprints
+    missing = False
+    try:
+        lib.find("sensor.other.v2x_custom")
+    except IndexError:
+        missing = True
+    assert missing
+
+payload = carla.CustomV2XBytes()  # a plain value: works with every LibCarla
+payload.set_string("hello v2x")
+assert payload.data_size == 9 and payload.get_string() == "hello v2x"
+
+def not_available(e: carla.CarlaError) -> bool:
+    return "is not available in LibCarla" in e.message
+
+original = world.get_settings()
+settings = world.get_settings()
+settings.synchronous_mode = True
+settings.fixed_delta_seconds = 0.05
+world.apply_settings(settings)
+actors = List[carla.Actor]()
+
+def spawn(bp: carla.ActorBlueprint, t: carla.Transform,
+          parent: Optional[carla.Actor] = None) -> carla.Actor:
+    a = world.spawn_actor(bp, t, attach_to=parent)
+    actors.append(a)
+    return a
+
+try:
+    points = world.get_map().get_spawn_points()
+    car_bp = lib.filter("vehicle.*")[0]
+    first = spawn(car_bp, points[0])
+
+    # A measurement that is not V2X, to convert.
+    gnss = spawn(lib.find("sensor.other.gnss"), carla.Transform(), first).as_sensor()
+    gnss.listen()
+    world.tick()
+    data = gnss.wait_for_data(5.0)
+    # Whether the linked LibCarla has V2X, from its behaviour: converting a
+    # GNSS measurement is a type error with V2X, "not available" without.
+    outcomes = List[str]()
+    for kind in range(2):
+        raised = ""
+        try:
+            if kind == 0:
+                data.as_cam_event()
+            else:
+                data.as_custom_v2x_event()
+        except carla.CarlaError as e:
+            assert not_available(e), e.message
+            raised = "CarlaError"
+        except carla.ActorTypeError:
+            raised = "ActorTypeError"
+        print("conversion", kind, "of a GNSS measurement:", raised)
+        outcomes.append(raised)
+    assert outcomes[0] != "" and outcomes[0] == outcomes[1], outcomes
+    libcarla_has_v2x = outcomes[0] == "ActorTypeError"
+    print("LibCarla has V2X:", libcarla_has_v2x)
+    gnss.stop()
+    # send(): unsupported without V2X; with it, LibCarla only warns for a
+    # sensor that is not sensor.other.v2x_custom.
+    try:
+        gnss.send(payload)
+        assert libcarla_has_v2x
+    except carla.CarlaError as e:
+        print("send:", e.message)
+        assert not libcarla_has_v2x and not_available(e), e.message
+
+    if libcarla_has_v2x and len(v2x_blueprints) > 0:
+        fwd = points[0].get_forward_vector()
+        second: Optional[carla.Actor] = None
+        for d in (12.0, 17.0, 22.0, 27.0):
+            loc = points[0].location + carla.Location(fwd.x * d, fwd.y * d, 0.3)
+            second = world.try_spawn_actor(car_bp, carla.Transform(loc, points[0].rotation))
+            if second is not None:
+                break
+        other = unwrap(second)
+        actors.append(other)
+
+        custom_bp = lib.find("sensor.other.v2x_custom")
+        sender = spawn(custom_bp, carla.Transform(), first).as_sensor()
+        receiver = spawn(custom_bp, carla.Transform(), other).as_sensor()
+        received = List[carla.CustomV2XData]()
+        def keep(d: carla.SensorData):
+            for m in d.as_custom_v2x_event():
+                received.append(m)
+        receiver.listen(keep)
+        for _ in range(5):
+            world.tick()
+        for _ in range(20):
+            sender.send(payload)
+            world.tick()
+        for _ in range(5):
+            world.tick()
+        receiver.stop()
+        print("custom messages received:", len(received))
+        assert len(received) > 0
+        message = received[0].get()
+        assert message.data.get_string() == "hello v2x" and message.data.data_size == 9
+        assert message.header.message_id == 0 and message.header.station_id == first.id
+        print("custom power", received[0].power, "header", message.header)
+
+        cam_bp = lib.find("sensor.other.v2x")
+        cam_bp.set_attribute("fixed_rate", "true")
+        cam_bp.set_attribute("gen_cam_max", "0.1")
+        tx = spawn(cam_bp, carla.Transform(), first).as_sensor()
+        rx = spawn(cam_bp, carla.Transform(), other).as_sensor()
+        cams = List[carla.CAMMessage]()
+        def keep_cam(d: carla.SensorData):
+            assert d.type == carla.SensorDataType.CAM
+            for m in d.as_cam_event():
+                cams.append(m)
+        rx.listen(keep_cam)
+        for _ in range(40):
+            world.tick()
+        rx.stop()
+        print("CAMs received:", len(cams))
+        assert len(cams) > 0
+        cam = cams[0].get()
+        print("CAM", cam, "power", cams[0].power)
+        assert cam.header.message_id == 2 and cam.header.station_id == first.id
+        assert cam.basic_vehicle_container_high_frequency is not None
+        assert cam.protected_communication_zones_rsu is None
+finally:
+    for a in reversed(actors):
+        if a.is_sensor():
+            a.as_sensor().stop()
+        a.destroy()
+    world.apply_settings(original)
+print("OK")

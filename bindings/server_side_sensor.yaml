@@ -1,6 +1,7 @@
-# ServerSideSensor operations (issue #33): tsc_sensor_<name>. A client-side
-# sensor (lane invasion) is TSC_TYPE_ERROR. Listening to a G-buffer and its
-# queue are hand-written (native/src/sensor.cpp).
+# ServerSideSensor operations: tsc_sensor_<name>. A client-side sensor (lane
+# invasion) is TSC_TYPE_ERROR. ROS and G-buffer (issue #33): listening to a
+# G-buffer and its queue are hand-written (native/src/sensor.cpp). V2X
+# (issue #42): send, LibCarla ue5-dev only.
 class: carla::client::ServerSideSensor
 prefix: sensor
 self: {type: tsc_sensor_t, name: sensor, get: server_side_sensor_of}
@@ -18,3 +19,8 @@ blocks:
       call: StopGBuffer
       args: {gbuffer_id: gbuffer_id}
       doc: "Stops the stream (the queue of tsc_sensor_listen_to_gbuffer stays)."
+  sensor_v2x:
+    send:
+      call: Send
+      args: {message: custom_v2x_bytes_in}
+      optional: {name: Sensor.send, missing_in: ["0.10.0"]}

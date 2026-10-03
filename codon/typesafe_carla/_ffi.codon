@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 4
-TSC_ABI_VERSION_MINOR = 4
+TSC_ABI_VERSION_MINOR = 5
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -345,6 +345,105 @@ class COpticalFlow:
     fov: float
     pixels: Ptr[COpticalFlowPixel]
     pixel_count: int
+
+# Issue #42 (ABI 4.5): V2X.
+TSC_CUSTOM_V2X_MAX_DATA_SIZE = 100
+TSC_CAM_MAX_PROTECTED_ZONES = 16
+TSC_CAM_MAX_PATH_POINTS = 40
+TSC_CAM_HF_NONE = 0
+TSC_CAM_HF_BASIC_VEHICLE = 1
+TSC_CAM_HF_RSU = 2
+
+@tuple
+class CItsHeader:
+    protocol_version: int
+    message_id: int
+    station_id: int
+
+@tuple
+class CItsValue:
+    value: int
+    confidence: int
+
+@tuple
+class CItsReferencePosition:
+    latitude: int
+    longitude: int
+    semi_major_confidence: int
+    semi_minor_confidence: int
+    semi_major_orientation: int
+    altitude: CItsValue
+
+@tuple
+class CCamBasicVehicleHf:
+    heading: CItsValue
+    speed: CItsValue
+    drive_direction: int
+    vehicle_length: CItsValue
+    vehicle_width: int
+    longitudinal_acceleration: CItsValue
+    curvature: CItsValue
+    curvature_calculation_mode: int
+    yaw_rate: CItsValue
+    has_acceleration_control: i32
+    has_lane_position: i32
+    has_steering_wheel_angle: i32
+    has_lateral_acceleration: i32
+    has_vertical_acceleration: i32
+    has_performance_class: i32
+    has_cen_dsrc_tolling_zone: i32
+    has_cen_dsrc_tolling_zone_id: i32
+    acceleration_control: int
+    lane_position: int
+    steering_wheel_angle: CItsValue
+    lateral_acceleration: CItsValue
+    vertical_acceleration: CItsValue
+    performance_class: int
+    cen_dsrc_tolling_zone_latitude: int
+    cen_dsrc_tolling_zone_longitude: int
+    cen_dsrc_tolling_zone_id: int
+
+@tuple
+class CCamMessage:
+    power: float32
+    reserved0: u32
+    header: CItsHeader
+    generation_delta_time: int
+    station_type: int
+    reference_position: CItsReferencePosition
+    high_frequency_present: i32
+    has_low_frequency: i32
+    basic_vehicle: CCamBasicVehicleHf
+    vehicle_role: int
+    exterior_lights: int
+
+@tuple
+class CCustomV2XData:
+    power: float32
+    data_size: u32
+    header: CItsHeader
+
+@tuple
+class CItsProtectedZone:
+    protected_zone_type: int
+    has_expiry_time: i32
+    has_protected_zone_radius: i32
+    has_protected_zone_id: i32
+    reserved0: i32
+    expiry_time: int
+    protected_zone_latitude: int
+    protected_zone_longitude: int
+    protected_zone_radius: int
+    protected_zone_id: int
+
+@tuple
+class CItsPathPoint:
+    delta_latitude: int
+    delta_longitude: int
+    delta_altitude: int
+    has_path_delta_time: i32
+    reserved0: i32
+    path_delta_time: int
 
 @tuple
 class CWalkerControl:
@@ -783,6 +882,16 @@ from C import LIB.tsc_sensor_data_as_semantic_lidar(cobj, Ptr[CSemanticLidar]) -
 from C import LIB.tsc_sensor_data_as_dvs(cobj, Ptr[CDvs]) -> i32
 from C import LIB.tsc_sensor_data_as_optical_flow(cobj, Ptr[COpticalFlow]) -> i32
 from C import LIB.tsc_optical_flow_color_coded(cobj, Ptr[u8], int) -> i32
+# ABI 4.5 (issue #42): V2X
+# BEGIN GENERATED sensor_v2x from bindings/server_side_sensor.yaml, do not edit
+from C import LIB.tsc_sensor_send(cobj, Ptr[byte], int) -> i32
+# END GENERATED sensor_v2x
+from C import LIB.tsc_cam_event_get_message_count(cobj, Ptr[int]) -> i32
+from C import LIB.tsc_cam_event_get_message(cobj, int, Ptr[CCamMessage]) -> i32
+from C import LIB.tsc_cam_event_get_protected_zones(cobj, int, Ptr[CItsProtectedZone], int, Ptr[int]) -> i32
+from C import LIB.tsc_cam_event_get_path_history(cobj, int, Ptr[CItsPathPoint], int, Ptr[int]) -> i32
+from C import LIB.tsc_custom_v2x_event_get_message_count(cobj, Ptr[int]) -> i32
+from C import LIB.tsc_custom_v2x_event_get_message(cobj, int, Ptr[CCustomV2XData], Ptr[byte], int) -> i32
 # BEGIN GENERATED collision_event from bindings/collision_event.yaml, do not edit
 from C import LIB.tsc_collision_event_get_actor(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_collision_event_get_other_actor(cobj, Ptr[cobj]) -> i32

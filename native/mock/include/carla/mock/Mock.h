@@ -24,6 +24,8 @@
 #include <variant>
 #include <vector>
 
+#include "carla/rpc/CustomV2XBytes.h"  // issue #42
+
 #define TSC_MOCK_LIBCARLA 1
 
 // Mock-only test hooks (not in ffi.h; exported by the mock build only, as
@@ -1166,6 +1168,10 @@ class ServerSideSensor : public Sensor {
   void EnableForROS();
   void DisableForROS();
   bool IsEnabledForROS();
+  // ue5-dev (issue #42): queues a message on a custom V2X sensor
+  // (sensor.other.v2x_custom) for the next tick. On any other sensor it only
+  // logs a warning, as LibCarla does.
+  void Send(const rpc::CustomV2XBytes &data);
 
  private:
   std::vector<uint32_t> OwnGBuffers() const;  // the textures this object listens to

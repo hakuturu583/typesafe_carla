@@ -821,6 +821,12 @@ tsc_status_t tsc_sensor_stop_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id) 
   return TSC_GUARD({ server_side_sensor_of(sensor).StopGBuffer(check_gbuffer_id(gbuffer_id)); });
 }
 
+tsc_status_t tsc_sensor_send(tsc_sensor_t *sensor, const uint8_t *message, size_t message_size) {
+  return TSC_GUARD({
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, Send, "Sensor.send", to_custom_v2x_bytes(message, message_size, "message")); }(server_side_sensor_of(sensor));
+  });
+}
+
 // bindings/traffic_light.yaml: carla::client::TrafficLight
 
 tsc_status_t tsc_traffic_light_set_state(tsc_traffic_light_t *light, int32_t state) {

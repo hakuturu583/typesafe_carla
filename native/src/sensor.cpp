@@ -4,6 +4,8 @@
 #include "internal.hpp"
 #include "sensor_image.hpp"
 
+#include <span>
+
 using namespace tsc;
 namespace data = carla::sensor::data;
 
@@ -63,16 +65,199 @@ tsc_sensor_data_type_t type_of(const carla::sensor::SensorData &d) {
   if (dynamic_cast<const data::ObstacleDetectionEvent *>(&d)) return TSC_SENSOR_DATA_OBSTACLE;
   if (dynamic_cast<const data::DVSEventArray *>(&d)) return TSC_SENSOR_DATA_DVS;
   if (dynamic_cast<const data::OpticalFlowImage *>(&d)) return TSC_SENSOR_DATA_OPTICAL_FLOW;
+#ifdef TSC_HAS_V2X
+  if (dynamic_cast<const data::CAMEvent *>(&d)) return TSC_SENSOR_DATA_CAM;
+  if (dynamic_cast<const data::CustomV2XEvent *>(&d)) return TSC_SENSOR_DATA_CUSTOM_V2X;
+#endif
   return TSC_SENSOR_DATA_OTHER;
 }
 
 constexpr const char *kPointCloud = "a LiDAR or semantic LiDAR measurement";
 
+// ---------------------------------------------------------------------------
+// Issue #42: V2X measurements (LibCarla ue5-dev). Without V2X, every entry
+// point checks the handle and raises "... is not available in LibCarla
+// <version>" instead (as geo.cpp without geo projections).
+
+#ifdef TSC_HAS_V2X
+constexpr const char *kCamEvent = "a CAM event";
+constexpr const char *kCustomV2XEvent = "a custom V2X event";
+
+const data::CAMData &cam_message(const tsc_sensor_data_t *d, size_t index) {
+  return list_at(sensor_data_as<data::CAMEvent>(d, kCamEvent), index, kCamEvent);
+}
+
+tsc_its_header_t from_carla(const ITSContainer::ItsPduHeader_t &h) {
+  return tsc_its_header_t{h.protocolVersion, h.messageID, h.stationID};
+}
+
+// The first `count` elements of a fixed ITS array (count clamped to it).
+template <typename Array>
+std::span<const typename Array::value_type> its_list(const Array &items, long count) {
+  return {items.data(), std::min(items.size(), static_cast<size_t>(std::max(count, 0L)))};
+}
+
+// A CAM's two lists: empty unless their container is the one `present` names
+// (the others are left as the server built them, possibly uninitialized).
+std::span<const ITSContainer::ProtectedCommunicationZone_t> protected_zones(const CAM_t &cam) {
+  const auto &hf = cam.cam.camParameters.highFrequencyContainer;
+  if (hf.present != CAMContainer::HighFrequencyContainer_PR_rsuContainerHighFrequency) return {};
+  const auto &zones = hf.rsuContainerHighFrequency.protectedCommunicationZonesRSU;
+  return its_list(zones.data, zones.ProtectedCommunicationZoneCount);
+}
+
+std::span<const ITSContainer::PathPoint_t> path_history(const CAM_t &cam) {
+  const auto &lf = cam.cam.camParameters.lowFrequencyContainer;
+  if (lf.present != CAMContainer::LowFrequencyContainer_PR_basicVehicleContainerLowFrequency) {
+    return {};
+  }
+  const auto &history = lf.basicVehicleContainerLowFrequency.pathHistory;
+  return its_list(history.data, history.NumberOfPathPoint);
+}
+
+tsc_its_value_t its(long value, long confidence) { return tsc_its_value_t{value, confidence}; }
+
+tsc_cam_basic_vehicle_hf_t from_carla(
+    const CAMContainer::BasicVehicleContainerHighFrequency_t &b) {
+  tsc_cam_basic_vehicle_hf_t r{};
+  r.heading = its(b.heading.headingValue, b.heading.headingConfidence);
+  r.speed = its(b.speed.speedValue, b.speed.speedConfidence);
+  r.drive_direction = b.driveDirection;
+  r.vehicle_length = its(b.vehicleLength.vehicleLengthValue,
+                         b.vehicleLength.vehicleLengthConfidenceIndication);
+  r.vehicle_width = b.vehicleWidth;
+  r.longitudinal_acceleration =
+      its(b.longitudinalAcceleration.longitudinalAccelerationValue,
+          b.longitudinalAcceleration.longitudinalAccelerationConfidence);
+  r.curvature = its(b.curvature.curvatureValue, b.curvature.curvatureConfidence);
+  r.curvature_calculation_mode = b.curvatureCalculationMode;
+  r.yaw_rate = its(b.yawRate.yawRateValue, b.yawRate.yawRateConfidence);
+  // Optional fields: only read when present (the rest is zero).
+  if (b.accelerationControlAvailable) {
+    r.has_acceleration_control = 1;
+    r.acceleration_control = b.accelerationControl;
+  }
+  if (b.lanePositionAvailable) {
+    r.has_lane_position = 1;
+    r.lane_position = b.lanePosition;
+  }
+  if (b.steeringWheelAngleAvailable) {
+    r.has_steering_wheel_angle = 1;
+    r.steering_wheel_angle = its(b.steeringWheelAngle.steeringWheelAngleValue,
+                                 b.steeringWheelAngle.steeringWheelAngleConfidence);
+  }
+  if (b.lateralAccelerationAvailable) {
+    r.has_lateral_acceleration = 1;
+    r.lateral_acceleration = its(b.lateralAcceleration.lateralAccelerationValue,
+                                 b.lateralAcceleration.lateralAccelerationConfidence);
+  }
+  if (b.verticalAccelerationAvailable) {
+    r.has_vertical_acceleration = 1;
+    r.vertical_acceleration = its(b.verticalAcceleration.verticalAccelerationValue,
+                                  b.verticalAcceleration.verticalAccelerationConfidence);
+  }
+  if (b.performanceClassAvailable) {
+    r.has_performance_class = 1;
+    r.performance_class = b.performanceClass;
+  }
+  if (b.cenDsrcTollingZoneAvailable) {
+    const auto &zone = b.cenDsrcTollingZone;
+    r.has_cen_dsrc_tolling_zone = 1;
+    r.cen_dsrc_tolling_zone_latitude = zone.protectedZoneLatitude;
+    r.cen_dsrc_tolling_zone_longitude = zone.protectedZoneLongitude;
+    if (zone.cenDsrcTollingZoneIDAvailable) {
+      r.has_cen_dsrc_tolling_zone_id = 1;
+      r.cen_dsrc_tolling_zone_id = zone.cenDsrcTollingZoneID;
+    }
+  }
+  return r;
+}
+
+tsc_cam_message_t from_carla(const data::CAMData &m) {
+  const CAM_t &cam = m.Message;
+  const auto &params = cam.cam.camParameters;
+  const auto &ref = params.basicContainer.referencePosition;
+  tsc_cam_message_t r{};
+  r.power = m.Power;
+  r.header = from_carla(cam.header);
+  r.generation_delta_time = cam.cam.generationDeltaTime;
+  r.station_type = params.basicContainer.stationType;
+  r.reference_position = tsc_its_reference_position_t{
+      ref.latitude,
+      ref.longitude,
+      ref.positionConfidenceEllipse.semiMajorConfidence,
+      ref.positionConfidenceEllipse.semiMinorConfidence,
+      ref.positionConfidenceEllipse.semiMajorOrientation,
+      its(ref.altitude.altitudeValue, ref.altitude.altitudeConfidence)};
+  switch (params.highFrequencyContainer.present) {
+    case CAMContainer::HighFrequencyContainer_PR_basicVehicleContainerHighFrequency:
+      r.high_frequency_present = TSC_CAM_HF_BASIC_VEHICLE;
+      r.basic_vehicle =
+          from_carla(params.highFrequencyContainer.basicVehicleContainerHighFrequency);
+      break;
+    case CAMContainer::HighFrequencyContainer_PR_rsuContainerHighFrequency:
+      r.high_frequency_present = TSC_CAM_HF_RSU;
+      break;
+    default:
+      r.high_frequency_present = TSC_CAM_HF_NONE;
+  }
+  if (params.lowFrequencyContainer.present ==
+      CAMContainer::LowFrequencyContainer_PR_basicVehicleContainerLowFrequency) {
+    const auto &low = params.lowFrequencyContainer.basicVehicleContainerLowFrequency;
+    r.has_low_frequency = 1;
+    r.vehicle_role = low.vehicleRole;
+    r.exterior_lights = low.exteriorLights;
+  }
+  return r;
+}
+
+tsc_custom_v2x_data_t from_carla(const data::CustomV2XData &m) {
+  tsc_custom_v2x_data_t r{};
+  r.power = m.Power;
+  r.data_size = std::min<uint32_t>(m.Message.data.data_size, TSC_CUSTOM_V2X_MAX_DATA_SIZE);
+  r.header = from_carla(m.Message.header);
+  return r;
+}
+static_assert(sizeof(carla::rpc::CustomV2XBytes{}.bytes) == TSC_CUSTOM_V2X_MAX_DATA_SIZE,
+              "rpc::CustomV2XBytes holds TSC_CUSTOM_V2X_MAX_DATA_SIZE bytes");
+#else
+[[noreturn]] void no_v2x(const tsc_sensor_data_t *d, const char *what) {
+  sensor_data_of(d);
+  unsupported(what);
+}
+#endif
 uint32_t id_or_zero(const carla::SharedPtr<carla::client::Actor> &a) {
   return a == nullptr ? 0u : a->GetId();
 }
 
 }  // namespace
+
+#ifdef TSC_HAS_V2X
+// The elements of the CAM lists (declared in internal.hpp for copy_out).
+tsc_its_protected_zone_t tsc::from_carla(const ITSContainer::ProtectedCommunicationZone_t &z) {
+  tsc_its_protected_zone_t r{};
+  r.protected_zone_type = z.protectedZoneType;
+  r.has_expiry_time = z.expiryTimeAvailable ? 1 : 0;
+  r.has_protected_zone_radius = z.protectedZoneRadiusAvailable ? 1 : 0;
+  r.has_protected_zone_id = z.protectedZoneIDAvailable ? 1 : 0;
+  r.expiry_time = z.expiryTimeAvailable ? z.expiryTime : 0;
+  r.protected_zone_latitude = z.protectedZoneLatitude;
+  r.protected_zone_longitude = z.protectedZoneLongitude;
+  r.protected_zone_radius = z.protectedZoneRadiusAvailable ? z.protectedZoneRadius : 0;
+  r.protected_zone_id = z.protectedZoneIDAvailable ? z.protectedZoneID : 0;
+  return r;
+}
+
+tsc_its_path_point_t tsc::from_carla(const ITSContainer::PathPoint_t &p) {
+  tsc_its_path_point_t r{};
+  r.delta_latitude = p.pathPosition.deltaLatitude;
+  r.delta_longitude = p.pathPosition.deltaLongitude;
+  r.delta_altitude = p.pathPosition.deltaAltitude;
+  r.has_path_delta_time = p.pathDeltaTimeAvailable ? 1 : 0;
+  r.path_delta_time = p.pathDeltaTimeAvailable ? p.pathDeltaTime : 0;
+  return r;
+}
+#endif
 
 // The zero-copy views reinterpret LibCarla's element types.
 static_assert(sizeof(data::Color) == 4, "Image pixels are 4 bytes (BGRA)");
@@ -377,4 +562,86 @@ tsc_status_t tsc_optical_flow_color_coded(const tsc_sensor_data_t *d, uint8_t *o
   });
 }
 
+// ---------------------------------------------------------------------------
+// Issue #42: V2X events. tsc_sensor_send is generated
+// (bindings/server_side_sensor.yaml).
+
+tsc_status_t tsc_cam_event_get_message_count(const tsc_sensor_data_t *d, size_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+#ifdef TSC_HAS_V2X
+    *out = sensor_data_as<data::CAMEvent>(d, kCamEvent).GetMessageCount();
+#else
+    no_v2x(d, "CAMEvent");
+#endif
+  });
+}
+
+tsc_status_t tsc_cam_event_get_message(const tsc_sensor_data_t *d, size_t index,
+                                       tsc_cam_message_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+#ifdef TSC_HAS_V2X
+    *out = from_carla(cam_message(d, index));
+#else
+    no_v2x(d, "CAMEvent");
+#endif
+  });
+}
+
+tsc_status_t tsc_cam_event_get_protected_zones(const tsc_sensor_data_t *d, size_t index,
+                                               tsc_its_protected_zone_t *out, size_t capacity,
+                                               size_t *out_count) {
+  return TSC_GUARD({
+    require_ptr(out_count, "out_count");
+#ifdef TSC_HAS_V2X
+    copy_out(protected_zones(cam_message(d, index).Message), out, capacity, out_count);
+#else
+    no_v2x(d, "CAMEvent");
+#endif
+  });
+}
+
+tsc_status_t tsc_cam_event_get_path_history(const tsc_sensor_data_t *d, size_t index,
+                                            tsc_its_path_point_t *out, size_t capacity,
+                                            size_t *out_count) {
+  return TSC_GUARD({
+    require_ptr(out_count, "out_count");
+#ifdef TSC_HAS_V2X
+    copy_out(path_history(cam_message(d, index).Message), out, capacity, out_count);
+#else
+    no_v2x(d, "CAMEvent");
+#endif
+  });
+}
+
+tsc_status_t tsc_custom_v2x_event_get_message_count(const tsc_sensor_data_t *d, size_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+#ifdef TSC_HAS_V2X
+    *out = sensor_data_as<data::CustomV2XEvent>(d, kCustomV2XEvent).GetMessageCount();
+#else
+    no_v2x(d, "CustomV2XEvent");
+#endif
+  });
+}
+
+tsc_status_t tsc_custom_v2x_event_get_message(const tsc_sensor_data_t *d, size_t index,
+                                              tsc_custom_v2x_data_t *out, uint8_t *bytes,
+                                              size_t capacity) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+    require_array(bytes, capacity, "bytes");
+#ifdef TSC_HAS_V2X
+    const auto &event = sensor_data_as<data::CustomV2XEvent>(d, kCustomV2XEvent);
+    const auto &message = list_at(event, index, kCustomV2XEvent);
+    const tsc_custom_v2x_data_t r = from_carla(message);
+    const auto &payload = message.Message.data.bytes;
+    std::copy_n(payload.begin(), std::min<size_t>(r.data_size, capacity), bytes);
+    *out = r;
+#else
+    no_v2x(d, "CustomV2XEvent");
+#endif
+  });
+}
 }  // extern "C"

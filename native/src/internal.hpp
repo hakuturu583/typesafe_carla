@@ -517,6 +517,11 @@ void list_at(const Items &&items, size_t index, const char *what) = delete;
 // List elements (map.cpp, walker.cpp).
 tsc_landmark_t from_carla(const carla::client::Landmark &lm);
 tsc_bone_transform_out_t from_carla(const carla::rpc::BoneTransformDataOut &b);
+#ifdef TSC_HAS_V2X
+// The elements of a CAM's lists (sensor.cpp, issue #42).
+tsc_its_protected_zone_t from_carla(const ITSContainer::ProtectedCommunicationZone_t &z);
+tsc_its_path_point_t from_carla(const ITSContainer::PathPoint_t &p);
+#endif
 
 // The measurement behind a sensor data handle (sensor.cpp, generated code).
 inline const carla::sensor::SensorData &sensor_data_of(const tsc_sensor_data_t *d) {
@@ -847,6 +852,20 @@ inline uint32_t check_gbuffer_id(uint32_t id) {
                                    std::to_string(TSC_GBUFFER_TEXTURE_COUNT));
   }
   return id;
+}
+
+// rpc::CustomV2XBytes (tsc::CustomV2XBytes: a stand-in without V2X).
+inline CustomV2XBytes to_custom_v2x_bytes(const uint8_t *data, size_t size, const char *name) {
+  CustomV2XBytes r;
+  if (size > r.bytes.size()) {
+    fail(TSC_INVALID_ARGUMENT, std::string(name) + ": " + std::to_string(size) +
+                                   " bytes exceed the " + std::to_string(r.bytes.size()) +
+                                   "-byte payload");
+  }
+  require_array(data, size, name);
+  r.data_size = static_cast<uint8_t>(size);
+  if (size > 0) std::copy(data, data + size, r.bytes.begin());
+  return r;
 }
 
 // The geometry behind Transform.get_matrix & co: a tsc_transform_t by value.
