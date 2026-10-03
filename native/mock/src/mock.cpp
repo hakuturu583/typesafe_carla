@@ -414,9 +414,12 @@ std::vector<std::string> SplitTags(const std::string &id) {
 ActorBlueprint VehicleBlueprint(const std::string &id, const std::string &color) {
   return ActorBlueprint(
       id, SplitTags(id),
-      {ActorAttribute("color", rpc::ActorAttributeType::RGBColor, color, true),
-       ActorAttribute("role_name", rpc::ActorAttributeType::String, "autopilot", true),
-       ActorAttribute("number_of_wheels", rpc::ActorAttributeType::Int, "4", false),
+      // Recommended values as CARLA's vehicle blueprints have them (issue #33).
+      {ActorAttribute("color", rpc::ActorAttributeType::RGBColor, color, true,
+                      {color, "255,255,255"}),
+       ActorAttribute("role_name", rpc::ActorAttributeType::String, "autopilot", true,
+                      {"autopilot", "scenario", "ego_vehicle"}),
+       ActorAttribute("number_of_wheels", rpc::ActorAttributeType::Int, "4", false, {"4"}),
        ActorAttribute("sticky_control", rpc::ActorAttributeType::Bool, "true", true),
        ActorAttribute("base_mass", rpc::ActorAttributeType::Float, "1500.0", false)});
 }
@@ -586,8 +589,15 @@ SharedPtr<BlueprintLibrary> BlueprintLibrary::Filter(const std::string &wildcard
 SharedPtr<BlueprintLibrary> BlueprintLibrary::FilterByAttribute(const std::string &name,
                                                               const std::string &value) const {
   std::vector<ActorBlueprint> result;
-  for (const auto &bp : _blueprints)
-    if (bp.ContainsAttribute(name) && bp.GetAttribute(name).GetValue() == value) result.push_back(bp);
+  for (const auto &bp : _blueprints) {
+    if (!bp.ContainsAttribute(name)) continue;
+    const ActorAttribute &attribute = bp.GetAttribute(name);
+    const auto &values = attribute.GetRecommendedValues();
+    if (values.empty() ? attribute.GetValue() == value
+                       : std::find(values.begin(), values.end(), value) != values.end()) {
+      result.push_back(bp);
+    }
+  }
   return std::make_shared<BlueprintLibrary>(std::move(result));
 }
 
@@ -839,6 +849,9 @@ std::string Client::GetServerVersion() const {
 }
 
 World Client::GetWorld() const { return World(mock::Connect(_endpoint, _timeout)); }
+
+// LibCarla: World{_episode}, the episode the actor was created in.
+World Actor::GetWorld() const { return World(_episode); }
 
 World Client::ReloadWorld(bool reset_settings) const {
   auto episode = mock::Connect(_endpoint, _timeout);

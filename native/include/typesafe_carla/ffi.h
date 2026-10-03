@@ -49,9 +49,11 @@ extern "C" {
  * 3.6: sensor data frame_number, image convert/save, point cloud save, collision
  *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24).
  * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37).
- * 3.8: tsc_world_get_actors_by_id (#38). */
+ * 3.8: tsc_world_get_actors_by_id (#38).
+ * 3.9: actor world, blueprint attribute ids and recommended values, sensor ROS
+ *      and GBuffer streams (#33). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 8
+#define TSC_ABI_VERSION_MINOR 9
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -370,6 +372,18 @@ TSC_API tsc_status_t tsc_actor_blueprint_get_attribute(const tsc_actor_blueprint
 TSC_API tsc_status_t tsc_actor_blueprint_set_attribute(tsc_actor_blueprint_t *blueprint,
                                                        const char *id, size_t id_len,
                                                        const char *value, size_t value_len);
+/* Issue #33. The ids of the blueprint's attributes, in LibCarla's iteration
+ * order (ActorBlueprint::begin/end; unspecified, but stable for a blueprint). */
+TSC_API tsc_status_t tsc_actor_blueprint_get_attribute_ids(const tsc_actor_blueprint_t *blueprint,
+                                                           tsc_string_list_t *out);
+/* ActorAttribute::GetRecommendedValues of attribute `id` (often empty).
+ * TSC_NOT_FOUND if the blueprint has no such attribute. */
+TSC_API tsc_status_t tsc_actor_blueprint_get_recommended_values(
+    const tsc_actor_blueprint_t *blueprint, const char *id, size_t id_len, tsc_string_list_t *out);
+/* BEGIN GENERATED actor_blueprint_size from bindings/actor_blueprint.yaml, do not edit */
+TSC_API tsc_status_t tsc_actor_blueprint_size(const tsc_actor_blueprint_t *blueprint,
+                                              size_t *out_count);
+/* END GENERATED actor_blueprint_size */
 
 /* ------------------------------------------------------------------------ */
 /* Milestone 1 (ABI 1.2)                                                    */
@@ -1730,10 +1744,14 @@ TSC_API tsc_status_t tsc_actor_is_active(tsc_actor_t *actor, int32_t *out_active
 TSC_API tsc_status_t tsc_actor_is_dormant(tsc_actor_t *actor, int32_t *out_dormant);
 /* *out = NULL (TSC_OK) when the actor has no parent. */
 TSC_API tsc_status_t tsc_actor_get_parent(tsc_actor_t *actor, tsc_actor_t **out);
+/* END GENERATED actor_state */
+/* BEGIN GENERATED actor_world from bindings/actor.yaml, do not edit */
+/* The world (episode) the actor belongs to. */
+TSC_API tsc_status_t tsc_actor_get_world(tsc_actor_t *actor, tsc_world_t **out);
 /* CityObjectLabel values (client-side data, no RPC). */
 TSC_API tsc_status_t tsc_actor_get_semantic_tags(tsc_actor_t *actor,
                                                  uint8_t *out, size_t capacity, size_t *out_count);
-/* END GENERATED actor_state */
+/* END GENERATED actor_world */
 
 /* The actor's attributes (as spawned): out_ids->items[i] has the value
  * out_values->items[i]. Both lists are owned by the caller. */

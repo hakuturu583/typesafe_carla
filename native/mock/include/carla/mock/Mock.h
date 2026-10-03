@@ -801,6 +801,7 @@ struct ActorData;
 
 class Junction;
 class Landmark;
+class World;
 class LightManager;
 
 class Timestamp {
@@ -913,11 +914,13 @@ class Map : public std::enable_shared_from_this<Map> {
 class ActorAttribute {
  public:
   ActorAttribute(std::string id, rpc::ActorAttributeType type, std::string value,
-                 bool is_modifiable)
-      : _id(std::move(id)), _type(type), _value(std::move(value)), _modifiable(is_modifiable) {}
+                 bool is_modifiable, std::vector<std::string> recommended_values = {})
+      : _id(std::move(id)), _type(type), _value(std::move(value)), _modifiable(is_modifiable),
+        _recommended_values(std::move(recommended_values)) {}
   const std::string &GetId() const { return _id; }
   rpc::ActorAttributeType GetType() const { return _type; }
   const std::string &GetValue() const { return _value; }
+  const std::vector<std::string> &GetRecommendedValues() const { return _recommended_values; }
   bool IsModifiable() const { return _modifiable; }
   // Throws std::invalid_argument when not modifiable or not parseable.
   void Set(std::string value);
@@ -927,6 +930,7 @@ class ActorAttribute {
   rpc::ActorAttributeType _type;
   std::string _value;
   bool _modifiable;
+  std::vector<std::string> _recommended_values;
 };
 
 class ActorBlueprint {
@@ -942,6 +946,22 @@ class ActorBlueprint {
   const ActorAttribute &GetAttribute(const std::string &id) const;
   void SetAttribute(const std::string &id, std::string value);
   size_t size() const { return _attributes.size(); }
+  // Iterates the attributes (ActorAttribute values), as LibCarla's
+  // make_map_values_const_iterator over its attribute map.
+  class const_iterator {
+   public:
+    explicit const_iterator(std::map<std::string, ActorAttribute>::const_iterator it) : _it(it) {}
+    const ActorAttribute &operator*() const { return _it->second; }
+    const ActorAttribute *operator->() const { return &_it->second; }
+    const_iterator &operator++() { ++_it; return *this; }
+    bool operator==(const const_iterator &other) const { return _it == other._it; }
+    bool operator!=(const const_iterator &other) const { return _it != other._it; }
+
+   private:
+    std::map<std::string, ActorAttribute>::const_iterator _it;
+  };
+  const_iterator begin() const { return const_iterator(_attributes.begin()); }
+  const_iterator end() const { return const_iterator(_attributes.end()); }
   rpc::ActorDescription MakeActorDescription() const;
 
  private:
@@ -960,7 +980,7 @@ class BlueprintLibrary : public std::enable_shared_from_this<BlueprintLibrary> {
   explicit BlueprintLibrary(std::vector<ActorBlueprint> blueprints)
       : _blueprints(std::move(blueprints)) {}
   SharedPtr<BlueprintLibrary> Filter(const std::string &wildcard_pattern) const;
-  // The mock's attributes have no recommended values: matches the value.
+  // As LibCarla: matches a recommended value, or the value when there are none.
   SharedPtr<BlueprintLibrary> FilterByAttribute(const std::string &name,
                                                 const std::string &value) const;
   const_pointer Find(const std::string &key) const;
@@ -1038,6 +1058,8 @@ class Actor : public std::enable_shared_from_this<Actor> {
   std::vector<geom::Transform> GetSocketWorldTransforms() const;
   std::vector<geom::Transform> GetSocketRelativeTransforms() const;
   std::vector<std::string> GetSocketNames() const;
+  // Issue #33: the world the actor lives in (ActorState::GetWorld in LibCarla).
+  World GetWorld() const;
 
  protected:
   // Locks the episode and returns the live actor record, or throws.

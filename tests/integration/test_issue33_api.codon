@@ -1,0 +1,68 @@
+# Issue #33 against a real CARLA server: Python API members found missing by
+# the survey against CARLA 0.10.0.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+lib = world.get_blueprint_library()
+
+spawned: List[carla.Actor] = []
+try:
+    # Actor.get_world(): a World of the same episode.
+    points = world.get_map().get_spawn_points()
+    vehicle_bp = lib.filter("vehicle.*")[0]
+    vehicle = None
+    for p in points:
+        vehicle = world.try_spawn_actor(vehicle_bp, p)
+        if vehicle is not None:
+            break
+    assert vehicle is not None
+    v = unwrap(vehicle)
+    spawned.append(v)
+    w = v.get_world()
+    print("get_world", w.id, world.id)
+    assert w.id == world.id
+    assert w.get_map().name == world.get_map().name
+    assert w.get_actor(v.id) is not None
+
+    # TrafficLight.state.
+    lights = [a.as_traffic_light() for a in world.get_actors().filter("traffic.traffic_light")]
+    print("traffic lights", len(lights))
+    if len(lights) > 0:
+        light = lights[0]
+        assert light.state == light.get_state()
+        frozen = light.is_frozen()
+        light.freeze(True)
+        light.set_state(carla.TrafficLightState.Red)
+        world.wait_for_tick(10.0)
+        print("state", light.state)
+        assert light.state == carla.TrafficLightState.Red
+        light.freeze(frozen)
+
+    # ActorBlueprint len() / iteration, ActorAttribute.recommended_values.
+    with_values = 0
+    for bp in lib:
+        attributes = [a for a in bp]
+        assert len(attributes) == len(bp)
+        for a in attributes:
+            assert bp.has_attribute(a.id)
+            assert bp.get_attribute(a.id).recommended_values == a.recommended_values
+            assert str(bp.get_attribute(a.id)) == str(a)
+            if len(a.recommended_values) > 0:
+                with_values += 1
+                if with_values <= 3:
+                    print("recommended", bp.id, a.id, a.recommended_values)
+                    matching = lib.filter_by_attribute(a.id, a.recommended_values[-1])
+                    assert any(b.id == bp.id for b in matching)
+    print("attributes with recommended values", with_values)
+    assert with_values > 0
+finally:
+    for a in spawned:
+        a.destroy()
+print("OK")

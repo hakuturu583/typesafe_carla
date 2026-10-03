@@ -872,8 +872,14 @@ class Sensor(Actor):
     def __repr__(self) -> str:
         return f"Sensor(id={self.id}, type={self.type_id})"
 
-# The Python API's carla.LaneInvasionSensor is a client-side Sensor subclass
-# with nothing of its own; here it is the same type as Sensor.
+# The Python API's carla.ServerSideSensor (sensors the server simulates),
+# carla.ClientSideSensor (sensors LibCarla computes on the client) and
+# carla.LaneInvasionSensor (the only client-side one) are Sensor subclasses;
+# here they are all the same type as Sensor. The ServerSideSensor methods
+# (enable_for_ros, listen_to_gbuffer, ...) raise ActorTypeError on a
+# client-side sensor.
+ServerSideSensor = Sensor
+ClientSideSensor = Sensor
 LaneInvasionSensor = Sensor
 
 @extend

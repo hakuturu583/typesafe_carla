@@ -76,6 +76,9 @@ def traffic_light_methods(actor: carla.Actor):
     boxes: List[carla.BoundingBox] = actor.get_light_boxes()
     trigger: carla.BoundingBox = actor.trigger_volume
     print(odr, len(affected), len(stops), len(group), len(boxes), trigger)
+    # Issue #33.
+    current: int = actor.state
+    print(current)
 
 def traffic_sign_methods(actor: carla.Actor):
     volume: carla.BoundingBox = actor.trigger_volume

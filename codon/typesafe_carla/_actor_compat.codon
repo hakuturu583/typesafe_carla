@@ -239,6 +239,12 @@ class Actor:
         compat_shortcut("Actor.get_state", "[tsc-compat] Actor.get_state() without as_traffic_light()", "call as_traffic_light() first")
         return self.as_traffic_light().get_state(*args, **kwargs)
 
+    @property
+    def state(self: S, S: type) -> int:
+        _plain_actor_only(self, "state")
+        compat_shortcut("Actor.state", "[tsc-compat] Actor.state without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().state
+
     def set_state(self: S, *args, S: type, **kwargs):
         _plain_actor_only(self, "set_state()")
         compat_shortcut("Actor.set_state", "[tsc-compat] Actor.set_state() without as_traffic_light()", "call as_traffic_light() first")

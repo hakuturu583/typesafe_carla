@@ -1,0 +1,33 @@
+# Issue #33: Python API members added after the survey against CARLA 0.10.0.
+# strict
+import typesafe_carla as carla
+
+def actor_world(actor: carla.Actor, vehicle: carla.Vehicle):
+    world: carla.World = actor.get_world()
+    same: carla.World = vehicle.get_world()  # subclasses inherit it
+    print(world.id == same.id)
+
+def light_state(light: carla.TrafficLight):
+    state: int = light.state
+    print(state == carla.TrafficLightState.Green)
+
+def sensor_class_names(sensor: carla.Sensor):
+    server_side: carla.ServerSideSensor = sensor
+    client_side: carla.ClientSideSensor = sensor
+    print(server_side.id, client_side.id)
+
+def blueprint_attributes(bp: carla.ActorBlueprint):
+    count: int = len(bp)
+    for attribute in bp:
+        values: List[str] = attribute.recommended_values
+        print(attribute.id, str(attribute), len(values))
+    ids = [a.id for a in bp]
+    color: List[str] = bp.get_attribute("color").recommended_values
+    print(count, ids, color)
+
+world = carla.Client("localhost", 2000).get_world()
+actors = world.get_actors()
+actor_world(actors[0], actors[0].as_vehicle())
+light_state(actors[2].as_traffic_light())
+sensor_class_names(actors[5].as_sensor())
+blueprint_attributes(world.get_blueprint_library().find("vehicle.tesla.model3"))

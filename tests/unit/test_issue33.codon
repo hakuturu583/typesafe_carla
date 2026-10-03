@@ -1,0 +1,58 @@
+# Issue #33 on the mock backend: Python API members found missing by the
+# survey against CARLA 0.10.0.
+import typesafe_carla as carla
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+actors = world.get_actors()
+
+def raises_type_error(f) -> bool:
+    try:
+        f()
+    except carla.ActorTypeError:
+        return True
+    return False
+
+# Actor.get_world(): the actor's world.
+vehicle = actors[0].as_vehicle()
+assert actors[0].get_world().id == world.id
+assert vehicle.get_world().id == world.id
+assert vehicle.get_world().get_actor(vehicle.id) is not None
+
+# TrafficLight.state mirrors get_state(); the plain-Actor shortcut converts.
+light = actors[2].as_traffic_light()
+light.set_state(carla.TrafficLightState.Yellow)
+assert light.state == carla.TrafficLightState.Yellow == light.get_state()
+assert actors[2].state == carla.TrafficLightState.Yellow
+assert raises_type_error(lambda: actors[0].state)
+
+# The sensor class names of the Python API are Sensor here.
+lib = world.get_blueprint_library()
+camera = world.spawn_actor(lib.find("sensor.camera.rgb"), carla.Transform(),
+                           attach_to=vehicle).as_sensor()
+sensor: carla.ServerSideSensor = camera
+assert isinstance(sensor, carla.ClientSideSensor) and isinstance(sensor, carla.Sensor)
+
+camera.destroy()
+
+# ActorAttribute.recommended_values, ActorBlueprint len() and iteration.
+model3 = lib.find("vehicle.tesla.model3")
+assert len(model3) == 5
+attributes = {a.id: a for a in model3}
+assert sorted(attributes.keys()) == ["base_mass", "color", "number_of_wheels", "role_name",
+                                     "sticky_control"]
+assert attributes["number_of_wheels"].recommended_values == ["4"]
+assert attributes["role_name"].recommended_values == ["autopilot", "scenario", "ego_vehicle"]
+assert attributes["base_mass"].recommended_values == List[str]()
+assert model3.get_attribute("color").recommended_values == ["17,37,103", "255,255,255"]
+assert attributes["color"].as_color() == carla.Color(17, 37, 103)
+# filter_by_attribute matches the recommended values, as LibCarla.
+assert len(lib.filter_by_attribute("color", "255,255,255")) == 3
+assert len(lib.filter_by_attribute("color", "17,37,103")) == 1
+assert len(lib.find("sensor.other.gnss")) == 0 and [a.id for a in lib.find("sensor.other.gnss")] == List[str]()
+# A blueprint copy keeps its own values; iteration sees set_attribute.
+model3.set_attribute("role_name", "hero")
+assert [str(a) for a in model3 if a.id == "role_name"] == ["hero"]
+assert carla.ActorAttribute("x", carla.ActorAttributeType.Int, False, "1").recommended_values == List[str]()
+
+print("OK")

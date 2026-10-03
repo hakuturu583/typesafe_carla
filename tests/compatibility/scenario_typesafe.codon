@@ -509,3 +509,9 @@ out("i21_ground", str(ground.label) + "," + fmt(ground.location.z) + "," + str(r
     fmt(ray[0].location.z))
 sky = world.project_point(p0_above, carla.Vector3D(0.0, 0.0, 1.0), 50.0)
 out("i21_projections", str(int(sky is None)) + "," + str(int(len(ray) > 0)))
+# Issue #33: Python API members found missing by the survey.
+out("i33_world", str(int(world.get_spectator().get_world().id == world.id)) + "," +
+    ("-1" if tl0 is None else str(int(unwrap(tl0).state == unwrap(tl0).get_state()))))
+bp33 = lib.find("vehicle.lincoln.mkz")
+attrs33 = sorted([(a.id, "|".join(a.recommended_values)) for a in bp33])
+out("i33_blueprint", str(len(bp33)) + ";" + ";".join([k + ":" + v for k, v in attrs33]))

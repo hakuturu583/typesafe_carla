@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 3
-TSC_ABI_VERSION_MINOR = 8
+TSC_ABI_VERSION_MINOR = 9
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -606,6 +606,12 @@ from C import LIB.tsc_build_commit() -> cobj
 from C import LIB.tsc_backend_name() -> cobj
 from C import LIB.tsc_string_free(Ptr[CString]) -> None
 from C import LIB.tsc_actor_attribute_free(Ptr[CActorAttribute]) -> None
+# Issue #33.
+from C import LIB.tsc_actor_blueprint_get_attribute_ids(cobj, Ptr[CStringList]) -> i32
+from C import LIB.tsc_actor_blueprint_get_recommended_values(cobj, cobj, int, Ptr[CStringList]) -> i32
+# BEGIN GENERATED actor_blueprint_size from bindings/actor_blueprint.yaml, do not edit
+from C import LIB.tsc_actor_blueprint_size(cobj, Ptr[int]) -> i32
+# END GENERATED actor_blueprint_size
 
 from C import LIB.tsc_handle_retain(cobj) -> None
 from C import LIB.tsc_handle_release(cobj) -> None
@@ -1021,8 +1027,11 @@ from C import LIB.tsc_actor_get_actor_state(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_is_active(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_is_dormant(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_get_parent(cobj, Ptr[cobj]) -> i32
-from C import LIB.tsc_actor_get_semantic_tags(cobj, Ptr[u8], int, Ptr[int]) -> i32
 # END GENERATED actor_state
+# BEGIN GENERATED actor_world from bindings/actor.yaml, do not edit
+from C import LIB.tsc_actor_get_world(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_actor_get_semantic_tags(cobj, Ptr[u8], int, Ptr[int]) -> i32
+# END GENERATED actor_world
 from C import LIB.tsc_actor_get_attributes(cobj, Ptr[CStringList], Ptr[CStringList]) -> i32
 # BEGIN GENERATED actor_physics_at_location from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_set_collisions(cobj, i32) -> i32

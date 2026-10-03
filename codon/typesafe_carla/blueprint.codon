@@ -8,6 +8,8 @@ from ._ffi import (Handle, CString, CColor, CActorAttribute, take_string, copy_s
                    tsc_actor_blueprint_set_attribute, TSC_TYPE_ERROR, TSC_INVALID_ARGUMENT)
 from ._ffi import (CStringList, take_string_list, tsc_actor_blueprint_get_tags,
                    tsc_actor_blueprint_match_tags, tsc_blueprint_library_filter_by_attribute)
+from ._ffi import (tsc_actor_blueprint_size, tsc_actor_blueprint_get_attribute_ids,
+                   tsc_actor_blueprint_get_recommended_values)
 from .errors import _check, _normalize_index, CarlaError
 
 class ActorAttributeType:
@@ -54,11 +56,19 @@ class Color:
     def __repr__(self) -> str:
         return f"Color(r={self.r}, g={self.g}, b={self.b}, a={self.a})"
 
+def _no_values() -> List[str]:
+    # Not inline in ActorAttribute.__init__: its parameter `type` shadows the
+    # builtin that List[str] needs in Codon 0.19 (also in an annotation there).
+    return List[str]()
+
 class ActorAttribute:
     """A snapshot of one blueprint attribute. Typed accessors check the type."""
     id: str
     type: int  # ActorAttributeType
     is_modifiable: bool
+    # The values the blueprint suggests (often none), as the Python API's
+    # recommended_values; BlueprintLibrary.filter_by_attribute matches them.
+    recommended_values: List[str]
     _value: str
 
     def __init__(self, id: str, type: int, is_modifiable: bool, value: str):
@@ -66,6 +76,7 @@ class ActorAttribute:
         self.type = type
         self.is_modifiable = is_modifiable
         self._value = value
+        self.recommended_values = _no_values()
 
     def _expect(self, t: int):
         if self.type != t:
@@ -148,7 +159,24 @@ class ActorBlueprint:
         result = ActorAttribute(copy_string(a.id), int(a.type), int(a.is_modifiable) != 0,
                                 copy_string(a.value))
         tsc_actor_attribute_free(out)
+        values = Ptr[CStringList](1)
+        _check(tsc_actor_blueprint_get_recommended_values(self._h.ptr, id.ptr, id.len, values))
+        result.recommended_values = take_string_list(values)
         return result
+
+    def __len__(self) -> int:
+        """The number of attributes."""
+        out = Ptr[int](1)
+        _check(tsc_actor_blueprint_size(self._h.ptr, out))
+        return out[0]
+
+    def __iter__(self) -> Generator[ActorAttribute]:
+        """The attributes (snapshots, as get_attribute returns), in LibCarla's
+        order, which is unspecified (the Python API iterates the same way)."""
+        out = Ptr[CStringList](1)
+        _check(tsc_actor_blueprint_get_attribute_ids(self._h.ptr, out))
+        for id in take_string_list(out):
+            yield self.get_attribute(id)
 
     def set_attribute(self, id: str, value: str):
         """Raises IndexError for unknown attributes, CarlaError for invalid values."""

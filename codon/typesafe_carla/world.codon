@@ -7,6 +7,7 @@ from ._ffi import (Handle, CTransform, CWorldSettings, tsc_world_get_id, tsc_wor
                    TSC_NOT_FOUND, tsc_world_get_map,
                    tsc_world_get_snapshot, tsc_world_wait_for_tick)
 from ._ffi import CWorldSettingsExt, tsc_world_get_settings_ext, tsc_world_apply_settings_ext
+from ._ffi import tsc_actor_get_world
 from .errors import _check, _is_actor_id, _actor_id
 from .geometry import Transform
 from .actor import Actor, ActorList, _make_actor
@@ -226,3 +227,11 @@ class World:
 
     def __repr__(self) -> str:
         return f"World(id={self.id})"
+
+@extend
+class Actor:
+    def get_world(self) -> World:
+        """The world the actor belongs to (LibCarla's Actor::GetWorld)."""
+        out = Ptr[cobj](1)
+        _check(tsc_actor_get_world(self._h.ptr, out))
+        return World(Handle(out[0]))

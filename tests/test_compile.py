@@ -79,7 +79,7 @@ def test_every_shortcut_warns_and_fails_in_strict_mode(launcher, tmp_path):
     assert result.returncode == 0, result.stderr
     warnings = {line for line in result.stderr.splitlines()
                 if line.startswith("typesafe-codon: compile-time warning: ")}
-    assert len(warnings) == len(actor_shortcuts()) == 60, "\n".join(sorted(warnings))
+    assert len(warnings) == len(actor_shortcuts()) == 61, "\n".join(sorted(warnings))
     result = _compile(launcher, source, tmp_path, strict=True)
     assert result.returncode != 0
     assert "strict mode: " in result.stderr, result.stderr
