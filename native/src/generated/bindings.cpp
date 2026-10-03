@@ -353,9 +353,10 @@ tsc_status_t tsc_client_get_world(tsc_client_t *client, tsc_world_t **out_world)
 }
 
 tsc_status_t tsc_client_load_world(tsc_client_t *client, const char *map_name, size_t map_name_len,
-                                   int32_t reset_settings, tsc_world_t **out_world) {
+                                   int32_t reset_settings, uint16_t map_layers,
+                                   tsc_world_t **out_world) {
   return new_handle(__func__, out_world, [&] {
-    return new tsc_world(client_of(client).LoadWorld(to_string(map_name, map_name_len, "map_name"), reset_settings != 0));
+    return new tsc_world(client_of(client).LoadWorld(to_string(map_name, map_name_len, "map_name"), reset_settings != 0, static_cast<carla::rpc::MapLayer>(map_layers)));
   }, "out_world");
 }
 

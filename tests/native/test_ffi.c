@@ -31,6 +31,11 @@ static int g_failures = 0;
 
 #define H(p) ((tsc_handle_t *)(p))
 
+/* Mock-only test hooks (native/mock/include/carla/mock/Mock.h): what the shim
+ * last passed to LibCarla. Weak, so the libcarla build links without them. */
+extern size_t tsc_mock_last_worker_threads(void) __attribute__((weak));
+extern uint16_t tsc_mock_last_map_layers(void) __attribute__((weak));
+
 static const char *kHost = "localhost";
 
 static void test_versions(void) {
@@ -149,16 +154,37 @@ static void test_issue23_offline(void) {
   tsc_world_t *world = NULL;
   int32_t option = 0;
   tsc_waypoint_t *waypoint = NULL;
-  CHECK(tsc_client_load_world_if_different(NULL, "Town01", 6, 1, &world) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_client_load_world_if_different(NULL, "Town01", 6, 1, 0xFFFF, &world) == TSC_INVALID_ARGUMENT);
   CHECK(tsc_traffic_manager_get_next_action(NULL, NULL, &option, &waypoint) == TSC_INVALID_ARGUMENT);
   CHECK(tsc_debug_clear_shapes(NULL) == TSC_INVALID_ARGUMENT);
   CHECK(tsc_world_get_settings_ext(NULL, NULL, NULL) == TSC_INVALID_ARGUMENT);
 }
 
+/* Issue #35: worker_threads and map_layers reach LibCarla (the mock). */
+static void test_mock_issue35(void) {
+  CHECK(tsc_mock_last_worker_threads != NULL && tsc_mock_last_map_layers != NULL);
+  if (tsc_mock_last_worker_threads == NULL || tsc_mock_last_map_layers == NULL) return;
+  tsc_client_t *client = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2035, 3, &client));
+  CHECK(tsc_mock_last_worker_threads() == 3);
+  tsc_world_t *world = NULL;
+  CHECK_OK(tsc_client_load_world(client, "Town01", 6, 1, 0x1 | 0x100, &world));
+  CHECK(tsc_mock_last_map_layers() == (0x1 | 0x100));
+  tsc_handle_release(H(world));
+  world = NULL;
+  CHECK_OK(tsc_client_load_world_if_different(client, "Town02", 6, 1, 0, &world));
+  CHECK(world != NULL && tsc_mock_last_map_layers() == 0);
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2035, 0, &client));
+  CHECK(tsc_mock_last_worker_threads() == 0);
+  tsc_handle_release(H(client));
+}
+
 /* Issue #23 against the mock server. */
 static void test_mock_issue23(void) {
   tsc_client_t *client = NULL;
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2023, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2023, 2, &client));
   tsc_string_list_t maps;
   memset(&maps, 0, sizeof maps);
   CHECK_OK(tsc_client_get_available_maps(client, &maps));
@@ -166,9 +192,9 @@ static void test_mock_issue23(void) {
   tsc_string_list_free(&maps);
   CHECK(maps.items == NULL && maps.size == 0);
   tsc_world_t *world = NULL;
-  CHECK_OK(tsc_client_load_world_if_different(client, "MockTown", 8, 1, &world));
+  CHECK_OK(tsc_client_load_world_if_different(client, "MockTown", 8, 1, 0xFFFF, &world));
   CHECK(world == NULL);
-  CHECK_OK(tsc_client_load_world_if_different(client, "Town01", 6, 1, &world));
+  CHECK_OK(tsc_client_load_world_if_different(client, "Town01", 6, 1, 0xFFFF, &world));
   CHECK(world != NULL);
   tsc_world_settings_t s;
   tsc_world_settings_ext_t ext;
@@ -230,9 +256,9 @@ static void test_mock_issue23(void) {
 
 static void test_null_arguments(void) {
   tsc_client_t *client = NULL;
-  CHECK(tsc_client_create(kHost, strlen(kHost), 2000, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_client_create(kHost, strlen(kHost), 2000, 0, NULL) == TSC_INVALID_ARGUMENT);
   CHECK(strstr(tsc_last_error_message(), "out_client") != NULL);
-  CHECK(tsc_client_create("", 0, 2000, &client) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_client_create("", 0, 2000, 0, &client) == TSC_INVALID_ARGUMENT);
   CHECK(client == NULL);
   CHECK(tsc_client_set_timeout(NULL, 1.0) == TSC_INVALID_ARGUMENT);
   tsc_handle_release(NULL);
@@ -243,7 +269,7 @@ static void test_null_arguments(void) {
 
 static void test_wrong_handle_kind(void) {
   tsc_client_t *client = NULL;
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2000, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2000, 0, &client));
   tsc_transform_t t;
   /* A client handle passed where an actor is expected must be rejected. */
   CHECK(tsc_actor_get_transform((tsc_actor_t *)client, &t) == TSC_INVALID_ARGUMENT);
@@ -260,7 +286,7 @@ static void test_wrong_handle_kind(void) {
 static void test_refcount(void) {
   uint64_t before = tsc_live_handle_count();
   tsc_client_t *client = NULL;
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2000, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2000, 0, &client));
   CHECK(tsc_handle_kind(H(client)) == TSC_KIND_CLIENT);
   CHECK(tsc_handle_refcount(H(client)) == 1);
   tsc_handle_retain(H(client));
@@ -298,7 +324,7 @@ static void test_mock_session(void) {
   tsc_vehicle_t *not_vehicle = (tsc_vehicle_t *)0x1;
   tsc_string_t s = {0};
 
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2101, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2101, 0, &client));
   CHECK_OK(tsc_client_set_timeout(client, 2.5));
   double timeout = 0.0;
   CHECK_OK(tsc_client_get_timeout(client, &timeout));
@@ -548,7 +574,7 @@ static void test_mock_milestone1(void) {
   tsc_client_t *client = NULL;
   tsc_world_t *world = NULL;
   tsc_map_t *map = NULL;
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2102, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2102, 0, &client));
   CHECK_OK(tsc_client_get_world(client, &world));
   CHECK_OK(tsc_world_get_map(world, &map));
 
@@ -654,7 +680,7 @@ static void test_mock_sensors(void) {
   tsc_actor_list_t *actors = NULL;
   tsc_actor_t *vehicle = NULL;
   tsc_blueprint_library_t *library = NULL;
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2103, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2103, 0, &client));
   CHECK_OK(tsc_client_get_world(client, &world));
   CHECK_OK(tsc_world_get_actors(world, &actors));
   CHECK_OK(tsc_actor_list_get(actors, 0, &vehicle));
@@ -796,7 +822,7 @@ static void test_mock_milestone4(void) {
   tsc_walker_ai_controller_t *ai = NULL;
   tsc_blueprint_library_t *library = NULL;
   tsc_actor_blueprint_t *walker_bp = NULL, *ai_bp = NULL;
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2104, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2104, 0, &client));
   CHECK_OK(tsc_client_get_world(client, &world));
   CHECK_OK(tsc_world_get_actors(world, &actors));
   CHECK_OK(tsc_actor_list_get(actors, 0, &vehicle_actor));
@@ -994,7 +1020,7 @@ static void test_mock_issue22(void) {
   tsc_client_t *client = NULL;
   tsc_world_t *world = NULL;
   tsc_map_t *map = NULL;
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2122, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2122, 0, &client));
   CHECK_OK(tsc_client_get_world(client, &world));
   CHECK_OK(tsc_world_get_map(world, &map));
 
@@ -1121,7 +1147,7 @@ static void test_mock_issue20(void) {
   tsc_walker_t *walker = NULL;
   tsc_blueprint_library_t *library = NULL;
   tsc_actor_blueprint_t *walker_bp = NULL;
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2120, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2120, 0, &client));
   CHECK_OK(tsc_client_get_world(client, &world));
   CHECK_OK(tsc_world_get_actors(world, &actors));
   CHECK_OK(tsc_actor_list_get(actors, 0, &vehicle_actor));
@@ -1274,7 +1300,7 @@ static void test_mock_issue21(void) {
   uint64_t before = tsc_live_handle_count();
   tsc_client_t *client = NULL;
   tsc_world_t *world = NULL;
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2121, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2121, 0, &client));
   CHECK_OK(tsc_client_get_world(client, &world));
 
   tsc_actor_t *spectator = NULL;
@@ -1416,7 +1442,7 @@ static void test_mock_timeout(void) {
   const char *host = "carla.invalid";
   tsc_client_t *client = NULL;
   tsc_world_t *world = NULL;
-  CHECK_OK(tsc_client_create(host, strlen(host), 2000, &client));
+  CHECK_OK(tsc_client_create(host, strlen(host), 2000, 0, &client));
   CHECK(tsc_client_get_world(client, &world) == TSC_TIMEOUT);
   CHECK(world == NULL);
   CHECK(strstr(tsc_last_error_message(), "time-out") != NULL);
@@ -1433,7 +1459,7 @@ static void test_mock_issue19(void) {
   tsc_traffic_sign_t *sign = NULL, *light_sign = NULL;
   CHECK(sizeof(tsc_string_list_t) == 16 && sizeof(tsc_transform_list_t) == 16);
   CHECK(sizeof(tsc_float_color_t) == 16 && sizeof(tsc_texture_color_t) == 16);
-  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2119, &client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2119, 0, &client));
   CHECK_OK(tsc_client_get_world(client, &world));
   CHECK_OK(tsc_world_get_actors(world, &actors));
   CHECK_OK(tsc_actor_list_get(actors, 0, &vehicle));
@@ -1537,6 +1563,7 @@ int main(void) {
   test_issue23_offline();
   if (strcmp(tsc_backend_name(), "mock") == 0) {
     test_mock_issue23();
+    test_mock_issue35();
     test_mock_session();
     test_mock_milestone1();
     test_mock_sensors();
