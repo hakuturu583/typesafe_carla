@@ -288,8 +288,10 @@ def validate(spec: Spec, build_dir: Path) -> int:
 def _in_shim(cursor: cindex.Cursor) -> Path | None:
     """The shim source `cursor` is in, or None (LibCarla, the standard library...)."""
     f = cursor.location.file
-    path = Path(f.name).resolve() if f is not None else None
-    return path if path is not None and SHIM_SOURCES.resolve() in path.parents else None
+    if f is None:
+        return None
+    path = Path(f.name).resolve()
+    return path if SHIM_SOURCES.resolve() in path.parents else None
 
 
 def _location(cursor: cindex.Cursor) -> tuple[str, int, int]:
@@ -313,7 +315,7 @@ def _param_members(template: cindex.Cursor) -> list[tuple[int, str]]:
     function template makes on one of its parameters, e.g. (0, "at") for
     `items.at(index)` in list_at(const Items &items, ...)."""
     params = [c for c in template.get_children() if c.kind == cindex.CursorKind.PARM_DECL]
-    index = {_location(p): i for i, p in enumerate(params)}
+    index = {p: i for i, p in enumerate(params)}
     out = []
     for node in template.walk_preorder():
         if node.kind != cindex.CursorKind.CALL_EXPR or node.referenced is not None:
@@ -323,8 +325,8 @@ def _param_members(template: cindex.Cursor) -> list[tuple[int, str]]:
         while base is not None and base.kind == cindex.CursorKind.UNEXPOSED_EXPR:
             base = next(base.get_children(), None)
         if name and base is not None and base.kind == cindex.CursorKind.DECL_REF_EXPR \
-                and base.referenced is not None and _location(base.referenced) in index:
-            out.append((index[_location(base.referenced)], name))
+                and base.referenced in index:
+            out.append((index[base.referenced], name))
     return out
 
 
@@ -384,10 +386,7 @@ def _calls(tu: cindex.TranslationUnit, classes: set[str]) -> set[tuple[str, bool
         for i, name in templates.get(where, ()):
             if i >= len(args):
                 continue
-            t = args[i].type.get_canonical()
-            if t.kind in (cindex.TypeKind.LVALUEREFERENCE, cindex.TypeKind.RVALUEREFERENCE):
-                t = t.get_pointee().get_canonical()
-            decl = t.get_declaration()
+            decl = args[i].type.get_canonical().get_declaration()
             if decl.kind == cindex.CursorKind.NO_DECL_FOUND:
                 continue
             called |= {(f"{cls}::{name}", generated) for cls in _declaring_classes(decl, name)
@@ -446,10 +445,9 @@ def coverage(spec: Spec, build_dir: Path, output: Path | None) -> int:
         for name in names:
             key = f"{cls}::{name}"
             deprecated = all(m.deprecated for m in methods[name])
-            is_called = f"*::{name}" in called or any(f"{m.cls}::{name}" in called
-                                                       for m in methods[name])
-            is_generated = key in spec_calls or any(f"{m.cls}::{name}" in generated_calls
-                                                     for m in methods[name])
+            declared = {f"{m.cls}::{name}" for m in methods[name]}
+            is_called = f"*::{name}" in called or bool(declared & called)
+            is_generated = key in spec_calls or bool(declared & generated_calls)
             status = "generated" if is_generated else "hand-written" if is_called else "—"
             if status != "—":
                 cls_bound += 1
