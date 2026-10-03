@@ -591,10 +591,13 @@ Deliberate differences, all in favour of static checking:
   - **G-buffer textures (issue #33).** `Sensor.listen_to_gbuffer(gbuffer_id,
     callback)` works like `listen(callback)`: the callback receives a
     `SensorData` (`as_image()`) at the dispatch points, on the program's
-    thread. As in LibCarla, only RGB cameras serve G-buffers (another sensor
-    logs a warning and delivers nothing), `is_listening` becomes `True`, and
+    thread. Only RGB cameras serve G-buffers: another sensor raises
+    `CarlaError` (LibCarla logs a warning and delivers nothing). As in
+    LibCarla, `is_listening` becomes `True`, and
     `stop()` leaves the G-buffer streams running; `stop_gbuffer(id)`,
-    `destroy()` or a batch `DestroyActor` ends them. An id outside
+    `destroy()` or a batch `DestroyActor` ends them (they are stopped before
+    the actor is destroyed: LibCarla cannot unsubscribe a destroyed actor's
+    G-buffer stream, which would then reconnect forever). An id outside
     `GBufferTextureID` raises `CarlaError` (LibCarla aborts the process).
   - **ROS2 (issue #33).** `enable_for_ros()` / `disable_for_ros()` /
     `is_enabled_for_ros()` call LibCarla's `ServerSideSensor`; a server built

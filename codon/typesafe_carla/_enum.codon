@@ -17,7 +17,7 @@
 # realizes classes before module-level values, so a method's default argument
 # in the library cannot name a member: those defaults are literals with a
 # comment. User code is not affected: `carla.LaneType.Driving` works there.) The typed
-# enumerations (VehicleDoor & co., which are types themselves) list their
+# enumerations (VehicleDoor & co., AttachmentType: types themselves) list their
 # members once in a ClassVar and use _member_names / _member_values.
 
 import internal.static as static

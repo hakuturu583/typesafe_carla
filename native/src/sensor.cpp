@@ -122,6 +122,11 @@ tsc_status_t tsc_sensor_listen_to_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer
     auto &h = sensor_handle(sensor);
     auto &s = server_side_sensor_of(sensor);
     const uint32_t id = check_gbuffer_id(gbuffer_id);
+    // LibCarla only logs a warning (and delivers nothing) for other sensors.
+    if (s.GetTypeId() != "sensor.camera.rgb") {
+      fail(TSC_INVALID_ARGUMENT, "G-buffer textures come from RGB cameras (sensor.camera.rgb), not '" +
+                                     s.GetTypeId() + "'");
+    }
     // As tsc_sensor_listen: never leave an orphaned subscription behind.
     if (s.IsListeningGBuffer(id)) s.StopGBuffer(id);
     h.gbuffer_queues[id] =

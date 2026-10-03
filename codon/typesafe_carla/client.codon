@@ -19,7 +19,7 @@ from .errors import _check, _check_port, CarlaError, _is_actor_id
 from .world import World
 from .geometry import Transform
 from .world_queries import MapLayer, _map_layer
-from ._callbacks import dispatch_callbacks, _unregister_callback
+from ._callbacks import dispatch_callbacks, _unregister_callback, _stop_gbuffers
 from .command import Command, CommandResponse, _flatten, _responses, _DESTROY_ACTOR
 
 class OpendriveGenerationParameters:
@@ -57,6 +57,13 @@ def _category(c: str) -> byte:
         raise CarlaError(f"recorder category must be one of h, v, w, t, o, a (got '{c}')",
                          TSC_INVALID_ARGUMENT)
     return c.ptr[0]
+
+def _stop_destroyed_gbuffers(commands: List[Command]):
+    """G-buffer streams of sensors a DestroyActor will destroy stop before the
+    batch is sent (see _callbacks._stop_gbuffers)."""
+    for c in commands:
+        if c._type == _DESTROY_ACTOR:
+            _stop_gbuffers(c._actor_id)
 
 class Client:
     _h: Handle
@@ -151,6 +158,7 @@ class Client:
     def apply_batch(self, commands: List[Command], do_tick: bool = False):
         """Sends all commands in one RPC without waiting for their results."""
         records, n = _flatten(commands)
+        _stop_destroyed_gbuffers(commands)
         _check(tsc_client_apply_batch(self._h.ptr, records, n, i32(int(do_tick))))
         # No responses: assume every DestroyActor succeeds.
         for c in commands:
@@ -167,6 +175,7 @@ class Client:
         set here is registered with the Traffic Manager, like the Python API.
         """
         records, n = _flatten(commands)
+        _stop_destroyed_gbuffers(commands)
         top = len(commands)
         buf = Ptr[CCommandResponse](top if top > 0 else 1)
         count = Ptr[int](1)

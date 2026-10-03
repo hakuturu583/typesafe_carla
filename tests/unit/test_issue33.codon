@@ -1,6 +1,9 @@
 # Issue #33 on the mock backend: Python API members found missing by the
 # survey against CARLA 0.10.0.
 import typesafe_carla as carla
+from typesafe_carla._ffi import LIB
+
+from C import LIB.tsc_mock_gbuffer_subscriptions() -> int
 
 client = carla.Client("localhost", 2000)
 world = client.get_world()
@@ -239,12 +242,41 @@ assert unwrap(as_actor).is_listening_gbuffer(carla.GBufferTextureID.GBufferA) ==
 camera.destroy()
 world.tick()
 assert len(normals) == 2
-# A non-RGB camera: LibCarla ignores the request (with a warning).
+# A non-RGB camera: CarlaError (LibCarla would ignore the request with a warning).
 depth_camera = spawn("sensor.camera.depth", 4, 2)
-depth_camera.listen_to_gbuffer(carla.GBufferTextureID.SceneColor, lambda d: normals.append(0))
+assert raises_carla_error(lambda: depth_camera.listen_to_gbuffer(
+    carla.GBufferTextureID.SceneColor, lambda d: normals.append(0)))
 assert not depth_camera.is_listening_gbuffer(carla.GBufferTextureID.SceneColor)
-world.tick()
-assert len(normals) == 2
+assert not depth_camera.has_callback and not depth_camera.is_listening
 depth_camera.destroy()
+
+# G-buffer streams are stopped before the actor is destroyed: LibCarla cannot
+# unsubscribe them afterwards (the mock counts the live subscriptions).
+def gbuffer_camera() -> carla.Sensor:
+    c = spawn("sensor.camera.rgb", 4, 2)
+    c.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth, lambda d: None)
+    c.listen_to_gbuffer(carla.GBufferTextureID.GBufferA, lambda d: None)
+    assert tsc_mock_gbuffer_subscriptions() == base + 2
+    return c
+
+base = tsc_mock_gbuffer_subscriptions()
+# (a) stop() clears LibCarla's listening flag, so its Destroy() skips StopGBuffer.
+cam_a = gbuffer_camera()
+cam_a.stop()
+assert cam_a.destroy()
+assert tsc_mock_gbuffer_subscriptions() == base
+# (b) destroyed through another handle of the actor.
+cam_b = gbuffer_camera()
+assert unwrap(world.get_actor(cam_b.id)).destroy()
+assert tsc_mock_gbuffer_subscriptions() == base
+# (c) a batch DestroyActor, with and without responses.
+cam_c = gbuffer_camera()
+responses = client.apply_batch_sync([carla.command.DestroyActor(cam_c.id)])
+assert not responses[0].has_error()
+assert tsc_mock_gbuffer_subscriptions() == base
+cam_d = gbuffer_camera()
+client.apply_batch([carla.command.DestroyActor(cam_d.id)])
+assert tsc_mock_gbuffer_subscriptions() == base
+world.tick()
 
 print("OK")

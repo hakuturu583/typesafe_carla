@@ -177,9 +177,8 @@ struct Episode : std::enable_shared_from_this<Episode> {
   // Every actor removal goes through here so listeners never outlive their sensor.
   bool EraseActorLocked(rpc::ActorId id) {
     listeners.erase(id);
-    for (auto it = gbuffer_listeners.begin(); it != gbuffer_listeners.end();) {
-      it = it->first.first == id ? gbuffer_listeners.erase(it) : std::next(it);
-    }
+    // G-buffer subscriptions stay: on a real client they outlive the actor
+    // unless StopGBuffer ran before the destroy (tsc_mock_gbuffer_subscriptions).
     auto it = actors.find(id);
     if (it == actors.end()) return false;
     destroyed.insert_or_assign(id, it->second);
@@ -854,6 +853,7 @@ uint64_t World::ApplySettings(const rpc::EpisodeSettings &settings, time_duratio
 
 namespace {
 std::atomic<size_t> g_last_worker_threads{0};
+std::atomic<size_t> g_gbuffer_subscriptions{0};  // tsc_mock_gbuffer_subscriptions
 std::atomic<uint16_t> g_last_map_layers{static_cast<uint16_t>(rpc::MapLayer::All)};
 }  // namespace
 
@@ -1221,20 +1221,45 @@ void CheckGBufferId(uint32_t id) {
 
 }  // namespace
 
-ServerSideSensor::~ServerSideSensor() {
+std::vector<uint32_t> ServerSideSensor::OwnGBuffers() const {
   std::lock_guard<std::mutex> lock(_episode->mutex);
-  auto &all = _episode->gbuffer_listeners;
-  for (auto it = all.begin(); it != all.end();) {
-    it = it->second.owner == this ? all.erase(it) : std::next(it);
+  std::vector<uint32_t> ids;
+  for (const auto &entry : _episode->gbuffer_listeners) {
+    if (entry.first.first == _id && entry.second.owner == this) ids.push_back(entry.first.second);
   }
+  return ids;
+}
+
+// As LibCarla: StopGBuffer for each texture, errors logged (a destroyed
+// actor's subscriptions then stay, see StopGBuffer).
+ServerSideSensor::~ServerSideSensor() {
+  for (uint32_t id : OwnGBuffers()) {
+    try {
+      StopGBuffer(id);
+    } catch (const std::exception &) {
+    }
+  }
+}
+
+// As LibCarla's ServerSideSensor::Destroy: while listening (bit 0, which
+// Stop() clears), stop the G-buffer streams and the measurements first.
+bool ServerSideSensor::Destroy() {
+  if (IsListening()) {
+    for (uint32_t id : OwnGBuffers()) StopGBuffer(id);
+    Stop();
+  }
+  return Actor::Destroy();
 }
 
 void ServerSideSensor::ListenToGBuffer(uint32_t GBufferId, CallbackFunctionType callback) {
   CheckGBufferId(GBufferId);
   // LibCarla logs a warning and does nothing for other sensors.
   if (GetTypeId() != "sensor.camera.rgb") return;
+  // The server's get_gbuffer_token fails for a destroyed actor (WithData throws).
   WithData([&](mock::ActorData &) {
-    _episode->gbuffer_listeners[{_id, GBufferId}] = mock::Episode::Listener{this, std::move(callback)};
+    auto &entry = _episode->gbuffer_listeners[{_id, GBufferId}];
+    if (!entry.callback) ++g_gbuffer_subscriptions;
+    entry = mock::Episode::Listener{this, std::move(callback)};
     _listening_gbuffer = true;
     return 0;
   });
@@ -1243,11 +1268,17 @@ void ServerSideSensor::ListenToGBuffer(uint32_t GBufferId, CallbackFunctionType 
 void ServerSideSensor::StopGBuffer(uint32_t GBufferId) {
   CheckGBufferId(GBufferId);
   if (GetTypeId() != "sensor.camera.rgb") return;
-  std::lock_guard<std::mutex> lock(_episode->mutex);
-  auto it = _episode->gbuffer_listeners.find({_id, GBufferId});
-  if (it != _episode->gbuffer_listeners.end() && it->second.owner == this) {
-    _episode->gbuffer_listeners.erase(it);
-  }
+  // LibCarla asks the server for the stream token first (get_gbuffer_token),
+  // which fails for a destroyed actor: the subscription is then never
+  // removed and the streaming client keeps reconnecting (issue #33 review).
+  WithData([&](mock::ActorData &) {
+    auto it = _episode->gbuffer_listeners.find({_id, GBufferId});
+    if (it != _episode->gbuffer_listeners.end() && it->second.owner == this) {
+      _episode->gbuffer_listeners.erase(it);
+      --g_gbuffer_subscriptions;
+    }
+    return 0;
+  });
 }
 
 bool ServerSideSensor::IsListeningGBuffer(uint32_t id) const {
@@ -2405,3 +2436,6 @@ extern "C" size_t tsc_mock_last_worker_threads(void) {
   return carla::client::g_last_worker_threads;
 }
 extern "C" uint16_t tsc_mock_last_map_layers(void) { return carla::client::g_last_map_layers; }
+extern "C" size_t tsc_mock_gbuffer_subscriptions(void) {
+  return carla::client::g_gbuffer_subscriptions;
+}

@@ -13,6 +13,11 @@ world = client.get_world()
 lib = world.get_blueprint_library()
 
 spawned: List[carla.Actor] = []
+# State this test changes, restored in `finally` even when an assertion fails.
+original_weather = world.get_weather()
+changed_light: Optional[carla.TrafficLight] = None
+light_was_frozen = False
+light_old_state = carla.TrafficLightState.Green
 try:
     # Actor.get_world(): a World of the same episode.
     points = world.get_map().get_spawn_points()
@@ -37,13 +42,14 @@ try:
     if len(lights) > 0:
         light = lights[0]
         assert light.state == light.get_state()
-        frozen = light.is_frozen()
+        light_was_frozen = light.is_frozen()
+        light_old_state = light.state
+        changed_light = light
         light.freeze(True)
         light.set_state(carla.TrafficLightState.Red)
         world.wait_for_tick(10.0)
         print("state", light.state)
         assert light.state == carla.TrafficLightState.Red
-        light.freeze(frozen)
 
     # ActorBlueprint len() / iteration, ActorAttribute.recommended_values.
     with_values = 0
@@ -66,7 +72,6 @@ try:
     # WeatherParameters presets applied with set_weather. CARLA 0.10.0 can
     # run without weather (is_weather_enabled() False): set_weather is then
     # ignored, as with the Python API.
-    original = world.get_weather()
     enabled = world.is_weather_enabled()
     print("weather enabled", enabled)
     for preset in [carla.WeatherParameters.HardRainNoon, carla.WeatherParameters.ClearSunset,
@@ -79,7 +84,6 @@ try:
             assert abs(got.precipitation - preset.precipitation) < 0.01
             assert abs(got.cloudiness - preset.cloudiness) < 0.01
             assert abs(got.sun_altitude_angle - preset.sun_altitude_angle) < 0.01
-    world.set_weather(original)
 
     # ServerSideSensor: ROS2 and G-buffer textures on an RGB camera.
     camera_bp = lib.find("sensor.camera.rgb")
@@ -109,13 +113,18 @@ try:
             break
         world.wait_for_tick(10.0)
         carla.dispatch_callbacks()
-    # Printed rather than asserted: whether a CARLA 0.10.0 (UE5) server sends
-    # G-buffer textures is what this run shows.
     print("gbuffer SceneDepth images", len(depth), depth[:2])
+    assert len(depth) > 0, ("no G-buffer texture within 40 ticks: the server accepted "
+                            "listen_to_gbuffer but sent nothing")
     assert all(w == 64 for w in depth)
     camera.stop_gbuffer(carla.GBufferTextureID.SceneDepth)
     assert not camera.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
 finally:
     for a in reversed(spawned):
         a.destroy()
+    world.set_weather(original_weather)
+    if changed_light is not None:
+        restored = unwrap(changed_light)
+        restored.set_state(light_old_state)
+        restored.freeze(light_was_frozen)
 print("OK")

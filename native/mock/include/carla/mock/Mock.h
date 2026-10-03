@@ -32,6 +32,9 @@
 #define TSC_MOCK_HOOK extern "C" __attribute__((visibility("default")))
 TSC_MOCK_HOOK size_t tsc_mock_last_worker_threads(void);  // Client(host, port, worker_threads)
 TSC_MOCK_HOOK uint16_t tsc_mock_last_map_layers(void);    // LoadWorld / LoadWorldIfDifferent
+// Live G-buffer subscriptions of the process (ListenToGBuffer minus a
+// successful StopGBuffer), leaked ones included.
+TSC_MOCK_HOOK size_t tsc_mock_gbuffer_subscriptions(void);
 #undef TSC_MOCK_HOOK
 
 namespace carla {
@@ -1156,12 +1159,16 @@ class ServerSideSensor : public Sensor {
  public:
   using Sensor::Sensor;
   ~ServerSideSensor() override;  // stops the G-buffer streams, as LibCarla
+  bool Destroy() override;
   void ListenToGBuffer(uint32_t GBufferId, CallbackFunctionType callback);
   void StopGBuffer(uint32_t GBufferId);
   bool IsListeningGBuffer(uint32_t id) const;
   void EnableForROS();
   void DisableForROS();
   bool IsEnabledForROS();
+
+ private:
+  std::vector<uint32_t> OwnGBuffers() const;  // the textures this object listens to
 };
 
 // Sensors LibCarla computes on the client (lane invasion).

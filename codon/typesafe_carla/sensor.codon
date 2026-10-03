@@ -974,11 +974,12 @@ class Sensor(Actor):
     def listen_to_gbuffer(self, gbuffer_id: int, callback):
         """Delivers one G-buffer texture (a GBufferTextureID) of this camera to
         callback, like listen(callback): it takes a SensorData (as_image())
-        and runs at the same dispatch points, on the program's thread. As in
-        LibCarla, only RGB cameras serve G-buffers (other sensors log a
-        warning and deliver nothing), and is_listening becomes True. Listening
-        to the same texture again replaces the callback; stop_gbuffer(),
-        destroy() or a batch DestroyActor unregisters it, stop() does not."""
+        and runs at the same dispatch points, on the program's thread. Only
+        RGB cameras serve G-buffers: another sensor raises CarlaError (LibCarla
+        logs a warning and delivers nothing). As in LibCarla, is_listening
+        becomes True. Listening to the same texture again replaces the
+        callback; stop_gbuffer(), destroy() or a batch DestroyActor
+        unregisters it, stop() does not."""
         cb: Callable[[cobj], None] = _CallbackThunk(callback).run
         id = _gbuffer_id(gbuffer_id)
         # Before listening: _register_callback's own unregister would stop the new stream.

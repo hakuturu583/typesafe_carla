@@ -133,8 +133,9 @@ def _unregister_stream(actor_id: int, gbuffer: int = -1) -> bool:
     return True
 
 def _unregister_callback(actor_id: int) -> bool:
-    """Drops every callback of this sensor actor (it is being destroyed): its
-    measurements and its G-buffer textures. Returns whether there was one."""
+    """Drops every callback of this sensor actor (it has been destroyed): its
+    measurements and any G-buffer textures left (_stop_gbuffers should have
+    run before the destroy). Returns whether there was one."""
     found = False
     i = 0
     while i < len(_listeners):
@@ -144,6 +145,19 @@ def _unregister_callback(actor_id: int) -> bool:
         else:
             i += 1
     return found
+
+def _stop_gbuffers(actor_id: int):
+    """Stops and drops this sensor actor's G-buffer callbacks. Call it BEFORE
+    destroying the actor: LibCarla's StopGBuffer asks the server for the
+    stream token first, which fails once the actor is gone, and the stream
+    would then never be unsubscribed (its client keeps reconnecting)."""
+    i = 0
+    while i < len(_listeners):
+        l = _listeners[i]
+        if not l.tick and l.actor_id == actor_id and l.gbuffer >= 0:
+            _remove(i)
+        else:
+            i += 1
 
 def _register_callback(actor_id: int, handle: Handle, callback: Callable[[cobj], None],
                        gbuffer: int = -1):

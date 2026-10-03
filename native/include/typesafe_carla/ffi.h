@@ -762,8 +762,9 @@ TSC_API tsc_status_t tsc_sensor_is_listening_gbuffer(tsc_sensor_t *sensor, uint3
 TSC_API tsc_status_t tsc_sensor_stop_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id);
 /* END GENERATED sensor_gbuffer */
 /* Starts delivering G-buffer texture gbuffer_id into a queue of this handle
- * (ServerSideSensor::ListenToGBuffer; LibCarla serves RGB cameras only and
- * ignores other sensors with a warning). queue_capacity as in
+ * (ServerSideSensor::ListenToGBuffer). TSC_INVALID_ARGUMENT for a sensor
+ * other than an RGB camera (LibCarla would only log a warning and deliver
+ * nothing). queue_capacity as in
  * tsc_sensor_listen. Listening again replaces the stream and the queue. */
 TSC_API tsc_status_t tsc_sensor_listen_to_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
                                                   size_t queue_capacity);
