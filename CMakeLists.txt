@@ -241,7 +241,8 @@ endif()
 # so CARLA's own install rules never end up in the wheel)
 #
 #   typesafe_carla/_native/libtypesafe_carla_ffi.so
-#   typesafe_carla/_native/LICENSE.CARLA
+#   typesafe_carla/_native/LICENSE.CARLA          (libcarla backend)
+#   typesafe_carla/_native/THIRD_PARTY_NOTICES    (libcarla backend)
 #   typesafe_carla/_codon/typesafe_carla/*.codon
 # ---------------------------------------------------------------------------
 install(TARGETS typesafe_carla_ffi
@@ -270,7 +271,14 @@ install(FILES "${CMAKE_BINARY_DIR}/BUILD_INFO.json" DESTINATION typesafe_carla/_
         COMPONENT typesafe_carla)
 
 if(TSC_BACKEND STREQUAL "libcarla")
-  # LibCarla (MIT) is linked statically; ship its license notice.
+  # LibCarla (MIT) is linked statically; ship its license notice, and the
+  # notices of everything else linked in with it (Boost, rpclib, Recast,
+  # libpng, zlib, LibCarla's vendored sources), collected from the fetched
+  # sources. Configuring fails if any expected license text is missing.
   install(FILES "${TSC_CARLA_DIR}/LICENSE" DESTINATION typesafe_carla/_native
           RENAME LICENSE.CARLA COMPONENT typesafe_carla)
+  include(cmake/ThirdPartyNotices.cmake)
+  tsc_write_third_party_notices("${CMAKE_BINARY_DIR}/THIRD_PARTY_NOTICES")
+  install(FILES "${CMAKE_BINARY_DIR}/THIRD_PARTY_NOTICES" DESTINATION typesafe_carla/_native
+          COMPONENT typesafe_carla)
 endif()
