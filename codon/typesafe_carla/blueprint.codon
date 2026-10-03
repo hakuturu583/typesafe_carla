@@ -12,7 +12,7 @@ from ._ffi import (CStringList, take_string_list, tsc_actor_blueprint_get_tags,
 from ._ffi import (tsc_actor_blueprint_size, tsc_actor_blueprint_get_attribute_ids,
                    tsc_actor_blueprint_get_recommended_values)
 from .errors import _check, _normalize_index, CarlaError
-from ._fmt import fmt_g32, fmt_bool
+from ._fmt import fmt_g32, fmt_bool, fmt_list
 
 class _ActorAttributeType(_IntEnum):
     Bool: int = 0
@@ -245,4 +245,4 @@ class BlueprintLibrary:
         return BlueprintLibrary(Handle(out[0]))
 
     def __repr__(self) -> str:
-        return "[" + ", ".join([str(bp) for bp in self]) + "]"
+        return fmt_list(self)

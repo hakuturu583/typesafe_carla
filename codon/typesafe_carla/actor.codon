@@ -40,6 +40,7 @@ from ._callbacks import _unregister_callback, _stop_gbuffers
 from .geometry import BoundingBox, Location, Transform, Vector3D, _vector_arg, _location_arg
 from .control import VehicleControl, VehiclePhysicsControl
 from .texture import TextureColor, TextureFloatColor
+from ._fmt import fmt_list
 
 TM_DEFAULT_PORT = 8000
 
@@ -460,4 +461,4 @@ class ActorList:
         return ActorList(Handle(out[0]))
 
     def __repr__(self) -> str:
-        return "[" + ", ".join([str(a) for a in self]) + "]"
+        return fmt_list(self)

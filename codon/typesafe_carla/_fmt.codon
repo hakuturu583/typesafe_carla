@@ -16,7 +16,9 @@
 
 import math
 
-_BASE = 1000000000  # limb base for the exact decimal expansion
+# Base-1e9 limbs for the exact decimal expansion (up to ~770 digits). Not
+# UInt[2560]: its str() divides bit by bit (~5 ms for a typical double).
+_BASE = 1000000000
 
 def _mul_small(limbs: List[int], s: int):
     """limbs (little-endian, base 1e9) *= s, in place; s < 2**31."""
@@ -32,8 +34,7 @@ def _mul_small(limbs: List[int], s: int):
 def _limbs_digits(limbs: List[int]) -> str:
     parts = [str(limbs[len(limbs) - 1])]
     for i in range(len(limbs) - 2, -1, -1):
-        t = str(limbs[i])
-        parts.append("0" * (9 - len(t)) + t)
+        parts.append(str(limbs[i]).zfill(9))
     return "".join(parts)
 
 def _exact_decimal(a: float) -> Tuple[str, int]:
@@ -66,16 +67,9 @@ def _exact_decimal(a: float) -> Tuple[str, int]:
 
 def _increment(digits: str) -> str:
     """digits + 1, as a decimal string."""
-    out = list(digits)
-    i = len(out) - 1
-    while i >= 0:
-        if out[i] == "9":
-            out[i] = "0"
-            i -= 1
-        else:
-            out[i] = chr(ord(out[i]) + 1)
-            return "".join(out)
-    return "1" + "".join(out)
+    s = digits.rstrip("9")
+    head = s[:len(s) - 1] + chr(ord(s[len(s) - 1]) + 1) if s else "1"
+    return head + "0" * (len(digits) - len(s))
 
 def _drop_digits(digits: str, r: int) -> str:
     """round(int(digits) / 10**r), half to even, as a decimal string."""
@@ -85,26 +79,21 @@ def _drop_digits(digits: str, r: int) -> str:
     if r > n:
         return "0"
     q = digits[:n - r] if r < n else "0"
-    first = digits[n - r]
-    up = False
-    if first > "5":
-        up = True
-    elif first == "5":
-        rest_zero = True
-        for c in digits[n - r + 1:]:
-            if c != "0":
-                rest_zero = False
-                break
-        up = (not rest_zero) or (ord(q[len(q) - 1]) - ord("0")) % 2 == 1
+    # Equal-length digit strings compare as the numbers they spell.
+    tail = digits[n - r:]
+    half = "5" + "0" * (r - 1)
+    up = tail > half or (tail == half and (ord(q[len(q) - 1]) - ord("0")) % 2 == 1)
     return _increment(q) if up else q
+
+def _sign(x: float) -> str:
+    return "-" if math.copysign(1.0, x) < 0.0 else ""
 
 def _special(x: float) -> str:
     """nan/inf spelled as glibc does ("" for finite values)."""
-    neg = math.copysign(1.0, x) < 0.0
     if math.isnan(x):
-        return "-nan" if neg else "nan"
+        return _sign(x) + "nan"
     if math.isinf(x):
-        return "-inf" if neg else "inf"
+        return _sign(x) + "inf"
     return ""
 
 def fmt_f(x: float, precision: int = 6) -> str:
@@ -112,11 +101,9 @@ def fmt_f(x: float, precision: int = 6) -> str:
     s = _special(x)
     if s:
         return s
-    sign = "-" if math.copysign(1.0, x) < 0.0 else ""
+    sign = _sign(x)
     digits, k = _exact_decimal(abs(x))
-    q = _drop_digits(digits, k - precision)
-    if len(q) <= precision:
-        q = "0" * (precision + 1 - len(q)) + q
+    q = _drop_digits(digits, k - precision).zfill(precision + 1)
     if precision == 0:
         return sign + q
     return sign + q[:len(q) - precision] + "." + q[len(q) - precision:]
@@ -126,10 +113,8 @@ def fmt_g(x: float, precision: int = 6) -> str:
     s = _special(x)
     if s:
         return s
-    sign = "-" if math.copysign(1.0, x) < 0.0 else ""
+    sign = _sign(x)
     p = max(precision, 1)
-    if x == 0.0:
-        return sign + "0"
     digits, k = _exact_decimal(abs(x))
     n = len(digits)
     exp = n - 1 - k  # decimal exponent of the leading digit
@@ -147,10 +132,8 @@ def fmt_g(x: float, precision: int = 6) -> str:
         frac = frac.rstrip("0")
         return sign + ip + ("." + frac if frac else "")
     frac = sig[1:].rstrip("0")
-    e = str(abs(exp))
-    if len(e) < 2:
-        e = "0" + e
-    return sign + sig[0] + ("." + frac if frac else "") + ("e-" if exp < 0 else "e+") + e
+    return (sign + sig[0] + ("." + frac if frac else "") + ("e-" if exp < 0 else "e+") +
+            str(abs(exp)).zfill(2))
 
 def fmt_f32(x: float) -> str:
     """std::to_string of a C++ `float` field."""
@@ -163,3 +146,25 @@ def fmt_g32(x: float) -> str:
 def fmt_bool(b: bool) -> str:
     """The binding's boolalpha(): "True" / "False"."""
     return "True" if b else "False"
+
+def fmt_b01(b: bool) -> str:
+    """A C++ bool through std::to_string or `<<` (no boolalpha): "1" / "0"."""
+    return "1" if b else "0"
+
+def fmt_list(items) -> str:
+    """The binding's PrintList: `[a, b]`, items as their str()."""
+    return "[" + ", ".join([str(x) for x in items]) + "]"
+
+def fmt_fields(name: str, obj) -> str:
+    """`Name(field=value, ...)` over obj's fields in declaration order: floats
+    as C++ `float` through std::to_string, bools as boolalpha, the rest by
+    str(). The Python API's format for its plain-field value types."""
+    parts = List[str]()
+    for k, v in static.vars(obj):
+        if isinstance(v, bool):
+            parts.append(k + "=" + fmt_bool(v))
+        elif isinstance(v, float):
+            parts.append(k + "=" + fmt_f32(v))
+        else:
+            parts.append(k + "=" + str(v))
+    return name + "(" + ", ".join(parts) + ")"

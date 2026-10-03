@@ -24,8 +24,8 @@ from .errors import _check, _i32, CarlaError
 from .map import _read_buffer
 from .geometry import Transform
 from .actor import Vehicle
-from .control import _fields_eq, _fields_repr, _list_str
-from ._fmt import fmt_f32
+from .control import _fields_eq
+from ._fmt import fmt_fields
 from ._enum import _member_names, _member_values, _enum_repr
 
 @tuple
@@ -125,7 +125,7 @@ class VehicleAckermannControl:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return _fields_repr("VehicleAckermannControl", self)
+        return fmt_fields("VehicleAckermannControl", self)
 
     def _to_c(self) -> CVehicleAckermannControl:
         return CVehicleAckermannControl(self.steer, self.steer_speed, self.speed,
@@ -157,7 +157,7 @@ class AckermannControllerSettings:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return _fields_repr("AckermannControllerSettings", self)
+        return fmt_fields("AckermannControllerSettings", self)
 
     def _to_c(self) -> CAckermannControllerSettings:
         return CAckermannControllerSettings(self.speed_kp, self.speed_ki, self.speed_kd,
@@ -180,7 +180,7 @@ class WheelTelemetryData:
         self.omega = omega
 
     def __repr__(self) -> str:
-        return _fields_repr("WheelTelemetryData", self)
+        return fmt_fields("WheelTelemetryData", self)
 
 class VehicleTelemetryData:
     """Vehicle.get_telemetry_data(), as carla.VehicleTelemetryData."""
@@ -204,10 +204,7 @@ class VehicleTelemetryData:
         self.wheels = wheels if wheels is not None else List[WheelTelemetryData]()
 
     def __repr__(self) -> str:
-        return (f"VehicleTelemetryData(speed={fmt_f32(self.speed)}, steer={fmt_f32(self.steer)}, "
-                f"throttle={fmt_f32(self.throttle)}, brake={fmt_f32(self.brake)}, "
-                f"engine_rpm={fmt_f32(self.engine_rpm)}, gear={self.gear}, "
-                f"wheels={_list_str(self.wheels)})")
+        return fmt_fields("VehicleTelemetryData", self)
 
 @extend
 class Vehicle:
