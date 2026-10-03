@@ -26,6 +26,7 @@ EXACT = ("server_version", "vehicle_blueprints", "color_type", "wheels", "type_i
          "failure_state", "doors", "telemetry", "vehicle_bones", "ackermann_batch",
          "walker_bones", "available_maps", "required_files", "load_world_same",
          "bp_filter_attr", "bp_tags", "frame_count", "actor_identity", "actor_parent",
+         "attachment_type",
          "traffic_signs", "skeleton", "i21_spectator", "i21_environment", "i21_traffic_lights",
          "i21_landmark_lookup", "i21_vehicle_light_states", "i21_projections",
          "frame_number", "sensor_types", "image_saved", "palette", "semantic_lidar", "lidar_ply",

@@ -1,0 +1,68 @@
+# Issue #34 against a real CARLA server: spawn cameras attached to a vehicle
+# with AttachmentType.SpringArm, SpringArmGhost and Rigid, check their parent,
+# and destroy them.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+
+def spawn_vehicle(world: carla.World, bp: carla.ActorBlueprint) -> carla.Vehicle:
+    for point in world.get_map().get_spawn_points():
+        actor = world.try_spawn_actor(bp, point)
+        if actor is not None:
+            return unwrap(actor).as_vehicle()
+    raise carla.CarlaError("no free spawn point")
+
+def check_parent(child: carla.Actor, parent: carla.Actor, what: str):
+    p = child.parent
+    assert p is not None, f"{what}: no parent"
+    assert p.id == parent.id, f"{what}: parent {p.id}, expected {parent.id}"
+    # The offsets are at most about 6.7 m and a spring arm only shortens, so a
+    # camera that follows its parent stays within 15 m. This cannot tell
+    # SpringArm from Rigid: the server exposes no attachment type to query.
+    d = child.get_location().distance(parent.get_location())
+    print(what, "camera", child.id, "parent", p.id, "distance", d)
+    assert d < 15.0, f"{what}: camera {d} m from its parent"
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+lib = world.get_blueprint_library()
+original = world.get_settings()
+settings = world.get_settings()
+settings.synchronous_mode = True
+settings.fixed_delta_seconds = 0.05
+world.apply_settings(settings)
+car = spawn_vehicle(world, lib.find("vehicle.lincoln.mkz"))
+cameras = List[carla.Actor]()
+try:
+    world.tick()
+    cam_bp = lib.find("sensor.camera.rgb")
+    cam_bp.set_attribute("image_size_x", "160")
+    cam_bp.set_attribute("image_size_y", "120")
+    behind = carla.Transform(carla.Location(-6.0, 0.0, 3.0), carla.Rotation(pitch=-15.0))
+
+    arm = world.spawn_actor(cam_bp, behind, attach_to=car,
+                            attachment_type=carla.AttachmentType.SpringArm)
+    cameras.append(arm)
+    ghost = world.try_spawn_actor(cam_bp, behind, car, carla.AttachmentType.SpringArmGhost)
+    assert ghost is not None, "SpringArmGhost spawn failed"
+    cameras.append(unwrap(ghost))
+    rigid = world.spawn_actor(cam_bp, carla.Transform(carla.Location(1.5, 0.0, 2.0)),
+                              attach_to=car, attachment_type=carla.AttachmentType.Rigid)
+    cameras.append(rigid)
+
+    car.apply_control(carla.VehicleControl(throttle=0.6))
+    for _ in range(20):
+        world.tick()
+    check_parent(arm, car, "SpringArm")
+    check_parent(unwrap(ghost), car, "SpringArmGhost")
+    check_parent(rigid, car, "Rigid")
+finally:
+    for c in cameras:
+        c.destroy()
+    car.destroy()
+    world.apply_settings(original)
+print("OK")
