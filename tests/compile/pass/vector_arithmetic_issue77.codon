@@ -1,0 +1,52 @@
+# Issue #77: the static result types of Vector3D-family and Vector2D
+# arithmetic (every combination's value and type is checked against the
+# official module in tests/unit/test_issue77_arithmetic.codon).
+# strict
+import typesafe_carla as carla
+
+def vector3d(loc: carla.Location, vel: carla.Velocity, k: float) -> carla.Vector3D:
+    # Binary operators give a Vector3D, in either order.
+    r: carla.Vector3D = loc + vel
+    r = vel - loc
+    r = carla.Vector3D() + loc
+    r = loc * 2
+    r = k * vel
+    r = loc / k
+    r = 2 / loc
+    # In place keeps the left operand's type.
+    loc += carla.Vector3D(1.0, 1.0, 1.0)
+    loc -= vel
+    loc *= k
+    same: carla.Location = loc
+    # /= rebinds to `v / k`: legal on a Vector3D variable.
+    r /= 2
+    return r
+
+def vector2d(a: carla.Vector2D, b: carla.Vector2D) -> carla.Vector2D:
+    r: carla.Vector2D = a + b
+    r = a - b
+    r = a * 2
+    r = 0.5 * a
+    r = 2.0 / a
+    a += b
+    a -= b
+    a *= 2
+    a /= 2
+    return r + a
+
+def fields(t: carla.Transform, b: carla.BoundingBox, w: carla.WalkerControl, k: float):
+    # In place on a field: changes the stored value, as in the official module.
+    t.location += carla.Vector3D(1.0, 1.0, 1.0)
+    t.location -= carla.Velocity(1.0, 1.0, 1.0)
+    t.location *= k
+    b.extent += t.location
+    b.location -= b.extent
+    w.direction *= 2
+
+def optional_operand(v: carla.Vector3D, o: Optional[carla.Location]) -> carla.Vector3D:
+    return v + o
+
+fields(carla.Transform(), carla.BoundingBox(), carla.WalkerControl(), 0.5)
+optional_operand(carla.Vector3D(), carla.Location(1.0, 2.0, 3.0))
+vector3d(carla.Location(1.0, 2.0, 3.0), carla.Velocity(1.0, 2.0, 3.0), 0.5)
+vector2d(carla.Vector2D(1.0, 2.0), carla.Vector2D(3.0, 4.0))

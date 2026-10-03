@@ -82,6 +82,12 @@ assert walker.get_location().distance(state.location) < 1e-3
 control = walker.get_control()
 assert abs(control.speed - 1.5) < 1e-6 and not control.jump
 assert abs(control.direction.x) < 1e-6 and abs(control.direction.y - 1.0) < 1e-6
+# The command holds a copy of its transform (#77 value semantics).
+copied = carla.command.ApplyWalkerState(walker, state, 0.5)
+state.location.x = 99.0
+assert copied._transform.location.x == 12.0
+state.location.x = 12.0
+
 for cmd in [carla.command.ApplyWalkerState(walker, state, 0.5),
             carla.command.ApplyWalkerState(actor=walker, transform=state, speed=0.5),
             carla.command.ApplyWalkerState(actor_id=walker.id, transform=state, speed=0.5)]:

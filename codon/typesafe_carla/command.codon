@@ -17,7 +17,7 @@ from ._ffi import (CCommand, CCommandResponse, CString, CVehiclePhysicsControl, 
                    TSC_INVALID_ARGUMENT)
 from .errors import (CarlaError, _check_light_state, _check_port, _check_traffic_light_state,
                      _actor_id)
-from .geometry import Location, Transform, Vector3D, _vector_arg, _location_arg
+from .geometry import Location, Transform, Vector3D, _vector_arg, _location_ref
 from .control import VehicleControl, WalkerControl, VehiclePhysicsControl
 from .vehicle import VehicleAckermannControl
 from .blueprint import ActorBlueprint
@@ -193,7 +193,7 @@ def SpawnActor(blueprint: ActorBlueprint, transform: Transform, parent_id = _MIS
     neither for no parent."""
     c = Command(_SPAWN_ACTOR)
     c._blueprint = blueprint
-    c._transform = transform
+    c._transform = transform._copy()  # a copy, as the Python API stores one
     if isinstance(parent_id, _MissingArgument) and isinstance(parent, _MissingArgument):
         pass  # no parent
     else:
@@ -212,7 +212,7 @@ def ApplyVehicleControl(actor_id = _MISSING, control: VehicleControl = _MISSING,
 def ApplyTransform(actor_id = _MISSING, transform: Transform = _MISSING,
                    actor = _MISSING) -> Command:
     c = Command(_APPLY_TRANSFORM, _actor_arg(actor_id, actor))
-    c._transform = transform
+    c._transform = transform._copy()
     return c
 
 def ApplyTargetVelocity(actor_id = _MISSING, velocity = _MISSING, actor = _MISSING) -> Command:
@@ -239,7 +239,7 @@ def SetSimulatePhysics(actor_id = _MISSING, enabled: bool = _MISSING, actor = _M
 def ApplyWalkerControl(actor_id = _MISSING, control: WalkerControl = _MISSING,
                        actor = _MISSING) -> Command:
     c = Command(_APPLY_WALKER_CONTROL, _actor_arg(actor_id, actor))
-    c._vector = control.direction
+    c._vector = Vector3D(control.direction)
     c._scalar = control.speed
     c._flag = int(control.jump)
     return c
@@ -288,7 +288,7 @@ def SetVehicleLightState(actor_id = _MISSING, light_state: int = _MISSING,
 def ApplyLocation(actor_id = _MISSING, location = _MISSING, actor = _MISSING) -> Command:
     """location: Location (a Vector3D is accepted as in the Python API)."""
     c = Command(_APPLY_LOCATION, _actor_arg(actor_id, actor))
-    c._transform = Transform(_location_arg(
+    c._transform = Transform(_location_ref(
         location, "[tsc-compat] a Vector3D passed as a Location to command.ApplyLocation"))
     return c
 
@@ -327,7 +327,7 @@ def ApplyWalkerState(actor_id = _MISSING, transform: Transform = _MISSING,
                      speed: float = _MISSING, actor = _MISSING) -> Command:
     """Moves a walker to `transform` and makes it walk forward at `speed` (m/s)."""
     c = Command(_APPLY_WALKER_STATE, _actor_arg(actor_id, actor))
-    c._transform = transform
+    c._transform = transform._copy()  # a copy, as ApplyTransform
     c._scalar = speed
     return c
 

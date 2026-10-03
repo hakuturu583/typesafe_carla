@@ -1,0 +1,99 @@
+# Issue #77: value semantics of vectors and transforms, as the official module
+# (C++ values behind Boost.Python): setters convert and copy, getters that
+# return values in Python return copies, and values built from LibCarla data
+# are independent objects. Expected values checked with the official module
+# where it can build the object offline.
+import typesafe_carla as carla
+
+V, L, R, T = carla.Vector3D, carla.Location, carla.Rotation, carla.Transform
+
+def test_setters():
+    t = T(L(2.0, 4.0, 6.0))
+    t.location /= 2                       # converted back to a Location, as in Python
+    assert t.location == L(1.0, 2.0, 3.0) and isinstance(t.location, carla.Location)
+    t.location = V(1.0, 1.0, 1.0)
+    assert t.location == L(1.0, 1.0, 1.0) and isinstance(t.location, carla.Location)
+    rot = R(1.0, 2.0, 3.0)
+    t.rotation = rot                      # the setter copies
+    rot.yaw = 50.0
+    assert t.rotation == R(1.0, 2.0, 3.0)
+    t.rotation.yaw = 9.0                  # the getter does not
+    assert t.rotation == R(1.0, 9.0, 3.0)
+    w = carla.WalkerControl()
+    loc = L(0.0, 1.0, 0.0)
+    w.direction = loc
+    loc.y = 5.0
+    assert w.direction == V(0.0, 1.0, 0.0) and not isinstance(w.direction, carla.Location)
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+lib = world.get_blueprint_library()
+vehicle = world.spawn_actor(lib.find("vehicle.audi.tt"), T(L(1.0, 2.0, 3.0))).as_vehicle()
+
+def test_from_c_independent():
+    a = vehicle.get_transform()
+    b = vehicle.get_transform()
+    assert a is not b and a.location is not b.location
+    a.location += V(10.0, 0.0, 0.0)
+    assert vehicle.get_transform() == b
+    bb = vehicle.bounding_box
+    bb.extent *= 3
+    assert vehicle.bounding_box != bb
+    pc = vehicle.get_physics_control()
+    pc.center_of_mass += V(1.0, 0.0, 0.0)
+    assert vehicle.get_physics_control().center_of_mass != pc.center_of_mass
+
+def test_copy_getters():
+    light = world.get_lightmanager().get_all_lights()[0]
+    l = light.location
+    l += V(1.0, 0.0, 0.0)
+    assert light.location != l
+    mark = world.get_map().get_all_landmarks()[0]
+    mt = mark.transform
+    mt.location += V(1.0, 0.0, 0.0)
+    assert mark.transform != mt
+
+def next_data(id: str) -> carla.SensorData:
+    sensor = world.spawn_actor(lib.find(id), T(), attach_to=vehicle).as_sensor()
+    sensor.listen()
+    world.tick()
+    d = sensor.wait_for_data(1.0)
+    sensor.stop()
+    sensor.destroy()
+    return d
+
+def test_measurements():
+    imu = next_data("sensor.other.imu").as_imu()
+    acc = imu.accelerometer
+    acc *= 2
+    gyro = imu.gyroscope
+    gyro += V(1.0, 1.0, 1.0)
+    assert imu.accelerometer != acc and imu.gyroscope != gyro
+    lidar = next_data("sensor.lidar.ray_cast").as_lidar()
+    if len(lidar) > 0:
+        p = lidar[0].point
+        p += V(1.0, 0.0, 0.0)
+        assert lidar[0].point != p
+
+def test_collision():
+    collision = world.spawn_actor(lib.find("sensor.other.collision"), T(),
+                                  attach_to=vehicle).as_sensor()
+    collision.listen(4)
+    other = world.spawn_actor(lib.find("vehicle.audi.tt"), T(L(10.0, 0.0, 0.5)))
+    other.set_location(L(1.0, 2.0, 3.0))
+    world.tick()
+    event = collision.wait_for_data(1.0).as_collision()
+    n = event.normal_impulse
+    n += V(1.0, 1.0, 1.0)
+    assert event.normal_impulse != n
+    collision.stop()
+    collision.destroy()
+    other.destroy()
+
+test_setters()
+test_from_c_independent()
+test_copy_getters()
+test_measurements()
+test_collision()
+vehicle.destroy()
+print("OK")
