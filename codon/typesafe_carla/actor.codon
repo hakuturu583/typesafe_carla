@@ -444,9 +444,9 @@ class ActorList:
         for i in range(len(self)):
             yield self._get(i)
 
-    def find(self, actor_id: int) -> Optional[Actor]:
+    def find(self, id: int) -> Optional[Actor]:
         for actor in self:
-            if actor.id == actor_id:
+            if actor.id == id:
                 return actor
         return None
 

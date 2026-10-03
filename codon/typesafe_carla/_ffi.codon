@@ -13,8 +13,8 @@ from internal.gc import register_finalizer
 LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
-TSC_ABI_VERSION_MAJOR = 3
-TSC_ABI_VERSION_MINOR = 9
+TSC_ABI_VERSION_MAJOR = 4
+TSC_ABI_VERSION_MINOR = 2
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -613,14 +613,14 @@ from C import LIB.tsc_handle_kind(cobj) -> i32
 from C import LIB.tsc_handle_refcount(cobj) -> u32
 from C import LIB.tsc_live_handle_count() -> u64
 
-from C import LIB.tsc_client_create(cobj, int, u16, Ptr[cobj]) -> i32
+from C import LIB.tsc_client_create(cobj, int, u16, int, Ptr[cobj]) -> i32
 # BEGIN GENERATED client from bindings/client.yaml, do not edit
 from C import LIB.tsc_client_set_timeout(cobj, float) -> i32
 from C import LIB.tsc_client_get_timeout(cobj, Ptr[float]) -> i32
 from C import LIB.tsc_client_get_client_version(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_client_get_server_version(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_client_get_world(cobj, Ptr[cobj]) -> i32
-from C import LIB.tsc_client_load_world(cobj, cobj, int, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_client_load_world(cobj, cobj, int, i32, u16, Ptr[cobj]) -> i32
 from C import LIB.tsc_client_reload_world(cobj, i32, Ptr[cobj]) -> i32
 # END GENERATED client
 
@@ -629,8 +629,8 @@ from C import LIB.tsc_world_get_id(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_world_get_actors(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_actors_by_id(cobj, Ptr[u32], int, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_blueprint_library(cobj, Ptr[cobj]) -> i32
-from C import LIB.tsc_world_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
-from C import LIB.tsc_world_try_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_try_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, i32, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_tick(cobj, float, Ptr[u64]) -> i32
 # END GENERATED world_core
 from C import LIB.tsc_world_get_actor(cobj, u32, Ptr[cobj]) -> i32
@@ -970,7 +970,7 @@ from C import LIB.tsc_bone_list_get(cobj, int, Ptr[CBoneTransformOut]) -> i32
 
 # Issue #23: Client, Traffic Manager, blueprint, debug and value-type gaps
 from C import LIB.tsc_string_list_free(Ptr[CStringList]) -> None
-from C import LIB.tsc_client_load_world_if_different(cobj, cobj, int, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_client_load_world_if_different(cobj, cobj, int, i32, u16, Ptr[cobj]) -> i32
 # BEGIN GENERATED client_replayer from bindings/client.yaml, do not edit
 from C import LIB.tsc_client_set_replayer_ignore_hero(cobj, i32) -> i32
 from C import LIB.tsc_client_set_replayer_ignore_spectator(cobj, i32) -> i32

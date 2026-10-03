@@ -353,9 +353,10 @@ tsc_status_t tsc_client_get_world(tsc_client_t *client, tsc_world_t **out_world)
 }
 
 tsc_status_t tsc_client_load_world(tsc_client_t *client, const char *map_name, size_t map_name_len,
-                                   int32_t reset_settings, tsc_world_t **out_world) {
+                                   int32_t reset_settings, uint16_t map_layers,
+                                   tsc_world_t **out_world) {
   return new_handle(__func__, out_world, [&] {
-    return new tsc_world(client_of(client).LoadWorld(to_string(map_name, map_name_len, "map_name"), reset_settings != 0));
+    return new tsc_world(client_of(client).LoadWorld(to_string(map_name, map_name_len, "map_name"), reset_settings != 0, static_cast<carla::rpc::MapLayer>(map_layers)));
   }, "out_world");
 }
 
@@ -1309,17 +1310,17 @@ tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
 
 tsc_status_t tsc_world_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
                                    const tsc_transform_t *transform, tsc_actor_t *parent,
-                                   tsc_actor_t **out_actor) {
+                                   int32_t attachment_type, tsc_actor_t **out_actor) {
   return new_handle(__func__, out_actor, [&] {
-    return make_actor_handle(spawned(world_of(world).SpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent"))));
+    return make_actor_handle(spawned(world_of(world).SpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent"), to_enum<carla::rpc::AttachmentType>(attachment_type, TSC_ATTACHMENT_RIGID, TSC_ATTACHMENT_SPRING_ARM_GHOST, "attachment type"))));
   }, "out_actor");
 }
 
 tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world, const tsc_actor_blueprint_t *blueprint,
                                        const tsc_transform_t *transform, tsc_actor_t *parent,
-                                       tsc_actor_t **out_actor) {
+                                       int32_t attachment_type, tsc_actor_t **out_actor) {
   return new_handle(__func__, out_actor, [&] {
-    return make_actor_handle(world_of(world).TrySpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent")));
+    return make_actor_handle(world_of(world).TrySpawnActor(blueprint_of(blueprint), to_carla(*require_ptr(transform, "transform")), actor_or_null(parent, "parent"), to_enum<carla::rpc::AttachmentType>(attachment_type, TSC_ATTACHMENT_RIGID, TSC_ATTACHMENT_SPRING_ARM_GHOST, "attachment type")));
   }, "out_actor");
 }
 

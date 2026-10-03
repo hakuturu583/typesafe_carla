@@ -16,14 +16,16 @@ blocks:
       out: {type: blueprint_library_handle, name: out_library}
     spawn_actor:
       call: SpawnActor
-      args: {blueprint: blueprint, transform: transform, parent: nullable_actor}
+      args: {blueprint: blueprint, transform: transform, parent: nullable_actor,
+             attachment_type: attachment_type}
       out: {type: spawned_actor, name: out_actor}
-      doc: "parent may be NULL."
+      doc: "attachment_type: tsc_attachment_type_t, always checked; used only with a parent (may be NULL)."
     try_spawn_actor:
       call: TrySpawnActor
-      args: {blueprint: blueprint, transform: transform, parent: nullable_actor}
+      args: {blueprint: blueprint, transform: transform, parent: nullable_actor,
+             attachment_type: attachment_type}
       out: {type: actor_handle, name: out_actor}
-      doc: "TSC_OK with *out_actor == NULL when the spawn location is occupied."
+      doc: "TSC_OK with *out_actor == NULL if the spawn fails; bad attachment_type: TSC_INVALID_ARGUMENT."
     tick:
       call: Tick
       args: {timeout_seconds: timeout}

@@ -16,6 +16,7 @@ from ._ffi import (CStringList, take_string_list, tsc_client_get_available_maps,
                    tsc_client_set_replayer_ignore_hero, tsc_client_set_replayer_ignore_spectator)
 from .errors import _check, _check_port, CarlaError, _is_actor_id
 from .world import World
+from .world_queries import MapLayer, _map_layer
 from ._callbacks import dispatch_callbacks, _unregister_callback
 from .command import Command, CommandResponse, _flatten, _responses, _DESTROY_ACTOR
 
@@ -58,11 +59,17 @@ def _category(c: str) -> byte:
 class Client:
     _h: Handle
 
-    def __init__(self, host: str, port: int = 2000):
-        """Creates a client. Like LibCarla, no connection is made until the first call."""
+    def __init__(self, host: str = "127.0.0.1", port: int = 2000, worker_threads: int = 0):
+        """Creates a client. Like LibCarla, no connection is made until the first call.
+        `worker_threads` is the number of asynchronous threads LibCarla spawns at
+        construction (0: one per hardware thread), as in LibCarla and Python;
+        there is no upper limit."""
         _check_port("port", port)
+        if worker_threads < 0:
+            raise CarlaError(f"worker_threads must be >= 0 (got {worker_threads})",
+                             TSC_INVALID_ARGUMENT)
         out = Ptr[cobj](1)
-        _check(tsc_client_create(host.ptr, host.len, u16(port), out))
+        _check(tsc_client_create(host.ptr, host.len, u16(port), worker_threads, out))
         self._h = Handle(out[0])
 
     def set_timeout(self, seconds: float):
@@ -88,10 +95,12 @@ class Client:
         _check(tsc_client_get_world(self._h.ptr, out))
         return World(Handle(out[0]))
 
-    def load_world(self, map_name: str, reset_settings: bool = True) -> World:
+    def load_world(self, map_name: str, reset_settings: bool = True,
+                   map_layers: int = MapLayer.All) -> World:
+        """`map_layers`: the MapLayer flags to load (for the "_Opt" maps)."""
         out = Ptr[cobj](1)
         _check(tsc_client_load_world(self._h.ptr, map_name.ptr, map_name.len,
-                                     i32(int(reset_settings)), out))
+                                     i32(int(reset_settings)), _map_layer(map_layers), out))
         return World(Handle(out[0]))
 
     def reload_world(self, reset_settings: bool = True) -> World:
@@ -99,14 +108,15 @@ class Client:
         _check(tsc_client_reload_world(self._h.ptr, i32(int(reset_settings)), out))
         return World(Handle(out[0]))
 
-    def load_world_if_different(self, map_name: str,
-                                reset_settings: bool = True) -> Optional[World]:
+    def load_world_if_different(self, map_name: str, reset_settings: bool = True,
+                                map_layers: int = MapLayer.All) -> Optional[World]:
         """Loads `map_name` unless it is the current map (with or without the
         "Carla/Maps/" prefix). Returns the new World, or None when nothing was
         loaded (the Python API always returns None)."""
         out = Ptr[cobj](1)
         _check(tsc_client_load_world_if_different(self._h.ptr, map_name.ptr, map_name.len,
-                                                  i32(int(reset_settings)), out))
+                                                  i32(int(reset_settings)),
+                                                  _map_layer(map_layers), out))
         if out[0] == cobj():
             return None
         return World(Handle(out[0]))
