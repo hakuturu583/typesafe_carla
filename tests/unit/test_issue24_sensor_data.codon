@@ -167,12 +167,14 @@ def test_image_convert_and_save():
         assert rgba[4 * i:4 * i + 4] == [c.r, c.g, c.b, c.a]
 
     # convert() changes the pixels in place, like the Python API.
-    pixels = image.raw_data()
+    pixels = image.raw_data_ptr()
+    view = image.raw_data
     image.convert(carla.ColorConverter.Depth)
     for i, c in enumerate(original):
         v = gray_depth(c)
         assert image[i] == carla.Color(v, v, v, 255)
     assert int(pixels[0]) == gray_depth(original[0])  # zero-copy views see it
+    assert view[0] == gray_depth(original[0])
     image.convert(carla.ColorConverter.Raw)  # no change
     assert image[1] == carla.Color(gray_depth(original[1]), gray_depth(original[1]),
                                    gray_depth(original[1]), 255)
@@ -276,7 +278,7 @@ def test_point_clouds():
     assert abs(first.point.x - 10.0 * math.cos(0.25)) < 1e-4
     unlink(path.c_str())
     points_bytes = Ptr[u8](sweep.raw_points().as_byte())
-    assert sweep.raw_size() == 3200 * 16 and sweep.raw_data() == points_bytes
+    assert sweep.raw_size() == 3200 * 16 and sweep.raw_data_ptr() == points_bytes
 
     semantic = next_data(spawn("sensor.lidar.ray_cast_semantic")).as_semantic_lidar()
     assert semantic.channels == 32 and len(semantic) == 320 and semantic.get_point_count(31) == 10

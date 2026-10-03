@@ -654,7 +654,8 @@ Possible API:
 
 ```python
 image = camera.wait_for_data()
-data: Ptr[u8] = image.raw_data()
+view: RawData = image.raw_data      # read-only, keeps the image alive (issue #78)
+data: Ptr[u8] = image.raw_data_ptr()
 size: int = image.raw_size()
 ```
 
@@ -669,10 +670,12 @@ Implemented views (issue #24 added the last four): `Image` (BGRA bytes),
 `DVSEventArray` (packed 13-byte events, decoded on access) and
 `OpticalFlowImage` ({x, y} floats). In Codon they share one generic base,
 `_ArrayMeasurement[T]`: `len`, indexing and iteration convert one element at a
-time into the Python API's element class; `raw_data()` / `raw_size()` expose
-the bytes. `Image.convert` changes the buffer in place, as in the Python API,
-and so does assigning an element (`image[i] = color`, issue #33): each
-subclass's `_element` converts the Python-API element back into `T`.
+time into the Python API's element class; the `raw_data` property (a
+read-only `RawData` view, as the Python API's memoryview) and
+`raw_data_ptr()` / `raw_size()` expose the bytes. `Image.convert` changes the
+buffer in place, as in the Python API, and so does assigning an element
+(`image[i] = color`, issue #33): each subclass's `_element` converts the
+Python-API element back into `T`.
 
 The V2X events of issue #42 (`CAMEvent`, `CustomV2XEvent`, LibCarla ue5-dev
 only) are not views: LibCarla's `CAMData` is a large struct with

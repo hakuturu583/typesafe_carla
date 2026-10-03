@@ -1,0 +1,10 @@
+# A command takes its actor as actor_id or actor (the official overloads), not both.
+# expect-error: pass either actor_id or actor to a command, not both
+import typesafe_carla as carla
+
+def autopilot(client: carla.Client, vehicle: carla.Vehicle):
+    client.apply_batch([carla.command.SetAutopilot(vehicle.id, True, actor=vehicle)])
+
+# Compile-only: Codon type-checks a function only when it is called.
+_client = carla.Client("localhost", 2000)
+autopilot(_client, _client.get_world().get_actors()[0].as_vehicle())

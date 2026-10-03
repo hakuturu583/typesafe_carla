@@ -30,10 +30,10 @@ try:
         world.tick()
         image = camera.wait_for_data(5.0).as_image()
         sweep = lidar.wait_for_data(5.0).as_lidar()
-        # Mean brightness straight from the zero-copy BGRA buffer.
-        raw = image.raw_data()
+        # Mean brightness straight from the BGRA bytes (a zero-copy view).
+        raw = image.raw_data
         total = 0
-        for i in range(0, image.raw_size(), 4):
+        for i in range(0, len(raw), 4):
             total += int(raw[i]) + int(raw[i + 1]) + int(raw[i + 2])
         nearest = 1e9
         for p in sweep:
