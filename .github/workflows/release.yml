@@ -32,9 +32,11 @@
 # follow-up jobs of the run that cut it. A hand-pushed tag would trigger a tag
 # workflow, but keeping both paths here means one place to trust.
 #
-# Publishing uses PyPI Trusted Publishing (OIDC): configure the "pypi" and
-# "testpypi" environments and register this workflow as a trusted publisher for
-# both projects on (Test)PyPI. No API tokens are stored. See docs/releasing.md.
+# Publishing uses PyPI Trusted Publishing (OIDC). typesafe-carla publishes from
+# the "pypi" / "testpypi" environments and typesafe-carla-toolchain from
+# "pypi-toolchain" / "testpypi-toolchain" (one environment per project, see
+# `publish-toolchain`); register each pair as the project's trusted publisher.
+# No API tokens are stored. See docs/releasing.md.
 #
 # A version can never be replaced on PyPI, so the mock test suite runs again on
 # the tagged commit rather than trusting that CI was green.
@@ -204,6 +206,7 @@ jobs:
       proceed: ${{ steps.r.outputs.proceed }}
       publish: ${{ steps.r.outputs.publish }}
       index: ${{ steps.r.outputs.index }}
+      upload_url: ${{ steps.r.outputs.upload_url }}
       ref: ${{ steps.r.outputs.ref }}
       tag: ${{ steps.r.outputs.tag }}
       version: ${{ steps.r.outputs.version }}
@@ -271,8 +274,10 @@ jobs:
           fi
           # What CMake fetches (CARLA_GIT_REF): the resolved SHA.
           carla_build_ref="${carla_commit:-$carla_ref}"
+          upload_url=https://upload.pypi.org/legacy/
+          if [ "$index" = testpypi ]; then upload_url=https://test.pypi.org/legacy/; fi
           {
-            echo "proceed=$proceed"; echo "publish=$publish"; echo "index=$index"
+            echo "proceed=$proceed"; echo "publish=$publish"; echo "index=$index"; echo "upload_url=$upload_url"
             echo "ref=$ref"; echo "tag=$tag"; echo "version=$version"; echo "carla_ref=$carla_ref"
             echo "carla_build_ref=$carla_build_ref"; echo "carla_commit=$carla_commit"
           } | tee -a "$GITHUB_OUTPUT"
@@ -405,23 +410,30 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: dist-toolchain, path: dist/* }
 
-  publish:
-    name: publish to ${{ needs.resolve.outputs.index }}
+  # The two packages are published from separate jobs with separate
+  # environments (<index>-toolchain and <index>) on purpose. PyPI's trusted
+  # publishers match on (repository, workflow, environment): with identical
+  # claims, which project's pending publisher a token exchange reifies is
+  # arbitrary and the token is scoped to that project only, so a run could
+  # upload one package and fail the other. Separate environments make the
+  # lookup unambiguous.
+  publish-toolchain:
+    name: publish typesafe-carla-toolchain to ${{ needs.resolve.outputs.index }}
     needs: [resolve, sdist, wheel, toolchain]
     # Decided by `resolve`, from the event: a release goes to PyPI; a manual
     # run (even one started from a tag) only with publish=true, to TestPyPI.
+    # Waits for every build, so nothing is uploaded unless all of it built.
     if: >-
       always() && needs.resolve.outputs.publish == 'true' &&
       needs.sdist.result == 'success' && needs.wheel.result == 'success' &&
       needs.toolchain.result == 'success'
     runs-on: ubuntu-24.04
-    environment: ${{ needs.resolve.outputs.index }}
+    environment: ${{ needs.resolve.outputs.index }}-toolchain
     permissions:
       id-token: write  # Trusted Publishing; no token in secrets.
     steps:
-      # Named explicitly rather than "everything in the run", so nothing else a
-      # job uploads ends up in dist/. The toolchain goes to its own directory:
-      # only its upload may skip existing files.
+      # Every artifact is checked here, so nothing is uploaded unless all of it
+      # passes; only the toolchain is uploaded from this job.
       - uses: actions/download-artifact@v4
         with: { name: dist-sdist, path: dist }
       - uses: actions/download-artifact@v4
@@ -429,23 +441,39 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: dist-toolchain, path: dist-toolchain }
       - run: ls -l dist dist-toolchain
-      # PyPI rejects bad metadata only after the build and the OIDC exchange;
-      # failing here costs nothing.
-      - name: Check the metadata before uploading
-        run: pipx run twine check --strict dist/* dist-toolchain/*
-      # First, so typesafe-carla's dependency is installable when it appears.
-      - name: Publish typesafe-carla-toolchain
-        uses: pypa/gh-action-pypi-publish@release/v1
+      # PyPI rejects bad metadata only after the OIDC exchange; failing here
+      # costs nothing.
+      - run: pipx run twine check --strict dist/* dist-toolchain/*
+      - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.resolve.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          repository-url: ${{ needs.resolve.outputs.upload_url }}
           packages-dir: dist-toolchain/
           # The toolchain version only changes with Codon; most releases skip it.
           skip-existing: true
-      - name: Publish typesafe-carla
-        uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish:
+    name: publish typesafe-carla to ${{ needs.resolve.outputs.index }}
+    # After the toolchain, so typesafe-carla's dependency is installable when
+    # it appears.
+    needs: [resolve, publish-toolchain]
+    if: >-
+      always() && needs.resolve.outputs.publish == 'true' &&
+      needs.publish-toolchain.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: ${{ needs.resolve.outputs.index }}
+    permissions:
+      id-token: write  # Trusted Publishing; no token in secrets.
+    steps:
+      # Named explicitly rather than "everything in the run", so nothing else a
+      # job uploads ends up in dist/.
+      - uses: actions/download-artifact@v4
+        with: { name: dist-sdist, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: dist-wheel, path: dist }
+      - run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ needs.resolve.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
-          packages-dir: dist/
+          repository-url: ${{ needs.resolve.outputs.upload_url }}
           # An existing file is an error, so a version is never "released"
           # without uploading anything; only a re-run may finish a partial upload.
           skip-existing: ${{ github.run_attempt > 1 }}

@@ -76,6 +76,9 @@ def traffic_light_methods(actor: carla.Actor):
     boxes: List[carla.BoundingBox] = actor.get_light_boxes()
     trigger: carla.BoundingBox = actor.trigger_volume
     print(odr, len(affected), len(stops), len(group), len(boxes), trigger)
+    # Issue #33.
+    current: int = actor.state
+    print(current)
 
 def traffic_sign_methods(actor: carla.Actor):
     volume: carla.BoundingBox = actor.trigger_volume
@@ -90,6 +93,14 @@ def sensor_methods(actor: carla.Actor):
     waited: carla.SensorData = actor.wait_for_data(2.0)
     actor.stop()
     print(listening, dropped, data, waited)
+    # Issue #33.
+    actor.enable_for_ros()
+    actor.disable_for_ros()
+    ros: bool = actor.is_enabled_for_ros()
+    actor.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth, lambda data: print(data.frame))
+    gbuffer: bool = actor.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
+    actor.stop_gbuffer(carla.GBufferTextureID.SceneDepth)
+    print(ros, gbuffer)
 
 world = carla.Client("localhost", 2000).get_world()
 vehicle_methods(world.get_actor(1))

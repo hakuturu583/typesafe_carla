@@ -1572,6 +1572,125 @@ static void test_mock_issue19(void) {
   CHECK(tsc_live_handle_count() == before);
 }
 
+/* Issue #33: the hand-written blueprint attribute and G-buffer functions. */
+static void test_issue33_null(void) {
+  tsc_string_list_t list = {NULL, 0};
+  CHECK(tsc_actor_blueprint_get_attribute_ids(NULL, &list) == TSC_INVALID_ARGUMENT);
+  CHECK(list.items == NULL && list.size == 0);
+  CHECK(tsc_actor_blueprint_get_recommended_values(NULL, "color", 5, &list) ==
+        TSC_INVALID_ARGUMENT);
+  size_t pending = 7;
+  tsc_sensor_data_t *data = (tsc_sensor_data_t *)0x1;
+  CHECK(tsc_sensor_listen_to_gbuffer(NULL, 0, 0) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_sensor_gbuffer_pending_count(NULL, 0, &pending) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_sensor_gbuffer_poll(NULL, 0, &data) == TSC_INVALID_ARGUMENT);
+  CHECK(data == NULL);
+}
+
+static void test_mock_issue33(void) {
+  uint64_t before = tsc_live_handle_count();
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  tsc_actor_list_t *actors = NULL;
+  tsc_actor_t *vehicle = NULL;
+  tsc_blueprint_library_t *library = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2133, 0, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+  CHECK_OK(tsc_world_get_actors(world, &actors));
+  CHECK_OK(tsc_actor_list_get(actors, 0, &vehicle));
+  CHECK_OK(tsc_world_get_blueprint_library(world, &library));
+
+  /* Attribute ids and recommended values. */
+  tsc_actor_blueprint_t *model3 = NULL;
+  CHECK_OK(tsc_blueprint_library_find(library, "vehicle.tesla.model3", 20, &model3));
+  tsc_string_list_t ids = {NULL, 0};
+  CHECK(tsc_actor_blueprint_get_attribute_ids(model3, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_actor_blueprint_get_attribute_ids(model3, &ids));
+  size_t count = 0;
+  CHECK_OK(tsc_actor_blueprint_size(model3, &count));
+  CHECK(ids.size == count && count == 5);
+  tsc_string_list_free(&ids);
+  tsc_string_list_t values = {NULL, 0};
+  CHECK(tsc_actor_blueprint_get_recommended_values(model3, "color", 5, NULL) ==
+        TSC_INVALID_ARGUMENT);
+  CHECK(tsc_actor_blueprint_get_recommended_values(model3, "nope", 4, &values) == TSC_NOT_FOUND);
+  CHECK(values.items == NULL && values.size == 0);
+  CHECK(tsc_actor_blueprint_get_recommended_values(model3, NULL, 1, &values) ==
+        TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_actor_blueprint_get_recommended_values(model3, "number_of_wheels", 16, &values));
+  CHECK(values.size == 1 && strcmp(values.items[0].data, "4") == 0);
+  tsc_string_list_free(&values);
+  tsc_actor_blueprint_t *wrong = (tsc_actor_blueprint_t *)world; /* another kind of handle */
+  CHECK(tsc_actor_blueprint_get_attribute_ids(wrong, &ids) == TSC_INVALID_ARGUMENT);
+
+  /* G-buffer streams. */
+  tsc_actor_blueprint_t *bp = NULL;
+  CHECK_OK(tsc_blueprint_library_find(library, "sensor.camera.rgb", 17, &bp));
+  CHECK_OK(tsc_actor_blueprint_set_attribute(bp, "image_size_x", 12, "4", 1));
+  CHECK_OK(tsc_actor_blueprint_set_attribute(bp, "image_size_y", 12, "2", 1));
+  tsc_transform_t at = {{0, 0, 2}, {0, 0, 0}};
+  tsc_actor_t *actor = NULL;
+  tsc_sensor_t *camera = NULL;
+  CHECK_OK(tsc_world_spawn_actor(world, bp, &at, vehicle, TSC_ATTACHMENT_RIGID, &actor));
+  CHECK_OK(tsc_actor_as_sensor(actor, &camera));
+  size_t pending = 7;
+  tsc_sensor_data_t *data = (tsc_sensor_data_t *)0x1;
+  CHECK_OK(tsc_sensor_gbuffer_pending_count(camera, 1, &pending)); /* never listened: empty */
+  CHECK(pending == 0);
+  CHECK_OK(tsc_sensor_gbuffer_poll(camera, 1, &data));
+  CHECK(data == NULL);
+  CHECK(tsc_sensor_listen_to_gbuffer(camera, TSC_GBUFFER_TEXTURE_COUNT, 0) ==
+        TSC_INVALID_ARGUMENT);
+  CHECK(tsc_sensor_gbuffer_pending_count(camera, TSC_GBUFFER_TEXTURE_COUNT, &pending) ==
+        TSC_INVALID_ARGUMENT);
+  CHECK(tsc_sensor_gbuffer_pending_count(camera, 1, NULL) == TSC_INVALID_ARGUMENT);
+  data = (tsc_sensor_data_t *)0x1;
+  CHECK(tsc_sensor_gbuffer_poll(camera, 99, &data) == TSC_INVALID_ARGUMENT && data == NULL);
+  CHECK(tsc_sensor_gbuffer_poll(camera, 1, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_sensor_listen_to_gbuffer((tsc_sensor_t *)vehicle, 1, 0) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_sensor_listen_to_gbuffer(camera, 1, 0));
+  uint64_t frame = 0;
+  CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+  CHECK_OK(tsc_sensor_gbuffer_pending_count(camera, 1, &pending));
+  CHECK(pending == 1);
+  CHECK_OK(tsc_sensor_gbuffer_poll(camera, 1, &data));
+  CHECK(data != NULL);
+  tsc_image_t image;
+  CHECK_OK(tsc_sensor_data_as_image(data, &image));
+  CHECK(image.width == 4 && image.height == 2 && image.data[0] == 1);
+  tsc_handle_release(H(data));
+  CHECK_OK(tsc_sensor_stop_gbuffer(camera, 1));
+
+  /* Only RGB cameras serve G-buffers; lane invasion is not a server-side sensor. */
+  const char *kinds[] = {"sensor.camera.depth", "sensor.other.lane_invasion"};
+  const tsc_status_t expected[] = {TSC_INVALID_ARGUMENT, TSC_TYPE_ERROR};
+  for (int i = 0; i < 2; ++i) {
+    tsc_actor_blueprint_t *other_bp = NULL;
+    tsc_actor_t *other = NULL;
+    tsc_sensor_t *other_sensor = NULL;
+    CHECK_OK(tsc_blueprint_library_find(library, kinds[i], strlen(kinds[i]), &other_bp));
+    CHECK_OK(tsc_world_spawn_actor(world, other_bp, &at, vehicle, TSC_ATTACHMENT_RIGID, &other));
+    CHECK_OK(tsc_actor_as_sensor(other, &other_sensor));
+    CHECK(tsc_sensor_listen_to_gbuffer(other_sensor, 0, 0) == expected[i]);
+    CHECK_OK(tsc_actor_destroy(other, NULL));
+    tsc_handle_release(H(other_sensor));
+    tsc_handle_release(H(other));
+    tsc_handle_release(H(other_bp));
+  }
+
+  CHECK_OK(tsc_actor_destroy(actor, NULL));
+  tsc_handle_release(H(camera));
+  tsc_handle_release(H(actor));
+  tsc_handle_release(H(bp));
+  tsc_handle_release(H(model3));
+  tsc_handle_release(H(library));
+  tsc_handle_release(H(vehicle));
+  tsc_handle_release(H(actors));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK(tsc_live_handle_count() == before);
+}
+
 int main(void) {
   test_versions();
   test_layout();
@@ -1580,6 +1699,7 @@ int main(void) {
   test_refcount();
   test_thread_local_error();
   test_issue23_offline();
+  test_issue33_null();
   if (strcmp(tsc_backend_name(), "mock") == 0) {
     test_mock_issue23();
     test_mock_issue35();
@@ -1592,6 +1712,7 @@ int main(void) {
     test_mock_issue19();
     test_mock_issue21();
     test_mock_timeout();
+    test_mock_issue33();
   } else {
     printf("backend '%s': skipping mock-server checks\n", tsc_backend_name());
   }

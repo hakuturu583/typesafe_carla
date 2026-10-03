@@ -3,6 +3,7 @@
 # objects, ray casts and projections, map layers, pedestrians, the IMU
 # gravity, textures, and on_tick callbacks.
 
+from ._enum import _IntEnum
 from ._ffi import (Handle, CString, CVehicleLightStateList,
                    CBoundingBoxList, CEnvironmentObjectList, CStringList, CLabelledPoint,
                    CLabelledPointList, TSC_INVALID_ARGUMENT, copy_string, take_list, ref, array,
@@ -36,19 +37,21 @@ from .labels import CityObjectLabel
 from .texture import TextureColor, TextureFloatColor
 from ._callbacks import _register_tick_callback, _unregister_tick_callback
 
-class MapLayer:
+class _MapLayer(_IntEnum):
     """Map layer bit flags (rpc::MapLayer); combine with |."""
-    NONE: ClassVar[int] = 0
-    Buildings: ClassVar[int] = 0x1
-    Decals: ClassVar[int] = 0x1 << 1
-    Foliage: ClassVar[int] = 0x1 << 2
-    Ground: ClassVar[int] = 0x1 << 3
-    ParkedVehicles: ClassVar[int] = 0x1 << 4
-    Particles: ClassVar[int] = 0x1 << 5
-    Props: ClassVar[int] = 0x1 << 6
-    StreetLights: ClassVar[int] = 0x1 << 7
-    Walls: ClassVar[int] = 0x1 << 8
-    All: ClassVar[int] = 0xFFFF
+    NONE: int = 0
+    Buildings: int = 0x1
+    Decals: int = 0x1 << 1
+    Foliage: int = 0x1 << 2
+    Ground: int = 0x1 << 3
+    ParkedVehicles: int = 0x1 << 4
+    Particles: int = 0x1 << 5
+    Props: int = 0x1 << 6
+    StreetLights: int = 0x1 << 7
+    Walls: int = 0x1 << 8
+    All: int = 0xFFFF
+
+MapLayer = _MapLayer()
 
 class EnvironmentObject:
     """A static object of the level (a plain value)."""
@@ -186,7 +189,7 @@ class World:
 
     # --- Environment objects and level geometry -----------------------------
 
-    def get_level_bbs(self, bb_type: int = CityObjectLabel.Any) -> List[BoundingBox]:
+    def get_level_bbs(self, bb_type: int = 255) -> List[BoundingBox]:  # CityObjectLabel.Any
         """The bounding boxes of the level's objects with this CityObjectLabel."""
         out = Ptr[CBoundingBoxList](1)
         _check(tsc_world_get_level_bbs(self._h.ptr, _u8(bb_type, "bb_type"), out))

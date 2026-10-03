@@ -6,14 +6,17 @@
 # (World.tick(), World.wait_for_tick(), Client.apply_batch(_sync)(do_tick=True))
 # and in dispatch_callbacks() / dispatch_sensor_callbacks().
 #
-# Sensor callbacks are keyed by actor id, so destroying a sensor through any
-# handle (an Actor, a world.get_actor(id) handle, a batch DestroyActor) drops
-# its callback; tick callbacks by (client, LibCarla callback id), as LibCarla
+# Sensor callbacks are keyed by actor id and stream (the measurements, or one
+# G-buffer texture of Sensor.listen_to_gbuffer, issue #33), so destroying a
+# sensor through any handle (an Actor, a world.get_actor(id) handle, a batch
+# DestroyActor) drops its callbacks; tick callbacks by (client, LibCarla callback id), as LibCarla
 # keeps them per client (Simulator), across load_world. This
 # small module lets actor.codon reach the registry without importing
 # sensor.codon. It is not thread-safe: register, stop and dispatch from one
 # thread (the program's main thread).
 
+from ._ffi import (tsc_sensor_gbuffer_poll, tsc_sensor_gbuffer_pending_count,
+                   tsc_sensor_stop_gbuffer)
 from ._ffi import (Handle, tsc_sensor_poll, tsc_sensor_pending_count, tsc_sensor_stop,
                    tsc_tick_listener_poll, tsc_tick_listener_pending_count,
                    tsc_tick_listener_stop, tsc_tick_listener_wait_for_frame,
@@ -22,6 +25,7 @@ from .errors import _check
 
 class _Listener:
     actor_id: int  # the sensor actor; -1 for a tick callback
+    gbuffer: int  # sensors: the G-buffer texture id, or -1 for the measurements
     tick: bool  # a World.on_tick callback (handle: a tick listener)
     client_token: int  # tick callbacks: the world's episode id
     callback_id: int  # tick callbacks: LibCarla's callback id
@@ -32,8 +36,9 @@ class _Listener:
     active: bool  # False once unregistered (the list may be iterated meanwhile)
 
     def __init__(self, actor_id: int, tick: bool, client_token: int, callback_id: int,
-                 handle: Handle, callback: Callable[[cobj], None]):
+                 handle: Handle, callback: Callable[[cobj], None], gbuffer: int = -1):
         self.actor_id = actor_id
+        self.gbuffer = gbuffer
         self.tick = tick
         self.client_token = client_token
         self.callback_id = callback_id
@@ -44,9 +49,11 @@ class _Listener:
 _listeners = List[_Listener]()  # in registration order
 _dispatching = False
 
-def _find_callback(actor_id: int) -> int:
+def _find_callback(actor_id: int, gbuffer: int = -1) -> int:
+    """The sensor stream's listener: the measurements, or a G-buffer texture."""
     for i in range(len(_listeners)):
-        if not _listeners[i].tick and _listeners[i].actor_id == actor_id:
+        l = _listeners[i]
+        if not l.tick and l.actor_id == actor_id and l.gbuffer == gbuffer:
             return i
     return -1
 
@@ -60,20 +67,43 @@ def _find_tick_callback(client_token: int, callback_id: int) -> int:
 def _pop_item(listener: _Listener) -> cobj:
     """The oldest queued item (a new handle), or a null pointer."""
     if not listener.tick:
-        return _pop(listener.handle)
+        return _pop(listener.handle, listener.gbuffer)
     out = Ptr[cobj](1)
     _check(tsc_tick_listener_poll(listener.handle.ptr, out))
     return out[0]
 
-def _pop(h: Handle) -> cobj:
-    """The oldest queued measurement of a sensor (a new handle), or a null pointer."""
+def _pop(h: Handle, gbuffer: int = -1) -> cobj:
+    """The oldest queued measurement of a sensor (a new handle), or a null
+    pointer; of one of its G-buffer textures if gbuffer >= 0."""
     out = Ptr[cobj](1)
-    _check(tsc_sensor_poll(h.ptr, out))
+    if gbuffer < 0:
+        _check(tsc_sensor_poll(h.ptr, out))
+    else:
+        _check(tsc_sensor_gbuffer_poll(h.ptr, u32(gbuffer), out))
     return out[0]
 
-def _discard_pending(h: Handle):
+def _pending(listener: _Listener) -> int:
+    """How many items are queued for the listener."""
+    out = Ptr[int](1)
+    if listener.tick:
+        _check(tsc_tick_listener_pending_count(listener.handle.ptr, out))
+    elif listener.gbuffer < 0:
+        _check(tsc_sensor_pending_count(listener.handle.ptr, out))
+    else:
+        _check(tsc_sensor_gbuffer_pending_count(listener.handle.ptr, u32(listener.gbuffer), out))
+    return out[0]
+
+def _stop_stream(h: Handle, gbuffer: int):
+    """Stops a sensor's measurements (gbuffer < 0) or one G-buffer texture;
+    best effort: the stream may already be gone."""
+    if gbuffer < 0:
+        tsc_sensor_stop(h.ptr)
+    else:
+        tsc_sensor_stop_gbuffer(h.ptr, u32(gbuffer))
+
+def _discard_pending(h: Handle, gbuffer: int = -1):
     while True:
-        p = _pop(h)
+        p = _pop(h, gbuffer)
         if p == cobj():
             break
         Handle(p).release()  # now, not at GC: it may own a large buffer
@@ -87,23 +117,52 @@ def _remove(i: int):
         tsc_tick_listener_stop(listener.handle.ptr)  # also drops the queued snapshots
         listener.handle.release()
     else:
-        tsc_sensor_stop(listener.handle.ptr)
-        _discard_pending(listener.handle)
+        _stop_stream(listener.handle, listener.gbuffer)
+        _discard_pending(listener.handle, listener.gbuffer)
 
-def _unregister_callback(actor_id: int) -> bool:
-    """Drops the callback of this sensor actor, if any: stops its stream and
-    discards what it has not received. Returns whether there was one."""
+def _unregister_stream(actor_id: int, gbuffer: int = -1) -> bool:
+    """Drops the callback of one stream of this sensor actor (its measurements,
+    or a G-buffer texture), if any: stops the stream and discards what it has
+    not received. Returns whether there was one."""
     if len(_listeners) == 0:
         return False
-    i = _find_callback(actor_id)
+    i = _find_callback(actor_id, gbuffer)
     if i < 0:
         return False
     _remove(i)
     return True
 
-def _register_callback(actor_id: int, handle: Handle, callback: Callable[[cobj], None]):
-    _unregister_callback(actor_id)
-    _listeners.append(_Listener(actor_id, False, 0, 0, handle, callback))
+def _unregister_callback(actor_id: int) -> bool:
+    """Drops every callback of this sensor actor (it has been destroyed): its
+    measurements and any G-buffer textures left (_stop_gbuffers should have
+    run before the destroy). Returns whether there was one."""
+    found = False
+    i = 0
+    while i < len(_listeners):
+        if not _listeners[i].tick and _listeners[i].actor_id == actor_id:
+            _remove(i)
+            found = True
+        else:
+            i += 1
+    return found
+
+def _stop_gbuffers(actor_id: int):
+    """Stops and drops this sensor actor's G-buffer callbacks. Call it BEFORE
+    destroying the actor: LibCarla's StopGBuffer asks the server for the
+    stream token first, which fails once the actor is gone, and the stream
+    would then never be unsubscribed (its client keeps reconnecting)."""
+    i = 0
+    while i < len(_listeners):
+        l = _listeners[i]
+        if not l.tick and l.actor_id == actor_id and l.gbuffer >= 0:
+            _remove(i)
+        else:
+            i += 1
+
+def _register_callback(actor_id: int, handle: Handle, callback: Callable[[cobj], None],
+                       gbuffer: int = -1):
+    _unregister_stream(actor_id, gbuffer)
+    _listeners.append(_Listener(actor_id, False, 0, 0, handle, callback, gbuffer))
 
 def _register_tick_callback(client_token: int, callback_id: int, handle: Handle,
                             callback: Callable[[cobj], None]):
@@ -139,12 +198,7 @@ def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
 def _deliver(listener: _Listener) -> int:
     """Delivers what was queued when the listener's turn began, in arrival order."""
     count = 0
-    pending = Ptr[int](1)
-    if listener.tick:
-        _check(tsc_tick_listener_pending_count(listener.handle.ptr, pending))
-    else:
-        _check(tsc_sensor_pending_count(listener.handle.ptr, pending))
-    for _ in range(pending[0]):
+    for _ in range(_pending(listener)):
         if not listener.active:
             break
         p = _pop_item(listener)

@@ -11,3 +11,6 @@ blocks:
       call: ContainsAttribute
       args: {id: string_in}
       out: {type: bool, name: out_has}
+  # Issue #33: len(blueprint), the number of attributes.
+  actor_blueprint_size:
+    size: {call: size, out: {type: index, name: out_count}}

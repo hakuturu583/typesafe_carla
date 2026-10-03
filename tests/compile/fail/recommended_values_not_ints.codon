@@ -1,0 +1,9 @@
+# ActorAttribute.recommended_values are strings, whatever the attribute type.
+# expect-error: 'List[int]' does not match expected type 'List[str]'
+import typesafe_carla as carla
+
+def wheel_counts(bp: carla.ActorBlueprint) -> List[int]:
+    return bp.get_attribute("number_of_wheels").recommended_values
+
+lib = carla.Client("localhost", 2000).get_world().get_blueprint_library()
+print(wheel_counts(lib.find("vehicle.tesla.model3")))

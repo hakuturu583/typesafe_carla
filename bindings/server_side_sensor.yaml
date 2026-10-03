@@ -1,0 +1,20 @@
+# ServerSideSensor operations (issue #33): tsc_sensor_<name>. A client-side
+# sensor (lane invasion) is TSC_TYPE_ERROR. Listening to a G-buffer and its
+# queue are hand-written (native/src/sensor.cpp).
+class: carla::client::ServerSideSensor
+prefix: sensor
+self: {type: tsc_sensor_t, name: sensor, get: server_side_sensor_of}
+blocks:
+  sensor_ros:
+    enable_for_ros: {call: EnableForROS}
+    disable_for_ros: {call: DisableForROS}
+    is_enabled_for_ros: {call: IsEnabledForROS, out: bool}
+  sensor_gbuffer:
+    is_listening_gbuffer:
+      call: IsListeningGBuffer
+      args: {gbuffer_id: gbuffer_id}
+      out: bool
+    stop_gbuffer:
+      call: StopGBuffer
+      args: {gbuffer_id: gbuffer_id}
+      doc: "Stops the stream (the queue of tsc_sensor_listen_to_gbuffer stays)."

@@ -54,9 +54,11 @@ extern "C" {
  * 4.1: tsc_client_create worker_threads; map_layers on load_world and
  *      load_world_if_different (#35).
  * 4.2: tsc_map_new_from_opendrive, a client-side Map from an OpenDRIVE string (#39).
- * 4.3: tsc_client_replay_file_ex, tsc_client_start_recorder_ex (#36). */
+ * 4.3: tsc_client_replay_file_ex, tsc_client_start_recorder_ex (#36).
+ * 4.4: actor world, blueprint attribute ids and recommended values, sensor ROS
+ *      and G-buffer streams (#33). */
 #define TSC_ABI_VERSION_MAJOR 4
-#define TSC_ABI_VERSION_MINOR 3
+#define TSC_ABI_VERSION_MINOR 4
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -386,6 +388,18 @@ TSC_API tsc_status_t tsc_actor_blueprint_get_attribute(const tsc_actor_blueprint
 TSC_API tsc_status_t tsc_actor_blueprint_set_attribute(tsc_actor_blueprint_t *blueprint,
                                                        const char *id, size_t id_len,
                                                        const char *value, size_t value_len);
+/* Issue #33. The ids of the blueprint's attributes, in LibCarla's iteration
+ * order (ActorBlueprint::begin/end; unspecified, but stable for a blueprint). */
+TSC_API tsc_status_t tsc_actor_blueprint_get_attribute_ids(const tsc_actor_blueprint_t *blueprint,
+                                                           tsc_string_list_t *out);
+/* ActorAttribute::GetRecommendedValues of attribute `id` (often empty).
+ * TSC_NOT_FOUND if the blueprint has no such attribute. */
+TSC_API tsc_status_t tsc_actor_blueprint_get_recommended_values(
+    const tsc_actor_blueprint_t *blueprint, const char *id, size_t id_len, tsc_string_list_t *out);
+/* BEGIN GENERATED actor_blueprint_size from bindings/actor_blueprint.yaml, do not edit */
+TSC_API tsc_status_t tsc_actor_blueprint_size(const tsc_actor_blueprint_t *blueprint,
+                                              size_t *out_count);
+/* END GENERATED actor_blueprint_size */
 
 /* ------------------------------------------------------------------------ */
 /* Milestone 1 (ABI 1.2)                                                    */
@@ -731,6 +745,35 @@ TSC_API tsc_status_t tsc_sensor_poll(tsc_sensor_t *sensor, tsc_sensor_data_t **o
 /* TSC_TIMEOUT when nothing arrives within timeout_seconds. */
 TSC_API tsc_status_t tsc_sensor_wait_for_data(tsc_sensor_t *sensor, double timeout_seconds,
                                               tsc_sensor_data_t **out);
+
+/* Issue #33: ServerSideSensor. A client-side sensor (lane invasion) is
+ * TSC_TYPE_ERROR. G-buffer texture ids (GBufferTextureID) are below
+ * TSC_GBUFFER_TEXTURE_COUNT (TSC_INVALID_ARGUMENT otherwise). */
+#define TSC_GBUFFER_TEXTURE_COUNT 13
+/* BEGIN GENERATED sensor_ros from bindings/server_side_sensor.yaml, do not edit */
+TSC_API tsc_status_t tsc_sensor_enable_for_ros(tsc_sensor_t *sensor);
+TSC_API tsc_status_t tsc_sensor_disable_for_ros(tsc_sensor_t *sensor);
+TSC_API tsc_status_t tsc_sensor_is_enabled_for_ros(tsc_sensor_t *sensor, int32_t *out);
+/* END GENERATED sensor_ros */
+/* BEGIN GENERATED sensor_gbuffer from bindings/server_side_sensor.yaml, do not edit */
+TSC_API tsc_status_t tsc_sensor_is_listening_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                                     int32_t *out);
+/* Stops the stream (the queue of tsc_sensor_listen_to_gbuffer stays). */
+TSC_API tsc_status_t tsc_sensor_stop_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id);
+/* END GENERATED sensor_gbuffer */
+/* Starts delivering G-buffer texture gbuffer_id into a queue of this handle
+ * (ServerSideSensor::ListenToGBuffer). TSC_INVALID_ARGUMENT for a sensor
+ * other than an RGB camera (LibCarla would only log a warning and deliver
+ * nothing). queue_capacity as in
+ * tsc_sensor_listen. Listening again replaces the stream and the queue. */
+TSC_API tsc_status_t tsc_sensor_listen_to_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                                  size_t queue_capacity);
+/* Items queued for gbuffer_id (0 if it was never listened to). */
+TSC_API tsc_status_t tsc_sensor_gbuffer_pending_count(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                                      size_t *out);
+/* *out = NULL (TSC_OK) when that queue is empty or was never created. */
+TSC_API tsc_status_t tsc_sensor_gbuffer_poll(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                             tsc_sensor_data_t **out);
 
 typedef struct {
   uint64_t frame;
@@ -1768,6 +1811,10 @@ TSC_API tsc_status_t tsc_actor_get_parent(tsc_actor_t *actor, tsc_actor_t **out)
 TSC_API tsc_status_t tsc_actor_get_semantic_tags(tsc_actor_t *actor,
                                                  uint8_t *out, size_t capacity, size_t *out_count);
 /* END GENERATED actor_state */
+/* BEGIN GENERATED actor_world from bindings/actor.yaml, do not edit */
+/* The world (episode) the actor belongs to. */
+TSC_API tsc_status_t tsc_actor_get_world(tsc_actor_t *actor, tsc_world_t **out);
+/* END GENERATED actor_world */
 
 /* The actor's attributes (as spawned): out_ids->items[i] has the value
  * out_values->items[i]. Both lists are owned by the caller. */
