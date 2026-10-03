@@ -14,11 +14,13 @@
 # --abi prints what a LibCarla prebuilt (static libraries and headers; see
 # docs/releasing.md, "LibCarla prebuilt") must share with the compiler that
 # links it: the target triple, the C and C++ compilers and their versions,
-# the C++ standard library (release and dual-ABI mode) and the glibc headers'
-# version. It leaves out what --toolchain has but a relocatable prefix does
-# not depend on: the command's name ("g++-11" vs "c++"), the distribution's
-# package revision of the compiler, CMake and Ninja. CFLAGS and CXXFLAGS are
-# applied, so e.g. -D_GLIBCXX_USE_CXX11_ABI=0 changes it.
+# the C++ standard library (release and dual-ABI mode), the glibc headers'
+# version, the data model, and macros that change layouts or mangling
+# (_GLIBCXX_DEBUG, _FILE_OFFSET_BITS, RTTI, exceptions, ...). It leaves out
+# what --toolchain has but a relocatable prefix does not depend on: the
+# command's name ("g++-11" vs "c++"), the distribution's package revision of
+# the compiler, CMake and Ninja. CFLAGS and CXXFLAGS are applied, so e.g.
+# -D_GLIBCXX_USE_CXX11_ABI=0 or -m32 changes it.
 set -euo pipefail
 shopt -s inherit_errexit  # a failing $(...) fails the script
 
@@ -82,16 +84,23 @@ abi_of() {
           printf ", unknown-stdlib"
       }
       if ("__GLIBC__" in m) printf ", glibc %s.%s", m["__GLIBC__"], m["__GLIBC_MINOR__"]
+      # Data model and the macros that change layouts or mangled names:
+      # -m32/-mx32, long double, _FILE_OFFSET_BITS/_TIME_BITS, libstdc++
+      # debug mode, RTTI and exceptions.
+      n = split("__SIZEOF_POINTER__ __SIZEOF_LONG__ __SIZEOF_LONG_DOUBLE__ _FILE_OFFSET_BITS _TIME_BITS _GLIBCXX_DEBUG _GLIBCXX_DEBUG_PEDANTIC _GLIBCXX_PARALLEL _LIBCPP_ABI_VERSION __GXX_RTTI __EXCEPTIONS", keys, " ")
+      for (i = 1; i <= n; i++)
+        if (keys[i] in m) printf ", %s=%s", keys[i], m[keys[i]]
       printf "\n"
     }' <<<"$macros"
 }
 
 abi() {
-  local cc cxx words target
+  local cc cxx words flags target
   cc=$(abi_of "${CC:-cc}" c "${CFLAGS:-}")
   cxx=$(abi_of "${CXX:-c++}" c++ "${CXXFLAGS:-}")
   read -ra words <<<"${CXX:-c++}"
-  target=$("${words[@]}" -dumpmachine)
+  read -ra flags <<<"${CXXFLAGS:-}"
+  target=$("${words[@]}" "${flags[@]}" -dumpmachine)
   echo "target=${target}"
   echo "cc=${cc}"
   echo "cxx=${cxx}"

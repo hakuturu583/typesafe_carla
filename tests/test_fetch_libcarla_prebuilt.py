@@ -9,6 +9,7 @@ import json
 import zipfile
 
 import pytest
+from pathlib import Path
 
 from tools import fetch_libcarla_prebuilt as fp
 
@@ -121,3 +122,57 @@ def test_find_artifact_takes_successful_main_runs_only(monkeypatch):
     runs[20]["conclusion"] = "failure"
     with pytest.raises(fp.Unavailable):
         fp.find_artifact("o/r", "n")
+
+
+def test_download_requires_a_digest(tmp_path, monkeypatch):
+    archive = make_zip(FILES)
+    monkeypatch.setattr(fp, "gh", fake_gh(archive))
+    art = artifact(archive)
+    del art["digest"]
+    with pytest.raises(ValueError, match="no sha256 digest"):
+        fp.download("o/r", art, tmp_path / "name", SHA, ABI, REPO)
+
+
+def test_cache_root_matches_typesafe_carla(monkeypatch, tmp_path):
+    from typesafe_carla import paths
+    monkeypatch.delenv("TYPESAFE_CARLA_CACHE_DIR", raising=False)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    assert fp.cache_root() == paths._cache_root() / "libcarla-prebuilt"
+    assert fp.cache_root() == tmp_path / "typesafe-carla" / "libcarla-prebuilt"
+    monkeypatch.setenv("TYPESAFE_CARLA_CACHE_DIR", str(tmp_path / "c"))
+    assert fp.cache_root() == paths._cache_root() / "libcarla-prebuilt"
+
+
+def test_prune(tmp_path):
+    import os
+    import time
+    old, new, partial = tmp_path / "old", tmp_path / "new", tmp_path / ".download-x"
+    for d in (old, new, partial):
+        d.mkdir()
+    day = 86400
+    os.utime(old, (time.time() - 40 * day,) * 2)
+    os.utime(partial, (time.time() - 2 * day,) * 2)
+    assert sorted(fp.prune(tmp_path, 30)) == sorted([old, partial])
+    assert new.exists()
+    assert fp.prune(tmp_path, 0, keep=new) == []
+    assert fp.prune(tmp_path, 0) == [new]
+
+
+def test_cached_prefix_is_reverified(tmp_path, monkeypatch, capsys):
+    """A cached prefix whose files changed is discarded and downloaded again."""
+    archive = make_zip(FILES)
+    monkeypatch.setattr(fp, "gh", fake_gh(archive))
+    monkeypatch.setenv("TYPESAFE_CARLA_CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(fp, "resolve", lambda ref, repo: SHA)
+    monkeypatch.setattr(fp, "abi_fingerprint", lambda: ABI)
+    monkeypatch.setattr(fp, "find_artifact", lambda repo, name: artifact(archive))
+    assert fp.main(["0.10.0"]) == 0
+    dest = Path(capsys.readouterr().out.strip())
+    (dest / "include" / "carla" / "Version.h").write_text("tampered\n")
+    downloads = []
+    monkeypatch.setattr(fp, "find_artifact",
+                        lambda repo, name: downloads.append(name) or artifact(archive))
+    assert fp.main(["0.10.0"]) == 0
+    assert len(downloads) == 1
+    assert (dest / "include" / "carla" / "Version.h").read_bytes() == b"#pragma once\n"
+    assert fp.main(["0.10.0"]) == 0 and len(downloads) == 1  # intact: no download

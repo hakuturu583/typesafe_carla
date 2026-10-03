@@ -37,12 +37,15 @@ set(_TSC_PB_FETCH "${CMAKE_CURRENT_LIST_DIR}/../tools/fetch_libcarla_prebuilt.py
 set(_TSC_PB_ASSEMBLE "${CMAKE_CURRENT_LIST_DIR}/LibCarlaPrebuiltAssemble.cmake")
 
 # Sets <out> to a command prefix that runs a command with this build's C and
-# C++ compilers and flags as CC, CXX, CFLAGS and CXXFLAGS: the inputs of
+# C++ compilers and flags (general and the build type's) as CC, CXX, CFLAGS
+# and CXXFLAGS: the inputs of
 # `tools/libcarla_cache_guard.sh --abi`.
 macro(_tsc_pb_abi_env out)
+  string(TOUPPER "${CMAKE_BUILD_TYPE}" _tsc_pb_cfg)
   set(${out} "${CMAKE_COMMAND}" -E env
              "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}"
-             "CFLAGS=${CMAKE_C_FLAGS}" "CXXFLAGS=${CMAKE_CXX_FLAGS}")
+             "CFLAGS=${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_${_tsc_pb_cfg}}"
+             "CXXFLAGS=${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${_tsc_pb_cfg}}")
 endmacro()
 
 # Sets <out> to `tools/libcarla_cache_guard.sh --abi` for this build's C and
@@ -261,69 +264,94 @@ function(_tsc_pb_resolve_ref out)
   set(${out} "${_sha}" PARENT_SCOPE)
 endfunction()
 
-function(tsc_import_libcarla_prebuilt prefix verified_sha)
-  get_filename_component(prefix "${prefix}" ABSOLUTE)
+# Sets <out_err> to why the prefix cannot be used for this build (format,
+# compiler ABI, CARLA repository or commit, missing files), or to "" if it
+# can. <verified_sha>: the commit the requested ref was already resolved to,
+# or "" to resolve it (cached per ref like a fetch).
+function(_tsc_pb_check prefix verified_sha out_err)
+  set(${out_err} "" PARENT_SCOPE)
   set(_manifest "${prefix}/prebuilt.json")
   if(NOT EXISTS "${_manifest}")
-    message(FATAL_ERROR "typesafe_carla: ${prefix} is not a LibCarla prebuilt (no prebuilt.json)")
+    set(${out_err} "${prefix} is not a LibCarla prebuilt (no prebuilt.json)" PARENT_SCOPE)
+    return()
   endif()
   file(READ "${_manifest}" _json)
-  _tsc_pb_json("${_json}" _format format)
-  if(NOT _format EQUAL _TSC_PB_FORMAT)
-    message(FATAL_ERROR "typesafe_carla: ${prefix} has prebuilt format ${_format}; this "
-                        "typesafe_carla reads format ${_TSC_PB_FORMAT}")
+  foreach(_k format abi carla_repository carla_ref carla_commit carla_version)
+    string(JSON _m_${_k} ERROR_VARIABLE _jerr GET "${_json}" ${_k})
+    if(_jerr)
+      set(${out_err} "${_manifest}: no ${_k}" PARENT_SCOPE)
+      return()
+    endif()
+  endforeach()
+  if(NOT _m_format EQUAL _TSC_PB_FORMAT)
+    string(CONCAT _e "${prefix} has prebuilt format ${_m_format}; this typesafe_carla reads "
+                   "format ${_TSC_PB_FORMAT}")
+    set(${out_err} "${_e}" PARENT_SCOPE)
+    return()
   endif()
-  _tsc_pb_json("${_json}" _abi abi)
-  _tsc_pb_json("${_json}" _repo carla_repository)
-  _tsc_pb_json("${_json}" _ref carla_ref)
-  _tsc_pb_json("${_json}" _commit carla_commit)
-  _tsc_pb_json("${_json}" _version carla_version)
-
   # The compilers must produce the same ABI the prefix was built with.
   tsc_abi_fingerprint(_here)
-  if(NOT _here STREQUAL _abi)
-    message(FATAL_ERROR
-      "typesafe_carla: the LibCarla prebuilt in ${prefix} was built with another toolchain.\n"
-      "Prebuilt:\n${_abi}\nThis build (${CMAKE_C_COMPILER}, ${CMAKE_CXX_COMPILER}):\n${_here}\n"
-      "Use a prebuilt made with this compiler, or unset TSC_CARLA_PREBUILT_DIR to build "
-      "LibCarla from source.")
+  if(NOT _here STREQUAL _m_abi)
+    string(CONCAT _e "the LibCarla prebuilt in ${prefix} was built with another toolchain.\n"
+        "Prebuilt:\n${_m_abi}\nThis build (${CMAKE_C_COMPILER}, ${CMAKE_CXX_COMPILER}):\n"
+        "${_here}")
+    set(${out_err} "${_e}" PARENT_SCOPE)
+    return()
   endif()
-
   # ... from the CARLA commit this build asks for.
-  _tsc_pb_norm_repo("${_repo}" _repo_n)
+  _tsc_pb_norm_repo("${_m_carla_repository}" _repo_n)
   _tsc_pb_norm_repo("${TSC_CARLA_GIT_REPOSITORY}" _want_repo)
   if(NOT _repo_n STREQUAL _want_repo)
-    message(FATAL_ERROR "typesafe_carla: the LibCarla prebuilt in ${prefix} is from ${_repo}, "
-                        "not TSC_CARLA_GIT_REPOSITORY (${TSC_CARLA_GIT_REPOSITORY})")
+    string(CONCAT _e "the LibCarla prebuilt in ${prefix} is from ${_m_carla_repository}, not "
+                   "TSC_CARLA_GIT_REPOSITORY (${TSC_CARLA_GIT_REPOSITORY})")
+    set(${out_err} "${_e}" PARENT_SCOPE)
+    return()
   endif()
-  # Like a fetched branch, the check is not repeated until the ref changes
+  # Like a fetched branch, the ref is not resolved again until it changes
   # (or TSC_CARLA_REFRESH).
-  set(_key "${TSC_CARLA_GIT_REPOSITORY}@${TSC_CARLA_GIT_REF}=${_commit}")
+  set(_key "${TSC_CARLA_GIT_REPOSITORY}@${TSC_CARLA_GIT_REF}=${_m_carla_commit}")
   if(verified_sha)
     set(_sha "${verified_sha}")
   elseif(_TSC_CARLA_PREBUILT_CHECKED STREQUAL _key AND NOT TSC_CARLA_REFRESH)
-    set(_sha "${_commit}")
+    set(_sha "${_m_carla_commit}")
   else()
     _tsc_pb_resolve_ref(_sha)
   endif()
-  if(NOT _sha STREQUAL _commit)
-    message(FATAL_ERROR
-      "typesafe_carla: the LibCarla prebuilt in ${prefix} is CARLA ${_ref} = ${_commit}, but "
-      "CARLA ${TSC_CARLA_GIT_REF} is ${_sha}. Use a prebuilt of ${_sha} "
-      "(tools/fetch_libcarla_prebuilt.py ${TSC_CARLA_GIT_REF}), or set TSC_CARLA_GIT_REF="
-      "${_commit} and TSC_CARLA_REF_NAME=${_ref} to build that commit.")
+  if(NOT _sha STREQUAL _m_carla_commit)
+    string(CONCAT _e "the LibCarla prebuilt in ${prefix} is CARLA ${_m_carla_ref} = "
+        "${_m_carla_commit}, but CARLA ${TSC_CARLA_GIT_REF} is ${_sha}. Use a prebuilt of "
+        "${_sha} (tools/fetch_libcarla_prebuilt.py ${TSC_CARLA_GIT_REF}), or set "
+        "TSC_CARLA_GIT_REF=${_m_carla_commit} and TSC_CARLA_REF_NAME=${_m_carla_ref} to build "
+        "that commit.")
+    set(${out_err} "${_e}" PARENT_SCOPE)
+    return()
   endif()
   set(_TSC_CARLA_PREBUILT_CHECKED "${_key}" CACHE INTERNAL "")
-  if(TSC_CARLA_REFRESH)
-    set_property(CACHE TSC_CARLA_REFRESH PROPERTY VALUE OFF)
-  endif()
-
   foreach(_f cmake/libcarla-targets.cmake licenses/LICENSE.CARLA
              licenses/THIRD_PARTY_NOTICES.components)
     if(NOT EXISTS "${prefix}/${_f}")
-      message(FATAL_ERROR "typesafe_carla: the LibCarla prebuilt in ${prefix} has no ${_f}")
+      set(${out_err} "the LibCarla prebuilt in ${prefix} has no ${_f}" PARENT_SCOPE)
+      return()
     endif()
   endforeach()
+endfunction()
+
+# Fails the configure step unless the prefix fits this build (_tsc_pb_check).
+function(tsc_import_libcarla_prebuilt prefix verified_sha)
+  get_filename_component(prefix "${prefix}" ABSOLUTE)
+  set(_manifest "${prefix}/prebuilt.json")
+  _tsc_pb_check("${prefix}" "${verified_sha}" _err)
+  if(_err)
+    message(FATAL_ERROR "typesafe_carla: ${_err}\nUse a prebuilt made for this build, or unset "
+                        "TSC_CARLA_PREBUILT_DIR to build LibCarla from source.")
+  endif()
+  if(TSC_CARLA_REFRESH)
+    set_property(CACHE TSC_CARLA_REFRESH PROPERTY VALUE OFF)
+  endif()
+  file(READ "${_manifest}" _json)
+  _tsc_pb_json("${_json}" _ref carla_ref)
+  _tsc_pb_json("${_json}" _commit carla_commit)
+  _tsc_pb_json("${_json}" _version carla_version)
   include("${prefix}/cmake/libcarla-targets.cmake")
   if(NOT TARGET carla-client)
     message(FATAL_ERROR "typesafe_carla: ${prefix}/cmake/libcarla-targets.cmake defined no carla-client")
@@ -351,49 +379,72 @@ endfunction()
 # Sets <out_prefix> to a LibCarla prebuilt for TSC_CARLA_GIT_REF and this
 # compiler, downloaded from CI by tools/fetch_libcarla_prebuilt.py (or found in
 # its cache), and <out_sha> to the commit it was checked against; both empty
-# if there is none, so that LibCarla is built from source. The answer is kept
-# until the ref, repository or compiler changes, or TSC_CARLA_REFRESH.
+# if there is none, so that LibCarla is built from source. Never fails the
+# configure step: a prefix that does not fit (_tsc_pb_check; e.g. the
+# compiler was upgraded since) is looked up again, then given up on. The
+# answer is kept until the ref, repository or ABI fingerprint changes, or
+# TSC_CARLA_REFRESH.
+#
+# _TSC_PB_FETCH (the helper's path) may be overridden, e.g. by tests.
 function(tsc_fetch_libcarla_prebuilt out_prefix out_sha)
   set(${out_prefix} "" PARENT_SCOPE)
   set(${out_sha} "" PARENT_SCOPE)
-  set(_key "${TSC_CARLA_GIT_REPOSITORY}@${TSC_CARLA_GIT_REF}|${CMAKE_C_COMPILER}|${CMAKE_CXX_COMPILER}|${CMAKE_C_FLAGS}|${CMAKE_CXX_FLAGS}")
+  tsc_abi_fingerprint(_abi SOFT)
+  if(NOT _abi)
+    message(STATUS "typesafe_carla: cannot fingerprint the compiler for a LibCarla prebuilt; "
+                   "building from source")
+    return()
+  endif()
+  string(SHA256 _abi_hash "${_abi}")
+  set(_key "${TSC_CARLA_GIT_REPOSITORY}@${TSC_CARLA_GIT_REF}|${_abi_hash}")
   if(_TSC_CARLA_PREBUILT_AUTO_KEY STREQUAL _key AND NOT TSC_CARLA_REFRESH)
     if(_TSC_CARLA_PREBUILT_AUTO_DIR STREQUAL "")
       message(STATUS "typesafe_carla: no LibCarla prebuilt (as before; "
                      "-DTSC_CARLA_REFRESH=ON looks again)")
       return()
-    elseif(EXISTS "${_TSC_CARLA_PREBUILT_AUTO_DIR}/prebuilt.json")
+    endif()
+    _tsc_pb_check("${_TSC_CARLA_PREBUILT_AUTO_DIR}" "${_TSC_CARLA_PREBUILT_AUTO_SHA}" _err)
+    if(NOT _err)
       set(${out_prefix} "${_TSC_CARLA_PREBUILT_AUTO_DIR}" PARENT_SCOPE)
       set(${out_sha} "${_TSC_CARLA_PREBUILT_AUTO_SHA}" PARENT_SCOPE)
       return()
     endif()
+    message(STATUS "typesafe_carla: the cached LibCarla prebuilt no longer fits: ${_err}")
   endif()
 
+  set(_dir "")
+  set(_sha "")
   find_package(Python3 COMPONENTS Interpreter QUIET)
   if(NOT Python3_Interpreter_FOUND)
     message(STATUS "typesafe_carla: no Python 3 to fetch a LibCarla prebuilt; building from source")
-    return()
-  endif()
-  message(STATUS "typesafe_carla: looking for a LibCarla prebuilt of CARLA ${TSC_CARLA_GIT_REF}")
-  _tsc_pb_abi_env(_env)
-  execute_process(
-    COMMAND ${_env} "${Python3_EXECUTABLE}" "${_TSC_PB_FETCH}"
-            --repository "${TSC_CARLA_GIT_REPOSITORY}" "${TSC_CARLA_GIT_REF}"
-    RESULT_VARIABLE _rc OUTPUT_VARIABLE _out ERROR_VARIABLE _err
-    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_STRIP_TRAILING_WHITESPACE)
-  set(_dir "")
-  set(_sha "")
-  if(_rc EQUAL 0 AND EXISTS "${_out}/prebuilt.json")
-    set(_dir "${_out}")
-    file(READ "${_dir}/prebuilt.json" _json)
-    _tsc_pb_json("${_json}" _sha carla_commit)
-    message(STATUS "typesafe_carla: using the LibCarla prebuilt ${_dir}")
-  elseif(_rc EQUAL 2)
-    # Expected: no gh, not logged in, or CI has no prebuilt for this.
-    message(STATUS "typesafe_carla: ${_err}\n   building LibCarla from source")
   else()
-    message(WARNING "typesafe_carla: fetching a LibCarla prebuilt failed (${_rc}):\n${_err}\n"
-                    "Building LibCarla from source.")
+    message(STATUS "typesafe_carla: looking for a LibCarla prebuilt of CARLA ${TSC_CARLA_GIT_REF}")
+    _tsc_pb_abi_env(_env)
+    execute_process(
+      COMMAND ${_env} "${Python3_EXECUTABLE}" "${_TSC_PB_FETCH}"
+              --repository "${TSC_CARLA_GIT_REPOSITORY}" "${TSC_CARLA_GIT_REF}"
+      RESULT_VARIABLE _rc OUTPUT_VARIABLE _out ERROR_VARIABLE _err
+      OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_STRIP_TRAILING_WHITESPACE)
+    if(_rc EQUAL 0 AND EXISTS "${_out}/prebuilt.json")
+      file(READ "${_out}/prebuilt.json" _json)
+      string(JSON _sha ERROR_VARIABLE _jerr GET "${_json}" carla_commit)
+      # The helper checked it against the resolved ref; check it as the import will.
+      _tsc_pb_check("${_out}" "${_sha}" _cerr)
+      if(_cerr)
+        message(WARNING "typesafe_carla: the downloaded LibCarla prebuilt does not fit this "
+                        "build: ${_cerr}\nBuilding LibCarla from source.")
+        set(_sha "")
+      else()
+        set(_dir "${_out}")
+        message(STATUS "typesafe_carla: using the LibCarla prebuilt ${_dir}")
+      endif()
+    elseif(_rc EQUAL 2)
+      # Expected: no gh, not logged in, or CI has no prebuilt for this.
+      message(STATUS "typesafe_carla: ${_err}\n   building LibCarla from source")
+    else()
+      message(WARNING "typesafe_carla: fetching a LibCarla prebuilt failed (${_rc}):\n${_err}\n"
+                      "Building LibCarla from source.")
+    endif()
   endif()
   set(_TSC_CARLA_PREBUILT_AUTO_KEY "${_key}" CACHE INTERNAL "")
   set(_TSC_CARLA_PREBUILT_AUTO_DIR "${_dir}" CACHE INTERNAL "")

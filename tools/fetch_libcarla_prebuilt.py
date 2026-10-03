@@ -4,6 +4,7 @@ and prints the path of the unpacked prefix (for TSC_CARLA_PREBUILT_DIR).
 
     tools/fetch_libcarla_prebuilt.py <ref> [dest]
     tools/fetch_libcarla_prebuilt.py --print-name <ref>
+    tools/fetch_libcarla_prebuilt.py --prune [DAYS]
 
 CI's `libcarla` job publishes, from its runs on main (push and the daily
 schedule), one workflow artifact per Ubuntu LTS leg and CARLA commit
@@ -20,14 +21,25 @@ C++ standard library, glibc) for CC/CXX (default cc/c++). This script:
 3. finds the newest such artifact of a successful ci.yml run on main of the
    repository itself (`gh api`; artifacts need a token even for a public
    repository);
-4. downloads it, checks the archive's digest, the manifest (commit, ABI) and
-   the sha256 of every file, and unpacks it into
-   ${XDG_CACHE_HOME:-~/.cache}/typesafe_carla/libcarla-prebuilt/<name>
-   (or [dest]), where later calls find it without downloading.
+4. downloads it, checks the archive against the digest the API reports
+   (required), the manifest (commit, ABI) and the sha256 of every file, and
+   unpacks it into <cache>/libcarla-prebuilt/<name> (or [dest]), where later
+   calls find it, re-check every file, and download it again if anything
+   changed. <cache> is typesafe_carla's cache root:
+   $TYPESAFE_CARLA_CACHE_DIR, else ${XDG_CACHE_HOME:-~/.cache}/typesafe-carla.
+
+Prefixes not used for 30 days are removed by the next download; --prune
+removes those not used for DAYS days (default: all) now.
+
+Trust: the artifact comes over TLS from the GitHub API, authenticated with
+the user's token, from a successful push/schedule run of ci.yml on main of
+this repository (not a fork, not a pull request); the digest and per-file
+hashes guard against corruption, not against that run. It is as trustworthy
+as CI on main itself.
 
 Exit status: 0 and the prefix on stdout; 2 if there is no prebuilt to use
 (no gh, not logged in, no matching artifact, network): build from source;
-1 on anything else (a download that fails verification, bad usage).
+1 if a download or cached prefix fails verification.
 Messages go to stderr.
 """
 
@@ -41,6 +53,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 
@@ -50,6 +63,8 @@ CARLA_REPOSITORY = "https://github.com/carla-simulator/carla"
 WORKFLOW_PATH = ".github/workflows/ci.yml"
 EVENTS = {"push", "schedule"}
 FORMAT = 1
+# Cached prefixes not used for this long are removed by the next download.
+PRUNE_DAYS = 30
 
 
 class Unavailable(Exception):
@@ -178,8 +193,12 @@ def download(repo: str, art: dict, dest: Path, sha: str, abi: str, repository: s
         print(f"downloading {art['name']} ({size_mb:.0f} MB)", file=sys.stderr)
         with archive.open("wb") as f:
             gh("api", f"repos/{repo}/actions/artifacts/{art['id']}/zip", out=f)
+        # The API's digest of the archive the run uploaded: required, so a
+        # download is always checked against what CI recorded.
         digest = art.get("digest") or ""
-        if digest.startswith("sha256:") and sha256(archive) != digest[len("sha256:"):]:
+        if not digest.startswith("sha256:"):
+            raise ValueError(f"artifact {art['id']} has no sha256 digest to check it against")
+        if sha256(archive) != digest[len("sha256:"):]:
             raise ValueError("the downloaded archive does not match its digest")
         unpacked = work / "prefix"
         with zipfile.ZipFile(archive) as z:
@@ -201,13 +220,38 @@ def download(repo: str, art: dict, dest: Path, sha: str, abi: str, repository: s
 
 
 def cache_root() -> Path:
-    base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
-    return Path(base) / "typesafe_carla" / "libcarla-prebuilt"
+    """libcarla-prebuilt/ in typesafe_carla's cache root (the same as
+    python/typesafe_carla/paths.py's): $TYPESAFE_CARLA_CACHE_DIR, else
+    ${XDG_CACHE_HOME:-~/.cache}/typesafe-carla."""
+    explicit = os.environ.get("TYPESAFE_CARLA_CACHE_DIR")
+    if explicit:
+        root = Path(explicit).expanduser()
+    else:
+        xdg = os.environ.get("XDG_CACHE_HOME")
+        root = (Path(xdg) if xdg else Path.home() / ".cache") / "typesafe-carla"
+    return root / "libcarla-prebuilt"
+
+
+def prune(root: Path, max_age_days: float, keep: Path | None = None) -> list[Path]:
+    """Removes the prefixes under <root> not used for <max_age_days> (a use
+    touches the directory), and stale partial downloads; never <keep>."""
+    if not root.is_dir():
+        return []
+    cutoff = time.time() - max_age_days * 86400
+    removed = []
+    for entry in root.iterdir():
+        if not entry.is_dir() or entry == keep:
+            continue
+        partial = entry.name.startswith(".download-")
+        if entry.stat().st_mtime < (max(cutoff, time.time() - 86400) if partial else cutoff):
+            shutil.rmtree(entry, ignore_errors=True)
+            removed.append(entry)
+    return removed
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("ref", help="CARLA branch, tag or commit SHA")
+    ap.add_argument("ref", nargs="?", help="CARLA branch, tag or commit SHA")
     ap.add_argument("dest", nargs="?", type=Path,
                     help="where to unpack (default: the user's cache, keyed by name)")
     ap.add_argument("--repository", default=CARLA_REPOSITORY,
@@ -217,7 +261,16 @@ def main(argv: list[str] | None = None) -> int:
                     help="the GitHub repository whose CI publishes prebuilts")
     ap.add_argument("--print-name", action="store_true",
                     help="only print the artifact name for this machine and exit")
+    ap.add_argument("--prune", type=float, metavar="DAYS", nargs="?", const=0.0,
+                    help="remove cached prefixes not used for DAYS days (default 0: all) "
+                         "and exit; <ref> is not needed")
     args = ap.parse_args(argv)
+    if args.prune is not None:
+        for path in prune(cache_root(), args.prune):
+            print(f"removed {path}", file=sys.stderr)
+        return 0
+    if args.ref is None:
+        ap.error("the CARLA ref is required")
 
     try:
         sha = resolve(args.ref, args.repository)
@@ -231,12 +284,20 @@ def main(argv: list[str] | None = None) -> int:
                               f"{norm_repo(args.repository)}")
         dest = args.dest or cache_root() / name
         if (dest / "prebuilt.json").exists():
-            check_manifest(dest, sha, abi, args.repository)
-            print(f"LibCarla prebuilt {name} (cached)", file=sys.stderr)
-        else:
+            try:
+                verify_files(dest, check_manifest(dest, sha, abi, args.repository))
+                print(f"LibCarla prebuilt {name} (cached)", file=sys.stderr)
+            except (ValueError, OSError) as e:
+                # Changed since it was downloaded: download it again.
+                print(f"discarding the cached {dest}: {e}", file=sys.stderr)
+                shutil.rmtree(dest)
+        if not (dest / "prebuilt.json").exists():
             art = find_artifact(args.artifact_repo, name)
             download(args.artifact_repo, art, dest, sha, abi, args.repository)
             print(f"LibCarla prebuilt {name} -> {dest}", file=sys.stderr)
+        os.utime(dest)  # last used, for prune()
+        if args.dest is None:
+            prune(cache_root(), PRUNE_DAYS, keep=dest)
         print(dest)
         return 0
     except Unavailable as e:

@@ -328,7 +328,10 @@ compiler (Ubuntu 22.04/GCC 11, 24.04/GCC 13 or 26.04/GCC 15, from a run on
 workflow artifacts only with a token. If there is no matching prebuilt, CMake
 builds LibCarla from source as usual. `-DTSC_CARLA_PREBUILT_DIR=<prefix>` uses
 a prefix you already have, e.g. from `tools/fetch_libcarla_prebuilt.py <ref>`
-or `cmake --build <build dir> --target libcarla_prebuilt`. See
+or `cmake --build <build dir> --target libcarla_prebuilt`. Downloads are
+cached (about 155 MB each) in `~/.cache/typesafe-carla/libcarla-prebuilt`
+(or under `$TYPESAFE_CARLA_CACHE_DIR`) and removed after 30 days unused;
+`tools/fetch_libcarla_prebuilt.py --prune` empties it. See
 [docs/releasing.md](docs/releasing.md#libcarla-prebuilt).
 
 `typesafe-codon` passes its arguments to `codon` after setting `CODON_PATH`

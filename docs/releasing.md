@@ -215,11 +215,12 @@ built. CI's `libcarla` job publishes, on pushes to `main` and the daily run
 leg (`actions/cache` entries cannot be downloaded outside a workflow):
 
     libcarla-prebuilt-<os>-<compiler><major>-<ABI hash>-<CARLA commit SHA>
-    e.g. libcarla-prebuilt-ubuntu-22.04-gcc11-4b5d385bc35b-ada75f920642e18cace0a9f85ecf9d4077ddb531
+    e.g. libcarla-prebuilt-ubuntu-22.04-gcc11-e2d542790b19-ada75f920642e18cace0a9f85ecf9d4077ddb531
 
-kept for 90 days (the daily run republishes an unchanged commit). The name is
-formed by `tools/fetch_libcarla_prebuilt.py --print-name <ref>`, both by CI
-and by the downloader.
+kept for 14 days (the daily run republishes an unchanged commit, so a
+commit CI still builds always has one). The name is formed by
+`tools/fetch_libcarla_prebuilt.py --print-name <ref>`, both by CI and by the
+downloader; CI checks that its ABI hash is the manifest's.
 
 **Contents.** The build tree is not relocatable, so `cmake --build <dir>
 --target libcarla_prebuilt` (defined by source builds,
@@ -243,8 +244,10 @@ installing CARLA's own rules:
 - `prebuilt.json`: the CARLA repository, ref, commit and version, the ABI
   fingerprint, and the sha256 of every file.
 
-CI moves the prefix out of the build tree, builds the shim and the C ABI tests
-from it alone (`TSC_CARLA_PREBUILT_DIR`), runs them, and only then uploads it.
+CI moves the prefix out of the build tree, fails if any of its text files
+names the checkout, moves the build tree aside, builds the shim and the C ABI
+tests from the prefix alone (`TSC_CARLA_PREBUILT_DIR`), runs them, and only
+then uploads it.
 
 **Using it.** `-DTSC_CARLA_PREBUILT=auto` (or the environment variable
 `TSC_CARLA_PREBUILT=auto`) runs `tools/fetch_libcarla_prebuilt.py` at
@@ -255,18 +258,36 @@ configure time, which:
 3. asks the GitHub API (`gh api`) for that artifact, taking only artifacts of
    a successful `ci.yml` run on `main` (push or schedule) of this repository
    itself, the newest first;
-4. downloads it, checks the archive's digest, the manifest's commit and ABI,
-   and the sha256 of every file, and unpacks it into
-   `${XDG_CACHE_HOME:-~/.cache}/typesafe_carla/libcarla-prebuilt/<name>`,
-   where later configures find it without downloading.
+4. downloads it, checks the archive against the digest the API reports
+   (required), the manifest's commit and ABI, and the sha256 of every file,
+   and unpacks it into `<cache>/libcarla-prebuilt/<name>`, where later
+   configures find it without downloading (every file is checked again; a
+   changed prefix is downloaded again). `<cache>` is typesafe_carla's cache
+   root, as for the launcher: `$TYPESAFE_CARLA_CACHE_DIR`, else
+   `${XDG_CACHE_HOME:-~/.cache}/typesafe-carla`.
 
 If any of this does not apply (no `gh`, not logged in — artifacts need a token
 even for a public repository —, no artifact for this commit and compiler, a
 fork's repository, no network), it says why and LibCarla is built from source
-as before. The answer is kept in the CMake cache until the ref, repository or
-compiler changes, or `-DTSC_CARLA_REFRESH=ON`. A moving `ue5-dev` has a
+as before. The answer is kept in the CMake cache until the ref, the repository
+or the compiler's ABI fingerprint changes, or `-DTSC_CARLA_REFRESH=ON`. A
+cached prefix that no longer fits (e.g. the compiler was upgraded) is looked
+up again, and LibCarla is built from source if nothing fits: `auto` never
+fails the configure step. A moving `ue5-dev` has a
 prebuilt only once CI has run on its current commit; pinning a commit
 (`-DTSC_CARLA_GIT_REF=<sha> -DTSC_CARLA_REF_NAME=ue5-dev`) uses an older one.
+
+**Cleaning up.** Each prefix is about 155 MB unpacked. The next download
+removes cached prefixes not used for 30 days;
+`tools/fetch_libcarla_prebuilt.py --prune [DAYS]` removes those not used for
+DAYS days (default: all) now, and deleting `<cache>/libcarla-prebuilt` is
+always safe.
+
+**Trust.** The artifact comes over TLS from the GitHub API, authenticated with
+your token, from a successful push or scheduled `ci.yml` run on `main` of this
+repository (not a fork, not a pull request). The digest and per-file hashes
+catch corruption and local changes, not a compromised run: a prebuilt is
+exactly as trustworthy as CI on `main`, which also builds the released wheels.
 
 `-DTSC_CARLA_PREBUILT_DIR=<prefix>` uses a given prefix (from the script, or
 assembled locally). Configuring then fails, rather than linking something
@@ -281,14 +302,18 @@ behaviour). The match is on `tools/libcarla_cache_guard.sh --abi` for the
 build's `CC`/`CXX` and flags, e.g.
 
     target=x86_64-linux-gnu
-    cc=gcc 11.4.0, glibc 2.35
-    cxx=gcc 11.4.0, libstdc++ 11 (20230528) cxx11-abi=1, glibc 2.35
+    cc=gcc 11.4.0, glibc 2.35, __SIZEOF_POINTER__=8, __SIZEOF_LONG__=8, __SIZEOF_LONG_DOUBLE__=16
+    cxx=gcc 11.4.0, libstdc++ 11 (20230528) cxx11-abi=1, glibc 2.35, __SIZEOF_POINTER__=8, __SIZEOF_LONG__=8, __SIZEOF_LONG_DOUBLE__=16, __GXX_RTTI=1, __EXCEPTIONS=1
 
-which is what static libraries and headers carry into the final link: the
-target, the compilers' upstream versions (their code generation, inline
-functions and the libstdc++ headers they instantiate), libstdc++'s release
-and dual-ABI mode (`std::string` and `std::list` layouts), and the glibc
-headers' version (newer ones redirect symbols, e.g. C23 `strtol`). The cache
+(the flags are `CMAKE_<LANG>_FLAGS` and those of the build type), which is
+what static libraries and headers carry into the final link: the target, the
+compilers' upstream versions (their code generation, inline functions and the
+libstdc++ headers they instantiate), libstdc++'s release and dual-ABI mode
+(`std::string` and `std::list` layouts), the glibc headers' version (newer
+ones redirect symbols, e.g. C23 `strtol`), the data model (`-m32`), and
+macros that change layouts or mangling when a flag sets them
+(`_GLIBCXX_DEBUG`, `_FILE_OFFSET_BITS`, `_TIME_BITS`, `-fno-rtti`,
+`-fno-exceptions`). The cache
 key's `--toolchain` is stricter, as a build tree needs, and would never match
 another machine: it includes the command's name (`g++-11` vs `c++`), the
 distribution's package revision (`11.4.0-1ubuntu1~22.04.3`, patches within

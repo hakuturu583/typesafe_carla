@@ -143,7 +143,7 @@ jobs:
       # download instead of compiling LibCarla (TSC_CARLA_PREBUILT=auto,
       # tools/fetch_libcarla_prebuilt.py; docs/releasing.md, "LibCarla
       # prebuilt"). Published from main only (pushes and the daily run, which
-      # also keeps the 90-day artifacts fresh), after the tests above passed.
+      # also keeps the 14-day artifacts fresh), after the tests above passed.
       - name: Assemble the LibCarla prebuilt
         id: prebuilt
         if: github.event_name == 'push' || github.event_name == 'schedule'
@@ -151,11 +151,21 @@ jobs:
           SHA: ${{ steps.carla.outputs.sha }}
         run: |
           set -euo pipefail
+          prefix="$RUNNER_TEMP/libcarla-prebuilt"
           cmake --build build --target libcarla_prebuilt
-          # Moved away from the build tree, to check that it is relocatable.
-          mv build/libcarla-prebuilt "$RUNNER_TEMP/libcarla-prebuilt"
-          du -sh "$RUNNER_TEMP/libcarla-prebuilt"
+          mv build/libcarla-prebuilt "$prefix"
+          du -sh "$prefix"
+          # Relocatable: no file names the checkout or the build tree.
+          if grep -rIl -e "$GITHUB_WORKSPACE" "$prefix"; then
+            echo "::error::the prefix refers to $GITHUB_WORKSPACE"; exit 1
+          fi
           name=$(python3 tools/fetch_libcarla_prebuilt.py --print-name "$SHA")
+          # The name's ABI hash is the one the manifest records.
+          hash=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["abi_hash"])' "$prefix/prebuilt.json")
+          case "$name" in
+            *-"$hash"-"$SHA") ;;
+            *) echo "::error::$name does not carry the manifest's ABI hash $hash"; exit 1 ;;
+          esac
           echo "name=${name}" >> "$GITHUB_OUTPUT"
       - name: Build the shim from the prebuilt alone
         if: steps.prebuilt.outcome == 'success'
@@ -163,17 +173,21 @@ jobs:
           SHA: ${{ steps.carla.outputs.sha }}
           CARLA_REF: ${{ matrix.carla_ref }}
         run: |
-          cmake -S . -B build-prebuilt -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF="$SHA" \
+          set -euo pipefail
+          # Without the build tree, so nothing can come from it.
+          mv build "$RUNNER_TEMP/build-aside"
+          trap 'mv "$RUNNER_TEMP/build-aside" build' EXIT
+          cmake -S . -B "$RUNNER_TEMP/build-prebuilt" -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF="$SHA" \
             -DTSC_CARLA_REF_NAME="$CARLA_REF" -DTSC_CARLA_PREBUILT_DIR="$RUNNER_TEMP/libcarla-prebuilt"
-          cmake --build build-prebuilt -j "$(nproc)" --target ${{ env.SHIM_TARGETS }}
-          ctest --test-dir build-prebuilt --output-on-failure
+          cmake --build "$RUNNER_TEMP/build-prebuilt" -j "$(nproc)" --target ${{ env.SHIM_TARGETS }}
+          ctest --test-dir "$RUNNER_TEMP/build-prebuilt" --output-on-failure
       - name: Publish the LibCarla prebuilt
         if: steps.prebuilt.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prebuilt.outputs.name }}
           path: ${{ runner.temp }}/libcarla-prebuilt
-          retention-days: 90
+          retention-days: 14
           if-no-files-found: error
           overwrite: true  # a re-run of the job
       # Slow (minutes): one leg, and only for main and the daily run.
