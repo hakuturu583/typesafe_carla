@@ -1,0 +1,11 @@
+# CustomV2XBytes.set_bytes takes a list of byte values; strings go through set_string.
+# expect-error: 'str' does not match expected type 'List[int]'
+import typesafe_carla as carla
+
+def payload() -> carla.CustomV2XBytes:
+    b = carla.CustomV2XBytes()
+    b.set_bytes("hello")
+    return b
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(payload())

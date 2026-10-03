@@ -124,6 +124,13 @@ static void test_layout(void) {
   CHECK(sizeof(tsc_light_t) == 32);
   CHECK(sizeof(tsc_light_state_t) == 24);
   CHECK(offsetof(tsc_light_state_t, group) == 12);
+  /* Issue #42 (_ffi.codon reads the two byte-array structs by offset). */
+  CHECK(sizeof(tsc_custom_v2x_data_t) == 32);
+  CHECK(sizeof(tsc_its_header_t) == 24 && sizeof(tsc_its_value_t) == 16);
+  CHECK(sizeof(tsc_its_reference_position_t) == 56);
+  CHECK(sizeof(tsc_cam_basic_vehicle_hf_t) == 248 && sizeof(tsc_cam_message_t) == 376);
+  CHECK(offsetof(tsc_cam_message_t, basic_vehicle) == 112);
+  CHECK(sizeof(tsc_its_protected_zone_t) == 64 && sizeof(tsc_its_path_point_t) == 40);
 }
 
 /* Issue #23, on any backend: no server needed. */
@@ -762,6 +769,9 @@ static void test_mock_sensors(void) {
   CHECK(tsc_sensor_data_as_radar(data, &radar) == TSC_TYPE_ERROR);
   double distance = 0.0;
   CHECK(tsc_obstacle_detection_get_distance(data, &distance) == TSC_TYPE_ERROR);
+  size_t v2x_count = 0; /* issue #42 */
+  CHECK(tsc_cam_event_get_message_count(data, &v2x_count) == TSC_TYPE_ERROR);
+  CHECK(tsc_custom_v2x_event_get_message_count(data, &v2x_count) == TSC_TYPE_ERROR);
   tsc_actor_t *event_actor = (tsc_actor_t *)0x1;
   CHECK(tsc_collision_event_get_actor(data, &event_actor) == TSC_TYPE_ERROR && event_actor == NULL);
   tsc_string_t written = {0};
@@ -1572,6 +1582,137 @@ static void test_mock_issue19(void) {
   CHECK(tsc_live_handle_count() == before);
 }
 
+/* Issue #42: V2X on the mock (which mirrors LibCarla ue5-dev). */
+static tsc_sensor_t *spawn_v2x(tsc_world_t *world, tsc_blueprint_library_t *library,
+                               const char *id, tsc_actor_t *parent) {
+  tsc_actor_blueprint_t *bp = NULL;
+  tsc_actor_t *actor = NULL;
+  tsc_sensor_t *sensor = NULL;
+  tsc_transform_t at = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+  CHECK_OK(tsc_blueprint_library_find(library, id, strlen(id), &bp));
+  CHECK_OK(tsc_world_spawn_actor(world, bp, &at, parent, TSC_ATTACHMENT_RIGID, &actor));
+  CHECK_OK(tsc_actor_as_sensor(actor, &sensor));
+  tsc_handle_release(H(bp));
+  tsc_handle_release(H(actor));
+  return sensor;
+}
+
+static void test_mock_issue42(void) {
+  uint64_t before = tsc_live_handle_count();
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  tsc_blueprint_library_t *library = NULL;
+  tsc_actor_blueprint_t *car = NULL;
+  tsc_actor_t *a = NULL, *b = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 4242, 0, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+  CHECK_OK(tsc_world_get_blueprint_library(world, &library));
+  CHECK_OK(tsc_blueprint_library_find(library, "vehicle.audi.tt", 15, &car));
+  tsc_transform_t at_a = {{0.0, 50.0, 0.5}, {0.0, 0.0, 0.0}};
+  tsc_transform_t at_b = {{10.0, 50.0, 0.5}, {0.0, 0.0, 0.0}};
+  CHECK_OK(tsc_world_spawn_actor(world, car, &at_a, NULL, TSC_ATTACHMENT_RIGID, &a));
+  CHECK_OK(tsc_world_spawn_actor(world, car, &at_b, NULL, TSC_ATTACHMENT_RIGID, &b));
+  tsc_sensor_t *sender = spawn_v2x(world, library, "sensor.other.v2x_custom", a);
+  tsc_sensor_t *receiver = spawn_v2x(world, library, "sensor.other.v2x_custom", b);
+  tsc_sensor_t *cam_tx = spawn_v2x(world, library, "sensor.other.v2x", a);
+  tsc_sensor_t *cam_rx = spawn_v2x(world, library, "sensor.other.v2x", b);
+  CHECK_OK(tsc_sensor_listen(receiver, 0));
+  CHECK_OK(tsc_sensor_listen(cam_rx, 0));
+
+  uint8_t message[TSC_CUSTOM_V2X_MAX_DATA_SIZE + 1] = {'a', 'b', 'c'};
+  CHECK(tsc_sensor_send(sender, message, sizeof message) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_sensor_send(sender, NULL, 1) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_sensor_send(sender, NULL, 0)); /* an empty message */
+  CHECK_OK(tsc_sensor_send(sender, message, 3));
+  uint64_t frame = 0;
+  CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+
+  tsc_sensor_data_t *data = NULL;
+  tsc_sensor_data_info_t info;
+  size_t count = 0;
+  CHECK_OK(tsc_sensor_wait_for_data(receiver, 1.0, &data));
+  CHECK_OK(tsc_sensor_data_get_info(data, &info));
+  CHECK(info.type == TSC_SENSOR_DATA_CUSTOM_V2X && info.frame == frame);
+  CHECK_OK(tsc_custom_v2x_event_get_message_count(data, &count));
+  CHECK(count == 2);
+  CHECK(tsc_cam_event_get_message_count(data, &count) == TSC_TYPE_ERROR);
+  tsc_custom_v2x_data_t received;
+  uint8_t payload[TSC_CUSTOM_V2X_MAX_DATA_SIZE] = {0};
+  CHECK_OK(tsc_custom_v2x_event_get_message(data, 0, &received, NULL, 0));
+  CHECK(received.data_size == 0);
+  CHECK_OK(tsc_custom_v2x_event_get_message(data, 1, &received, payload, 2));
+  CHECK(received.data_size == 3 && memcmp(payload, "ab", 2) == 0 && payload[2] == 0);
+  CHECK_OK(tsc_custom_v2x_event_get_message(data, 1, &received, payload, sizeof payload));
+  CHECK(memcmp(payload, "abc", 3) == 0);
+  CHECK(received.header.message_id == 0 && received.header.protocol_version == 2);
+  CHECK(received.power == 21.5f); /* the mock has no path loss */
+  CHECK(tsc_custom_v2x_event_get_message(data, 2, &received, NULL, 0) == TSC_NOT_FOUND);
+  CHECK(tsc_custom_v2x_event_get_message(data, 0, NULL, NULL, 0) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_custom_v2x_event_get_message(data, 0, &received, NULL, 1) == TSC_INVALID_ARGUMENT);
+  tsc_handle_release(H(data));
+
+  /* The CAM of vehicle a, at b: no RSU list, an empty path history. */
+  CHECK_OK(tsc_sensor_wait_for_data(cam_rx, 1.0, &data));
+  CHECK_OK(tsc_sensor_data_get_info(data, &info));
+  CHECK(info.type == TSC_SENSOR_DATA_CAM);
+  CHECK_OK(tsc_cam_event_get_message_count(data, &count));
+  CHECK(count == 1);
+  tsc_cam_message_t cam;
+  CHECK_OK(tsc_cam_event_get_message(data, 0, &cam));
+  CHECK(cam.header.message_id == 2 && cam.station_type == 5);
+  CHECK(cam.high_frequency_present == TSC_CAM_HF_BASIC_VEHICLE && cam.has_low_frequency == 1);
+  CHECK(cam.basic_vehicle.has_lateral_acceleration == 1);
+  CHECK(cam.basic_vehicle.has_steering_wheel_angle == 0);
+  CHECK(cam.reference_position.latitude == -4500); /* 0.1 microdegree: y = 50 m is -0.00045 deg */
+  size_t n = 1;
+  CHECK_OK(tsc_cam_event_get_protected_zones(data, 0, NULL, 0, &n));
+  CHECK(n == 0);
+  CHECK_OK(tsc_cam_event_get_path_history(data, 0, NULL, 0, &n));
+  CHECK(n == 0);
+  CHECK(tsc_cam_event_get_path_history(data, 0, NULL, 0, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_cam_event_get_message(data, 1, &cam) == TSC_NOT_FOUND);
+  CHECK(tsc_cam_event_get_protected_zones(data, 1, NULL, 0, &n) == TSC_NOT_FOUND);
+  CHECK(tsc_custom_v2x_event_get_message_count(data, &count) == TSC_TYPE_ERROR);
+  tsc_handle_release(H(data));
+
+  /* A road-side unit (no parent): 16 protected zones. */
+  tsc_sensor_t *rsu = spawn_v2x(world, library, "sensor.other.v2x", NULL);
+  CHECK_OK(tsc_world_tick(world, 1.0, &frame));
+  tsc_its_protected_zone_t zones[16];
+  int found = 0;
+  while (tsc_sensor_poll(cam_rx, &data) == TSC_OK && data != NULL) {
+    CHECK_OK(tsc_cam_event_get_message_count(data, &count));
+    for (size_t i = 0; i < count; ++i) {
+      CHECK_OK(tsc_cam_event_get_message(data, i, &cam));
+      if (cam.station_type != 15) continue;
+      found = 1;
+      CHECK(cam.high_frequency_present == TSC_CAM_HF_RSU);
+      CHECK_OK(tsc_cam_event_get_protected_zones(data, i, zones, 2, &n));
+      CHECK(n == 16 && zones[1].protected_zone_latitude == 50 && zones[1].has_expiry_time == 0);
+    }
+    tsc_handle_release(H(data));
+  }
+  CHECK(found);
+
+  /* The client-side lane-invasion sensor cannot send. */
+  tsc_sensor_t *lane = spawn_v2x(world, library, "sensor.other.lane_invasion", a);
+  CHECK(tsc_sensor_send(lane, message, 3) == TSC_TYPE_ERROR);
+
+  tsc_sensor_t *sensors[] = {sender, receiver, cam_tx, cam_rx, rsu, lane};
+  for (size_t i = 0; i < sizeof sensors / sizeof sensors[0]; ++i) {
+    int32_t destroyed = 0;
+    CHECK_OK(tsc_actor_destroy((tsc_actor_t *)sensors[i], &destroyed));
+    tsc_handle_release(H(sensors[i]));
+  }
+  tsc_handle_release(H(a));
+  tsc_handle_release(H(b));
+  tsc_handle_release(H(car));
+  tsc_handle_release(H(library));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK(tsc_live_handle_count() == before);
+}
+
 /* Issue #33: the hand-written blueprint attribute and G-buffer functions. */
 static void test_issue33_null(void) {
   tsc_string_list_t list = {NULL, 0};
@@ -1711,6 +1852,7 @@ int main(void) {
     test_mock_issue20();
     test_mock_issue19();
     test_mock_issue21();
+    test_mock_issue42();
     test_mock_timeout();
     test_mock_issue33();
   } else {

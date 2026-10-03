@@ -1,0 +1,456 @@
+# V2X (issue #42): Sensor.send and the CAM / custom V2X measurements of
+# LibCarla ue5-dev's sensor.other.v2x and sensor.other.v2x_custom.
+#
+#     cam = world.spawn_actor(lib.find("sensor.other.v2x"), t, attach_to=car).as_sensor()
+#     event = cam.wait_for_data(1.0).as_cam_event()
+#     for message in event:                 # CAMMessage
+#         cam_t = message.get()             # typed CAM, not a dict
+#         print(message.power, cam_t.header.station_id, cam_t.reference_position.latitude)
+#
+#     radio = world.spawn_actor(lib.find("sensor.other.v2x_custom"), t, attach_to=car).as_sensor()
+#     payload = carla.CustomV2XBytes()
+#     payload.set_string("hello")
+#     radio.send(payload)                   # or radio.send("hello")
+#
+# Built against a LibCarla without V2X (CARLA 0.10.0), send() and the
+# as_*_event() conversions raise CarlaError ("... is not available in LibCarla
+# 0.10.0") after their argument checks (send() on the client-side
+# lane-invasion sensor is still ActorTypeError); CustomV2XBytes is a plain
+# value and works everywhere.
+#
+# The Python API's CAMMessage.get() returns a nested dict whose enumerations
+# are display strings ("Passenger Car"). Here get() returns a typed CAM with
+# the same content (plus the altitude, which the Python API leaves out): the
+# ETSI ITS containers of LibCarla's LibITS.h, with snake_case field names,
+# raw ETSI codes and units (latitude in 0.1 microdegrees, speed in cm/s, ...)
+# and Optional for the optional fields and containers.
+
+from ._ffi import (CItsHeader, CItsValue, CItsReferencePosition, CCamBasicVehicleHf, CCamMessage,
+                   CItsProtectedZone, CItsPathPoint, CCustomV2XData,
+                   TSC_CUSTOM_V2X_MAX_DATA_SIZE, TSC_CAM_MAX_PROTECTED_ZONES,
+                   TSC_CAM_MAX_PATH_POINTS,
+                   TSC_CAM_HF_BASIC_VEHICLE, TSC_CAM_HF_RSU, TSC_INVALID_ARGUMENT,
+                   tsc_sensor_send, tsc_cam_event_get_message_count, tsc_cam_event_get_message,
+                   tsc_cam_event_get_protected_zones, tsc_cam_event_get_path_history,
+                   tsc_custom_v2x_event_get_message_count, tsc_custom_v2x_event_get_message)
+from .errors import _check, CarlaError, _normalize_index, _u8
+from .map import _read_buffer
+from .sensor import SensorData, Sensor, _Measurement
+
+class ItsPduHeader:
+    """ITS PDU header (ItsPduHeader). The Python API's "Header" dict."""
+    protocol_version: int
+    message_id: int  # 0 custom, 2 CAM (the Python API gives "CUSTOM", "CAM", ...)
+    station_id: int
+
+    def __init__(self, protocol_version: int = 0, message_id: int = 0, station_id: int = 0):
+        self.protocol_version = protocol_version
+        self.message_id = message_id
+        self.station_id = station_id
+
+    @staticmethod
+    def _from_c(c: CItsHeader) -> ItsPduHeader:
+        return ItsPduHeader(c.protocol_version, c.message_id, c.station_id)
+
+    def __repr__(self) -> str:
+        return (f"ItsPduHeader(protocol_version={self.protocol_version}, "
+                f"message_id={self.message_id}, station_id={self.station_id})")
+
+class ValueConfidence:
+    """A value with its ETSI confidence code (the Python API's {"Value",
+    "Confidence"} dicts; its confidences are display strings)."""
+    value: int
+    confidence: int
+
+    def __init__(self, value: int = 0, confidence: int = 0):
+        self.value = value
+        self.confidence = confidence
+
+    @staticmethod
+    def _from_c(c: CItsValue) -> ValueConfidence:
+        return ValueConfidence(c.value, c.confidence)
+
+    def __repr__(self) -> str:
+        return f"ValueConfidence(value={self.value}, confidence={self.confidence})"
+
+class ReferencePosition:
+    """ReferencePosition of the basic container."""
+    latitude: int  # 0.1 microdegree
+    longitude: int  # 0.1 microdegree
+    semi_major_confidence: int
+    semi_minor_confidence: int
+    semi_major_orientation: int
+    altitude: ValueConfidence  # cm, AltitudeConfidence
+
+    def __init__(self, c: CItsReferencePosition):
+        self.latitude = c.latitude
+        self.longitude = c.longitude
+        self.semi_major_confidence = c.semi_major_confidence
+        self.semi_minor_confidence = c.semi_minor_confidence
+        self.semi_major_orientation = c.semi_major_orientation
+        self.altitude = ValueConfidence._from_c(c.altitude)
+
+    def __repr__(self) -> str:
+        return (f"ReferencePosition(latitude={self.latitude}, longitude={self.longitude}, "
+                f"altitude={self.altitude.value})")
+
+def _opt(flag: i32, value: T, T: type) -> Optional[T]:
+    if int(flag) != 0:
+        return value
+    return None
+
+def _opt_value(flag: i32, c: CItsValue) -> Optional[ValueConfidence]:
+    """_opt that converts only a present value."""
+    if int(flag) != 0:
+        return ValueConfidence._from_c(c)
+    return None
+
+class CenDsrcTollingZone:
+    protected_zone_latitude: int
+    protected_zone_longitude: int
+    cen_dsrc_tolling_zone_id: Optional[int]
+
+    def __init__(self, latitude: int, longitude: int, zone_id: Optional[int]):
+        self.protected_zone_latitude = latitude
+        self.protected_zone_longitude = longitude
+        self.cen_dsrc_tolling_zone_id = zone_id
+
+class BasicVehicleContainerHighFrequency:
+    """The high-frequency container of a vehicle's CAM."""
+    heading: ValueConfidence  # 0.1 degree from north
+    speed: ValueConfidence  # cm/s
+    drive_direction: int  # 0 forward, 1 backward
+    vehicle_length: ValueConfidence  # 0.1 m; confidence: VehicleLengthConfidenceIndication
+    vehicle_width: int  # 0.1 m
+    longitudinal_acceleration: ValueConfidence  # 0.1 m/s^2
+    curvature: ValueConfidence
+    curvature_calculation_mode: int
+    yaw_rate: ValueConfidence  # 0.01 degree/s
+    acceleration_control: Optional[int]  # bit string
+    lane_position: Optional[int]
+    steering_wheel_angle: Optional[ValueConfidence]
+    lateral_acceleration: Optional[ValueConfidence]
+    vertical_acceleration: Optional[ValueConfidence]
+    performance_class: Optional[int]
+    cen_dsrc_tolling_zone: Optional[CenDsrcTollingZone]
+
+    def __init__(self, c: CCamBasicVehicleHf):
+        self.heading = ValueConfidence._from_c(c.heading)
+        self.speed = ValueConfidence._from_c(c.speed)
+        self.drive_direction = c.drive_direction
+        self.vehicle_length = ValueConfidence._from_c(c.vehicle_length)
+        self.vehicle_width = c.vehicle_width
+        self.longitudinal_acceleration = ValueConfidence._from_c(c.longitudinal_acceleration)
+        self.curvature = ValueConfidence._from_c(c.curvature)
+        self.curvature_calculation_mode = c.curvature_calculation_mode
+        self.yaw_rate = ValueConfidence._from_c(c.yaw_rate)
+        self.acceleration_control = _opt(c.has_acceleration_control, c.acceleration_control)
+        self.lane_position = _opt(c.has_lane_position, c.lane_position)
+        self.steering_wheel_angle = _opt_value(c.has_steering_wheel_angle, c.steering_wheel_angle)
+        self.lateral_acceleration = _opt_value(c.has_lateral_acceleration, c.lateral_acceleration)
+        self.vertical_acceleration = _opt_value(c.has_vertical_acceleration,
+                                                c.vertical_acceleration)
+        self.performance_class = _opt(c.has_performance_class, c.performance_class)
+        self.cen_dsrc_tolling_zone = None
+        if int(c.has_cen_dsrc_tolling_zone) != 0:
+            self.cen_dsrc_tolling_zone = CenDsrcTollingZone(
+                c.cen_dsrc_tolling_zone_latitude, c.cen_dsrc_tolling_zone_longitude,
+                _opt(c.has_cen_dsrc_tolling_zone_id, c.cen_dsrc_tolling_zone_id))
+
+    def __repr__(self) -> str:
+        return (f"BasicVehicleContainerHighFrequency(heading={self.heading.value}, "
+                f"speed={self.speed.value})")
+
+class ProtectedCommunicationZone:
+    """One zone of a road-side unit's high-frequency container."""
+    protected_zone_type: int
+    expiry_time: Optional[int]
+    protected_zone_latitude: int
+    protected_zone_longitude: int
+    protected_zone_radius: Optional[int]
+    protected_zone_id: Optional[int]
+
+    def __init__(self, c: CItsProtectedZone):
+        self.protected_zone_type = c.protected_zone_type
+        self.expiry_time = _opt(c.has_expiry_time, c.expiry_time)
+        self.protected_zone_latitude = c.protected_zone_latitude
+        self.protected_zone_longitude = c.protected_zone_longitude
+        self.protected_zone_radius = _opt(c.has_protected_zone_radius, c.protected_zone_radius)
+        self.protected_zone_id = _opt(c.has_protected_zone_id, c.protected_zone_id)
+
+class PathPoint:
+    """One point of the low-frequency container's path history."""
+    delta_latitude: int
+    delta_longitude: int
+    delta_altitude: int
+    path_delta_time: Optional[int]
+
+    def __init__(self, c: CItsPathPoint):
+        self.delta_latitude = c.delta_latitude
+        self.delta_longitude = c.delta_longitude
+        self.delta_altitude = c.delta_altitude
+        self.path_delta_time = _opt(c.has_path_delta_time, c.path_delta_time)
+
+class BasicVehicleContainerLowFrequency:
+    vehicle_role: int
+    exterior_lights: int  # ETSI bit string (bit 0, low beam, is the 0x80 bit)
+    path_history: List[PathPoint]  # [] when empty (the Python API gives None)
+
+    def __init__(self, vehicle_role: int, exterior_lights: int, path_history: List[PathPoint]):
+        self.vehicle_role = vehicle_role
+        self.exterior_lights = exterior_lights
+        self.path_history = path_history
+
+def _its_list(fn, data: SensorData, index: int, capacity: int, T: type) -> List[T]:
+    """Reads a two-call ITS list of CAM `index` into a buffer of LibITS's
+    fixed capacity (one call)."""
+    buf, n = _read_buffer(lambda h, b, cap, out_count: fn(h, index, b, cap, out_count),
+                          data._h.ptr, T, capacity)
+    return [buf[i] for i in range(n)]
+
+class CAM:
+    """A Cooperative Awareness Message (LibITS's CAM_t): CAMMessage.get().
+
+    At most one of the two high-frequency containers is set: a vehicle's
+    basic_vehicle_container_high_frequency, or a road-side unit's
+    protected_communication_zones_rsu (a pedestrian's CAM has neither)."""
+    header: ItsPduHeader
+    generation_delta_time: int  # ms, modulo 65536
+    station_type: int  # e.g. 5 passenger car, 15 road-side unit
+    reference_position: ReferencePosition
+    basic_vehicle_container_high_frequency: Optional[BasicVehicleContainerHighFrequency]
+    protected_communication_zones_rsu: Optional[List[ProtectedCommunicationZone]]
+    basic_vehicle_container_low_frequency: Optional[BasicVehicleContainerLowFrequency]
+
+    def __init__(self, data: SensorData, index: int, c: CCamMessage):
+        self.header = ItsPduHeader._from_c(c.header)
+        self.generation_delta_time = c.generation_delta_time
+        self.station_type = c.station_type
+        self.reference_position = ReferencePosition(c.reference_position)
+        self.basic_vehicle_container_high_frequency = None
+        self.protected_communication_zones_rsu = None
+        self.basic_vehicle_container_low_frequency = None
+        hf = int(c.high_frequency_present)
+        if hf == TSC_CAM_HF_BASIC_VEHICLE:
+            self.basic_vehicle_container_high_frequency = BasicVehicleContainerHighFrequency(
+                c.basic_vehicle)
+        elif hf == TSC_CAM_HF_RSU:
+            zones = _its_list(tsc_cam_event_get_protected_zones, data, index,
+                              TSC_CAM_MAX_PROTECTED_ZONES, CItsProtectedZone)
+            self.protected_communication_zones_rsu = [ProtectedCommunicationZone(z)
+                                                      for z in zones]
+        if int(c.has_low_frequency) != 0:
+            points = _its_list(tsc_cam_event_get_path_history, data, index,
+                               TSC_CAM_MAX_PATH_POINTS, CItsPathPoint)
+            self.basic_vehicle_container_low_frequency = BasicVehicleContainerLowFrequency(
+                c.vehicle_role, c.exterior_lights, [PathPoint(p) for p in points])
+
+    def __repr__(self) -> str:
+        return (f"CAM(station_id={self.header.station_id}, station_type={self.station_type}, "
+                f"generation_delta_time={self.generation_delta_time})")
+
+class CAMMessage:
+    """One received CAM (LibCarla's CAMData) and its receive power."""
+    power: float  # dBm
+    _cam: CAM
+
+    def __init__(self, power: float, cam: CAM):
+        self.power = power
+        self._cam = cam
+
+    def get(self) -> CAM:
+        """The message. The Python API builds a new dict (that also holds the
+        power) on each call; this returns the same stored CAM object, so
+        changes to it are seen by later get() calls."""
+        return self._cam
+
+    def __repr__(self) -> str:
+        return (f"CAMData(power={self.power}, stationId={self._cam.header.station_id}, "
+                f"messageId={self._cam.header.message_id})")
+
+class _V2XEvent(_Measurement):
+    """The messages a V2X sensor received in one tick. Indexing reads
+    LibCarla's buffer on access. Subclasses define _message(i) and _WHAT.
+
+    Every method reading _count takes `self: S`: in Codon 0.19, a method a
+    subclass inherits from here reads the wrong field otherwise."""
+    _count: int
+
+    def __init__(self, data: SensorData, count: int):
+        self.data = data
+        self._count = count
+
+    def get_message_count(self: S, S: type) -> int:
+        return self._count
+
+    def __len__(self: S, S: type) -> int:
+        return self._count
+
+    def __getitem__(self: S, index: int, S: type):
+        return self._message(_normalize_index(index, self._count, S._WHAT))
+
+    def __iter__(self: S, S: type):
+        for i in range(self._count):
+            yield self._message(i)
+
+    def __repr__(self: S, S: type) -> str:
+        return (f"{S._WHAT}(frame={self.frame}, timestamp={self.timestamp}, "
+                f"message_count={self._count})")
+
+class CAMEvent(_V2XEvent):
+    """The CAMs a sensor.other.v2x received in one tick."""
+    _WHAT: ClassVar[str] = "CAMEvent"
+
+    def _message(self, i: int) -> CAMMessage:
+        out = Ptr[CCamMessage](1)
+        _check(tsc_cam_event_get_message(self.data._h.ptr, i, out))
+        return CAMMessage(float(out[0].power), CAM(self.data, i, out[0]))
+
+class CustomV2XBytes:
+    """LibCarla's rpc::CustomV2XBytes: up to max_data_size() (100) bytes, the
+    payload of Sensor.send and of a CustomV2XEvent message.
+
+    set_string / set_bytes copy at most 100 bytes (the rest is cut, as in the
+    Python API) and zero the remainder. data_size may be set directly, within
+    [0, 100] (the Python API takes any uint8 and then reads past the buffer)."""
+    _bytes: Ptr[byte]  # always max_data_size() bytes
+    _size: int
+
+    def __init__(self):
+        self._bytes = Ptr[byte](TSC_CUSTOM_V2X_MAX_DATA_SIZE)
+        for i in range(TSC_CUSTOM_V2X_MAX_DATA_SIZE):
+            self._bytes[i] = byte(0)
+        self._size = 0
+
+    @property
+    def data_size(self) -> int:
+        return self._size
+
+    @data_size.setter
+    def data_size(self, size: int):
+        if size < 0 or size > TSC_CUSTOM_V2X_MAX_DATA_SIZE:
+            raise CarlaError(f"CustomV2XBytes.data_size must be in [0, "
+                             f"{TSC_CUSTOM_V2X_MAX_DATA_SIZE}], got {size}",
+                             TSC_INVALID_ARGUMENT)
+        self._size = size
+
+    def max_data_size(self) -> int:
+        return TSC_CUSTOM_V2X_MAX_DATA_SIZE
+
+    def _assign(self, n: int):
+        self._size = n
+        for i in range(n, TSC_CUSTOM_V2X_MAX_DATA_SIZE):
+            self._bytes[i] = byte(0)
+
+    def set_string(self, string: str):
+        n = min(len(string), TSC_CUSTOM_V2X_MAX_DATA_SIZE)
+        str.memcpy(self._bytes, string.ptr, n)
+        self._assign(n)
+
+    def get_string(self) -> str:
+        """The first data_size bytes (not decoded: Codon strings are bytes)."""
+        p = Ptr[byte](self._size if self._size > 0 else 1)
+        str.memcpy(p, self._bytes, self._size)
+        return str(p, self._size)
+
+    def set_bytes(self, bytes: List[int]):
+        """Each value must be in [0, 255] (CarlaError otherwise; nothing changes)."""
+        n = min(len(bytes), TSC_CUSTOM_V2X_MAX_DATA_SIZE)
+        values = [byte(int(_u8(bytes[i], "CustomV2XBytes.set_bytes"))) for i in range(n)]
+        for i in range(n):
+            self._bytes[i] = values[i]
+        self._assign(n)
+
+    def get_bytes(self) -> List[int]:
+        """The first data_size bytes (the Python API returns `bytes`)."""
+        return [int(self._bytes[i]) for i in range(self._size)]
+
+    def __eq__(self, other: CustomV2XBytes) -> bool:
+        return self.get_bytes() == other.get_bytes()
+
+    def __ne__(self, other: CustomV2XBytes) -> bool:
+        return not (self == other)
+
+    def __repr__(self) -> str:
+        return (f"CustomV2XBytes(max_data_size={TSC_CUSTOM_V2X_MAX_DATA_SIZE}, "
+                f"data_size={self._size}, bytes={self.get_bytes()})")
+
+class CustomV2XMessage:
+    """A custom V2X message (LibITS's CustomV2XM): CustomV2XData.get()."""
+    header: ItsPduHeader
+    data: CustomV2XBytes
+
+    def __init__(self, header: ItsPduHeader, data: CustomV2XBytes):
+        self.header = header
+        self.data = data
+
+    def __repr__(self) -> str:
+        return f"CustomV2XMessage(header={self.header}, data={self.data})"
+
+class CustomV2XData:
+    """One received custom V2X message (LibCarla's CustomV2XData) and its
+    receive power."""
+    power: float  # dBm
+    _message: CustomV2XMessage
+
+    def __init__(self, power: float, message: CustomV2XMessage):
+        self.power = power
+        self._message = message
+
+    def get(self) -> CustomV2XMessage:
+        """The message. The Python API builds a new dict (that also holds the
+        power) on each call; this returns the same stored object."""
+        return self._message
+
+    def __repr__(self) -> str:
+        return (f"CustomV2XData(power={self.power}, stationId={self._message.header.station_id}, "
+                f"messageId={self._message.header.message_id}, data={self._message.data})")
+
+class CustomV2XEvent(_V2XEvent):
+    """The custom messages a sensor.other.v2x_custom received in one tick."""
+    _WHAT: ClassVar[str] = "CustomV2XEvent"
+
+    def _message(self, i: int) -> CustomV2XData:
+        out = Ptr[CCustomV2XData](1)
+        payload = CustomV2XBytes()
+        _check(tsc_custom_v2x_event_get_message(self.data._h.ptr, i, out, payload._bytes,
+                                                TSC_CUSTOM_V2X_MAX_DATA_SIZE))
+        payload._size = int(out[0].data_size)
+        return CustomV2XData(float(out[0].power),
+                             CustomV2XMessage(ItsPduHeader._from_c(out[0].header), payload))
+
+@extend
+class SensorData:
+    def as_cam_event(self) -> CAMEvent:
+        """Checked conversion (ActorTypeError for another measurement). Raises
+        CarlaError for any measurement with a LibCarla without V2X (CARLA
+        0.10.0)."""
+        out = Ptr[int](1)
+        _check(tsc_cam_event_get_message_count(self._h.ptr, out))
+        return CAMEvent(self, out[0])
+
+    def as_custom_v2x_event(self) -> CustomV2XEvent:
+        """Checked conversion (ActorTypeError for another measurement). Raises
+        CarlaError for any measurement with a LibCarla without V2X (CARLA
+        0.10.0)."""
+        out = Ptr[int](1)
+        _check(tsc_custom_v2x_event_get_message_count(self._h.ptr, out))
+        return CustomV2XEvent(self, out[0])
+
+@extend
+class Sensor:
+    def send(self, message: CustomV2XBytes):
+        """ServerSideSensor::Send: sends message through this custom V2X sensor
+        (sensor.other.v2x_custom); the other custom V2X sensors on the same
+        channel_id and in range receive it at the next tick. On any other
+        server-side sensor LibCarla only logs a warning, as in the Python API.
+        Raises ActorTypeError on a client-side sensor (lane invasion), also
+        with a LibCarla without V2X (CARLA 0.10.0); there, any other sensor
+        raises CarlaError ("... is not available in LibCarla 0.10.0")."""
+        _check(tsc_sensor_send(self._h.ptr, message._bytes, message._size))
+
+    def send(self, message: str):
+        """send(CustomV2XBytes) of the first 100 bytes of message (set_string)."""
+        payload = CustomV2XBytes()
+        payload.set_string(message)
+        self.send(payload)

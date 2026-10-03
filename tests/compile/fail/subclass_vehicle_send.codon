@@ -1,0 +1,9 @@
+# A typed Vehicle has no send() (only a V2X sensor sends), in every mode.
+# expect-error: Vehicle has no method send() (it is an Actor compatibility shortcut; call it on the right actor type)
+import typesafe_carla as carla
+
+def ping(vehicle: carla.Vehicle):
+    vehicle.send("hello")
+
+# Compile-only: Codon type-checks a function only when it is called.
+ping(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

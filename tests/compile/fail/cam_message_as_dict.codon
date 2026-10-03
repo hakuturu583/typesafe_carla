@@ -1,0 +1,9 @@
+# CAMMessage.get() is a typed CAM, not the Python API's dict.
+# expect-error: 'CAM' object has no attribute '__getitem__'
+import typesafe_carla as carla
+
+def station(sensor: carla.Sensor) -> int:
+    return sensor.wait_for_data(1.0).as_cam_event()[0].get()["Header"]
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(station(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()))

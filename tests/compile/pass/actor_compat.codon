@@ -91,6 +91,7 @@ def sensor_methods(actor: carla.Actor):
     dropped: int = actor.dropped_count
     data: Optional[carla.SensorData] = actor.poll()
     waited: carla.SensorData = actor.wait_for_data(2.0)
+    actor.send("hello")  # issue #42
     actor.stop()
     print(listening, dropped, data, waited)
     # Issue #33.

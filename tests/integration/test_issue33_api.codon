@@ -107,28 +107,18 @@ try:
     print("ros", ros_before, ros_enabled, ros_after)
     assert not ros_after
 
-    depth = List[int]()
-    # A CARLA 0.10.0 server does not stream G-buffers: it rejects the
-    # subscription, which raises CarlaError here (the official Python module
-    # aborts the process). Any other server must deliver the texture.
-    server = client.get_server_version()
-    rejected = False
-    message = ""
-    try:
+    # G-buffer streaming is opt-in (TSC_TEST_GBUFFER=1). A server that cannot
+    # stream G-buffers (CARLA 0.10.0) rejects the subscription only after the
+    # client timeout and then crashes and restarts, breaking every test that
+    # runs after this one. The server version cannot tell it apart: ue5-dev
+    # servers also report "0.10.0".
+    if os.getenv("TSC_TEST_GBUFFER", "") != "1":
+        print("note: G-buffer checks skipped (set TSC_TEST_GBUFFER=1 against a "
+              "server that streams G-buffers; a CARLA 0.10.0 server crashes)")
+    else:
+        depth = List[int]()
         camera.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth,
                                  lambda d: depth.append(d.as_image().width))
-    except carla.CarlaError as e:
-        rejected = True
-        message = e.message
-    print("server", server, "gbuffer rejected", rejected, message)
-    if server.startswith("0.10.0"):
-        assert rejected, "a CARLA 0.10.0 server was expected to reject listen_to_gbuffer"
-        assert "do not stream G-buffers" in message, message
-        assert not camera.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
-        assert not camera.has_callback
-        print("note: CARLA 0.10.0 does not stream G-buffers; data checks skipped")
-    else:
-        assert not rejected, message
         assert camera.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
         assert not camera.is_listening_gbuffer(carla.GBufferTextureID.GBufferA)
         for _ in range(40):
