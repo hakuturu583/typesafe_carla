@@ -518,4 +518,6 @@ attrs71 = [bp71.get_attribute(a) for a in ("number_of_wheels", "role_name", "col
 attrs71.append(lib.find("sensor.camera.rgb").get_attribute("fov"))
 out("i71_str", " | ".join([str(m71.get_waypoint(p0.location)), str(world.get_spectator()), str(m71)] +
                           [str(a) for a in attrs71]))
-out("i71_timestamp", "".join("#" if c.isdigit() else c for c in str(world.get_snapshot().timestamp)))
+import re
+# Each run of digits becomes one "#": the frame and times grow between the runs.
+out("i71_timestamp", re.sub(r"\d+", "#", str(world.get_snapshot().timestamp)))

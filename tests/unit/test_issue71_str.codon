@@ -142,6 +142,15 @@ b = carla.CustomV2XBytes()
 b.set_bytes([1, 15, 16, 255])
 check(str(b), "CustomV2XData(max_data_size=100, data_size=4, bytes=[1, f, 10, ff])")
 check(str(carla.Color(1, 2, 3)), "Color(1,2,3,255)")
+# ActorAttribute's str() never raises: an unparsable value prints raw.
+check(str(carla.ActorAttribute("n", carla.ActorAttributeType.Int, True, "abc")),
+      "ActorAttribute(id=n,type=int,value=abc)")
+check(str(carla.ActorAttribute("f", carla.ActorAttributeType.Float, False, "0.05")),
+      "ActorAttribute(id=f,type=float,value=0.05(const))")
+check(str(carla.ActorAttribute("c", carla.ActorAttributeType.RGBColor, True, "1,2")),
+      "ActorAttribute(id=c,type=Color,value=1,2)")
+check(str(carla.ActorAttribute("v", 5, True, "1,2,3")),
+      "ActorAttribute(id=v,type=vector,value= (not implemented yet))")
 
 # Server objects (the mock server).
 world = carla.Client("localhost", 2000).get_world()

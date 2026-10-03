@@ -496,7 +496,10 @@ Deliberate differences, all in favour of static checking:
   so here `distance` accepts `vector=` or `location=` (exactly one) on any
   vector, a superset of the Python API.
 * **Attribute values are typed.** `ActorAttribute.as_int()` raises when the
-  attribute is not an int; `str(attribute)` gives the raw value.
+  attribute is not an int. Read values with `as_int()`, `as_float()`,
+  `as_bool()`, `as_color()` or `as_str()`: `str(attribute)` gives the Python
+  API's text, `ActorAttribute(id=number_of_wheels,type=int,value=4(const))`
+  (since issue #71; it used to give the raw value).
 * **Sensor callbacks run at dispatch points, not on CARLA's threads.**
   `sensor.listen(lambda data: ...)` works, but the callback receives a
   `SensorData` (convert it with `as_image()` etc.; a callback typed

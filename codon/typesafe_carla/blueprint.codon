@@ -117,18 +117,27 @@ class ActorAttribute:
         binding registers both `As<std::string>` and the ostream form as
         __str__; boost.python tries the later one first.)"""
         t = self.type
-        if t == ActorAttributeType.Bool:
-            v = ",type=bool,value=" + fmt_bool(self.as_bool())
-        elif t == ActorAttributeType.Int:
-            v = ",type=int,value=" + str(self.as_int())
-        elif t == ActorAttributeType.Float:
-            v = ",type=float,value=" + fmt_g32(self.as_float())
-        elif t == ActorAttributeType.String:
+        if t == ActorAttributeType.String:
             v = ",type=str,value=" + self._value
-        elif t == ActorAttributeType.RGBColor:
-            v = ",type=Color,value=" + str(self.as_color())
-        else:
+        elif t == 5:  # rpc::ActorAttributeType::Vector
+            v = ",type=vector,value= (not implemented yet)"
+        elif t < 0 or t > 5:
             v = ",INVALID"
+        else:
+            v = ",type=" + ("Color" if t == ActorAttributeType.RGBColor else _type_name(t)) + ",value="
+            # Never raise from str(): a value the typed accessor rejects
+            # (LibCarla's atoi/atof are lenient) prints as its raw text.
+            try:
+                if t == ActorAttributeType.Bool:
+                    v += fmt_bool(self.as_bool())
+                elif t == ActorAttributeType.Int:
+                    v += str(self.as_int())
+                elif t == ActorAttributeType.Float:
+                    v += fmt_g32(self.as_float())
+                else:
+                    v += str(self.as_color())
+            except:
+                v += self._value
         return "ActorAttribute(id=" + self.id + v + ("" if self.is_modifiable else "(const)") + ")"
 
 class ActorBlueprint:
