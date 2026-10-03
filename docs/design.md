@@ -568,8 +568,9 @@ carla.dispatch_sensor_callbacks()     # e.g. in an asynchronous main loop
   sensor. The registry holds the listening sensor handle, so the stream lives
   on without a reference in user code (as in the Python API) until it is
   unregistered. There is one callback per sensor actor: listening through
-  another handle of the same actor replaces it. The registry is not
-  thread-safe; register, stop and dispatch from one thread.
+  another handle of the same actor replaces it. Without the callback thread
+  (below) the registry is not thread-safe; register, stop and dispatch from
+  one thread.
 - **Order.** Per sensor, measurements are delivered in arrival order. Sensors
   are visited in registration order. One dispatch delivers only what was
   queued when the sensor's turn began (`tsc_sensor_pending_count`), so it
@@ -629,6 +630,75 @@ before the frame is queued. They therefore wait, within their timeout, until
 each of the client's tick listeners has received the returned frame
 (`tsc_tick_listener_wait_for_frame`, a frame counter and a condition
 variable); a timeout there only delays delivery to a later dispatch point.
+
+### The callback thread (issue #86)
+
+The dispatch points above break one Python-API pattern: tick, then block on
+a queue the callbacks fill (`queue.get(True, 10.0)`, as upstream
+`smoke/test_lidar.py` does). Data that reaches the client after `tick()`
+returned is never delivered, since the program never reaches another
+dispatch point. `carla.start_callback_thread()` restores the Python API's
+model: one background thread runs the callbacks as soon as their data is
+queued.
+
+```
+LibCarla thread ──▶ native queue ──push──▶ queue signal (counter + condvar)
+                                                │ tsc_queue_signal_wait
+                                                ▼
+                              callback thread: for each listener, under _lock,
+                              pop one item, callback(data); repeat
+```
+
+- **Waking.** Every `ItemQueue::push` (sensor, G-buffer and tick-listener
+  queues) increments a process-wide counter and notifies a condition
+  variable (`tsc_queue_signal_count` / `_wait` / `_notify`, ABI 4.7). The
+  thread reads the count, drains every listener, then waits for the count to
+  change, so it blocks instead of polling and cannot miss a push that lands
+  during a pass (the 1 s wait timeout only bounds the unexpected). The
+  signal object is leaked so it outlives static destructors at exit.
+- **Thread.** Codon 0.19's `threading` has locks but no threads; `@par` is
+  OpenMP's fork-join. The thread is a raw pthread made by
+  `GC_pthread_create` (exported by Codon's runtime), so the Boehm collector
+  registers it and scans its stack; its entry point is a top-level Codon
+  function's raw pointer. Callbacks may allocate freely.
+- **Locking.** While the thread runs, every registry operation and every
+  public operation that changes a sensor's streams (`listen`, `stop`,
+  `listen_to_gbuffer`, `stop_gbuffer`, `destroy`, `apply_batch(_sync)`,
+  `on_tick` / `remove_on_tick`) holds one lock, and the thread holds it for
+  each delivered item. So the registry and the shim's per-handle queue
+  pointers are never touched by two threads at once, and once `stop()`
+  returns no callback of that stream starts. The lock is recursive (a
+  callback may stop or listen) and fair: a gate lock in front of it keeps the
+  thread, which re-takes it per item, from starving the program's `stop()`.
+  Without the thread no lock is taken.
+- **Semantics.** Callbacks run one at a time, on that thread only: dispatch
+  points stop dispatching and `dispatch_callbacks()` returns 0, so a
+  callback never runs inside `tick()` (as in the Python API). Per stream,
+  arrival order; streams in registration order per pass. An exception is
+  printed to stderr and delivery continues (LibCarla's Python binding prints
+  it too); in dispatch-point mode it propagates instead. `stop_callback_thread()`
+  waits for the callback in progress and joins the thread; undelivered data
+  stays queued for the dispatch points. An `atexit` handler stops and joins
+  it (waiting at most 2 s for a running callback).
+- **Default: off.** The Python API's semantics argue for on, but Codon has no
+  GIL: the documented `frames.append(...)` callback would race with the main
+  thread and corrupt memory instead of merely interleaving. Existing programs
+  keep their single-threaded guarantees; programs ported from Python opt in
+  with `start_callback_thread()` or `TYPESAFE_CARLA_CALLBACK_THREAD=1` (which
+  starts it at the first registry operation). The switch is process-wide, as
+  the registry is; a per-client switch would not help, because a World does
+  not know its sensors.
+- **External dispatchers.** A wrapper that must call back into another
+  runtime on its own thread (the CPython wrapper, whose callbacks need the
+  GIL) cannot use this thread. It turns the dispatch points off with
+  `set_auto_dispatch(False)` and runs its own loop: `seen =
+  queue_signal_count()`, `dispatch_callbacks()`, `wait_queue_signal(seen,
+  timeout)` (or `tsc_queue_signal_wait` directly, without holding the GIL).
+  Such a thread was not made by Codon, so it first calls
+  `attach_current_thread()` (`GC_register_my_thread`) so the collector scans
+  its stack, and `detach_current_thread()` before it exits. With the GIL
+  held across each call into Codon, its calls never overlap the program's,
+  which is all the unlocked registry needs.
 
 The callback type is `Callable[[SensorData], None]`. Functions, bound methods,
 lambdas and closures are all accepted (Codon 0.19 cannot convert a capturing
@@ -692,6 +762,10 @@ Rules:
 * FFI state must be thread-safe.
 * `tsc_last_error` must be thread-local.
 * sensor queues must support producer/consumer access.
+* Codon callbacks never run on LibCarla threads. The optional callback
+  thread (section 15, issue #86) is the only other thread that enters Codon
+  code; it is created through the GC and serialized with the program's
+  stream operations by one lock.
 * no global Python interpreter lock exists or should be introduced.
 * the core library must not initialize CPython.
 

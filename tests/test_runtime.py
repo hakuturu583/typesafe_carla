@@ -229,3 +229,27 @@ def test_enum_names_and_values_match_the_official_module(launcher, tmp_path):
         ours[label] = {"names": {k: int(v) for k, v in (kv.split("=") for kv in names.split(","))},
                        "values": [int(v) for v in values.split(",")]}
     assert ours == official
+
+
+_AUTOSTART_PROGRAM = """
+import typesafe_carla as carla
+world = carla.Client("localhost", 2000).get_world()
+lib = world.get_blueprint_library()
+assert not carla.callback_thread_running()
+gnss = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform()).as_sensor()
+gnss.listen(lambda data: None)
+print(carla.callback_thread_running())
+gnss.destroy()
+print("OK")
+"""
+
+
+@pytest.mark.parametrize("value, running", [("1", "True"), ("0", "False"), (None, "False")])
+def test_callback_thread_environment_variable(launcher, tmp_path, value, running):
+    """Issue #86: TYPESAFE_CARLA_CALLBACK_THREAD=1 starts the callback thread
+    at the first stream operation; unset or 0 keeps the dispatch points."""
+    # An empty value counts as unset.
+    result = launcher("run", _program(tmp_path, _AUTOSTART_PROGRAM),
+                      env={"TYPESAFE_CARLA_CALLBACK_THREAD": value or ""})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.split() == [running, "OK"], result.stdout

@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 4
-TSC_ABI_VERSION_MINOR = 5
+TSC_ABI_VERSION_MINOR = 7  # 4.7: #86 (4.6 is reserved for #88)
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -1242,6 +1242,11 @@ from C import LIB.tsc_tick_listener_get_id(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_tick_listener_pending_count(cobj, Ptr[int]) -> i32
 from C import LIB.tsc_tick_listener_poll(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_tick_listener_stop(cobj) -> i32
+
+# Issue #86 (ABI 4.7): the queue signal, for the background callback dispatcher.
+from C import LIB.tsc_queue_signal_count(Ptr[u64]) -> i32
+from C import LIB.tsc_queue_signal_wait(u64, float, Ptr[u64]) -> i32
+from C import LIB.tsc_queue_signal_notify() -> i32
 
 # --- Helpers --------------------------------------------------------------------
 

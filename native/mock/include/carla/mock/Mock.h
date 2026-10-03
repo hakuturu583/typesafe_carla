@@ -37,6 +37,11 @@ TSC_MOCK_HOOK uint16_t tsc_mock_last_map_layers(void);    // LoadWorld / LoadWor
 // Live G-buffer subscriptions of the process (ListenToGBuffer minus a
 // successful StopGBuffer), leaked ones included.
 TSC_MOCK_HOOK size_t tsc_mock_gbuffer_subscriptions(void);
+// Issue #86: deliver each tick's measurements and OnTick snapshots that many
+// milliseconds after the tick, on a worker thread (0, the default: in the
+// ticking call). Models LibCarla's streaming threads, whose data can arrive
+// after World::Tick has returned.
+TSC_MOCK_HOOK void tsc_mock_set_delivery_delay_ms(uint32_t milliseconds);
 #undef TSC_MOCK_HOOK
 
 namespace carla {

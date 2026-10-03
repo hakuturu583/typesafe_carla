@@ -1,0 +1,8 @@
+# Issue #86: the callback thread is process-wide; it takes no client or sensor.
+# expect-error: start_callback_thread() takes 0 arguments
+import typesafe_carla as carla
+
+def use(client: carla.Client):
+    carla.start_callback_thread(client)
+
+use(carla.Client("localhost", 2000))

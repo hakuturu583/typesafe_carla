@@ -1,0 +1,8 @@
+# Issue #86: wait_queue_signal takes the count from queue_signal_count() and a timeout in seconds.
+# expect-error: 'str' does not match expected type 'float'
+import typesafe_carla as carla
+
+def use():
+    carla.wait_queue_signal(carla.queue_signal_count(), "1s")
+
+use()

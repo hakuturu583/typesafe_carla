@@ -1,0 +1,312 @@
+# Issue #86: the callback thread. The mock delivers each tick's data 50 ms
+# after the tick, on a worker thread, as LibCarla's streaming threads can, so
+# data reaches the client after World.tick() has returned. With the callback
+# thread, callbacks still run while the program's thread blocks without
+# ticking (the upstream smoke/test_lidar.py pattern); without it, they wait
+# for the next dispatch point.
+import threading
+import time
+import typesafe_carla as carla
+
+from typesafe_carla._ffi import LIB
+from C import LIB.tsc_mock_set_delivery_delay_ms(u32)
+from C import pthread_self() -> u64
+from C import pthread_create(Ptr[u64], cobj, cobj, cobj) -> i32
+from C import pthread_join(u64, Ptr[cobj]) -> i32
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+vehicle = world.get_actors()[0].as_vehicle()
+lib = world.get_blueprint_library()
+MAIN = pthread_self()
+
+class SensorQueue:
+    """A queue the callbacks fill, guarded by a lock (no GIL in Codon)."""
+    lock: threading.Lock
+    frames: List[int]
+    threads: List[u64]
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.frames = []
+        self.threads = []
+
+    def put(self, data: carla.SensorData):
+        with self.lock:
+            self.frames.append(data.frame)
+            self.threads.append(pthread_self())
+
+    def size(self) -> int:
+        with self.lock:
+            return len(self.frames)
+
+    def get(self, i: int, timeout: float) -> int:
+        """Blocks (without ticking) until item i is there; -1 on timeout."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            with self.lock:
+                if len(self.frames) > i:
+                    return self.frames[i]
+            time.sleep(0.005)
+        return -1
+
+def spawn(type_id: str) -> carla.Sensor:
+    return world.spawn_actor(lib.find(type_id), carla.Transform(), attach_to=vehicle).as_sensor()
+
+def test_without_thread_data_waits_for_dispatch():
+    assert not carla.callback_thread_running()
+    gnss = spawn("sensor.other.gnss")
+    q = SensorQueue()
+    gnss.listen(q.put)
+    frame = world.tick()
+    assert q.get(0, 0.3) == -1  # arrived after tick() returned: nobody delivers it
+    assert carla.dispatch_callbacks() == 1
+    assert q.frames == [frame]
+    assert q.threads[0] == MAIN
+    starts = List[str]()
+
+    def start_inside(data: carla.SensorData):
+        try:
+            carla.start_callback_thread()
+        except carla.CarlaError as e:
+            starts.append(e.message)
+    gnss.listen(start_inside)
+    world.tick()
+    time.sleep(0.2)
+    carla.dispatch_callbacks()
+    assert len(starts) == 1 and "from a callback" in starts[0], starts
+    assert not carla.callback_thread_running()
+    gnss.destroy()
+
+def test_thread_delivers_while_blocking():
+    carla.start_callback_thread()
+    carla.start_callback_thread()  # idempotent
+    assert carla.callback_thread_running()
+    lidar = spawn("sensor.lidar.ray_cast")
+    gnss = spawn("sensor.other.gnss")
+    lidar_q = SensorQueue()
+    gnss_q = SensorQueue()
+    ticks = List[int]()
+    tick_lock = threading.Lock()
+
+    def on_tick(s: carla.WorldSnapshot):
+        with tick_lock:
+            ticks.append(s.frame)
+
+    lidar.listen(lidar_q.put)
+    gnss.listen(gnss_q.put)
+    tick_id = world.on_tick(on_tick)
+    frames = List[int]()
+    for i in range(5):
+        frames.append(world.tick())
+        # The upstream pattern: block on the queue, no tick in between.
+        assert lidar_q.get(i, 10.0) == frames[i], (i, lidar_q.frames, frames)
+        assert gnss_q.get(i, 10.0) == frames[i]
+    assert lidar_q.frames == frames and gnss_q.frames == frames  # in order
+    for t in lidar_q.threads + gnss_q.threads:
+        assert t != MAIN
+    assert carla.dispatch_callbacks() == 0  # the thread delivers everything
+    deadline = time.time() + 10.0
+    while time.time() < deadline:
+        with tick_lock:
+            if len(ticks) >= 5:
+                break
+        time.sleep(0.005)
+    with tick_lock:
+        assert ticks[-5:] == frames, (ticks, frames)
+    world.remove_on_tick(tick_id)
+    lidar.destroy()
+    gnss.destroy()
+    carla.stop_callback_thread()
+    assert not carla.callback_thread_running()
+
+class Slow:
+    """A slow callback that records whether it is running."""
+    lock: threading.Lock
+    running: bool
+    calls: int
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.running = False
+        self.calls = 0
+
+    def on_data(self, data: carla.SensorData):
+        with self.lock:
+            self.running = True
+            self.calls += 1
+        time.sleep(0.02)
+        junk = List[List[int]]()  # allocate on this thread while the main one does too
+        for i in range(2000):
+            junk.append([i] * 8)
+        with self.lock:
+            self.running = False
+
+    def snapshot(self) -> Tuple[bool, int]:
+        with self.lock:
+            return (self.running, self.calls)
+
+def wait_for_calls(s: Slow, n: int):
+    deadline = time.time() + 10.0
+    while s.snapshot()[1] < n and time.time() < deadline:
+        time.sleep(0.002)
+    assert s.snapshot()[1] >= n, s.snapshot()
+
+def assert_quiet(s: Slow, calls: int):
+    junk = List[List[int]]()
+    for i in range(20000):
+        junk.append([i] * 8)
+    time.sleep(0.3)
+    assert s.snapshot() == (False, calls), (s.snapshot(), calls)
+
+def test_stop_destroy_while_running():
+    carla.start_callback_thread()
+    a = spawn("sensor.other.imu")
+    b = spawn("sensor.other.imu")
+    c = spawn("sensor.other.imu")
+    sa, sb, sc = Slow(), Slow(), Slow()
+    a.listen(sa.on_data)
+    b.listen(sb.on_data)
+    c.listen(sc.on_data)
+    for _ in range(20):
+        world.tick()  # 20 items each, ~0.4 s of callbacks per sensor
+    # The thread visits a, b, c in turn; each has ~0.4 s of callbacks queued.
+    wait_for_calls(sa, 1)
+    a.stop()  # waits for the callback in progress; none starts afterwards
+    running, calls_a = sa.snapshot()
+    assert not running and calls_a < 20, calls_a
+    assert not a.has_callback
+
+    wait_for_calls(sb, 1)
+    b.destroy()
+    running, calls_b = sb.snapshot()
+    assert not running and calls_b < 20, calls_b
+
+    # Re-listening replaces the callback: the old one never runs again.
+    wait_for_calls(sc, 1)
+    sc2 = Slow()
+    c.listen(sc2.on_data)
+    running, calls_c = sc.snapshot()
+    assert not running and calls_c < 20, calls_c
+    world.tick()
+    wait_for_calls(sc2, 1)
+    assert_quiet(sa, calls_a)
+    assert_quiet(sb, calls_b)
+    assert_quiet(sc, calls_c)
+
+    # Stopping the thread waits for the callback in progress; the rest is
+    # delivered at the dispatch points again, on the program's thread.
+    for _ in range(10):
+        world.tick()
+    wait_for_calls(sc2, 2)
+    carla.stop_callback_thread()
+    running, calls = sc2.snapshot()
+    assert not running and calls < 11, calls
+    time.sleep(0.3)  # the mock delivers the last ticks' data
+    assert sc2.snapshot() == (False, calls)
+    assert carla.dispatch_callbacks() == 11 - calls
+    assert sc2.snapshot()[1] == 11
+    c.destroy()
+    a.destroy()
+
+def test_errors_do_not_stop_the_thread():
+    carla.start_callback_thread()
+    gnss = spawn("sensor.other.gnss")
+    q = SensorQueue()
+    errors = List[str]()
+
+    def on_data(data: carla.SensorData):
+        if data.frame % 2 == 0:
+            try:
+                carla.stop_callback_thread()  # not from a callback
+            except carla.CarlaError as e:
+                errors.append(e.message)
+            raise carla.CarlaError("odd frames only")  # printed; the thread goes on
+        q.put(data)
+
+    gnss.listen(on_data)
+    frames = List[int]()
+    for _ in range(4):
+        frames.append(world.tick())
+    odd = [f for f in frames if f % 2 == 1]
+    assert q.get(len(odd) - 1, 10.0) == odd[-1]
+    time.sleep(0.3)  # the last even frame
+    assert q.frames == odd
+    assert len(errors) == 2 and "from a callback" in errors[0], errors
+    gnss.destroy()
+    carla.stop_callback_thread()
+
+def test_auto_dispatch_switch():
+    # An external dispatcher (e.g. a CPython wrapper's own thread) turns the
+    # dispatch points off and calls dispatch_callbacks() itself.
+    tsc_mock_set_delivery_delay_ms(u32(0))  # delivered inside tick()
+    gnss = spawn("sensor.other.gnss")
+    q = SensorQueue()
+    gnss.listen(q.put)
+    carla.set_auto_dispatch(False)
+    assert not carla.auto_dispatch()
+    seen = carla.queue_signal_count()
+    frame = world.tick()
+    assert q.size() == 0
+    assert carla.wait_queue_signal(seen, 10.0) != seen
+    assert carla.dispatch_callbacks() == 1 and q.frames == [frame]
+    carla.set_auto_dispatch(True)
+    frame = world.tick()
+    assert q.frames[-1] == frame
+    gnss.destroy()
+
+# An external dispatcher, as a CPython wrapper runs on its own thread (there
+# the GIL serializes it with the program's calls; here the program only ticks
+# and waits meanwhile): a thread Codon did not create, attached to the GC.
+_external_stop = False
+_external_attached = False
+
+def _external_main(arg: cobj) -> cobj:
+    global _external_attached
+    _external_attached = carla.attach_current_thread()
+    while not _external_stop:
+        seen = carla.queue_signal_count()
+        carla.dispatch_callbacks()
+        junk = List[List[int]]()  # allocate on this thread
+        for i in range(200):
+            junk.append([i] * 4)
+        carla.wait_queue_signal(seen, 0.05)
+    carla.detach_current_thread()
+    return cobj()
+
+def test_external_dispatcher():
+    global _external_stop
+    gnss = spawn("sensor.other.gnss")
+    q = SensorQueue()
+    gnss.listen(q.put)
+    carla.set_auto_dispatch(False)
+    tid = Ptr[u64](1)
+    assert pthread_create(tid, cobj(), _external_main(...).F.T.__raw__(), cobj()) == i32(0)
+    frames = List[int]()
+    for i in range(3):
+        frames.append(world.tick())
+        assert q.get(i, 10.0) == frames[i]
+    _external_stop = True
+    pthread_join(tid[0], Ptr[cobj](1))
+    assert _external_attached
+    assert q.frames == frames and all(t != MAIN for t in q.threads)
+    carla.set_auto_dispatch(True)
+    gnss.destroy()
+
+tsc_mock_set_delivery_delay_ms(u32(50))
+test_external_dispatcher()
+test_without_thread_data_waits_for_dispatch()
+test_thread_delivers_while_blocking()
+test_stop_destroy_while_running()
+test_errors_do_not_stop_the_thread()
+test_auto_dispatch_switch()
+
+# Left running at exit: the atexit handler stops it.
+tsc_mock_set_delivery_delay_ms(u32(20))
+carla.start_callback_thread()
+imu = spawn("sensor.other.imu")
+last = Slow()
+imu.listen(last.on_data)
+for _ in range(5):
+    world.tick()
+print("OK")

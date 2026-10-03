@@ -1,6 +1,7 @@
 /* Exercises the C ABI from plain C: ownership, errors, layout, threading.
  * Runs against whichever backend the library was built with; the
  * behavioural checks that depend on the mock server are skipped otherwise. */
+#define _POSIX_C_SOURCE 200809L /* nanosleep */
 #include "typesafe_carla/ffi.h"
 
 #include <pthread.h>
@@ -8,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static int g_failures = 0;
 
@@ -35,6 +37,7 @@ static int g_failures = 0;
  * last passed to LibCarla. Weak, so the libcarla build links without them. */
 extern size_t tsc_mock_last_worker_threads(void) __attribute__((weak));
 extern uint16_t tsc_mock_last_map_layers(void) __attribute__((weak));
+extern void tsc_mock_set_delivery_delay_ms(uint32_t) __attribute__((weak));
 
 static const char *kHost = "localhost";
 
@@ -309,6 +312,38 @@ static void *error_thread(void *arg) {
   (void)arg;
   CHECK(tsc_client_set_timeout(NULL, 1.0) == TSC_INVALID_ARGUMENT);
   return NULL;
+}
+
+/* Issue #86: the queue signal a background callback dispatcher blocks on. */
+static void *notify_thread(void *arg) {
+  (void)arg;
+  struct timespec delay = {0, 20 * 1000 * 1000};
+  nanosleep(&delay, NULL);
+  tsc_queue_signal_notify();
+  return NULL;
+}
+
+static void test_queue_signal(void) {
+  uint64_t count = 0, out = 0;
+  CHECK_OK(tsc_queue_signal_count(&count));
+  CHECK_OK(tsc_queue_signal_notify());
+  CHECK_OK(tsc_queue_signal_count(&out));
+  CHECK(out == count + 1);
+  /* Already different from `seen`: returns at once. */
+  CHECK_OK(tsc_queue_signal_wait(count, 1e9, &out));
+  CHECK(out == count + 1);
+  /* Unchanged: times out, which is not an error. */
+  CHECK_OK(tsc_queue_signal_wait(count + 1, 0.01, &out));
+  CHECK(out == count + 1);
+  /* Another thread's notify wakes the waiter. */
+  pthread_t thread;
+  pthread_create(&thread, NULL, notify_thread, NULL);
+  CHECK_OK(tsc_queue_signal_wait(count + 1, 30.0, &out));
+  CHECK(out == count + 2);
+  pthread_join(thread, NULL);
+  CHECK(tsc_queue_signal_count(NULL) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_queue_signal_wait(out, 0.0, NULL) == TSC_INVALID_ARGUMENT);
+  CHECK(tsc_queue_signal_wait(out, -1.0, &out) == TSC_INVALID_ARGUMENT);
 }
 
 static void test_thread_local_error(void) {
@@ -1832,6 +1867,50 @@ static void test_mock_issue33(void) {
   CHECK(tsc_live_handle_count() == before);
 }
 
+/* Issue #86: with delayed delivery (LibCarla's streaming threads), the
+ * measurement arrives after tick returns and bumps the queue signal. */
+static void test_mock_issue86(void) {
+  uint64_t before = tsc_live_handle_count();
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  tsc_blueprint_library_t *library = NULL;
+  tsc_actor_blueprint_t *bp = NULL;
+  tsc_actor_t *actor = NULL;
+  tsc_sensor_t *sensor = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2186, 0, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+  CHECK_OK(tsc_world_get_blueprint_library(world, &library));
+  CHECK_OK(tsc_blueprint_library_find(library, "sensor.other.gnss", 17, &bp));
+  tsc_transform_t at = {{0, 0, 2}, {0, 0, 0}};
+  CHECK_OK(tsc_world_spawn_actor(world, bp, &at, NULL, TSC_ATTACHMENT_RIGID, &actor));
+  CHECK_OK(tsc_actor_as_sensor(actor, &sensor));
+  CHECK_OK(tsc_sensor_listen(sensor, 0));
+  uint64_t seen = 0, now = 0, frame = 0;
+  size_t pending = 1;
+  CHECK_OK(tsc_queue_signal_count(&seen));
+  tsc_mock_set_delivery_delay_ms(100);
+  CHECK_OK(tsc_world_tick(world, 10.0, &frame));
+  CHECK_OK(tsc_sensor_pending_count(sensor, &pending));
+  CHECK(pending == 0); /* not yet delivered */
+  CHECK_OK(tsc_queue_signal_wait(seen, 10.0, &now));
+  CHECK(now != seen);
+  tsc_sensor_data_t *data = NULL;
+  CHECK_OK(tsc_sensor_wait_for_data(sensor, 10.0, &data));
+  CHECK(data != NULL);
+  tsc_handle_release(H(data));
+  tsc_mock_set_delivery_delay_ms(0);
+  int32_t destroyed = 0;
+  CHECK_OK(tsc_sensor_stop(sensor));
+  CHECK_OK(tsc_actor_destroy(actor, &destroyed));
+  tsc_handle_release(H(sensor));
+  tsc_handle_release(H(actor));
+  tsc_handle_release(H(bp));
+  tsc_handle_release(H(library));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK(tsc_live_handle_count() == before);
+}
+
 int main(void) {
   test_versions();
   test_layout();
@@ -1839,6 +1918,7 @@ int main(void) {
   test_wrong_handle_kind();
   test_refcount();
   test_thread_local_error();
+  test_queue_signal();
   test_issue23_offline();
   test_issue33_null();
   if (strcmp(tsc_backend_name(), "mock") == 0) {
@@ -1855,6 +1935,7 @@ int main(void) {
     test_mock_issue42();
     test_mock_timeout();
     test_mock_issue33();
+    test_mock_issue86();
   } else {
     printf("backend '%s': skipping mock-server checks\n", tsc_backend_name());
   }

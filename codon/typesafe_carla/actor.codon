@@ -36,7 +36,7 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_actor_get_socket_world_transforms, tsc_actor_get_socket_relative_transforms,
                    tsc_actor_apply_texture_color, tsc_actor_apply_texture_float_color)
 from .errors import _check, _check_light_state, _check_port, _normalize_index, _i32
-from ._callbacks import _unregister_callback, _stop_gbuffers
+from ._callbacks import _unregister_callback, _stop_gbuffers, _Locked
 from .geometry import BoundingBox, Location, Transform, Vector3D, _vector_arg, _location_arg
 from .control import VehicleControl, VehiclePhysicsControl
 from .texture import TextureColor, TextureFloatColor
@@ -342,10 +342,13 @@ class Actor:
         unregisters the callback and discards what it has not received.
         """
         actor_id = self.id
-        _stop_gbuffers(actor_id)  # while the server still knows the actor
         out = Ptr[i32](1)
-        _check(tsc_actor_destroy(self._h.ptr, out))
-        _unregister_callback(actor_id)
+        # With the callback thread (issue #86): waits for the callback in
+        # progress, and no callback of the sensor starts once this returns.
+        with _Locked():
+            _stop_gbuffers(actor_id)  # while the server still knows the actor
+            _check(tsc_actor_destroy(self._h.ptr, out))
+            _unregister_callback(actor_id)
         return int(out[0]) != 0
 
     def is_vehicle(self) -> bool:

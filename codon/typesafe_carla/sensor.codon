@@ -17,8 +17,9 @@
 # Callbacks run only inside World.tick(), World.wait_for_tick(),
 # Client.apply_batch_sync(do_tick=True) (after the server has answered),
 # Client.apply_batch(do_tick=True) (after sending; it does not wait) and
-# dispatch_sensor_callbacks(). The registry and dispatcher live in
-# _callbacks.codon.
+# dispatch_sensor_callbacks(); or, after start_callback_thread() (issue #86),
+# on one background thread as soon as the data arrives. The registry,
+# dispatcher and callback thread live in _callbacks.codon.
 #
 # Typed measurements keep their SensorData (and so the native buffer) alive.
 
@@ -50,7 +51,7 @@ from .actor import Actor, _make_actor
 from .lane_marking import LaneMarking
 from .map import _read_buffer
 from ._eq import _fields_eq
-from ._callbacks import (_register_callback, _unregister_stream, _find_callback, _pop,
+from ._callbacks import (_register_callback, _unregister_stream, _find_callback, _pop, _Locked,
                          dispatch_sensor_callbacks)
 from ._ffi import (TSC_GBUFFER_TEXTURE_COUNT, tsc_sensor_enable_for_ros,
                    tsc_sensor_disable_for_ros, tsc_sensor_is_enabled_for_ros,
@@ -1018,9 +1019,12 @@ class Sensor(Actor):
 
         listen(callback) / listen(callback, queue_size): callback mode, like
         the Python API. callback takes one SensorData; any return value is
-        ignored. It runs on the program's thread, never on a LibCarla thread:
-        in World.tick(), World.wait_for_tick(), Client.apply_batch(_sync) with
-        do_tick=True, and dispatch_sensor_callbacks(). The queue is unbounded
+        ignored. It never runs on a LibCarla thread. By default it runs on
+        the program's thread: in World.tick(), World.wait_for_tick(),
+        Client.apply_batch(_sync) with do_tick=True, and
+        dispatch_sensor_callbacks(). With start_callback_thread() (issue #86)
+        it runs on that background thread as soon as data arrives, as in the
+        Python API. The queue is unbounded
         by default; pass queue_size to drop the oldest beyond that. stop(),
         destroy() through any handle of the actor, or a batch DestroyActor
         unregisters the callback.
@@ -1033,13 +1037,16 @@ class Sensor(Actor):
         if isinstance(callback, int):
             if queue_size is not None:
                 raise CarlaError("listen(): queue size given twice", TSC_INVALID_ARGUMENT)
-            self._start(callback)
+            with _Locked():
+                self._start(callback)
         elif callback is None:
-            self._start(queue_size if queue_size is not None else 64)
+            with _Locked():
+                self._start(queue_size if queue_size is not None else 64)
         else:
             cb: Callable[[cobj], None] = _CallbackThunk(callback).run
-            self._start(queue_size if queue_size is not None else 0)
-            _register_callback(self.id, self._h, cb)
+            with _Locked():  # the callback thread (issue #86): see stop()
+                self._start(queue_size if queue_size is not None else 0)
+                _register_callback(self.id, self._h, cb)
 
     def _start(self, queue_size: int):
         """Drops any previous callback, then replaces the stream (the caller
@@ -1052,9 +1059,12 @@ class Sensor(Actor):
 
     def stop(self):
         """Stops the stream. In callback mode, also unregisters the callback
-        and discards the measurements it has not received yet."""
-        _check(tsc_sensor_stop(self._h.ptr))
-        _unregister_stream(self.id)
+        and discards the measurements it has not received yet. While the
+        callback thread runs (start_callback_thread()), waits for the callback
+        in progress: no callback of this stream starts once stop() returns."""
+        with _Locked():
+            _check(tsc_sensor_stop(self._h.ptr))
+            _unregister_stream(self.id)
 
     def _pop(self) -> Optional[SensorData]:
         p = _pop(self._h)
@@ -1135,10 +1145,11 @@ class Sensor(Actor):
         a server known to stream G-buffers."""
         cb: Callable[[cobj], None] = _CallbackThunk(callback).run
         id = _gbuffer_id(gbuffer_id)
-        # Before listening: _register_callback's own unregister would stop the new stream.
-        _unregister_stream(self.id, id)
-        _check(tsc_sensor_listen_to_gbuffer(self._h.ptr, u32(id), 0))
-        _register_callback(self.id, self._h, cb, id)
+        with _Locked():  # the callback thread (issue #86): see stop()
+            # Before listening: _register_callback's own unregister would stop the new stream.
+            _unregister_stream(self.id, id)
+            _check(tsc_sensor_listen_to_gbuffer(self._h.ptr, u32(id), 0))
+            _register_callback(self.id, self._h, cb, id)
 
     def is_listening_gbuffer(self, gbuffer_id: int) -> bool:
         out = Ptr[i32](1)
@@ -1148,8 +1159,9 @@ class Sensor(Actor):
     def stop_gbuffer(self, gbuffer_id: int):
         """Stops the texture's stream and drops its callback and undelivered data."""
         id = _gbuffer_id(gbuffer_id)
-        if not _unregister_stream(self.id, id):  # which stops a callback's stream
-            _check(tsc_sensor_stop_gbuffer(self._h.ptr, u32(id)))
+        with _Locked():  # the callback thread (issue #86): see stop()
+            if not _unregister_stream(self.id, id):  # which stops a callback's stream
+                _check(tsc_sensor_stop_gbuffer(self._h.ptr, u32(id)))
 
 def _gbuffer_id(gbuffer_id: int) -> int:
     if gbuffer_id < 0 or gbuffer_id >= TSC_GBUFFER_TEXTURE_COUNT:
