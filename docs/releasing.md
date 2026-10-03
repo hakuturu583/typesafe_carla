@@ -86,12 +86,36 @@ and commit; the annotated tag and the GitHub release name the ref and SHA.
 2. For each project on both indexes, add a **Trusted Publisher**:
    - owner/repository: `hakuturu583/typesafe_carla`
    - workflow: `release.yml`
-   - environment: `pypi` (PyPI) or `testpypi` (TestPyPI)
-3. In the GitHub repository settings, create the environments `pypi` and
-   `testpypi`. Protecting `pypi` with required reviewers is recommended. If
-   `pypi` has deployment branch/tag rules, they must allow both `main` (the
-   auto-release run is a push to `main`) and the release tags
-   (`[0-9]*.[0-9]*.[0-9]*-*`, for hand-cut tags).
+   - environment:
+
+     | | PyPI | TestPyPI |
+     |---|---|---|
+     | `typesafe-carla` | `pypi` | `testpypi` |
+     | `typesafe-carla-toolchain` | `pypi-toolchain` | `testpypi-toolchain` |
+
+   The two projects need different environments, and every publisher must
+   name one: a publisher with no environment matches both jobs. Trusted
+   publishers match on (repository, workflow, environment). With identical
+   claims, which project's pending publisher a token exchange reifies is
+   arbitrary, and the token is scoped to that one project only, so a run can
+   upload one package and fail the other ("400 Non-user identities cannot
+   create new projects"). Separate environments make the lookup unambiguous.
+
+   **Migrating from a single environment:** on each index, delete any
+   `typesafe-carla-toolchain` publisher (pending or active) registered with
+   environment `pypi` / `testpypi` or with no environment, then add it with
+   `pypi-toolchain` / `testpypi-toolchain`. PyPI looks up pending publishers
+   first, so a stale one would match `publish`'s token exchange and fail it.
+   A `typesafe-carla` publisher with `pypi` / `testpypi` is already correct.
+3. In the GitHub repository settings, create the environments `pypi`,
+   `pypi-toolchain`, `testpypi` and `testpypi-toolchain` **before the first
+   release**: GitHub creates a missing environment on first use, without any
+   protection. Protecting `pypi` and `pypi-toolchain` with required reviewers
+   is recommended; a release then needs two approvals in sequence (the
+   toolchain job, then `typesafe-carla`). If they have
+   deployment branch/tag rules, they must allow both `main` (the auto-release
+   run is a push to `main`) and, for hand-cut tags, the release tags
+   (`[0-9]*.[0-9]*.[0-9]*-*`).
 4. Create the labels `release:major`, `release:minor` and `release:patch`.
 5. The `release` job pushes the version bump to `main` and the tag with
    `GITHUB_TOKEN`: if `main` is protected, allow GitHub Actions to push to it
@@ -142,9 +166,14 @@ before releasing that ref.
 push to main ──► release ──┐  (bump, tag, push, draft GitHub release; only with a release:* label)
 push a tag ────────────────┤
 workflow_dispatch ─────────┴─► resolve ──► verify ──┬─► sdist ─────┐
-                                                    ├─► wheel ─────┼─► publish ──► github-release
+                                                    ├─► wheel ─────┼─► publish-toolchain ──► publish ──► github-release
                                                     └─► toolchain ─┘
 ```
+
+`publish-toolchain` (environment `<index>-toolchain`) uploads
+`typesafe-carla-toolchain`; `publish` (environment `<index>`) then uploads
+`typesafe-carla`. They are separate jobs so each project has its own trusted
+publisher (see One-time setup).
 
 It is one workflow because a tag pushed with `GITHUB_TOKEN` starts no new
 workflow runs: the auto-release tag is built and published by the run that
@@ -209,8 +238,11 @@ and no Codon, CARLA Python package or `CODON_PATH` set up by hand.
   `_native/LICENSE.CARLA` or `_native/THIRD_PARTY_NOTICES` is missing or
   empty;
 - builds the toolchain wheel and checks that the bundled Codon runs;
-- `twine check --strict`, then publishes the toolchain (an already-published
-  toolchain version is skipped) and `typesafe-carla` (an existing file fails);
+- `publish-toolchain` runs `twine check --strict` on every artifact (sdist,
+  wheel, toolchain), so nothing is uploaded unless all of them pass, then
+  publishes the toolchain (an already-published toolchain version is
+  skipped); `publish` then publishes `typesafe-carla` (an existing file
+  fails);
 - `github-release` publishes (or, for a hand-cut tag, creates) the GitHub
   release.
 
@@ -219,13 +251,15 @@ and no Codon, CARLA Python package or `CODON_PATH` set up by hand.
 The tag (and for the auto path, the version bump on `main` and a draft GitHub
 release) already exist, but PyPI may have nothing or only part of the files.
 
-- **Failure before `publish`** (verify, build or wheel checks): nothing was
+- **Failure before `publish-toolchain`** (verify, build or wheel checks): nothing was
   uploaded. If it was transient (a runner, network or GitHub outage), use
   **Re-run failed jobs**. If the commit or the CARLA ref is broken, abandon
   the version: delete the draft GitHub release and the tag
   (`git push origin :refs/tags/<tag>`), fix it on `main`, and release again.
   The auto path bumps to the next version, and the bump commit stays on
   `main`; that is harmless.
+- **Failure in `publish-toolchain`**: `typesafe-carla` was not uploaded.
+  **Re-run failed jobs**; the toolchain upload always skips existing files.
 - **Failure during `publish`** (some files uploaded): **Re-run failed jobs**.
   On a re-run (`run_attempt > 1`), `resolve` lets an already-published version
   through and `typesafe-carla` is uploaded with `skip-existing`, so the
