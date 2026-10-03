@@ -18,7 +18,7 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 | ue5-dev | cpython | smoke | 0a5ce0d5b4 | 20 | 2 | 0 | 0 |
 | ue5-dev | cpython | API | 0a5ce0d5b4 | 2 | 24 | 0 | 0 |
 | ue5-dev | cpython | top | 0a5ce0d5b4 | 1 | 1 | 1 | 0 |
-| ue5-dev | cpython | ported | 0a5ce0d5b4 | 24 | 13 | 0 | 0 |
+| ue5-dev | cpython | ported | 0a5ce0d5b4 | 25 | 12 | 0 | 0 |
 | ue5-dev | codon | unit | 0a5ce0d5b4 | 30 | 10 | 0 | 0 |
 | ue5-dev | codon | smoke | 0a5ce0d5b4 | 0 | 22 | 0 | 0 |
 | ue5-dev | codon | API | 0a5ce0d5b4 | 0 | 26 | 0 | 0 |
@@ -28,7 +28,7 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 | ue5-dev | official | smoke | 0a5ce0d5b4 | 22 | 0 | 0 | 0 |
 | ue5-dev | official | API | 0a5ce0d5b4 | 2 | 24 | 0 | 0 |
 | ue5-dev | official | top | 0a5ce0d5b4 | 1 | 1 | 1 | 0 |
-| ue5-dev | official | ported | 0a5ce0d5b4 | 32 | 3 | 0 | 0 |
+| ue5-dev | official | ported | 0a5ce0d5b4 | 34 | 1 | 0 | 0 |
 | 0.10.0 | cpython | unit | ada75f9206 | 13 | 2 | 0 | 0 |
 | 0.10.0 | codon | unit | ada75f9206 | 13 | 2 | 0 | 0 |
 | 0.10.0 | codon | smoke | ada75f9206 | 0 | 35 | 0 | 0 |
@@ -52,11 +52,10 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 - **load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way)**: 21 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +13 more
 - **the prop does not move after set_transform + tick in synchronous mode; the official module fails the same way on this server**: 1 tests: `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform`
 
-### the upstream test itself (fails with the official module too) (7 causes, 7 tests)
+### the upstream test itself (fails with the official module too) (6 causes, 6 tests)
 
 - **fails with the official module too: RuntimeError: std::exception**: 1 tests: `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`
 - **fails with the official module too: a script that needs command-line arguments (API/Tests.md documents them)**: 1 tests: `API/spawn_actor.py::<script>`
-- **fails with the official module too: assertion: AssertionError: True is not false : vehicle.carlacola.actors on Town10HD_Opt: [(17.091217041015625, 28.104215621948242, 'Spawn failed becaus**: 1 tests: `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points`
 - **fails with the official module too: error: exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu)**: 1 tests: `API/prop_control.py::<script>`
 - **fails with the official module too: test dependency `cv2` not installed in the test interpreter**: 1 tests: `test_ground_truth.py::<script>`
 - **fails with the official module too: the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
@@ -95,10 +94,9 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 
 ## Root causes: ue5-dev, official mode
 
-### behaviour differs (assertions, errors, crashes) (3 causes, 23 tests)
+### behaviour differs (assertions, errors, crashes) (2 causes, 21 tests)
 
-- **RuntimeError: std::exception**: 21 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +13 more
-- **assertion: AssertionError: True is not false : vehicle.carlacola.actors on Town10HD_Opt: [(17.091217041015625, 28.104215621948242, 'Spawn failed becaus**: 1 tests: `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points`
+- **RuntimeError: std::exception**: 20 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +12 more
 - **error: exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu)**: 1 tests: `API/prop_control.py::<script>`
 
 ### the test server's content (maps, blueprints), not typesafe_carla (2 causes, 3 tests)
@@ -376,7 +374,7 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `ported/smoke/test_lidar.py::TestASyncLidar.test_semlidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
 | `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | error | compile | pass | sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads (#86) |
 | `ported/smoke/test_map.py::TestMap.test_load_all_maps` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | fail | compile | fail | fails with the official module too: assertion: AssertionError: True is not false : vehicle.carlacola.actors on Town10HD_Opt: [(17.091217041015625, 28.104215621948242, 'Spawn failed becaus |
+| `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode` | pass | compile | pass | does not compile: no module named 'queue' |
 | `ported/smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync` | pass | compile | pass | does not compile: no module named 'queue' |
 | `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control` | error | compile | not run | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
@@ -387,7 +385,7 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
 | `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
 | `ported/smoke/test_world.py::TestWorld.test_fixed_delta_seconds` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `ported/test_vehicle_physics.py::<script>` | pass | compile | error | does not compile: no module named 'argparse' |
+| `ported/test_vehicle_physics.py::<script>` | pass | compile | pass | does not compile: no module named 'argparse' |
 
 ## Every test: 0.10.0
 

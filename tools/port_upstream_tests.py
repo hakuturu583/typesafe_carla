@@ -312,6 +312,7 @@ def _api_collision(t: str):
                 "client.set_timeout(60.0)  # port: Town10HD_Opt takes ~8 s to load\n"
                 "        world = client.load_world(shipped_map(client))\n"
                 "        frame = MapFrame(world, (177.7, 198.8), 0.0, 40.0)")
+    t = replace(t, 'bp_lib.filter("*mkz_2020*")', 'bp_lib.filter("vehicle.lincoln.mkz")')
     t = re.sub(r"walker = world\.spawn_actor\(bp, carla\.Transform\(carla\.Location\(([^()]*)\), carla\.Rotation\(\)\)\)",
                r"walker = frame.spawn(world, bp, frame.transform(\1))", t)
     t = re.sub(r"vehicle = world\.spawn_actor\(bp, carla\.Transform\(carla\.Location\(([^()]*)\), carla\.Rotation\(\)\)\)",
@@ -321,6 +322,8 @@ def _api_collision(t: str):
                "5 s was enough for Town01 on UE4; Town10HD_Opt takes ~8 s)",
                "the walker and the vehicle behind it, on Town01's road at y = 199 heading +x, go "
                "through a MapFrame onto a straight road of the loaded map",
+               "blueprint *mkz_2020* (UE4) is vehicle.lincoln.mkz on ue5-dev (stale upstream id; "
+               "Docs/catalogue_vehicles.md at the same commit)",
                "they spawn through MapFrame.spawn: a blocked spawn (UE4's flat-ground z) is "
                "retried 1 m higher, and the walker's further along the lane, the frame moving "
                "with it so the vehicle still starts 23 m behind it"]

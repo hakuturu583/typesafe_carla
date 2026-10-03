@@ -228,7 +228,7 @@ cpython:
     ported/smoke/test_snapshot.py:
       TestSnapshot.test_spawn_points: 'exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
     ported/smoke/test_spawnpoints.py:
-      TestSpawnpoints.test_spawn_points: 'xfail: fail: AssertionError: True is not false'
+      TestSpawnpoints.test_spawn_points: pass
     ported/smoke/test_streamming.py:
       TestStreamming.test_multistream: 'exclude: extra clients with wait_for_tick intermittently hang on this server (the official module timed out; a typesafe run passed)'
     ported/smoke/test_sync.py:
@@ -238,14 +238,14 @@ cpython:
     ported/smoke/test_vehicle_physics.py:
       TestApplyVehiclePhysics.test_single_physics_control: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
       TestApplyVehiclePhysics.test_multiple_physics_control: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
-      TestVehicleFriction.test_vehicle_zero_friction: 'exclude: physics on this ue5-dev server: the official module fails it too, with vehicle.taxi.ford''s velocities after initialisation [27.599, 27.764] against the 27.778 reference'
       TestVehicleFriction.test_vehicle_friction_volume: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
       TestVehicleFriction.test_vehicle_friction_values: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
-      TestVehicleTireConfig.test_vehicle_wheel_collision: 'exclude: physics on this ue5-dev server: the official module fails it too, with vehicle.taxi.ford''s two velocities after the simulation unequal, [-0.807, -2.364]'
-      TestVehicleTireConfig.test_vehicle_tire_long_stiff: 'exclude: physics on this ue5-dev server: the official module fails it too; two identical vehicle.firetruck.actors side by side at full throttle drive 29.73 m and 24.11 m (the test needs the second to go at least as far)'
       TestStickyControl.test_default: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
       TestStickyControl.test_true: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
       TestStickyControl.test_false: 'xfail: error: AttributeError: module ''carla.command'' has no attribute ''ApplyVehiclePhysicsControl'''
+      TestVehicleFriction.test_vehicle_zero_friction: 'exclude: physics on this ue5-dev server: the official module fails it too, with vehicle.taxi.ford''s velocities after initialisation [27.599, 27.764] against the 27.778 reference'
+      TestVehicleTireConfig.test_vehicle_wheel_collision: 'exclude: physics on this ue5-dev server: the official module fails it too, with vehicle.taxi.ford''s two velocities after the simulation unequal, [-0.807, -2.364]'
+      TestVehicleTireConfig.test_vehicle_tire_long_stiff: 'exclude: physics on this ue5-dev server: the official module fails it too; two identical vehicle.firetruck.actors side by side at full throttle drive 29.73 m and 24.11 m (the test needs the second to go at least as far)'
     ported/smoke/test_world.py:
       TestWorld.test_fixed_delta_seconds: pass
     ported/test_vehicle_physics.py:

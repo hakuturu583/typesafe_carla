@@ -523,7 +523,7 @@
     ]
    },
    "traces": {
-    "TestCollision.test_collision_against_side_of_car": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/API/test_collision.py\", line 157, in test_collision_against_side_of_car\n    walker = world.spawn_actor(bp, frame.transform(200.7, 199.3, 0.2))\nRuntimeError: std::exception"
+    "TestCollision.test_collision_against_side_of_car": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/API/test_collision.py\", line 192, in test_collision_against_side_of_car\n    bp = bp_lib.filter(\"*mkz_2020*\")[0]\nRuntimeError: std::exception"
    }
   },
   "ported/smoke/test_blueprint.py": {
@@ -679,12 +679,9 @@
    "file_error": null,
    "tests": {
     "TestSpawnpoints.test_spawn_points": [
-     "fail",
-     "AssertionError: True is not false : vehicle.carlacola.actors on Town10HD_Opt: [(17.091217041015625, 28.104215621948242, 'Spawn failed because of collision at spawn position')]"
+     "pass",
+     ""
     ]
-   },
-   "traces": {
-    "TestSpawnpoints.test_spawn_points": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_spawnpoints.py\", line 59, in test_spawn_points\n    self.assertFalse(any(x.error for x in response), \"%s on %s: %s\" % (  # port: say which\nAssertionError: True is not false : vehicle.carlacola.actors on Town10HD_Opt: [(17.091217041015625, 28.104215621948242, 'Spawn failed because of collision at spawn position')]"
    }
   },
   "ported/smoke/test_streamming.py": {
@@ -742,12 +739,9 @@
    "file_error": null,
    "tests": {
     "<script>": [
-     "error",
-     "exit 1: RuntimeError: std::exception"
+     "pass",
+     ""
     ]
-   },
-   "traces": {
-    "<script>": "  File \"test_vehicle_physics.py\", line 544, in <module>\n    main(args)\n  File \"test_vehicle_physics.py\", line 461, in main\n    uturn_scenario(world, bp_veh)\n  File \"test_vehicle_physics.py\", line 389, in uturn_scenario\n    data = run_scenario(world, bp_veh, init_loc=init_pos, controls=controls)\n  File \"test_vehicle_physics.py\", line 300, in run_scenario\n    vehicle = world.spawn_actor(bp_veh, veh_transf)\nRuntimeError: std::exception"
    }
   }
  },

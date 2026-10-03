@@ -822,11 +822,11 @@
    }
   },
   "ported/API/test_collision.py": {
-   "file_error": "ported/API/test_collision.py:12: no module named 'argparse'",
+   "file_error": "ported/API/test_collision.py:13: no module named 'argparse'",
    "tests": {
     "TestCollision.test_collision_against_side_of_car": [
      "compile",
-     "ported/API/test_collision.py:12: no module named 'argparse'"
+     "ported/API/test_collision.py:13: no module named 'argparse'"
     ]
    }
   },
@@ -839,7 +839,7 @@
    "tests": {
     "TestClient.test_version": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ]
    }
   },
@@ -852,7 +852,7 @@
    "tests": {
     "TestCollisionSensor.test_single_car": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ]
    }
   },
@@ -865,67 +865,67 @@
    "tests": {
     "TestGeoLocationConversion.test_geo_reference": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_geo_projection": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_location_to_geo_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_geo_to_location_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_zero_conversion": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_relative_offset_preserved": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_tm_location_to_geo_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_tm_geo_to_location_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_utm_north_location_to_geo_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_utm_north_geo_to_location_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_utm_south_location_to_geo_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_utm_south_geo_to_location_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_webmerc_location_to_geo_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_webmerc_geo_to_location_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_lcc_location_to_geo_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ],
     "TestGeoLocationConversion.test_lcc_geo_to_location_and_back": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ]
    }
   },
@@ -959,7 +959,7 @@
    "tests": {
     "TestMap.test_load_all_maps": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ]
    }
   },
@@ -984,7 +984,7 @@
    "tests": {
     "TestSpawnpoints.test_spawn_points": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ]
    }
   },
@@ -1016,23 +1016,11 @@
      "compile",
      "ported/smoke/test_vehicle_physics.py:22: no module named 'enum'"
     ],
-    "TestVehicleFriction.test_vehicle_zero_friction": [
-     "compile",
-     "ported/smoke/test_vehicle_physics.py:22: no module named 'enum'"
-    ],
     "TestVehicleFriction.test_vehicle_friction_volume": [
      "compile",
      "ported/smoke/test_vehicle_physics.py:22: no module named 'enum'"
     ],
     "TestVehicleFriction.test_vehicle_friction_values": [
-     "compile",
-     "ported/smoke/test_vehicle_physics.py:22: no module named 'enum'"
-    ],
-    "TestVehicleTireConfig.test_vehicle_wheel_collision": [
-     "compile",
-     "ported/smoke/test_vehicle_physics.py:22: no module named 'enum'"
-    ],
-    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": [
      "compile",
      "ported/smoke/test_vehicle_physics.py:22: no module named 'enum'"
     ],
@@ -1055,16 +1043,16 @@
    "tests": {
     "TestWorld.test_fixed_delta_seconds": [
      "compile",
-     "ported/smoke/__init__.py:37: 'SmokeTest' object has no attribute 'testing_address'"
+     "ported/smoke/__init__.py:39: 'SmokeTest' object has no attribute 'testing_address'"
     ]
    }
   },
   "ported/test_vehicle_physics.py": {
-   "file_error": "ported/test_vehicle_physics.py:25: no module named 'argparse'",
+   "file_error": "ported/test_vehicle_physics.py:26: no module named 'argparse'",
    "tests": {
     "<script>": [
      "compile",
-     "ported/test_vehicle_physics.py:25: no module named 'argparse'"
+     "ported/test_vehicle_physics.py:26: no module named 'argparse'"
     ]
    }
   }
