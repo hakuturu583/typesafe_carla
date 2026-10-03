@@ -125,6 +125,13 @@ SHA. UE4 refs (`0.9.x`, `ue4-dev`) are rejected.
 Releases set `CARLA_GIT_REF` to the commit SHA resolved from the release tag,
 so for them the recorded ref and commit are both that SHA.
 
+The wheel also ships `_native/THIRD_PARTY_NOTICES`, the license notices of
+everything LibCarla links statically. They are collected from the fetched
+sources at configure time by `cmake/ThirdPartyNotices.cmake`. If a ref links
+a new library, vendors a new `LibCarla/source/third-party/` directory, or
+drops a license text, configuring fails. Add the component's notice there
+before releasing that ref.
+
 ## Cutting a release
 
 `.github/workflows/release.yml` has three entry points:
@@ -196,7 +203,9 @@ and no Codon, CARLA Python package or `CODON_PATH` set up by hand.
 - builds the wheel in manylinux_2_28 with `TSC_BACKEND=libcarla`, then runs
   `tools/check_wheel.py`. That fails the release if the backend is not
   `libcarla`, the CARLA ref or commit differs from the resolved one, libpython
-  is linked, or the library exports anything besides `tsc_*`;
+  is linked, the library exports anything besides `tsc_*`, or
+  `_native/LICENSE.CARLA` or `_native/THIRD_PARTY_NOTICES` is missing or
+  empty;
 - builds the toolchain wheel and checks that the bundled Codon runs;
 - `twine check --strict`, then publishes the toolchain (an already-published
   toolchain version is skipped) and `typesafe-carla` (an existing file fails);
