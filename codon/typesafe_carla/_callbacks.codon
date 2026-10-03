@@ -196,16 +196,16 @@ def _discard_pending(h: Handle, gbuffer: int = -1):
 
 def _remove(i: int):
     """Unregisters _listeners[i]: stops its stream and discards what it has
-    not received (best effort: the stream may already be gone)."""
-    with _Locked():
-        listener = _listeners.pop(i)
-        listener.active = False
-        if listener.tick:
-            tsc_tick_listener_stop(listener.handle.ptr)  # also drops the queued snapshots
-            listener.handle.release()
-        else:
-            _stop_stream(listener.handle, listener.gbuffer)
-            _discard_pending(listener.handle, listener.gbuffer)
+    not received (best effort: the stream may already be gone). The caller
+    holds _Locked."""
+    listener = _listeners.pop(i)
+    listener.active = False
+    if listener.tick:
+        tsc_tick_listener_stop(listener.handle.ptr)  # also drops the queued snapshots
+        listener.handle.release()
+    else:
+        _stop_stream(listener.handle, listener.gbuffer)
+        _discard_pending(listener.handle, listener.gbuffer)
 
 def _unregister_stream(actor_id: int, gbuffer: int = -1) -> bool:
     """Drops the callback of one stream of this sensor actor (its measurements,
@@ -429,12 +429,12 @@ def detach_current_thread():
 def _on_callback_thread() -> bool:
     return _threaded and pthread_self() == _thread_id
 
-def _report(where: str, message: str):
+def _report(kind: str, message: str):
     """An exception escaped a callback on the callback thread. As LibCarla's
     Python binding, print it and keep delivering."""
     import sys
     sys.stderr.write("typesafe_carla: exception in a callback on the callback thread: " +
-                     where + message + "\n")
+                     kind + message + "\n")
     sys.stderr.flush()
 
 def _thread_deliver(listener: _Listener):

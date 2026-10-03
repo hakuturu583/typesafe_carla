@@ -1037,14 +1037,13 @@ class Sensor(Actor):
         if isinstance(callback, int):
             if queue_size is not None:
                 raise CarlaError("listen(): queue size given twice", TSC_INVALID_ARGUMENT)
-            with _Locked():
+        with _Locked():  # the callback thread (issue #86): see stop()
+            if isinstance(callback, int):
                 self._start(callback)
-        elif callback is None:
-            with _Locked():
+            elif callback is None:
                 self._start(queue_size if queue_size is not None else 64)
-        else:
-            cb: Callable[[cobj], None] = _CallbackThunk(callback).run
-            with _Locked():  # the callback thread (issue #86): see stop()
+            else:
+                cb: Callable[[cobj], None] = _CallbackThunk(callback).run
                 self._start(queue_size if queue_size is not None else 0)
                 _register_callback(self.id, self._h, cb)
 
