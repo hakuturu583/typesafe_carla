@@ -254,6 +254,25 @@ if(TSC_BUILD_TESTS AND NOT SKBUILD)
   add_test(NAME test_ffi COMMAND test_ffi)
   set_tests_properties(test_ffi PROPERTIES LABELS "${TSC_BACKEND}")
 
+  # ffi.h under strict standards (-pedantic-errors): C99, C11 and C++17. The
+  # header must not need compiler extensions its users did not ask for.
+  if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    set(_tsc_strict_src "${CMAKE_CURRENT_SOURCE_DIR}/tests/native/test_header_strict.c")
+    set(_tsc_strict_inc "-I${CMAKE_CURRENT_SOURCE_DIR}/native/include")
+    foreach(_std c99 c11)
+      add_test(NAME header_strict_${_std}
+               COMMAND ${CMAKE_C_COMPILER} -std=${_std} -pedantic-errors -Wall -Wextra -Werror
+                       -fsyntax-only ${_tsc_strict_inc} ${_tsc_strict_src})
+      set_tests_properties(header_strict_${_std} PROPERTIES LABELS "${TSC_BACKEND}")
+    endforeach()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+      add_test(NAME header_strict_cxx17
+               COMMAND ${CMAKE_CXX_COMPILER} -x c++ -std=c++17 -pedantic-errors -Wall -Wextra
+                       -Werror -fsyntax-only ${_tsc_strict_inc} ${_tsc_strict_src})
+      set_tests_properties(header_strict_cxx17 PROPERTIES LABELS "${TSC_BACKEND}")
+    endif()
+  endif()
+
   # Generated with the bindings (tools/bindgen): NULL-handle checks for every
   # generated function.
   add_executable(test_generated tests/native/test_generated.c)

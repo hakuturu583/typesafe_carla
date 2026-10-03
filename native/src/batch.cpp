@@ -56,6 +56,12 @@ Command to_command(const tsc_command_t &c) {
     }
     case TSC_COMMAND_SHOW_DEBUG_TELEMETRY:
       return Command::ShowDebugTelemetry(c.actor_id, c.flag != 0);
+    case TSC_COMMAND_APPLY_VEHICLE_PHYSICS_CONTROL:
+      return Command::ApplyVehiclePhysicsControl(
+          c.actor_id, to_carla(*require_ptr(c.physics_control, "command.physics_control")));
+    case TSC_COMMAND_APPLY_WALKER_STATE:
+      return Command::ApplyWalkerState(c.actor_id, to_carla(c.transform),
+                                       check_non_negative(c.scalar, "walker speed"));
     default:
       fail(TSC_INVALID_ARGUMENT, "unknown command type " + std::to_string(c.type));
   }

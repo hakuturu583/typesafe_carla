@@ -1,6 +1,7 @@
 # Issue #20 against a real CARLA server: Ackermann control and controller
 # settings, doors, failure state, telemetry, wheel steering, vehicle bones,
-# the CarSim / Chrono calls, the two batch commands, walker bones and poses.
+# the CarSim / Chrono calls, the two batch commands, walker bones and poses,
+# and the ApplyWalkerState batch command (#79).
 import os
 import typesafe_carla as carla
 
@@ -153,6 +154,18 @@ try:
     w.blend_pose(0.5)
     w.get_pose_from_animation()
     world.tick()
+
+    # Batch ApplyWalkerState (#79): move the walker 1 m along x, walk at 1 m/s.
+    here = w.get_transform()
+    target = carla.Transform(carla.Location(here.location.x + 1.0, here.location.y,
+                                            here.location.z), here.rotation)
+    r = client.apply_batch_sync([carla.command.ApplyWalkerState(w.id, target, 1.0)], True)
+    assert not r[0].has_error(), r[0].error
+    world.tick()
+    moved = w.get_location()
+    print("walker state", here.location, "->", moved, w.get_control())
+    # Two ticks of walking at 1 m/s: within 0.5 m of the target in x and y.
+    assert abs(moved.x - target.location.x) < 0.5 and abs(moved.y - target.location.y) < 0.5
 finally:
     if walker is not None:
         unwrap(walker).destroy()

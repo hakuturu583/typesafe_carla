@@ -773,6 +773,19 @@ class Command {
     ActorId actor;
     bool enabled;
   };
+  struct ApplyVehiclePhysicsControl : CommandBase<ApplyVehiclePhysicsControl> {
+    ApplyVehiclePhysicsControl(ActorId id, const VehiclePhysicsControl &value)
+        : actor(id), physics_control(value) {}
+    ActorId actor;
+    VehiclePhysicsControl physics_control;
+  };
+  struct ApplyWalkerState : CommandBase<ApplyWalkerState> {
+    ApplyWalkerState(ActorId id, const geom::Transform &value, const float speed)
+        : actor(id), transform(value), speed(speed) {}
+    ActorId actor;
+    geom::Transform transform;
+    float speed;
+  };
   struct SetAutopilot : CommandBase<SetAutopilot> {
     SetAutopilot(ActorId id, bool value, uint16_t port) : actor(id), enabled(value), tm_port(port) {}
     ActorId actor;
@@ -785,7 +798,8 @@ class Command {
                    SetSimulatePhysics, SetAutopilot, ApplyWalkerControl, ApplyTargetAngularVelocity,
                    ApplyImpulse, ApplyForce, ApplyAngularImpulse, ApplyTorque, SetEnableGravity,
                    SetVehicleLightState, ApplyLocation, SetTrafficLightState,
-                   ApplyVehicleAckermannControl, ShowDebugTelemetry>;
+                   ApplyVehicleAckermannControl, ShowDebugTelemetry, ApplyVehiclePhysicsControl,
+                   ApplyWalkerState>;
   CommandType command;
 };
 
