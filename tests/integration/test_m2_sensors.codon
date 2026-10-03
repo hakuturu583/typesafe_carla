@@ -63,8 +63,9 @@ try:
     # Zero-copy buffer: the picture is not uniform (it shows a street).
     lo = 255
     hi = 0
-    raw = image.raw_data()
-    for i in range(0, image.raw_size(), 4 * 97):
+    raw = image.raw_data  # issue #78: the Python API's read-only view
+    assert len(raw) == image.raw_size() and raw[1] == int(image.raw_data_ptr()[1])
+    for i in range(0, len(raw), 4 * 97):
         v = int(raw[i + 1])
         lo = min(lo, v)
         hi = max(hi, v)

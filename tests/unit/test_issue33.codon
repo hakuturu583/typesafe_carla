@@ -144,7 +144,7 @@ image[5] = carla.Color(1, 2, 3, 4)
 image[-1] = carla.Color(250, 251, 252, 253)
 assert image[5] == carla.Color(1, 2, 3, 4) and image.pixel(1, 1) == carla.Color(1, 2, 3, 4)
 assert image[11] == carla.Color(250, 251, 252, 253)
-assert int(image.raw_data()[20]) == 3 and int(image.raw_data()[22]) == 1  # BGRA
+assert image.raw_data[20] == 3 and image.raw_data[22] == 1  # BGRA
 assert raises_index_error(lambda: image.__setitem__(12, carla.Color()))
 assert raises_carla_error(lambda: image.__setitem__(0, carla.Color(256, 0, 0)))
 rgb.destroy()

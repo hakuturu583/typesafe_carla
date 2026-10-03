@@ -1,0 +1,9 @@
+# Only an Optional actor is unwrapped; an Optional[int] id is a compile error.
+# expect-error: a command's actor must be an Actor (a Vehicle, Walker, ...) or an actor id (int)
+import typesafe_carla as carla
+
+def destroy(client: carla.Client, actor_id: Optional[int]):
+    client.apply_batch([carla.command.DestroyActor(actor_id)])
+
+# Compile-only: Codon type-checks a function only when it is called.
+destroy(carla.Client("localhost", 2000), Optional[int](3))

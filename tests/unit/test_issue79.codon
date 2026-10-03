@@ -38,6 +38,16 @@ other = world.get_actor(spawned[0].actor_id)
 assert other is not None
 assert other.as_vehicle().get_physics_control() == pc
 
+# An Actor or the official keywords name the same vehicle (#76 style).
+pc.mass = got.mass + 10.0
+for cmd in [carla.command.ApplyVehiclePhysicsControl(vehicle, pc),
+            carla.command.ApplyVehiclePhysicsControl(actor=vehicle, physics_control=pc),
+            carla.command.ApplyVehiclePhysicsControl(actor_id=vehicle.id, physics_control=pc)]:
+    vehicle.apply_physics_control(got)
+    rs = client.apply_batch_sync([cmd], False)
+    assert not rs[0].has_error() and rs[0].actor_id == vehicle.id, rs[0].error
+    assert abs(vehicle.get_physics_control().mass - pc.mass) < 1e-3
+
 # Errors are per command, as on the server.
 walker = world.spawn_actor(lib.find("walker.pedestrian.0001"),
                            carla.Transform(carla.Location(10.0, 0.0, 1.0))).as_walker()
@@ -69,6 +79,13 @@ assert walker.get_location().distance(state.location) < 1e-3
 control = walker.get_control()
 assert abs(control.speed - 1.5) < 1e-6 and not control.jump
 assert abs(control.direction.x) < 1e-6 and abs(control.direction.y - 1.0) < 1e-6
+for cmd in [carla.command.ApplyWalkerState(walker, state, 0.5),
+            carla.command.ApplyWalkerState(actor=walker, transform=state, speed=0.5),
+            carla.command.ApplyWalkerState(actor_id=walker.id, transform=state, speed=0.5)]:
+    walker.apply_control(carla.WalkerControl(speed=0.0))
+    rs = client.apply_batch_sync([cmd], False)
+    assert not rs[0].has_error() and rs[0].actor_id == walker.id, rs[0].error
+    assert abs(walker.get_control().speed - 0.5) < 1e-6
 assert str(carla.command.ApplyWalkerState(walker.id, state, 1.0)).startswith(
     "command.ApplyWalkerState(")
 r = client.apply_batch_sync([carla.command.ApplyWalkerState(vehicle.id, state, 1.0)], False)

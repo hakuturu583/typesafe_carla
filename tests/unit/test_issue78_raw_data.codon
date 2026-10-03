@@ -1,0 +1,146 @@
+# Issue #78 on the mock backend: raw_data is the Python API's read-only
+# buffer property on every measurement that has one (a RawData view): its
+# bytes match the zero-copy raw_data_ptr(), it slices, iterates, copies into
+# a str and into Codon's numpy, and it keeps the measurement alive.
+import numpy as np
+import typesafe_carla as carla
+
+from C import GC_gcollect() -> None
+from C import GC_invoke_finalizers() -> int
+
+def collect():
+    for _ in range(3):
+        GC_gcollect()
+        GC_invoke_finalizers()
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+vehicle = world.get_actors()[0].as_vehicle()
+lib = world.get_blueprint_library()
+
+def spawn(id: str, w: int = 0, h: int = 0) -> carla.Sensor:
+    bp = lib.find(id)
+    if w > 0:
+        bp.set_attribute("image_size_x", str(w))
+        bp.set_attribute("image_size_y", str(h))
+    return world.spawn_actor(bp, carla.Transform(), attach_to=vehicle).as_sensor()
+
+def next_data(s: carla.Sensor) -> carla.SensorData:
+    s.listen()
+    world.tick()
+    d = s.wait_for_data(1.0)
+    s.stop()
+    return d
+
+def matches(view: carla.RawData, ptr: Ptr[u8], n: int) -> bool:
+    """Every access path of the view agrees with the pointer API."""
+    expected = [int(ptr[i]) for i in range(n)]
+    copy = view.tobytes()
+    return (len(view) == n and view.nbytes == n and view.readonly and
+            [view[i] for i in range(n)] == expected and view.tolist() == expected and
+            len(copy) == n and view == copy and hash(view) == hash(copy) and view == view[:])
+
+image = next_data(spawn("sensor.camera.rgb", 4, 3)).as_image()
+assert matches(image.raw_data, image.raw_data_ptr(), 48) and image.raw_size() == 48
+sweep = next_data(spawn("sensor.lidar.ray_cast")).as_lidar()
+assert matches(sweep.raw_data, Ptr[u8](sweep.raw_points().as_byte()), 3200 * 16)
+semantic = next_data(spawn("sensor.lidar.ray_cast_semantic")).as_semantic_lidar()
+assert matches(semantic.raw_data, semantic.raw_data_ptr(), 320 * 24)
+radar = next_data(spawn("sensor.other.radar")).as_radar()
+assert matches(radar.raw_data, radar.raw_data_ptr(), 160)
+events = next_data(spawn("sensor.camera.dvs", 5, 4)).as_dvs()
+assert matches(events.raw_data, events.raw_data_ptr(), 52)
+flow = next_data(spawn("sensor.camera.optical_flow", 4, 2)).as_optical_flow()
+assert matches(flow.raw_data, flow.raw_data_ptr(), 64)
+fake = flow.get_color_coded_flow()
+assert matches(fake.raw_data, fake.raw_data_ptr(), 32)
+
+# Indexing and slicing, as on a memoryview.
+raw = image.raw_data
+assert raw[-1] == raw[47] == image[11].a and raw[2] == image[0].r
+reds = raw[2::4]  # BGRA: every red byte, still a view
+assert len(reds) == 12 and reds.tolist() == [c.r for c in image]
+assert raw[::-1][0] == raw[47] and len(raw[::-1]) == 48 and raw[::-1][::-1] == raw
+assert raw[4:8].tolist() == [image[1].b, image[1].g, image[1].r, image[1].a]
+assert len(raw[40:100]) == 8 and len(raw[10:5]) == 0 and raw[10:5].tobytes() == ""
+assert image[0].r in raw and not (256 in raw)
+raised = False
+try:
+    raw[48]
+except IndexError:
+    raised = True
+assert raised
+assert repr(raw) == "<memory of 48 bytes>" and str(raw) == repr(raw)
+
+# The view sees in-place changes to the measurement, like the Python API's.
+image[0] = carla.Color(9, 8, 7, 6)
+assert raw[:4].tolist() == [7, 8, 9, 6] and reds[0] == 9
+image.convert(carla.ColorConverter.Depth)
+assert raw[0] == int(image.raw_data_ptr()[0]) and raw[2] == image[0].r
+
+# Codon's numpy: np.frombuffer over a copy of the bytes (Codon has no bytes).
+pixels = np.frombuffer(image.raw_data.tobytes(), dtype=np.uint8)
+assert pixels.shape == (48,) and all(int(pixels[i]) == raw[i] for i in range(48))
+bgra = pixels.reshape((3, 4, 4))
+assert int(bgra[2, 3, 2]) == image.pixel(3, 2).r
+points = np.frombuffer(sweep.raw_data.tobytes(), dtype=np.float32).reshape((3200, 4))
+assert float(points[5, 0]) == float(sweep[5].point.x)
+assert float(points[5, 3]) == float(sweep[5].intensity)
+flow_xy = np.frombuffer(flow.raw_data.tobytes(), dtype=np.float32)
+assert float(flow_xy[14]) == flow[7].x and float(flow_xy[15]) == flow[7].y
+
+# A view keeps its measurement (and LibCarla's buffer) alive.
+def views(sensor: carla.Sensor, n: int) -> List[carla.RawData]:
+    out = List[carla.RawData]()
+    for _ in range(n):
+        out.append(next_data(sensor).as_image().raw_data)
+    return out
+
+camera = spawn("sensor.camera.rgb", 8, 8)
+collect()
+baseline = carla._live_handle_count()
+kept = views(camera, 20)
+copies = [v.tobytes() for v in kept]
+collect()
+assert carla._live_handle_count() >= baseline + 20, (baseline, carla._live_handle_count())
+for i in range(20):
+    assert len(kept[i]) == 256 and kept[i] == copies[i]
+
+# A FakeImage's view keeps the buffer it was taken of alive: append / extend
+# move the bytes to a new buffer and leave the old one to the view. Freshly
+# allocated blocks of the old size must not reuse it.
+def churn(size: int) -> int:
+    junk = List[List[u8]]()
+    for k in range(2000):
+        junk.append([u8(k & 0xFF)] * size)
+    return len(junk)
+
+fake = carla.FakeImage(16, 4, 90.0, [u8(i & 0xFF) for i in range(256)])
+before = fake.raw_data
+snapshot = before.tobytes()
+fake.extend([1] * 100000)
+assert churn(256) == 2000
+assert len(before) == 256 and before == snapshot and len(fake.raw_data) == 100256
+before = fake.raw_data
+snapshot = before.tobytes()
+for _ in range(200000):  # grows more than once
+    fake.append(2)
+assert churn(100256) == 2000 and before == snapshot
+assert fake[100255] == 1 and fake[100256] == 2 and len(fake) == 300256
+# FakeImage copies the list it is built from: growing the caller's list
+# cannot free the bytes under a view (nor change the image).
+mine = [u8(i & 0xFF) for i in range(256)]
+own = carla.FakeImage(16, 4, 90.0, mine)
+view = own.raw_data
+snapshot = view.tobytes()
+mine.extend([u8(7)] * 100000)  # past its capacity: GC_realloc frees the old block
+mine[0] = u8(99)
+assert churn(256) == 2000
+assert view == snapshot  # the bytes the view was taken of are intact
+assert len(own) == 256 and own[0] == 0  # the image no longer aliases the list
+# del shifts the bytes in place: the view sees the shifted bytes.
+small = carla.FakeImage(1, 1, 90.0, [u8(1), u8(2), u8(3), u8(4)])
+view = small.raw_data
+del small[0]
+assert view[:3].tolist() == [2, 3, 4] and len(small) == 3
+print("OK")

@@ -117,7 +117,7 @@ try:
     deadline = time.time() + 10.0
     while True:
         brake = client.apply_batch_sync(
-            [carla.command.ApplyVehicleControl(ids[0], carla.VehicleControl(brake=1.0))])
+            [carla.command.ApplyVehicleControl(vehicle, carla.VehicleControl(brake=1.0))])  # an Actor (#76)
         assert not brake[0].has_error()
         world.wait_for_tick(10.0)
         if abs(vehicle.get_control().brake - 1.0) < 1e-3 or time.time() > deadline:

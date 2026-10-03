@@ -1,0 +1,9 @@
+# A literal None is not an actor (the official API crashes on DestroyActor(None)).
+# expect-error: a command's actor must be an Actor (a Vehicle, Walker, ...) or an actor id (int)
+import typesafe_carla as carla
+
+def destroy(client: carla.Client):
+    client.apply_batch([carla.command.DestroyActor(None)])
+
+# Compile-only: Codon type-checks a function only when it is called.
+destroy(carla.Client("localhost", 2000))

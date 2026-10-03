@@ -6,6 +6,15 @@ def batch(client: carla.Client, vehicle: carla.Vehicle, walker: carla.Walker,
     pc.mass = 1500.0
     commands = [carla.command.ApplyVehiclePhysicsControl(vehicle.id, pc),
                 carla.command.ApplyWalkerState(walker.id, walker.get_transform(), 1.4),
+                # An Actor, or the official keywords (#76 style).
+                carla.command.ApplyVehiclePhysicsControl(vehicle, pc),
+                carla.command.ApplyVehiclePhysicsControl(actor_id=vehicle.id, physics_control=pc),
+                carla.command.ApplyVehiclePhysicsControl(actor=vehicle, physics_control=pc),
+                carla.command.ApplyWalkerState(walker, walker.get_transform(), 1.4),
+                carla.command.ApplyWalkerState(actor_id=walker.id, transform=walker.get_transform(),
+                                               speed=1.4),
+                carla.command.ApplyWalkerState(actor=walker, transform=walker.get_transform(),
+                                               speed=1.4),
                 carla.command.SpawnActor(bp, point).then(
                     carla.command.ApplyVehiclePhysicsControl(carla.command.FutureActor,
                                                              carla.VehiclePhysicsControl()))]
