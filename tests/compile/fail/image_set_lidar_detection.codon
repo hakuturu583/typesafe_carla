@@ -1,0 +1,9 @@
+# Image elements are Colors: writing another measurement's element does not compile.
+# expect-error: 'LidarDetection' does not match expected type 'Color'
+import typesafe_carla as carla
+
+def overwrite(data: carla.SensorData):
+    image = data.as_image()
+    image[0] = carla.LidarDetection()
+
+overwrite(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor().wait_for_data())

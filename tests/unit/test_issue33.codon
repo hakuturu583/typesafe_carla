@@ -105,4 +105,98 @@ assert marking.type == carla.LaneMarkingType.NONE and marking.color == carla.Lan
 assert marking.lane_change == carla.LaneChange.NONE
 assert carla.LightState().group == carla.LightGroup.NONE
 
+# Element writes (__setitem__) go into LibCarla's buffer, as in the Python API.
+def raises_carla_error(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError:
+        return True
+    return False
+
+def raises_index_error(f) -> bool:
+    try:
+        f()
+    except IndexError:
+        return True
+    return False
+
+def spawn(id: str, w: int = 0, h: int = 0) -> carla.Sensor:
+    bp = lib.find(id)
+    if w > 0:
+        bp.set_attribute("image_size_x", str(w))
+        bp.set_attribute("image_size_y", str(h))
+    return world.spawn_actor(bp, carla.Transform(), attach_to=vehicle).as_sensor()
+
+def next_data(s: carla.Sensor) -> carla.SensorData:
+    s.listen()
+    world.tick()
+    d = s.wait_for_data(1.0)
+    s.stop()
+    return d
+
+rgb = spawn("sensor.camera.rgb", 4, 3)
+image = next_data(rgb).as_image()
+image[5] = carla.Color(1, 2, 3, 4)
+image[-1] = carla.Color(250, 251, 252, 253)
+assert image[5] == carla.Color(1, 2, 3, 4) and image.pixel(1, 1) == carla.Color(1, 2, 3, 4)
+assert image[11] == carla.Color(250, 251, 252, 253)
+assert int(image.raw_data()[20]) == 3 and int(image.raw_data()[22]) == 1  # BGRA
+assert raises_index_error(lambda: image.__setitem__(12, carla.Color()))
+assert raises_carla_error(lambda: image.__setitem__(0, carla.Color(256, 0, 0)))
+rgb.destroy()
+
+lidar_sensor = spawn("sensor.lidar.ray_cast")
+lidar = next_data(lidar_sensor).as_lidar()
+lidar[0] = carla.LidarDetection(carla.Location(1.5, -2.0, 0.25), 0.75)
+assert lidar[0].point == carla.Location(1.5, -2.0, 0.25) and lidar[0].intensity == 0.75
+assert lidar.raw_points()[0].x == float32(1.5)
+lidar_sensor.destroy()
+
+semantic_sensor = spawn("sensor.lidar.ray_cast_semantic")
+semantic = next_data(semantic_sensor).as_semantic_lidar()
+semantic[-1] = carla.SemanticLidarDetection(carla.Location(1.0, 2.0, 3.0), 0.5, 42, 7)
+last = semantic[len(semantic) - 1]
+assert last.point == carla.Location(1.0, 2.0, 3.0) and last.cos_inc_angle == 0.5
+assert last.object_idx == 42 and last.object_tag == 7
+assert raises_carla_error(lambda: semantic.__setitem__(
+    0, carla.SemanticLidarDetection(carla.Location(), 0.0, -1, 0)))
+semantic_sensor.destroy()
+
+radar_sensor = spawn("sensor.other.radar")
+radar = next_data(radar_sensor).as_radar()
+radar[2] = carla.RadarDetection(1.0, 0.5, 0.25, 12.0)
+assert radar[2].velocity == 1.0 and radar[2].depth == 12.0
+radar_sensor.destroy()
+
+dvs_sensor = spawn("sensor.camera.dvs", 8, 8)
+dvs = next_data(dvs_sensor).as_dvs()
+dvs[1] = carla.DVSEvent(300, 7, -123456789012, True)
+e = dvs[1]
+assert e.x == 300 and e.y == 7 and e.t == -123456789012 and e.pol
+assert dvs.to_array()[1] == [300, 7, -123456789012, 1]
+assert raises_carla_error(lambda: dvs.__setitem__(0, carla.DVSEvent(70000, 0, 0, False)))
+dvs_sensor.destroy()
+
+flow_sensor = spawn("sensor.camera.optical_flow", 4, 2)
+flow = next_data(flow_sensor).as_optical_flow()
+flow[3] = carla.OpticalFlowPixel(0.25, -0.5)
+assert flow[3].x == 0.25 and flow[3].y == -0.5
+
+# FakeImage is a byte vector, as in the Python API.
+fake = flow.get_color_coded_flow()
+assert len(fake) == 32 and len([b for b in fake]) == 32
+fake[0] = 7
+fake[-1] = 255
+assert fake[0] == 7 and fake[31] == 255 and 7 in fake and not (300 in fake)
+fake.append(9)
+fake.extend([10, 11])
+assert len(fake) == 35 and fake[34] == 11 and fake.raw_size() == 35
+del fake[34]
+assert len(fake) == 34 and [b for b in fake][-2:] == [9, 10]
+assert raises_carla_error(lambda: fake.append(256))
+assert raises_carla_error(lambda: fake.extend([1, -1]))
+assert len(fake) == 34  # nothing appended
+assert raises_index_error(lambda: fake.__setitem__(34, 0))
+flow_sensor.destroy()
+
 print("OK")

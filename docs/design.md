@@ -663,7 +663,9 @@ Implemented views (issue #24 added the last four): `Image` (BGRA bytes),
 `OpticalFlowImage` ({x, y} floats). In Codon they share one generic base,
 `_ArrayMeasurement[T]`: `len`, indexing and iteration convert one element at a
 time into the Python API's element class; `raw_data()` / `raw_size()` expose
-the bytes. `Image.convert` changes the buffer in place, as in the Python API.
+the bytes. `Image.convert` changes the buffer in place, as in the Python API,
+and so does assigning an element (`image[i] = color`, issue #33): each
+subclass's `_element` converts the Python-API element back into `T`.
 
 ## 17. Threading
 

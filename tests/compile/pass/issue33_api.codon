@@ -46,6 +46,30 @@ def enum_maps():
           len(carla.LightGroup.values), len(carla.MapLayer.values),
           len(carla.MaterialParameter.values), len(carla.VehicleLightState.values))
 
+def element_writes(data: carla.SensorData):
+    image = data.as_image()
+    image[0] = carla.Color(1, 2, 3)
+    lidar = data.as_lidar()
+    lidar[0] = carla.LidarDetection(carla.Location(1.0, 2.0, 3.0), 0.5)
+    semantic = data.as_semantic_lidar()
+    semantic[0] = carla.SemanticLidarDetection(carla.Location(), 1.0, 2, 3)
+    radar = data.as_radar()
+    radar[0] = carla.RadarDetection(1.0, 0.0, 0.0, 5.0)
+    dvs = data.as_dvs()
+    dvs[0] = carla.DVSEvent(1, 2, 3, True)
+    flow = data.as_optical_flow()
+    flow[0] = carla.OpticalFlowPixel(0.5, 0.5)
+    fake: carla.FakeImage = flow.get_color_coded_flow()
+    fake[0] = 255
+    fake.append(1)
+    fake.extend([2, 3])
+    fake.extend(flow.get_color_coded_flow())
+    del fake[0]
+    total = 0
+    for b in fake:
+        total += b
+    print(total, 4 in fake)
+
 world = carla.Client("localhost", 2000).get_world()
 actors = world.get_actors()
 actor_world(actors[0], actors[0].as_vehicle())
@@ -54,3 +78,4 @@ sensor_class_names(actors[5].as_sensor())
 blueprint_attributes(world.get_blueprint_library().find("vehicle.tesla.model3"))
 weather_presets(world)
 enum_maps()
+element_writes(actors[5].as_sensor().wait_for_data())

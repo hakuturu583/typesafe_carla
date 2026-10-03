@@ -519,9 +519,14 @@ Deliberate differences, all in favour of static checking:
 
 * **Sensor data (issue #24).**
   - `raw_data()` is a method returning a zero-copy `Ptr[u8]` (with
-    `raw_size()` in bytes), not a `memoryview`. Elements (`image[i]`,
-    `radar[i]`, ...) are read-only copies; the Python API's `__setitem__` is
-    not provided.
+    `raw_size()` in bytes), not a `memoryview`. Reading an element
+    (`image[i]`, `radar[i]`, ...) gives a copy; assigning one (`image[i] =
+    carla.Color(...)`, issue #33) writes into LibCarla's buffer, as in the
+    Python API, so `raw_data()` sees it. A field that does not fit LibCarla's
+    element type (a color component outside [0, 255], a DVS `x` beyond
+    uint16, a negative `object_idx`) raises `CarlaError`, where the Python
+    API raises `OverflowError` / `TypeError`. Negative indices count from the
+    end (the Python API rejects them).
   - `Image.save_to_disk` writes PNG only, as LibCarla does when built with
     PNG support only (CARLA's default build): any other extension is replaced
     by `.png`, missing directories are created, and the path written is
@@ -546,7 +551,9 @@ Deliberate differences, all in favour of static checking:
   - `LaneInvasionSensor`, `ServerSideSensor` and `ClientSideSensor` are the
     same type as `Sensor` (issue #33). In the Python API they are subclasses.
   - `OpticalFlowImage.get_color_coded_flow()` returns a `FakeImage` (the
-    Python API's name) with `raw_data()`, `pixel(x, y)` and byte indexing.
+    Python API's name) with `raw_data()`, `pixel(x, y)` and, as the Python
+    API's byte vector, indexing, assignment, `del`, iteration, `in`, `append`
+    and `extend` on single bytes (issue #33; slices are not supported).
   - DVS events are packed 13-byte records in LibCarla; `DVSEventArray` reads
     them in place, and `to_image()` / `to_array*()` are computed in Codon
     from that view (same results as LibCarla's `ToImage` / `ToArray*`).
