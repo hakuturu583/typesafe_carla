@@ -39,7 +39,7 @@ try:
     print("attributes", attrs)
     # The actor carries its blueprint's values (ue5-dev's lincoln.mkz says 3 wheels).
     assert attrs["role_name"] == "issue19"
-    assert attrs["number_of_wheels"] == str(bp.get_attribute("number_of_wheels"))
+    assert attrs["number_of_wheels"] == str(bp.get_attribute("number_of_wheels").as_int())
     assert int(attrs["number_of_wheels"]) > 0
     tags = vehicle.semantic_tags
     print("semantic_tags", tags)

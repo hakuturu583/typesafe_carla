@@ -548,3 +548,19 @@ out("i33_weather_presets", ";".join([",".join([fmt(x) for x in (
     w.sun_altitude_angle, w.fog_density, w.fog_distance, w.fog_falloff, w.wetness,
     w.scattering_intensity, w.mie_scattering_scale, w.rayleigh_scattering_scale, w.dust_storm)])
     for w in presets33]))
+# Issue #71: str() in the Python API's format, for server objects.
+m71 = world.get_map()
+bp71 = lib.find("vehicle.lincoln.mkz")
+attrs71 = [bp71.get_attribute(a) for a in ("number_of_wheels", "role_name", "color", "sticky_control")
+           if bp71.has_attribute(a)]
+attrs71.append(lib.find("sensor.camera.rgb").get_attribute("fov"))
+out("i71_str", " | ".join([str(unwrap(m71.get_waypoint(p0.location))), str(world.get_spectator()), str(m71)] +
+                          [str(a) for a in attrs71]))
+# Each run of digits becomes one "#": the frame and times grow between the runs.
+ts71 = List[str]()
+for c in str(world.get_snapshot().timestamp):
+    if not c.isdigit():
+        ts71.append(c)
+    elif len(ts71) == 0 or ts71[-1] != "#":
+        ts71.append("#")
+out("i71_timestamp", "".join(ts71))

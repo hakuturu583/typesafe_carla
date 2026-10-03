@@ -5,6 +5,7 @@
 from math import cos, sin, inf
 from ._ffi import CGeoLocation, CGeoProjection
 from .geometry import Location, _location_arg
+from ._fmt import fmt_f
 
 TSC_GEO_PROJECTION_TM = 0
 TSC_GEO_PROJECTION_UTM = 1
@@ -36,8 +37,8 @@ class GeoLocation:
         return GeoLocation(c.latitude, c.longitude, c.altitude)
 
     def __repr__(self) -> str:
-        return (f"GeoLocation(latitude={self.latitude}, longitude={self.longitude}, "
-                f"altitude={self.altitude})")
+        return (f"GeoLocation(latitude={fmt_f(self.latitude)}, longitude={fmt_f(self.longitude)}, "
+                f"altitude={fmt_f(self.altitude)})")
 
 class GeoEllipsoid:
     """Semi-major axis `a` (m) and inverse flattening `f_inv` (inf: a sphere)."""

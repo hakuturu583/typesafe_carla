@@ -24,7 +24,8 @@ assert type(v + a).__name__ == "Vector3D" and v + a == carla.Vector3D(2.0, 2.0, 
 assert type(a + v).__name__ == "Vector3D" and a + v == carla.Vector3D(2.0, 2.0, 3.0)
 assert a - v == carla.Vector3D(0.0, 2.0, 3.0) and v - a == carla.Vector3D(0.0, -2.0, -3.0)
 assert carla.Location(1.0, 0.0, 0.0) == v and v == carla.Location(1.0, 0.0, 0.0)
-assert a != v and repr(a) == "Location(x=1, y=2, z=3)" and repr(d) == "Vector3D(x=3, y=4, z=0)"
+assert a != v and repr(a) == "Location(x=1.000000, y=2.000000, z=3.000000)"
+assert repr(d) == "Vector3D(x=3.000000, y=4.000000, z=0.000000)"
 
 # Vector3D's methods, on Vector3D and Location alike.
 assert d.length() == 5.0 and d.squared_length() == 25.0
