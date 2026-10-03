@@ -51,16 +51,27 @@ jobs:
 
   libcarla:
     # The shim compiled and linked against real LibCarla built from CARLA
-    # sources. Runs the C ABI tests that need no server. ue5-dev, and 0.10.0
-    # as run by the test server.
+    # sources. Runs the C ABI tests that need no server. Every current Ubuntu
+    # LTS with that release's default GCC (users build LibCarla and the shim
+    # with their distribution's compiler; a manylinux/gcc-toolset prebuilt
+    # does not mix with it), times ue5-dev and 0.10.0 (the test server's).
     # LibCarla is built from the ref's current commit SHA, and build/ is
     # cached keyed by that SHA and the toolchain (docs/releasing.md,
     # "LibCarla build cache").
-    name: libcarla (${{ matrix.carla_ref }})
-    runs-on: ubuntu-24.04
+    name: libcarla (${{ matrix.os.runner }} gcc-${{ matrix.os.gcc }}, ${{ matrix.carla_ref }})
+    runs-on: ${{ matrix.os.runner }}
+    env:
+      # The release's default GCC, never a newer one the runner image adds.
+      CC: gcc-${{ matrix.os.gcc }}
+      CXX: g++-${{ matrix.os.gcc }}
     strategy:
       fail-fast: false
       matrix:
+        # Ubuntu 20.04 is out of standard support, and its GCC 9 lacks C++20.
+        os:
+          - { runner: ubuntu-22.04, gcc: 11 }
+          - { runner: ubuntu-24.04, gcc: 13 }
+          - { runner: ubuntu-26.04, gcc: 15 }
         carla_ref: ${{ fromJSON(inputs.carla_ref && format('["ue5-dev","0.10.0","{0}"]', inputs.carla_ref) || '["ue5-dev","0.10.0"]') }}
     steps:
       - uses: actions/checkout@v4
@@ -69,15 +80,18 @@ jobs:
         id: carla
         env:
           CARLA_REF: ${{ matrix.carla_ref }}
+          OS: ${{ matrix.os.runner }}
+          GCC: ${{ matrix.os.gcc }}
         run: |
           set -euo pipefail
+          "$CXX" --version | sed -n 1p
           sha=$(tools/resolve_carla_ref.sh "$CARLA_REF")
           echo "CARLA ${CARLA_REF} = ${sha}"
           # Objects from another toolchain are never restored.
           tc=$(tools/libcarla_cache_guard.sh --toolchain | sha256sum | cut -c1-12)
           {
             echo "sha=${sha}"
-            echo "key=libcarla-${RUNNER_OS}-${RUNNER_ARCH}-ubuntu-24.04-${tc}-${sha}"
+            echo "key=libcarla-${RUNNER_OS}-${RUNNER_ARCH}-${OS}-gcc-${GCC}-${tc}-${sha}"
           } >> "$GITHUB_OUTPUT"
       - name: Restore the LibCarla build
         id: cache
@@ -123,7 +137,11 @@ jobs:
       # LibCarla build of the package.
       - name: Binding spec vs LibCarla headers
         run: uv run --no-project --with pyyaml --with libclang==18.1.1 python -m tools.bindgen validate --build-dir build
+      # Slow (minutes): one leg, and only for main and the daily run.
       - name: LibCarla API coverage report
+        if: >-
+          matrix.os.runner == 'ubuntu-24.04' && matrix.carla_ref == 'ue5-dev' &&
+          (github.event_name == 'push' || github.event_name == 'schedule')
         run: |
           uv run --no-project --with pyyaml --with libclang==18.1.1 python -m tools.bindgen coverage --build-dir build -o coverage.md
           cat coverage.md >> "$GITHUB_STEP_SUMMARY"

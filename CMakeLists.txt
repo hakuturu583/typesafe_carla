@@ -185,6 +185,19 @@ else()
     set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
   endif()
 
+  # CARLA sets ZLIB_INCLUDE_DIRS to zlib's source and build directories with
+  # `set(ZLIB_INCLUDE_DIRS <src> <build> CACHE INTERNAL "")`, which keeps only
+  # the source directory; zlib generates zconf.h in its build directory, so
+  # libpng's pnglibconf step then finds zconf.h only if the system has one
+  # (zlib1g-dev) and fails otherwise. A normal variable with both shadows the
+  # cache entry (CMP0126, NEW from CARLA's minimum CMake 3.27).
+  if(FETCHCONTENT_BASE_DIR)
+    set(_tsc_fc_base "${FETCHCONTENT_BASE_DIR}")
+  else()
+    set(_tsc_fc_base "${CMAKE_BINARY_DIR}/_deps")
+  endif()
+  set(ZLIB_INCLUDE_DIRS "${_tsc_fc_base}/zlib-src;${_tsc_fc_base}/zlib-build")
+
   add_subdirectory("${TSC_CARLA_DIR}" "${CMAKE_BINARY_DIR}/carla" EXCLUDE_FROM_ALL SYSTEM)
   if(NOT TARGET carla-client)
     message(FATAL_ERROR "CARLA at ${TSC_CARLA_DIR} did not define the carla-client target")

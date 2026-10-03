@@ -246,7 +246,7 @@ names that branch or tag, and it is what is recorded as the ref: e.g.
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
-| 0.1.0 | 4.4 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev` and `0.10.0`: build, link and pass the C ABI tests in CI |
+| 0.1.0 | 4.4 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64; Ubuntu 22.04 (GCC 11), 24.04 (GCC 13), 26.04 (GCC 15) | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev` and `0.10.0`: build, link and pass the C ABI tests in CI on each of those Ubuntu LTS releases with its default GCC |
 
 ### Backends
 
@@ -297,7 +297,8 @@ CARLA_PYTHON=/path/to/venv-with-carla/bin/python uv run python tests/compatibili
 
 ## Quick start (development)
 
-Requirements: Linux x86_64, a C++20 compiler, git, CMake ≥ 3.27.2, and uv.
+Requirements: Linux x86_64, a C++20 compiler (GCC ≥ 11; CI builds with the default GCC of
+Ubuntu 22.04, 24.04 and 26.04), git, CMake ≥ 3.27.2, and uv.
 Codon is installed by `uv sync` from the `toolchain/` workspace member.
 
 ```sh

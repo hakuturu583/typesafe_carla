@@ -162,8 +162,9 @@ with `actions/cache`, keyed by the resolved CARLA commit SHA:
   `git ls-remote`; a tag resolves to the commit it tags), builds from that
   SHA, and caches the whole CMake build directory (`build/`: the CARLA sparse
   checkout, the fetched and built dependencies under `_deps/`, LibCarla under
-  `carla/`, and the shim) under `libcarla-<os>-<arch>-<image>-<toolchain
-  hash>-<CARLA SHA>-<hash of CMakeLists.txt and cmake/>`. The toolchain hash
+  `carla/`, and the shim) under `libcarla-<os>-<arch>-<runner>-gcc-<version>-
+  <toolchain hash>-<CARLA SHA>-<hash of CMakeLists.txt and cmake/>`, one per
+  Ubuntu LTS and CARLA ref of the matrix. The toolchain hash
   is of `tools/libcarla_cache_guard.sh --toolchain`: compilers, CMake and
   Ninja. A run on an unchanged commit restores it and only the shim is
   recompiled; a new `ue5-dev` commit misses and builds from scratch. When
@@ -193,7 +194,8 @@ with `actions/cache`, keyed by the resolved CARLA commit SHA:
   freezes them as they were when it was built; a fresh build of the same
   CARLA SHA may get newer ones.
 
-An entry is about 275 MB compressed (1.1 GB unpacked, mostly Boost sources).
+An entry is about 275 MB compressed (1.1 GB unpacked, mostly Boost sources),
+so CI's six legs hold about 1.7 GB; a new `ue5-dev` commit adds three.
 GitHub evicts the least recently used entries beyond 10 GB per repository.
 
 The wheel also ships `_native/THIRD_PARTY_NOTICES`, the license notices of
