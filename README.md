@@ -599,6 +599,11 @@ Deliberate differences, all in favour of static checking:
     the actor is destroyed: LibCarla cannot unsubscribe a destroyed actor's
     G-buffer stream, which would then reconnect forever). An id outside
     `GBufferTextureID` raises `CarlaError` (LibCarla aborts the process).
+    G-buffer streams need a server that serves them: a CARLA 0.10.0 server
+    does not, and rejects the subscription, so `listen_to_gbuffer` raises
+    `CarlaError` ("the server rejected the G-buffer subscription ...") and
+    nothing is registered. With the official 0.10.0 Python API the same call
+    aborts the whole process (an uncaught `std::exception` in LibCarla).
   - **ROS2 (issue #33).** `enable_for_ros()` / `disable_for_ros()` /
     `is_enabled_for_ros()` call LibCarla's `ServerSideSensor`; a server built
     without ROS2 accepts the requests and reports `False`.

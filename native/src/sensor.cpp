@@ -85,6 +85,28 @@ static_assert(sizeof(data::SemanticLidarDetection) == sizeof(tsc_semantic_lidar_
 static_assert(sizeof(data::DVSEvent) == TSC_DVS_EVENT_SIZE, "DVS events are packed, 13 bytes");
 static_assert(sizeof(data::OpticalFlowPixel) == 2 * sizeof(float), "optical flow pixels are {x, y}");
 
+namespace {
+
+// ServerSideSensor::ListenToGBuffer. A server that does not stream G-buffers
+// (CARLA 0.10.0) rejects the get_gbuffer_token call; LibCarla's
+// throw_exception rethrows that error by value as a plain std::exception
+// ("std::exception"; the official Python module aborts on it). That one
+// error gets a readable message, as new_map_from_opendrive does; any other
+// error passes through unchanged.
+void listen_to_gbuffer(carla::client::ServerSideSensor &s, uint32_t id,
+                       carla::client::Sensor::CallbackFunctionType callback) {
+  try {
+    s.ListenToGBuffer(id, std::move(callback));
+  } catch (const std::exception &e) {
+    if (typeid(e) != typeid(std::exception)) throw;
+    throw std::runtime_error(
+        "the server rejected the G-buffer subscription (CARLA 0.10.0 servers do not stream "
+        "G-buffers)");
+  }
+}
+
+}  // namespace
+
 extern "C" {
 
 tsc_status_t tsc_actor_as_sensor(tsc_actor_t *actor, tsc_sensor_t **out_sensor) {
@@ -130,7 +152,7 @@ tsc_status_t tsc_sensor_listen_to_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer
     // As tsc_sensor_listen: never leave an orphaned subscription behind.
     if (s.IsListeningGBuffer(id)) s.StopGBuffer(id);
     h.gbuffer_queues[id] =
-        listen_into_queue(queue_capacity, [&](auto cb) { s.ListenToGBuffer(id, std::move(cb)); });
+        listen_into_queue(queue_capacity, [&](auto cb) { listen_to_gbuffer(s, id, std::move(cb)); });
   });
 }
 
