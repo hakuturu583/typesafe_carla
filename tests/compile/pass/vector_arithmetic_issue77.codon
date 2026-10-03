@@ -1,75 +1,38 @@
-# Issue #77: arithmetic across the Vector3D family and Vector2D, every
-# combination the official module accepts (values and result types are
-# checked in tests/unit/test_issue77_arithmetic.codon).
+# Issue #77: the static result types of Vector3D-family and Vector2D
+# arithmetic (every combination's value and type is checked against the
+# official module in tests/unit/test_issue77_arithmetic.codon).
 # strict
 import typesafe_carla as carla
 
-def binary(a, b) -> carla.Vector3D:
-    # + and - across the family give a Vector3D, in either order.
-    s: carla.Vector3D = a + b
-    d: carla.Vector3D = a - b
-    return s + d
-
-def in_place(a, b):
-    # += and -= keep the left operand's type (a Location stays a Location).
-    a += b
-    a -= b
-    return a
-
-def scalars(a) -> carla.Vector3D:
-    r: carla.Vector3D = a * 2
-    r = a * 0.5
-    r = 2 * a
-    r = 0.5 * a
-    r = a / 2
-    r = a / 0.5
-    r = 2 / a
-    r = 0.5 / a
-    a *= 2
-    a *= 0.5
+def vector3d(loc: carla.Location, vel: carla.Velocity, k: float) -> carla.Vector3D:
+    # Binary operators give a Vector3D, in either order.
+    r: carla.Vector3D = loc + vel
+    r = vel - loc
+    r = carla.Vector3D() + loc
+    r = loc * 2
+    r = k * vel
+    r = loc / k
+    r = 2 / loc
+    # In place keeps the left operand's type.
+    loc += carla.Vector3D(1.0, 1.0, 1.0)
+    loc -= vel
+    loc *= k
+    same: carla.Location = loc
+    # /= rebinds to `v / k`: legal on a Vector3D variable.
+    r /= 2
     return r
 
-def all_pairs(a):
-    binary(a, carla.Vector3D(1.0, 2.0, 3.0))
-    binary(a, carla.Location(1.0, 2.0, 3.0))
-    binary(a, carla.Velocity(1.0, 2.0, 3.0))
-    binary(a, carla.AngularVelocity(1.0, 2.0, 3.0))
-    binary(a, carla.Acceleration(1.0, 2.0, 3.0))
-    in_place(a, carla.Vector3D(1.0, 2.0, 3.0))
-    in_place(a, carla.Location(1.0, 2.0, 3.0))
-    in_place(a, carla.Velocity(1.0, 2.0, 3.0))
-    in_place(a, carla.AngularVelocity(1.0, 2.0, 3.0))
-    in_place(a, carla.Acceleration(1.0, 2.0, 3.0))
-    scalars(a)
-
-all_pairs(carla.Vector3D(1.0, 2.0, 3.0))
-all_pairs(carla.Location(1.0, 2.0, 3.0))
-all_pairs(carla.Velocity(1.0, 2.0, 3.0))
-all_pairs(carla.AngularVelocity(1.0, 2.0, 3.0))
-all_pairs(carla.Acceleration(1.0, 2.0, 3.0))
-
-loc: carla.Location = in_place(carla.Location(), carla.Vector3D(1.0, 1.0, 1.0))
-vel: carla.Velocity = in_place(carla.Velocity(), carla.Location(1.0, 1.0, 1.0))
-
-# /= rebinds to `v / k`, a new Vector3D: legal on a Vector3D variable.
-def divide(v: carla.Vector3D) -> carla.Vector3D:
-    v /= 2
-    v /= 0.5
-    return v
-
-divide(carla.Vector3D(1.0, 2.0, 3.0))
-
 def vector2d(a: carla.Vector2D, b: carla.Vector2D) -> carla.Vector2D:
-    r = a + b
+    r: carla.Vector2D = a + b
     r = a - b
     r = a * 2
     r = 0.5 * a
-    r = a / 2
     r = 2.0 / a
     a += b
     a -= b
     a *= 2
     a /= 2
-    return r
+    return r + a
 
+vector3d(carla.Location(1.0, 2.0, 3.0), carla.Velocity(1.0, 2.0, 3.0), 0.5)
 vector2d(carla.Vector2D(1.0, 2.0), carla.Vector2D(3.0, 4.0))

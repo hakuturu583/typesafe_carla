@@ -103,15 +103,10 @@ class Vector3D:
         c = self.dot(vector) / n
         return acos(max(-1.0, min(1.0, c)))
 
-    # Arithmetic, as the official module (shared by Location, Velocity,
-    # AngularVelocity and Acceleration, which define none of their own):
-    # `+` / `-` take any Vector3D-family operand and `*` / `/` a scalar, and
-    # all give a Vector3D. `+=`, `-=` and `*=` update the left operand in
-    # place and keep its type (`loc += v` stays a Location). There is no
-    # `/=`: as in the official module, `v /= k` rebinds `v` to `v / k`, a
-    # new Vector3D, so on a Location (or another subclass) variable it is a
-    # compile error here. A Vector2D operand is a compile error too
-    # (TypeError / ArgumentError in Python).
+    # Arithmetic, as the official module (Location and the other subclasses
+    # inherit it): binary operators give a Vector3D; `+=`, `-=`, `*=` work in
+    # place and keep the left operand's type. No `/=`: `v /= k` rebinds `v` to
+    # the Vector3D `v / k`, so on a subclass variable it is a compile error.
 
     def __add__(self, other) -> Vector3D:
         o = _upcast_vector(other)
@@ -151,8 +146,7 @@ class Vector3D:
         return Vector3D(self.x / k, self.y / k, self.z / k)
 
     def __rtruediv__(self, k: float) -> Vector3D:
-        """`k / v` is `v / k`, as LibCarla's operator/(float, Vector3D) and
-        so the official module compute it (not a component-wise k / x)."""
+        """`v / k`, as LibCarla's operator/(float, Vector3D) (not k / x)."""
         return self / k
 
     def __abs__(self) -> Vector3D:
@@ -198,8 +192,7 @@ class Vector2D:
             return Vector2D(self.x, self.y)
         return Vector2D(self.x / n, self.y / n)
 
-    # Arithmetic with another Vector2D and scalars, as Vector3D's (and as in
-    # the official module: `k / v` is `v / k`, no `/=` in place).
+    # Arithmetic with another Vector2D and scalars, as Vector3D's.
 
     def __add__(self, other: Vector2D) -> Vector2D:
         return Vector2D(self.x + other.x, self.y + other.y)

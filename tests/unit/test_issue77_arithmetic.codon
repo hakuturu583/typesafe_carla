@@ -1,5 +1,6 @@
 # Issue #77: arithmetic across the Vector3D family (Vector3D, Location,
-# Velocity, AngularVelocity, Acceleration) and Vector2D, as the official module.
+# Velocity, AngularVelocity, Acceleration) and Vector2D, as the official module:
+# result types, values and in-place updates of every combination.
 from ..compatibility.arithmetic_cases import arithmetic_cases
 import typesafe_carla as carla
 
@@ -26,73 +27,6 @@ if got != expected:
             print("typesafe_carla " + a[i] + "\n!= official " + b[i])
 assert got == expected
 
-def check(v, x: float, y: float, z: float):
-    assert v.x == x and v.y == y and v.z == z, str(v)
-
-def test_binary():
-    loc = carla.Location(1.0, 2.0, 3.0)
-    vec = carla.Vector3D(0.5, 0.5, 0.5)
-    # Every binary operator gives a Vector3D, in either order.
-    r1 = loc + vec
-    r2 = vec + loc
-    r3 = loc - vec
-    r4 = carla.Velocity(1.0, 1.0, 1.0) - carla.Acceleration(1.0, 2.0, 3.0)
-    r5 = carla.AngularVelocity(1.0, 2.0, 3.0) + loc
-    assert isinstance(r1, carla.Vector3D) and not isinstance(r1, carla.Location)
-    assert not isinstance(r3, carla.Location) and not isinstance(r4, carla.Velocity)
-    check(r1, 1.5, 2.5, 3.5)
-    check(r2, 1.5, 2.5, 3.5)
-    check(r3, 0.5, 1.5, 2.5)
-    check(r4, 0.0, -1.0, -2.0)
-    check(r5, 2.0, 4.0, 6.0)
-    m1 = loc * 2
-    m2 = 2.0 * loc
-    d1 = loc / 2
-    d2 = 2 / loc     # v / k, as LibCarla's operator/(float, Vector3D)
-    assert not isinstance(m1, carla.Location) and not isinstance(d2, carla.Location)
-    check(m1, 2.0, 4.0, 6.0)
-    check(m2, 2.0, 4.0, 6.0)
-    check(d1, 0.5, 1.0, 1.5)
-    check(d2, 0.5, 1.0, 1.5)
-
-def test_in_place():
-    loc = carla.Location(1.0, 2.0, 3.0)
-    alias = loc
-    loc += carla.Vector3D(1.0, 1.0, 1.0)     # stays a Location, updated in place
-    loc -= carla.Velocity(0.5, 0.5, 0.5)
-    loc *= 2
-    assert isinstance(loc, carla.Location) and loc is alias
-    check(alias, 3.0, 5.0, 7.0)
-    vel = carla.Velocity(1.0, 1.0, 1.0)
-    vel += loc
-    assert isinstance(vel, carla.Velocity)
-    check(vel, 4.0, 6.0, 8.0)
-    # /= is not in place: it rebinds a Vector3D to a new one.
-    vec = carla.Vector3D(2.0, 4.0, 8.0)
-    before = vec
-    vec /= 2
-    assert vec is not before
-    check(vec, 1.0, 2.0, 4.0)
-    check(before, 2.0, 4.0, 8.0)
-
-def test_vector2d():
-    a = carla.Vector2D(1.0, 2.0)
-    b = carla.Vector2D(0.5, -1.0)
-    s = a + b
-    assert s.x == 1.5 and s.y == 1.0
-    d = a - b
-    assert d.x == 0.5 and d.y == 3.0
-    m = 2 * a
-    assert m.x == 2.0 and m.y == 4.0
-    q = 4.0 / a
-    assert q.x == 0.25 and q.y == 0.5
-    alias = a
-    a += b
-    a *= 2
-    assert a is alias and a.x == 3.0 and a.y == 2.0
-    a /= 2
-    assert a is not alias and a.x == 1.5 and alias.x == 3.0
-
 def test_equality():
     # Results compare with #70's == (float32, as LibCarla), as the official
     # module's do: each of these is True there.
@@ -106,8 +40,5 @@ def test_equality():
     l += V(0.2, 0.0, 0.0)
     assert l == L(0.3, 0.0, 0.0)
 
-test_binary()
 test_equality()
-test_in_place()
-test_vector2d()
 print("OK")
