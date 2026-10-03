@@ -37,7 +37,7 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_actor_apply_texture_color, tsc_actor_apply_texture_float_color)
 from .errors import _check, _check_light_state, _check_port, _normalize_index, _i32
 from ._callbacks import _unregister_callback, _stop_gbuffers
-from .geometry import BoundingBox, Location, Transform, Vector3D, _vector_arg, _location_arg
+from .geometry import BoundingBox, Location, Transform, Vector3D, _vector_ref, _location_ref
 from .control import VehicleControl, VehiclePhysicsControl
 from .texture import TextureColor, TextureFloatColor
 from ._fmt import fmt_list
@@ -101,7 +101,7 @@ class Actor:
 
     def set_location(self, location):
         """location: Location (a Vector3D is accepted as in the Python API)."""
-        self._vector_call(tsc_actor_set_location, _location_arg(
+        self._vector_call(tsc_actor_set_location, _location_ref(
             location, "[tsc-compat] a Vector3D passed as a Location to Actor.set_location"))
 
     def get_velocity(self) -> Vector3D:
@@ -111,7 +111,7 @@ class Actor:
 
     def set_target_velocity(self, velocity):
         """velocity: Vector3D, m/s (a Location is accepted as in the Python API)."""
-        self._vector_call(tsc_actor_set_target_velocity, _vector_arg(
+        self._vector_call(tsc_actor_set_target_velocity, _vector_ref(
             velocity, "[tsc-compat] a Location passed as a Vector3D to Actor.set_target_velocity"))
 
     def get_acceleration(self) -> Vector3D:
@@ -133,27 +133,27 @@ class Actor:
 
     def set_target_angular_velocity(self, angular_velocity):
         """angular_velocity: Vector3D, degrees per second (a Location is accepted as in the Python API)."""
-        self._vector_call(tsc_actor_set_target_angular_velocity, _vector_arg(
+        self._vector_call(tsc_actor_set_target_angular_velocity, _vector_ref(
             angular_velocity, "[tsc-compat] a Location passed as a Vector3D to Actor.set_target_angular_velocity"))
 
     def add_impulse(self, impulse):
         """impulse: Vector3D (a Location is accepted as in the Python API)."""
-        self._vector_call(tsc_actor_add_impulse, _vector_arg(
+        self._vector_call(tsc_actor_add_impulse, _vector_ref(
             impulse, "[tsc-compat] a Location passed as a Vector3D to Actor.add_impulse"))
 
     def add_force(self, force):
         """force: Vector3D (a Location is accepted as in the Python API)."""
-        self._vector_call(tsc_actor_add_force, _vector_arg(
+        self._vector_call(tsc_actor_add_force, _vector_ref(
             force, "[tsc-compat] a Location passed as a Vector3D to Actor.add_force"))
 
     def add_angular_impulse(self, angular_impulse):
         """angular_impulse: Vector3D (a Location is accepted as in the Python API)."""
-        self._vector_call(tsc_actor_add_angular_impulse, _vector_arg(
+        self._vector_call(tsc_actor_add_angular_impulse, _vector_ref(
             angular_impulse, "[tsc-compat] a Location passed as a Vector3D to Actor.add_angular_impulse"))
 
     def add_torque(self, torque):
         """torque: Vector3D (a Location is accepted as in the Python API)."""
-        self._vector_call(tsc_actor_add_torque, _vector_arg(
+        self._vector_call(tsc_actor_add_torque, _vector_ref(
             torque, "[tsc-compat] a Location passed as a Vector3D to Actor.add_torque"))
 
     def set_simulate_physics(self, enabled: bool = True):
@@ -239,7 +239,7 @@ class Actor:
     def enable_constant_velocity(self, velocity):
         """velocity: Vector3D, m/s, in the actor's local space (a Location is
         accepted as in the Python API)."""
-        self._vector_call(tsc_actor_enable_constant_velocity, _vector_arg(
+        self._vector_call(tsc_actor_enable_constant_velocity, _vector_ref(
             velocity, "[tsc-compat] a Location passed as a Vector3D to Actor.enable_constant_velocity"))
 
     def disable_constant_velocity(self):
@@ -255,18 +255,18 @@ class Actor:
         """force: Vector3D (N); location: Location, world space, where it acts.
         (A Location as the force, or a Vector3D as the location, is accepted as
         in the Python API.)"""
-        self._vector_at_call(tsc_actor_add_force_at_location, _vector_arg(
+        self._vector_at_call(tsc_actor_add_force_at_location, _vector_ref(
             force, "[tsc-compat] a Location passed as a Vector3D to Actor.add_force_at_location"),
-            _location_arg(location,
+            _location_ref(location,
                           "[tsc-compat] a Vector3D passed as a Location to Actor.add_force_at_location"))
 
     def add_impulse_at_location(self, impulse, location):
         """impulse: Vector3D (N*s); location: Location, world space, where it
         acts. (A Location as the impulse, or a Vector3D as the location, is
         accepted as in the Python API.)"""
-        self._vector_at_call(tsc_actor_add_impulse_at_location, _vector_arg(
+        self._vector_at_call(tsc_actor_add_impulse_at_location, _vector_ref(
             impulse, "[tsc-compat] a Location passed as a Vector3D to Actor.add_impulse_at_location"),
-            _location_arg(location,
+            _location_ref(location,
                           "[tsc-compat] a Vector3D passed as a Location to Actor.add_impulse_at_location"))
 
     # --- Skeleton: bones, components, sockets (issue #19) --------------------

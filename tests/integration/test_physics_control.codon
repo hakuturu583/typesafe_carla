@@ -1,6 +1,7 @@
 # VehiclePhysicsControl against a real CARLA server (issue #12): read every
 # field, modify a scalar, a curve, a gear ratio and wheel fields, apply, wait
 # a few ticks and read back. Fields that were not touched must keep their values.
+# Then the same through the ApplyVehiclePhysicsControl batch command (#79).
 import os
 import typesafe_carla as carla
 
@@ -92,6 +93,23 @@ try:
             print("NOTE: the server did not apply wheel", name, got, "!=", want)
     assert again.wheels[1].wheel_index == pc.wheels[1].wheel_index
     assert again.wheels[1].axle_type == pc.wheels[1].axle_type
+
+    # The same through a batch command (#79): the whole control is sent.
+    batched = car.get_physics_control()
+    batch_mass = float(int(batched.mass + 200.0))
+    batched.mass = batch_mass
+    responses = client.apply_batch_sync(
+        [carla.command.ApplyVehiclePhysicsControl(car.id, batched)], False)
+    assert len(responses) == 1 and not responses[0].has_error(), responses[0].error
+    assert responses[0].actor_id == car.id
+    for _ in range(20):
+        world.wait_for_tick(10.0)
+    after_batch = car.get_physics_control()
+    print("physics after batch", after_batch.mass)
+    assert close(after_batch.mass, batch_mass), after_batch.mass
+    assert close(after_batch.max_rpm, batched.max_rpm)
+    assert len(after_batch.wheels) == 4
+    assert len(after_batch.forward_gear_ratios) == len(batched.forward_gear_ratios)
 finally:
     car.destroy()
 print("OK")

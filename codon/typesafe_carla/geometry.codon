@@ -103,6 +103,11 @@ class Vector3D:
         c = self.dot(vector) / n
         return acos(max(-1.0, min(1.0, c)))
 
+    # Arithmetic, as the official module (Location and the other subclasses
+    # inherit it): binary operators give a Vector3D; `+=`, `-=`, `*=` work in
+    # place and keep the left operand's type. No `/=`: `v /= k` rebinds `v` to
+    # the Vector3D `v / k`, so on a subclass variable it is a compile error.
+
     def __add__(self, other) -> Vector3D:
         o = _upcast_vector(other)
         return Vector3D(self.x + o.x, self.y + o.y, self.z + o.z)
@@ -111,14 +116,30 @@ class Vector3D:
         o = _upcast_vector(other)
         return Vector3D(self.x - o.x, self.y - o.y, self.z - o.z)
 
+    def __iadd__(self, other):
+        _add_into(self, other, 1.0)
+        return self
+
+    def __isub__(self, other):
+        _add_into(self, other, -1.0)
+        return self
+
     def __mul__(self, k: float) -> Vector3D:
         return Vector3D(self.x * k, self.y * k, self.z * k)
 
     def __rmul__(self, k: float) -> Vector3D:
         return self * k
 
+    def __imul__(self, k: float):
+        _scale_into(self, k)
+        return self
+
     def __truediv__(self, k: float) -> Vector3D:
         return Vector3D(self.x / k, self.y / k, self.z / k)
+
+    def __rtruediv__(self, k: float) -> Vector3D:
+        """`v / k`, as LibCarla's operator/(float, Vector3D) (not k / x)."""
+        return self / k
 
     def __abs__(self) -> Vector3D:
         return Vector3D(abs(self.x), abs(self.y), abs(self.z))
@@ -162,6 +183,41 @@ class Vector2D:
         if n <= max(epsilon, 0.0):
             return Vector2D(self.x, self.y)
         return Vector2D(self.x / n, self.y / n)
+
+    # Arithmetic with another Vector2D and scalars, as Vector3D's.
+
+    def __add__(self, other: Vector2D) -> Vector2D:
+        return Vector2D(self.x + other.x, self.y + other.y)
+
+    def __sub__(self, other: Vector2D) -> Vector2D:
+        return Vector2D(self.x - other.x, self.y - other.y)
+
+    def __iadd__(self, other: Vector2D) -> Vector2D:
+        self.x += other.x
+        self.y += other.y
+        return self
+
+    def __isub__(self, other: Vector2D) -> Vector2D:
+        self.x -= other.x
+        self.y -= other.y
+        return self
+
+    def __mul__(self, k: float) -> Vector2D:
+        return Vector2D(self.x * k, self.y * k)
+
+    def __rmul__(self, k: float) -> Vector2D:
+        return self * k
+
+    def __imul__(self, k: float) -> Vector2D:
+        self.x *= k
+        self.y *= k
+        return self
+
+    def __truediv__(self, k: float) -> Vector2D:
+        return Vector2D(self.x / k, self.y / k)
+
+    def __rtruediv__(self, k: float) -> Vector2D:
+        return self / k
 
     def __eq__(self, other: Vector2D) -> bool:
         """Exact in float32, as LibCarla."""
@@ -210,6 +266,20 @@ class Location(Vector3D):
     def __repr__(self) -> str:
         return fmt_fields("Location", self)
 
+    # The in-place operators again, typed: inherited, they are compiled with
+    # self: Vector3D, and `t.location += v` would then not compile.
+    def __iadd__(self, other) -> Location:
+        _add_into(self, other, 1.0)
+        return self
+
+    def __isub__(self, other) -> Location:
+        _add_into(self, other, -1.0)
+        return self
+
+    def __imul__(self, k: float) -> Location:
+        _scale_into(self, k)
+        return self
+
     @staticmethod
     def _from_c(v: CVector3D) -> Location:
         return Location(v.x, v.y, v.z)
@@ -227,6 +297,19 @@ class Velocity(Vector3D):
     def __repr__(self) -> str:
         return fmt_fields("Velocity", self)
 
+    # Typed in-place operators, as Location's.
+    def __iadd__(self, other) -> Velocity:
+        _add_into(self, other, 1.0)
+        return self
+
+    def __isub__(self, other) -> Velocity:
+        _add_into(self, other, -1.0)
+        return self
+
+    def __imul__(self, k: float) -> Velocity:
+        _scale_into(self, k)
+        return self
+
 class AngularVelocity(Vector3D):
     """An angular velocity, as carla.AngularVelocity: a Vector3D."""
 
@@ -238,6 +321,19 @@ class AngularVelocity(Vector3D):
 
     def __repr__(self) -> str:
         return fmt_fields("AngularVelocity", self)
+
+    # Typed in-place operators, as Location's.
+    def __iadd__(self, other) -> AngularVelocity:
+        _add_into(self, other, 1.0)
+        return self
+
+    def __isub__(self, other) -> AngularVelocity:
+        _add_into(self, other, -1.0)
+        return self
+
+    def __imul__(self, k: float) -> AngularVelocity:
+        _scale_into(self, k)
+        return self
 
 class Acceleration(Vector3D):
     """A linear acceleration in m/s^2, as carla.Acceleration: a Vector3D."""
@@ -251,8 +347,31 @@ class Acceleration(Vector3D):
     def __repr__(self) -> str:
         return fmt_fields("Acceleration", self)
 
-def _vector_arg(v, what: Literal[str]) -> Vector3D:
+    # Typed in-place operators, as Location's.
+    def __iadd__(self, other) -> Acceleration:
+        _add_into(self, other, 1.0)
+        return self
+
+    def __isub__(self, other) -> Acceleration:
+        _add_into(self, other, -1.0)
+        return self
+
+    def __imul__(self, k: float) -> Acceleration:
+        _scale_into(self, k)
+        return self
+
+@tuple
+class _Owned[T]:
+    """A value the library has just built (from LibCarla data): the argument
+    helpers below store it as is instead of copying it. A tuple class, so the
+    wrapper itself costs no allocation."""
+    value: T
+
+def _vector_ref(v, what: Literal[str]) -> Vector3D:
     """An API argument documented as Vector3D: a Vector3D, or a Location.
+    Not copied (the caller's own object when it is a Vector3D): for
+    arguments used at once, e.g. converted with _to_c(). Values that are
+    stored go through _vector_arg, which copies.
 
     A Location is a Vector3D (as in the Python API), but API parameters that
     take a vector (velocity, force, impulse, direction, ...) check for it
@@ -262,15 +381,29 @@ def _vector_arg(v, what: Literal[str]) -> Vector3D:
     Other types fail to compile with "'T' does not match expected type 'Vector3D'".
     """
     if isinstance(v, Optional):
-        return _vector_arg(unwrap(v), what)
+        return _vector_ref(unwrap(v), what)
+    elif isinstance(v, _Owned):
+        return _upcast_vector(v.value)
     elif isinstance(v, Location):
         compat_shortcut("Location as Vector3D", what, "convert with location.as_vector()")
         return v.as_vector()
     else:
         return _upcast_vector(v)
 
+def _vector_arg(v, what: Literal[str]) -> Vector3D:
+    """_vector_ref for a value that is stored: a fresh copy (one allocation),
+    so it does not follow later in-place changes to the caller's vector, as
+    in the official module (C++ values). An _Owned value is taken as is."""
+    if isinstance(v, Optional):
+        return _vector_arg(unwrap(v), what)
+    elif isinstance(v, _Owned) or isinstance(v, Location):
+        return _vector_ref(v, what)  # already fresh
+    else:
+        return Vector3D(_upcast_vector(v))
+
 def _vector_or(v, default: Vector3D, what: Literal[str]) -> Vector3D:
-    """_vector_arg for an optional parameter: `v` may be None (gives `default`).
+    """_vector_arg for an optional parameter: `v` may be None (gives `default`,
+    a fresh value the caller builds).
 
     (A plain Optional[Vector3D] parameter would not accept a Location: Codon
     does not upcast inside Optional.)
@@ -280,17 +413,39 @@ def _vector_or(v, default: Vector3D, what: Literal[str]) -> Vector3D:
     else:
         return _vector_arg(v, what)
 
-def _upcast_vector(v: Vector3D) -> Vector3D:
+def _add_into(v, other, sign: float):
+    """v += sign * other, in place (the in-place operators of the family)."""
+    o = _upcast_vector(other)
+    v.x += sign * o.x
+    v.y += sign * o.y
+    v.z += sign * o.z
+
+def _scale_into(v, k: float):
+    v.x *= k
+    v.y *= k
+    v.z *= k
+
+def _upcast_vector(v) -> Vector3D:
+    """`v` as a Vector3D: a Vector3D, a subclass, or an Optional of one
+    (unwrapped: None raises). Anything else fails with "'T' does not match
+    expected type 'Vector3D'"."""
+    if isinstance(v, Optional):
+        return _as_vector3d(unwrap(v))
+    else:
+        return _as_vector3d(v)
+
+def _as_vector3d(v: Vector3D) -> Vector3D:
     return v
 
 def _loc(l, what: Literal[str]) -> Ptr[CVector3D]:
     """A Location argument by pointer (a Vector3D is accepted as in the Python API)."""
     p = Ptr[CVector3D](1)
-    p[0] = _location_arg(l, what)._to_c()
+    p[0] = _location_ref(l, what)._to_c()
     return p
 
-def _location_arg(v, what: Literal[str]) -> Location:
+def _location_ref(v, what: Literal[str]) -> Location:
     """An API argument documented as Location: a Location, or a Vector3D.
+    Not copied, as _vector_ref (use _location_arg for a stored value).
 
     The CARLA Python API converts a Vector3D to a Location implicitly (e.g.
     `carla.Transform(loc + offset, rot)`, where `loc + offset` is a Vector3D).
@@ -299,7 +454,9 @@ def _location_arg(v, what: Literal[str]) -> Location:
     Other types fail with "'T' does not match expected type 'Location'".
     """
     if isinstance(v, Optional):
-        return _location_arg(unwrap(v), what)
+        return _location_ref(unwrap(v), what)
+    elif isinstance(v, _Owned):
+        return _upcast_location(v.value)
     elif isinstance(v, Location):
         return v
     elif isinstance(v, Vector3D):
@@ -307,6 +464,16 @@ def _location_arg(v, what: Literal[str]) -> Location:
         return Location(v)
     else:
         return _upcast_location(v)
+
+def _location_arg(v, what: Literal[str]) -> Location:
+    """_location_ref for a value that is stored: a fresh copy (one
+    allocation), as _vector_arg. An _Owned value is taken as is."""
+    if isinstance(v, Optional):
+        return _location_arg(unwrap(v), what)
+    elif isinstance(v, Location):
+        return Location(v)
+    else:
+        return _location_ref(v, what)  # an _Owned value, or a new Location
 
 def _location_or(v, what: Literal[str]) -> Location:
     """_location_arg for an optional parameter: None gives Location()."""
@@ -376,6 +543,13 @@ class Rotation:
     def _from_c(r: CRotation) -> Rotation:
         return Rotation(r.pitch, r.yaw, r.roll)
 
+def _rotation_or(r: Optional[Rotation]) -> Rotation:
+    """A copy of `r`, or Rotation() for None."""
+    if r is None:
+        return Rotation()
+    else:
+        return Rotation(r.pitch, r.yaw, r.roll)
+
 def _normalize_angle(a: float) -> float:
     from math import trunc
     a = a - 360.0 * float(trunc(a / 360.0))
@@ -416,14 +590,39 @@ def _set_vector(v, x: float, y: float, z: float):
         return Vector3D(x, y, z)
 
 class Transform:
-    location: Location
-    rotation: Rotation
+    # Value semantics, as the official module (C++ values behind Boost.Python):
+    # the constructor and the field setters store copies, and the field
+    # getters return the stored value, so `t.location.x = 1` and
+    # `t.location += v` change `t`, while `t.location = loc` does not tie
+    # `t` to `loc`. The same holds for the other value types' vector fields.
+    _location: Location
+    _rotation: Rotation
 
     def __init__(self, location = None, rotation: Optional[Rotation] = None):
         """location: Optional[Location] (a Vector3D is accepted as in the Python API)."""
-        self.location = _location_or(
+        self._location = _location_or(
             location, "[tsc-compat] a Vector3D passed as a Location to Transform(location=...)")
-        self.rotation = rotation if rotation is not None else Rotation()
+        self._rotation = _rotation_or(rotation)
+
+    @property
+    def location(self) -> Location:
+        return self._location
+
+    @location.setter
+    def location(self, v):
+        """v: Location (a Vector3D is accepted, as in the Python API); stored as a copy."""
+        self._location = _location_arg(v, "[tsc-compat] a Vector3D passed as a Location to Transform.location")
+
+    @property
+    def rotation(self) -> Rotation:
+        return self._rotation
+
+    @rotation.setter
+    def rotation(self, r: Rotation):
+        self._rotation = _rotation_or(r)
+
+    def _copy(self) -> Transform:
+        return Transform(self._location, self._rotation)
 
     def get_forward_vector(self) -> Vector3D:
         return self.rotation.get_forward_vector()
@@ -469,7 +668,7 @@ class Transform:
         if isinstance(in_point, Optional):
             return self.transform_vector(unwrap(in_point))
         else:
-            q = _vector_arg(in_point, "[tsc-compat] a Location passed as a Vector3D to Transform.transform_vector")
+            q = _vector_ref(in_point, "[tsc-compat] a Location passed as a Vector3D to Transform.transform_vector")
             x, y, z = _apply(_matrix(self._to_c(), False), q.x, q.y, q.z, 0.0)
             _set_vector(in_point, x, y, z)
             return Vector3D(x, y, z)
@@ -488,22 +687,56 @@ class Transform:
 
     @staticmethod
     def _from_c(t: CTransform) -> Transform:
-        return Transform(Location._from_c(t.location), Rotation._from_c(t.rotation))
+        # Built directly: its parts are fresh, so the copying constructor is not needed.
+        r = Transform.__new__()
+        r._location = Location._from_c(t.location)
+        r._rotation = Rotation._from_c(t.rotation)
+        return r
 
 class BoundingBox:
-    """An oriented box in actor-local space: center `location`, half-size `extent`."""
-    location: Location
-    extent: Vector3D
-    rotation: Rotation
+    """An oriented box in actor-local space: center `location`, half-size `extent`.
+    Value semantics as Transform's (copying setters)."""
+    _location: Location
+    _extent: Vector3D
+    _rotation: Rotation
 
     def __init__(self, location = None, extent = None, rotation: Optional[Rotation] = None):
         """location: Optional[Location], extent: Optional[Vector3D] (each accepts the
         other type as in the Python API)."""
-        self.location = _location_or(
+        self._location = _location_or(
             location, "[tsc-compat] a Vector3D passed as a Location to BoundingBox(location=...)")
-        self.extent = _vector_or(extent, Vector3D(),
-                                 "[tsc-compat] a Location passed as a Vector3D to BoundingBox(extent=...)")
-        self.rotation = rotation if rotation is not None else Rotation()
+        self._extent = _vector_or(extent, Vector3D(),
+                                  "[tsc-compat] a Location passed as a Vector3D to BoundingBox(extent=...)")
+        self._rotation = _rotation_or(rotation)
+
+    @property
+    def location(self) -> Location:
+        return self._location
+
+    @location.setter
+    def location(self, v):
+        """v: Location (a Vector3D is accepted, as in the Python API); stored as a copy."""
+        self._location = _location_arg(v, "[tsc-compat] a Vector3D passed as a Location to BoundingBox.location")
+
+    @property
+    def extent(self) -> Vector3D:
+        return self._extent
+
+    @extent.setter
+    def extent(self, v):
+        """v: Vector3D (a Location is accepted, as in the Python API); stored as a copy."""
+        self._extent = _vector_arg(v, "[tsc-compat] a Location passed as a Vector3D to BoundingBox.extent")
+
+    @property
+    def rotation(self) -> Rotation:
+        return self._rotation
+
+    @rotation.setter
+    def rotation(self, r: Rotation):
+        self._rotation = _rotation_or(r)
+
+    def _copy(self) -> BoundingBox:
+        return BoundingBox(self._location, self._extent, self._rotation)
 
     def __eq__(self, other: BoundingBox) -> bool:
         return (self.location == other.location and self.extent == other.extent and
@@ -519,7 +752,7 @@ class BoundingBox:
         """Whether `world_point` (a Location) is inside this box placed by the
         transform `point` (box space to world; the official name). As in
         LibCarla, the box's own rotation is not applied."""
-        p = _location_arg(world_point, "[tsc-compat] a Vector3D passed as a Location to BoundingBox.contains")
+        p = _location_ref(world_point, "[tsc-compat] a Vector3D passed as a Location to BoundingBox.contains")
         x, y, z = _apply(_matrix(point._to_c(), True), p.x, p.y, p.z, 1.0)
         x -= self.location.x
         y -= self.location.y
@@ -551,8 +784,11 @@ class BoundingBox:
 
     @staticmethod
     def _from_c(b: CBoundingBox) -> BoundingBox:
-        return BoundingBox(Location._from_c(b.location), Vector3D._from_c(b.extent),
-                           Rotation._from_c(b.rotation))
+        r = BoundingBox.__new__()
+        r._location = Location._from_c(b.location)
+        r._extent = Vector3D._from_c(b.extent)
+        r._rotation = Rotation._from_c(b.rotation)
+        return r
 
     def _to_c(self) -> CBoundingBox:
         return CBoundingBox(self.location._to_c(), self.extent._to_c(), self.rotation._to_c())

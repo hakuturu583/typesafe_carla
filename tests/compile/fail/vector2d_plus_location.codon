@@ -1,0 +1,8 @@
+# Issue #77: Vector2D and the Vector3D family do not mix (a TypeError in Python).
+# expect-error: unsupported operand type(s) for +: 'Vector2D' and 'Location'
+import typesafe_carla as carla
+
+def add(a: carla.Vector2D, b: carla.Location):
+    return a + b
+
+add(carla.Vector2D(1.0, 2.0), carla.Location(1.0, 2.0, 3.0))

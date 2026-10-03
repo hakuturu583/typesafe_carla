@@ -49,7 +49,7 @@ Milestones (design section 43):
 | Landmark | every field of the Python API (`id`, `name`, `type`, `road_id`, `s`, `t`, `distance`, `orientation` (`LandmarkOrientation`), `h_offset`, `pitch`, `roll`, `is_dynamic`, ...), `waypoint` (→ `Optional[Waypoint]`), `get_lane_validities`; `LandmarkType` |
 | Snapshots | `WorldSnapshot` (`id`, `frame` / `frame_count`, `timestamp`, `elapsed_seconds`, `delta_seconds`, `platform_timestamp`, `find` → `Optional`, `has_actor`, indexing, iteration), `ActorSnapshot`, `Timestamp` (`frame` / `frame_count`) |
 | Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`, `enable_for_ros` / `disable_for_ros` / `is_enabled_for_ros`, `listen_to_gbuffer` / `is_listening_gbuffer` / `stop_gbuffer` (`GBufferTextureID`; issue #33); `SensorData` (`frame`, `frame_number`, `timestamp`, `transform`) with checked `as_image()` / `as_lidar()` / `as_semantic_lidar()` / `as_radar()` / `as_gnss()` / `as_imu()` / `as_collision()` / `as_obstacle()` / `as_lane_invasion()` / `as_dvs()` / `as_optical_flow()`; `Image` (`raw_data` → read-only `RawData` view, zero-copy `raw_data_ptr()`, indexing and iteration → `Color`, `pixel`, `convert(ColorConverter)`, `save_to_disk(path, ColorConverter)` as PNG), `ColorConverter` (`Raw`, `Depth`, `LogarithmicDepth`, `CityScapesPalette`), `LidarMeasurement` (`raw_data`, zero-copy `raw_data_ptr()` / `raw_points()`, iteration, `get_point_count`, `save_to_disk` as PLY), `SemanticLidarMeasurement` / `SemanticLidarDetection`, `RadarMeasurement` / `RadarDetection`, `DVSEventArray` / `DVSEvent` (`to_image`, `to_array`, `to_array_x/y/t/pol`), `OpticalFlowImage` / `OpticalFlowPixel` (`get_color_coded_flow` → `FakeImage`) — all zero-copy views of LibCarla's buffers; `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` / `ObstacleDetectionEvent` (`actor`, `other_actor` → `Optional[Actor]`, `distance`), `LaneInvasionEvent` (`crossed_lane_markings` → `List[LaneMarking]`, `actor`), `LaneInvasionSensor`, `ServerSideSensor`, `ClientSideSensor`, `LaneMarking` / `LaneMarkingType` / `LaneMarkingColor` / `LaneChange`; V2X (issue #42, LibCarla ue5-dev only): `Sensor.send(CustomV2XBytes)` / `send(str)`, `as_cam_event()` → `CAMEvent` (`get_message_count`, indexing, iteration → `CAMMessage`: `power`, `get()` → typed `CAM`), `as_custom_v2x_event()` → `CustomV2XEvent` (→ `CustomV2XData`: `power`, `get()` → `CustomV2XMessage`), `CustomV2XBytes` (`get_string` / `set_string` / `get_bytes` / `set_bytes` / `data_size` / `max_data_size` / `get`); the Python API's dict keys on every `get()` result, resolved at compile time (`get()["Message"]["Message"]["DataSize"]`, issue #85) |
-| Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyWalkerControl`, `ApplyTransform`, `ApplyLocation`, `ApplyTargetVelocity`, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, `SetAutopilot`, `SetSimulatePhysics`, `SetEnableGravity`, `SetVehicleLightState`, `SetTrafficLightState`, `ApplyVehicleAckermannControl`, `ShowDebugTelemetry`; `CommandResponse` |
+| Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyWalkerControl`, `ApplyTransform`, `ApplyLocation`, `ApplyTargetVelocity`, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, `SetAutopilot`, `SetSimulatePhysics`, `SetEnableGravity`, `SetVehicleLightState`, `SetTrafficLightState`, `ApplyVehicleAckermannControl`, `ShowDebugTelemetry`, `ApplyVehiclePhysicsControl`, `ApplyWalkerState`; `CommandResponse` |
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, `filter_by_attribute`, indexing, iteration), `ActorBlueprint` (`id`, `tags`, `has_tag`, `match_tags`, `has_attribute`, `get_attribute`, `set_attribute`, `len()` and iteration over its attributes), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`, `recommended_values`) |
 | Values | `TextureColor`, `TextureFloatColor`, `FloatColor`, `MaterialParameter`, `CityObjectLabel`, `ActorState` (issue #19), `MapLayer`, `EnvironmentObject`, `LabelledPoint` (issue #21), `Location`, `Rotation` (`get_forward_vector` / `get_right_vector` / `get_up_vector`, `get_normalized`), `Transform` (`get_forward_vector` / `get_right_vector` / `get_up_vector`, `get_matrix`, `get_inverse_matrix`, `transform` (a point or a list of points, in place), `transform_vector`), `Vector2D` (`length`, `squared_length`, `make_unit_vector`), `Vector3D`, `Velocity`, `AngularVelocity`, `Acceleration`, `Quaternion`, `BoundingBox` (`contains`, `get_local_vertices`, `get_world_vertices`), `VehicleControl`, `VehiclePhysicsControl` and `WheelPhysicsControl` (all fields: curves, gear ratios, wheels), `WorldSettings` (every LibCarla field, including `max_culling_distance`, `deterministic_ragdolls`, `tile_stream_distance`, `actor_active_distance`, `spectator_as_ego`), `Color`, `VehicleAckermannControl`, `AckermannControllerSettings`, `VehicleTelemetryData`, `WheelTelemetryData`, `WalkerBoneControlIn` / `WalkerBoneControlOut`, `bone_transform` / `bone_transform_out`; enumerations `VehicleDoor`, `VehicleWheelLocation`, `VehicleFailureState`, `AttachmentType`; constants `GBufferTextureID` |
 | Errors | `CarlaError`, `TimeoutError`, `ActorTypeError`, `VersionError` (plus `IndexError` for lookups by key or index) |
@@ -211,7 +211,7 @@ Notes on Milestone 2:
 
 Notes on Milestone 1:
 - **Physics control.** `VehiclePhysicsControl` and `WheelPhysicsControl` have every field of LibCarla UE5's `rpc::VehiclePhysicsControl` / `rpc::WheelPhysicsControl` (identical in 0.10.0 and ue5-dev), with the Python API's names and LibCarla's defaults: the torque and steering curves and each wheel's `lateral_slip_graph` (`List[Vector2D]`), `forward_gear_ratios` / `reverse_gear_ratios` (`List[float]`; the official 0.10.0 Python API cannot read or set these), the engine, transmission, chassis and suspension scalars, and the `uint8_t` codes (`differential_type`, `axle_type`, ...) as `int` in [0, 255]. The lists are plain Codon lists, so `pc.wheels[0].wheel_radius = 40.0` changes `pc` in place. `apply_physics_control` reads the vehicle's current control and overwrites every field, so fields a newer LibCarla adds keep the server's values; the wheel count must match the vehicle's. CARLA 0.10.0 applies changes a few frames later, ignores per-wheel fields such as `max_brake_torque`, `max_steer_angle`, `wheel_radius` and `cornering_stiffness`, and puts two default keys in front of every curve it is given (so each apply grows `torque_curve` and `steering_curve` by two points), all exactly as the official Python API reads back.
-- **Batch commands.** As in the Python API, a command's actor (and `SpawnActor`'s parent) is an `Actor` of any kind or its id, given positionally or by the official keywords `actor_id=` / `actor=` (`parent_id=` / `parent=`); passing both, or neither, is a compile error. An `Optional` actor such as `world.get_actor(id)` is accepted too and raises `CarlaError` when it is `None` at run time; a literal `None` (on which the official 0.10.0 module crashes), an `Optional[int]` or any other type is a compile error. Unlike the official overloads, either keyword takes either form (`actor_id=vehicle` works). Every constructor returns one `Command` type, so one list can mix command kinds. `SetAutopilot` in `apply_batch_sync` also registers the vehicle with the Traffic Manager, like the Python API.
+- **Batch commands.** As in the Python API, a command's actor (and `SpawnActor`'s parent) is an `Actor` of any kind or its id, given positionally or by the official keywords `actor_id=` / `actor=` (`parent_id=` / `parent=`); passing both, or neither, is a compile error. An `Optional` actor such as `world.get_actor(id)` is accepted too and raises `CarlaError` when it is `None` at run time; a literal `None` (on which the official 0.10.0 module crashes), an `Optional[int]` or any other type is a compile error. Unlike the official overloads, either keyword takes either form (`actor_id=vehicle` works). Every constructor returns one `Command` type, so one list can mix command kinds. `SetAutopilot` in `apply_batch_sync` also registers the vehicle with the Traffic Manager, like the Python API. `ApplyVehiclePhysicsControl` copies the control when the command is made and sends all of it; unlike `Vehicle.apply_physics_control()`, it cannot check the wheel count against the vehicle's.
 
 ### Supported CARLA versions
 
@@ -474,19 +474,44 @@ Deliberate differences, all in favour of static checking:
   method is a compile error in every mode (`vehicle.listen()`: "Vehicle has
   no method listen()"), as in the Python API, where `carla.Vehicle` has no
   `listen`.
-* **A `Vector3D` does not become a `Location` on assignment.** As in CARLA
-  0.10.0, `Location` arithmetic gives a `Vector3D`, and the Python API
-  converts it back implicitly. API parameters do the same here (with a
-  warning; see docs/usage.md). Assignments cannot convert, because Codon has
-  no hook for it and a variable keeps one static type. These do not compile,
-  each with `'Vector3D' does not match expected type 'Location'`:
-  - a field: `t.location = loc + offset`;
-  - a rebound local: `loc = actor.get_location()` followed by
-    `loc += offset`, `loc = loc + offset` in a loop, or a conditional
-    `loc = loc + offset`.
-
-  Write `loc = carla.Location(loc + offset)`, or start from a vector
-  (`pos = actor.get_location().as_vector()`, then `pos += offset`).
+* **A `Vector3D` does not become a `Location` on assignment to a variable.**
+  As in CARLA 0.10.0, `Location` arithmetic gives a `Vector3D`, and the
+  Python API converts it back implicitly. API parameters and field setters
+  do the same here, with a warning (see docs/usage.md): `t.location = loc +
+  offset` and `t.location /= k` store a `Location`, as in Python. A
+  variable cannot convert, because Codon has no hook for it and a variable
+  keeps one static type: a rebound local (`loc = actor.get_location()`
+  followed by `loc = loc + offset` in a loop, or a conditional
+  `loc = loc + offset`) does not compile (`'Vector3D' does not match
+  expected type 'Location'`). Write `loc += offset` (in place: `loc` stays a
+  `Location`, as in Python) or `loc = carla.Location(loc + offset)`.
+* **No `/=` on a `Location`.** The Python API has no in-place `/=`, so
+  `loc /= k` rebinds `loc` to the `Vector3D` `loc / k`. A variable keeps one
+  static type here, so on a `Location`, `Velocity`, `AngularVelocity` or
+  `Acceleration` variable it is a compile error (`'Vector3D' does not match
+  expected type 'Location'`); write `loc *= 1.0 / k` (in place) or
+  `v = loc / k`. On a `Vector3D` or `Vector2D` it works as in Python, and on
+  a field (`t.location /= k`) the setter converts, as above.
+* **Vector arithmetic otherwise matches the Python API.** Arithmetic across `Vector3D`, `Location`, `Velocity`,
+  `AngularVelocity`, `Acceleration` and `Vector2D` matches the Python API
+  (`tests/compatibility/arithmetic_cases.py`): `+` and `-` mix any of the
+  Vector3D family and give a `Vector3D`; `*` and `/` by a scalar give a
+  `Vector3D` (a `Vector2D` on a `Vector2D`), and `k / v` is `v / k`, as
+  LibCarla computes it; `+=`, `-=` and `*=` update the left operand in place
+  and keep its type (`t.location += v` changes `t`). Mixing a `Vector2D`
+  with the Vector3D family, or any other type (`loc + rotation`), is a
+  compile error. One difference: a `bool` scalar (`v * True`) does not
+  compile.
+* **Value semantics.** The Python API's vectors and transforms are C++
+  values, and typesafe_carla copies where it does: constructors and field
+  setters store copies (`t.location = loc`, then `loc += v`, leaves `t`
+  alone; a setter accepts the other vector type with a warning, as the
+  constructor does), and getter methods and read-only properties return copies
+  (`ActorSnapshot.get_velocity()`, `Light.location`, `Landmark.transform`,
+  `IMUMeasurement.accelerometer`, ...). Field getters return the stored value,
+  as the Python API's do, so `t.location.x = 1` and `t.location += v` change
+  `t`. Lists are not covered: a list field (`VehiclePhysicsControl.wheels`,
+  `torque_curve`, ...) is shared with the list it was set from.
 * **`get_landmarks_of_type(distance, type)`**: pass the type by position.
   Codon 0.19 cannot compile these methods with a parameter named `type`, so
   it is `landmark_type` (as in `Map.get_all_landmarks_of_type`).
@@ -551,9 +576,13 @@ Deliberate differences, all in favour of static checking:
   `center_of_mass`) stay `Location`.
 * **Float precision.** Values cross into LibCarla as float32, as they do in
   the Python API, so `get_control().throttle` after setting `0.2` is
-  `0.2000000029802322`. `Vector3D` and `Location` arithmetic runs in double
-  precision here and in float32 in the Python API. Results can differ in the
-  last digits. Near the edges they can differ outright:
+  `0.2000000029802322`. Arithmetic on `Vector3D`, `Location`, `Velocity`,
+  `AngularVelocity`, `Acceleration` and `Vector2D` runs in double precision
+  here and in float32 in the Python API. Results can differ in the last
+  digits, and so can `==` on them, which compares in float32 as LibCarla
+  does: `Vector3D(-81.2, 0, 0) + Vector3D(78.6634, 0, 0) ==
+  Vector3D(-81.2 + 78.6634, 0, 0)` is True here and False in Python. Near
+  the edges they can differ outright:
   `get_vector_angle` clamps the cosine to [-1, 1], so nearly parallel vectors
   give 0 rather than NaN. In `make_unit_vector`, Python computes the squared
   length in float32: with an `epsilon` below the vector's true length, a
