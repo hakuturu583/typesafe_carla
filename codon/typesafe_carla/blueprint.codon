@@ -12,6 +12,7 @@ from ._ffi import (CStringList, take_string_list, tsc_actor_blueprint_get_tags,
 from ._ffi import (tsc_actor_blueprint_size, tsc_actor_blueprint_get_attribute_ids,
                    tsc_actor_blueprint_get_recommended_values)
 from .errors import _check, _normalize_index, CarlaError
+from ._eq import _f32_eq
 from ._fmt import fmt_g32, fmt_bool, fmt_list
 
 class _ActorAttributeType(_IntEnum):
@@ -49,7 +50,11 @@ class Color:
         self.a = a
 
     def __eq__(self, other: Color) -> bool:
-        return self.r == other.r and self.g == other.g and self.b == other.b and self.a == other.a
+        """r, g and b, as LibCarla: alpha is not compared."""
+        return self.r == other.r and self.g == other.g and self.b == other.b
+
+    def __ne__(self, other: Color) -> bool:
+        return not (self == other)
 
     def _to_c(self) -> CColor:
         for v in (self.r, self.g, self.b, self.a):
@@ -88,8 +93,14 @@ class ActorAttribute:
                              f"not {_type_name(t)}", TSC_TYPE_ERROR)
 
     def as_bool(self) -> bool:
+        """As LibCarla: "true" or "false" in any case; anything else raises."""
         self._expect(ActorAttributeType.Bool)
-        return self._value == "true" or self._value == "True"
+        v = self._value.lower()
+        if v == "true":
+            return True
+        if v == "false":
+            return False
+        raise CarlaError(f"attribute '{self.id}' has invalid bool '{self._value}'")
 
     def as_int(self) -> int:
         self._expect(ActorAttributeType.Int)
@@ -110,6 +121,39 @@ class ActorAttribute:
             raise CarlaError(f"attribute '{self.id}' has malformed color '{self._value}'")
         return Color(int(parts[0].strip()), int(parts[1].strip()), int(parts[2].strip()),
                      int(parts[3].strip()) if len(parts) > 3 else 255)
+
+    # == / != as the official Python API (LibCarla's ActorAttributeValueAccess
+    # through its Boost.Python overloads). Against another attribute: the same
+    # type and value (the ids are not compared). Against a str or Color: the
+    # attribute read as that type (CarlaError on a mismatched type, as
+    # LibCarla's BadAttributeCast; a Color without alpha). Against a float,
+    # an int or a bool: the attribute read as a FLOAT, compared in float32.
+    # Boost.Python's float converter accepts any Python int (bools too) and
+    # it is tried before the int and bool overloads, so in the Python API
+    # `int_attr == 4` and `bool_attr == True` raise and `float_attr == 1` is
+    # True; so they do here. Compare `attr.as_int() == n` (or `int(attr)`)
+    # instead. Codon tries the overloads last to first and converts bool ->
+    # int -> float implicitly, hence one overload per type.
+    def __eq__(self, other: ActorAttribute) -> bool:
+        return self.type == other.type and self._value == other._value
+
+    def __eq__(self, other: float) -> bool:
+        return _f32_eq(self.as_float(), other)
+
+    def __eq__(self, other: int) -> bool:
+        return _f32_eq(self.as_float(), float(other))  # see above: as the official module
+
+    def __eq__(self, other: bool) -> bool:
+        return _f32_eq(self.as_float(), float(other))  # see above: as the official module
+
+    def __eq__(self, other: str) -> bool:
+        return self.as_str() == other
+
+    def __eq__(self, other: Color) -> bool:
+        return self.as_color() == other
+
+    def __ne__(self, other) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
         """As the Python API's str(): `ActorAttribute(id=..,type=..,value=..)`,

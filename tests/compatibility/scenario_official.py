@@ -10,6 +10,8 @@ import time
 
 import carla
 
+from equality_cases import equality_bits
+
 host = os.environ.get("TSC_CARLA_HOST", "localhost")
 port = int(os.environ.get("TSC_CARLA_PORT", "2000"))
 
@@ -367,8 +369,14 @@ try:
             carla.Location(rel.location.x, rel.location.y, rel.location.z + 0.1),
             carla.Rotation(rel.rotation.pitch, rel.rotation.yaw + 30.0, rel.rotation.roll)))]))
         walker.show_pose()
-        world.tick()
-        posed = [b for b in walker.get_bones().bone_transforms if b.name == b1.name][0].relative
+        # The server can apply the pose a tick late (issue #73): tick up to 10
+        # times until the bone has moved by over half of the +0.1 z offset.
+        posed = rel
+        for _ in range(10):
+            world.tick()
+            posed = [b for b in walker.get_bones().bone_transforms if b.name == b1.name][0].relative
+            if abs(posed.location.z - rel.location.z) > 0.05:
+                break
         out("walker_pose", f"{posed.location.z - rel.location.z:.3f},"
                            f"{posed.rotation.yaw - rel.rotation.yaw:.3f}")
         walker.hide_pose()
@@ -509,6 +517,36 @@ out("i33_weather_presets", ";".join(
     f"{w.fog_falloff:.3f},{w.wetness:.3f},{w.scattering_intensity:.3f},{w.mie_scattering_scale:.3f},"
     f"{w.rayleigh_scattering_scale:.3f},{w.dust_storm:.3f}"
     for w in (getattr(carla.WeatherParameters, n) for n in PRESETS33)))
+# Issue #70: == / != on the value types (offline values).
+out("i70_equality", equality_bits())
+# ActorAttribute == / != (Boost.Python overloads: an int or a bool reaches
+# the float one). Per case: 1/0, E if it raised, M if the attribute is missing.
+def attr_eq(bp, name, f):
+    if not bp.has_attribute(name):
+        return "M"
+    try:
+        return "1" if f(bp.get_attribute(name)) else "0"
+    except Exception:
+        return "E"
+
+
+veh70 = lib.find("vehicle.lincoln.mkz")
+cam70 = lib.find("sensor.camera.rgb")
+out("i70_attr_equality", "".join([
+    attr_eq(veh70, "number_of_wheels", lambda a: a == a.as_int()),
+    attr_eq(veh70, "number_of_wheels", lambda a: a != 3),
+    attr_eq(veh70, "sticky_control", lambda a: a == True),
+    attr_eq(cam70, "fov", lambda a: a == 90),
+    attr_eq(cam70, "fov", lambda a: a == a.as_float()),
+    attr_eq(cam70, "fov", lambda a: a == 91.5),
+    attr_eq(cam70, "image_size_x", lambda a: a == a.as_int()),
+    attr_eq(veh70, "role_name", lambda a: a == a.as_str()),
+    attr_eq(veh70, "role_name", lambda a: a != "no-such-role"),
+    attr_eq(veh70, "color", lambda a: a == a.as_color()),
+    attr_eq(veh70, "color", lambda a: a == "0,0,0"),
+    attr_eq(veh70, "role_name", lambda a: a == veh70.get_attribute("role_name")),
+    attr_eq(veh70, "role_name", lambda a: a == a.as_int()),
+]))
 sys.stdout.flush()
 # Issue #71: str() in the Python API's format, for server objects.
 m71 = world.get_map()

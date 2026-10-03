@@ -4,6 +4,7 @@ from ._ffi import (CVector2D, CVector3D, CRotation, CTransform, CBoundingBox,
                    tsc_transform_get_matrix, tsc_transform_get_inverse_matrix)
 from ._strict import compat_shortcut
 from .errors import _check
+from ._eq import _f32_eq, _fields_eq
 from ._fmt import fmt_fields
 
 # 2 * FLT_EPSILON: LibCarla's default threshold for a zero-length vector.
@@ -158,8 +159,9 @@ class Vector3D:
         return Vector3D(abs(self.x), abs(self.y), abs(self.z))
 
     def __eq__(self, other) -> bool:
+        """Exact in float32, as LibCarla (a Location and a Vector3D compare too)."""
         other = _upcast_vector(other)
-        return self.x == other.x and self.y == other.y and self.z == other.z
+        return _f32_eq(self.x, other.x) and _f32_eq(self.y, other.y) and _f32_eq(self.z, other.z)
 
     def __ne__(self, other) -> bool:
         return not (self == other)
@@ -233,7 +235,8 @@ class Vector2D:
         return self / k
 
     def __eq__(self, other: Vector2D) -> bool:
-        return self.x == other.x and self.y == other.y
+        """Exact in float32, as LibCarla."""
+        return _fields_eq(self, other)
 
     def __ne__(self, other: Vector2D) -> bool:
         return not (self == other)
@@ -421,7 +424,15 @@ class Rotation:
                         _normalize_angle(self.roll))
 
     def __eq__(self, other: Rotation) -> bool:
-        return self.pitch == other.pitch and self.yaw == other.yaw and self.roll == other.roll
+        """As LibCarla's Rotation::operator== (float32): equal angles, or, as
+        Unreal compares normalized rotators, every pair of angles with
+        |a| + |b| == 180 (so Rotation(90, 90, 90) == Rotation(-90, -90, -90))."""
+        p, y, r = float32(self.pitch), float32(self.yaw), float32(self.roll)
+        op, oy, orr = float32(other.pitch), float32(other.yaw), float32(other.roll)
+        if p == op and y == oy and r == orr:
+            return True
+        h = float32(180.0)
+        return abs(p) + abs(op) == h and abs(y) + abs(oy) == h and abs(r) + abs(orr) == h
 
     def __ne__(self, other: Rotation) -> bool:
         return not (self == other)
@@ -709,7 +720,8 @@ class Quaternion:
             self.w * rhs.w - self.x * rhs.x - self.y * rhs.y - self.z * rhs.z)
 
     def __eq__(self, other: Quaternion) -> bool:
-        return self.x == other.x and self.y == other.y and self.z == other.z and self.w == other.w
+        """Exact in float32, as LibCarla."""
+        return _fields_eq(self, other)
 
     def __ne__(self, other: Quaternion) -> bool:
         return not (self == other)

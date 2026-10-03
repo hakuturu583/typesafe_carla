@@ -579,6 +579,28 @@ Deliberate differences, all in favour of static checking:
   vector of length <= `epsilon` (default `2.384185791015625e-07`, i.e.
   2 * FLT_EPSILON) is returned unchanged.
 
+* **`==` / `!=` (issue #70)** follow LibCarla's `operator==` on every value
+  type the Python API compares. Float fields compare exactly *in float32*, as
+  LibCarla stores them: `Location(0.1) == Location(0.1 + 1e-12)` is `True`
+  although the doubles kept here differ. Double fields (`GeoLocation`, the geo
+  projections, `GeoEllipsoid`, `GeoOffsetTransform`, and `WorldSettings`'
+  `fixed_delta_seconds` and `max_substep_delta_time`) compare exactly. As in
+  LibCarla, some types compare less than every field. `Rotation`s are also
+  equal when each pair of angles has `|a| + |b| == 180`, so
+  `Rotation(90, 90, 90) == Rotation(-90, -90, -90)`. `Color` ignores alpha.
+  `Timestamp` and `WorldSnapshot` compare the frame only. `ActorAttribute`
+  compared with another attribute checks type and value, not the id.
+  Compared with a `str` or `Color`, it reads itself as that type, raising
+  `CarlaError` on a type mismatch (LibCarla's `BadAttributeCast`). Compared
+  with a `float`, an `int` or a `bool`, it reads itself as a **float**, as the
+  Python API does: Boost.Python's float overload accepts any Python int,
+  bools included. So `attr == 4` on an int attribute and `attr == True` on a
+  bool attribute raise in both, and `fov_attr == 90` is `True`. Write
+  `attr.as_int() == 4`, `int(attr) == 4` (Python API only) or
+  `attr.as_bool()` instead. `as_bool()` accepts "true"/"false" in any case
+  and raises on anything else, as LibCarla. Comparing unrelated types does
+  not compile; the Python API answers `False`.
+
 * **Sensor data (issue #24).**
   - `raw_data()` is a method returning a zero-copy `Ptr[u8]` (with
     `raw_size()` in bytes), not a `memoryview`. Reading an element
