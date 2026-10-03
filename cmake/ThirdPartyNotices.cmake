@@ -21,10 +21,12 @@
 #   - rpclib, with its bundled asio, msgpack-c, cppformat and optional-lite;
 #   - RecastNavigation (Recast, Detour, DetourCrowd), libpng and zlib.
 # Not linked: Eigen (fetched by CARLA, unused by the client), SQLite (replaced
-# by an empty stand-in) and Boost.Python (an empty target).
+# by an empty stand-in; not linked) and Boost.Python (an empty target).
 #
 # To keep this list honest, configuring fails if carla-client links a library
-# or LibCarla vendors a third-party directory that is not accounted for here.
+# (directly or transitively), or LibCarla vendors a third-party/ entry, that is
+# not accounted for here; and LibCarla's sources are scanned for copyright
+# holders other than CVC, which are listed with LibCarla's notice.
 
 include_guard(GLOBAL)
 include(FetchContent)
@@ -56,9 +58,92 @@ function(_tsc_dep_dir name out)
   set(${out} "${${_lc}_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
+# Link items covered by the notices below (by target name or library file).
+set(_TSC_COVERED_LINKS
+  "^(Boost::.*|boost_[a-z0-9_]+|RecastNavigation::(Recast|Detour|DetourCrowd)|Recast|Detour|DetourCrowd|png_static|zlibstatic|ZLIB::ZLIB|.*/libz\\.a|rpc)$")
+# Link items that are system libraries, not shipped code.
+set(_TSC_SYSTEM_LINKS
+  "^(Threads::Threads|m|dl|rt|pthread|-pthread|-lm|-ldl|/(usr/)?lib[^ ]*/lib(m|dl|rt|pthread)\\.(so|a))$")
+
+# Sets <out> to every library <target> links, directly or through the
+# LINK_LIBRARIES / INTERFACE_LINK_LIBRARIES of the targets it links, minus
+# system libraries. $<LINK_ONLY:x> and $<BUILD_INTERFACE:x> are unwrapped;
+# other generator expressions are skipped.
+function(_tsc_link_closure target out)
+  set(_todo "${target}")
+  set(_seen "")
+  set(_found "")
+  while(_todo)
+    list(POP_FRONT _todo _t)
+    if(_t IN_LIST _seen)
+      continue()
+    endif()
+    list(APPEND _seen "${_t}")
+    get_target_property(_alias "${_t}" ALIASED_TARGET)
+    if(_alias)
+      list(APPEND _todo "${_alias}")
+      continue()
+    endif()
+    set(_deps "")
+    get_target_property(_type "${_t}" TYPE)
+    if(NOT _type STREQUAL "INTERFACE_LIBRARY")
+      get_target_property(_l "${_t}" LINK_LIBRARIES)
+      if(_l)
+        list(APPEND _deps ${_l})
+      endif()
+    endif()
+    get_target_property(_l "${_t}" INTERFACE_LINK_LIBRARIES)
+    if(_l)
+      list(APPEND _deps ${_l})
+    endif()
+    foreach(_d IN LISTS _deps)
+      if(_d MATCHES "^\\$<(LINK_ONLY|BUILD_INTERFACE):([^<>$]+)>$")
+        set(_d "${CMAKE_MATCH_2}")
+      elseif(_d MATCHES "\\$<")
+        continue()
+      endif()
+      if(_d MATCHES "${_TSC_SYSTEM_LINKS}")
+        continue()
+      endif()
+      if(TARGET "${_d}")
+        list(APPEND _todo "${_d}")
+      endif()
+      list(APPEND _found "${_d}")
+    endforeach()
+  endwhile()
+  list(REMOVE_DUPLICATES _found)
+  set(${out} "${_found}" PARENT_SCOPE)
+endfunction()
+
+# Sets <out> to <path> relative to the CARLA tree ("<CARLA>/...") or the
+# dependency download directory ("<deps>/..."), so no builder's paths end up in
+# the shipped file.
+function(_tsc_display_path path out)
+  if(FETCHCONTENT_BASE_DIR)
+    set(_deps "${FETCHCONTENT_BASE_DIR}")
+  else()
+    set(_deps "${CMAKE_BINARY_DIR}/_deps")
+  endif()
+  set(_bases "${TSC_CARLA_DIR}" "${_deps}")
+  set(_tags "<CARLA>" "<deps>")
+  foreach(_base _tag IN ZIP_LISTS _bases _tags)
+    cmake_path(IS_PREFIX _base "${path}" NORMALIZE _in)
+    if(_in)
+      file(RELATIVE_PATH _rel "${_base}" "${path}")
+      if(_rel)
+        set(_tag "${_tag}/${_rel}")
+      endif()
+      set(${out} "${_tag}" PARENT_SCOPE)
+      return()
+    endif()
+  endforeach()
+  message(FATAL_ERROR "typesafe_carla: ${path} is neither in the CARLA tree nor in ${_deps}")
+endfunction()
+
 # Sets <out> to the first capture group of <regex> in the first line of
 # <file> it matches. Fails if no line matches.
 function(_tsc_version file regex out)
+  _tsc_require_file("${file}" "${file}")
   file(STRINGS "${file}" _lines REGEX "${regex}")
   if(NOT _lines MATCHES "${regex}")
     message(FATAL_ERROR "typesafe_carla: no version matching '${regex}' in ${file}; "
@@ -105,10 +190,7 @@ function(_tsc_component)
   cmake_parse_arguments(PARSE_ARGV 0 _c ""
                         "NAME;VERSION;LICENSE;UPSTREAM;SOURCE;CONTAINS;HEADER;TEXT" "FILES")
   math(EXPR _tsc_n "${_tsc_n} + 1")
-  file(RELATIVE_PATH _c_rel "${CMAKE_BINARY_DIR}" "${_c_SOURCE}")
-  if(_c_rel MATCHES "^\\.\\./")
-    set(_c_rel "${_c_SOURCE}")
-  endif()
+  _tsc_display_path("${_c_SOURCE}" _c_rel)
   string(APPEND _tsc_index
     "${_tsc_n}. ${_c_NAME} ${_c_VERSION}\n"
     "   License:  ${_c_LICENSE}\n"
@@ -146,24 +228,81 @@ function(_tsc_component)
   set(_tsc_body "${_tsc_body}" PARENT_SCOPE)
 endfunction()
 
+# Sets <out> to a list of the copyright holders other than CVC named in
+# LibCarla's own sources (LibCarla/source/carla, without ros2/ and rss/, which
+# are not built), each with the files that name it. Fails if such a file does
+# not say it is under the MIT license, like the rest of LibCarla.
+function(_tsc_libcarla_holders out)
+  set(_src "${TSC_CARLA_DIR}/LibCarla/source")
+  file(GLOB_RECURSE _files RELATIVE "${_src}"
+       "${_src}/carla/*.h" "${_src}/carla/*.hpp" "${_src}/carla/*.cpp" "${_src}/carla/*.inl")
+  list(FILTER _files EXCLUDE REGEX "^carla/(ros2|rss)/")
+  list(SORT _files)
+  set(_holders "")
+  foreach(_f IN LISTS _files)
+    file(READ "${_src}/${_f}" _text)
+    string(FIND "${_text}" "Copyright" _at)
+    if(_at EQUAL -1)
+      continue()
+    endif()
+    string(REPLACE "\r" "" _text "${_text}")
+    # A copyright line and the comment lines continuing it (up to a blank one).
+    string(REGEX MATCHALL "Copyright[^\n]*(\n[ \t]*//[ \t]*[^ \t\n][^\n]*)*" _lines "${_text}")
+    # Consecutive copyright lines (e.g. CVC, then Intel) match as one.
+    list(JOIN _lines "\n" _lines)
+    string(REGEX REPLACE "\n[ \t]*//[ \t]*" " " _lines "${_lines}")
+    string(REPLACE "Copyright" ";Copyright" _lines "${_lines}")
+    foreach(_line IN LISTS _lines)
+      string(STRIP "${_line}" _line)
+      if(_line STREQUAL "")
+        continue()
+      endif()
+      if(_line MATCHES "Computer Vision Center|\\(CVC\\)|CVC\\.")
+        continue()
+      endif()
+      string(FIND "${_text}" "licensed under the terms of the MIT license" _mit)
+      if(_mit EQUAL -1)
+        message(FATAL_ERROR "typesafe_carla: ${_src}/${_f} names '${_line}' but not the MIT "
+                            "license; check its license and update cmake/ThirdPartyNotices.cmake")
+      endif()
+      string(MD5 _key "${_line}")
+      if(NOT _key IN_LIST _holders)
+        list(APPEND _holders "${_key}")
+        set(_holder_${_key} "${_line}")
+        set(_files_${_key} "")
+      endif()
+      list(APPEND _files_${_key} "${_f}")
+    endforeach()
+  endforeach()
+  set(_result "")
+  foreach(_key IN LISTS _holders)
+    list(REMOVE_DUPLICATES _files_${_key})
+    list(JOIN _files_${_key} ", " _fl)
+    string(APPEND _result "  ${_holder_${_key}}\n    (${_fl})\n")
+  endforeach()
+  set(${out} "${_result}" PARENT_SCOPE)
+endfunction()
+
 function(tsc_write_third_party_notices output)
   if(NOT TARGET carla-client)
     message(FATAL_ERROR "tsc_write_third_party_notices: no carla-client target")
   endif()
 
   # --- Guard: everything carla-client links must be listed below. ----------
-  get_target_property(_links carla-client LINK_LIBRARIES)
+  _tsc_link_closure(carla-client _links)
+  message(VERBOSE "typesafe_carla: carla-client links ${_links}")
   foreach(_lib IN LISTS _links)
-    if(NOT _lib MATCHES "^(Boost::.*|RecastNavigation::(Recast|Detour|DetourCrowd)|png_static|zlibstatic|rpc)$")
-      message(FATAL_ERROR "typesafe_carla: carla-client links '${_lib}', which has no entry "
-                          "in THIRD_PARTY_NOTICES; add its license to cmake/ThirdPartyNotices.cmake")
+    if(NOT _lib MATCHES "${_TSC_COVERED_LINKS}")
+      message(FATAL_ERROR "typesafe_carla: carla-client links '${_lib}' (directly or "
+                          "transitively), which has no entry in THIRD_PARTY_NOTICES; add its "
+                          "license to cmake/ThirdPartyNotices.cmake")
     endif()
   endforeach()
   set(_tp "${TSC_CARLA_DIR}/LibCarla/source/third-party")
   set(_known_vendored marchingcube moodycamel odrSpiral pugixml simplify)
   file(GLOB _vendored RELATIVE "${_tp}" "${_tp}/*")
   foreach(_v IN LISTS _vendored)
-    if(IS_DIRECTORY "${_tp}/${_v}" AND NOT _v IN_LIST _known_vendored)
+    if(NOT _v IN_LIST _known_vendored)
       message(FATAL_ERROR "typesafe_carla: LibCarla vendors third-party/${_v}, which has no "
                           "entry in THIRD_PARTY_NOTICES; add its license to "
                           "cmake/ThirdPartyNotices.cmake")
@@ -178,19 +317,30 @@ function(tsc_write_third_party_notices output)
   _tsc_require_file("${_mit}" "MIT (template)")
   file(READ "${_mit}" _mit_terms)
   string(STRIP "${_mit_terms}" _mit_terms)
+  # The MIT terms without the warranty disclaimer, for notices that carry it.
+  string(FIND "${_mit_terms}" "THE SOFTWARE IS PROVIDED" _at)
+  string(SUBSTRING "${_mit_terms}" 0 ${_at} _mit_grant)
+  string(STRIP "${_mit_grant}" _mit_grant)
 
   # --- LibCarla and its vendored sources --------------------------------------
   set(_carla_ver "${TSC_CARLA_VERSION}")
   if(NOT TSC_CARLA_COMMIT STREQUAL "unknown")
     set(_carla_ver "${_carla_ver} (${TSC_CARLA_RESOLVED_REF}, ${TSC_CARLA_COMMIT})")
   endif()
+  _tsc_libcarla_holders(_carla_holders)
+  if(_carla_holders)
+    set(_carla_holders "--- other copyright holders in LibCarla's sources, under the MIT terms above ---\n\n${_carla_holders}")
+  endif()
   _tsc_component(NAME "LibCarla (CARLA)" VERSION "${_carla_ver}" LICENSE "MIT"
     UPSTREAM "https://github.com/carla-simulator/carla" SOURCE "${TSC_CARLA_DIR}"
-    FILES "${TSC_CARLA_DIR}/LICENSE")
+    FILES "${TSC_CARLA_DIR}/LICENSE" TEXT _carla_holders)
 
-  _tsc_component(NAME "pugixml" VERSION "(vendored in LibCarla)" LICENSE "MIT"
+  # The header credits pugxml (Kristen Wegner), which pugixml is based on.
+  _tsc_version("${_tp}/pugixml/pugixml.hpp" "pugixml parser - version ([0-9.]+)" _pugiv)
+  _tsc_leading_comment("${_tp}/pugixml/pugixml.hpp" _pugi "Arseny Kapoulkine" "Kristen Wegner")
+  _tsc_component(NAME "pugixml" VERSION "${_pugiv} (vendored in LibCarla)" LICENSE "MIT"
     UPSTREAM "https://github.com/zeux/pugixml" SOURCE "${_tp}/pugixml"
-    FILES "${_tp}/pugixml/LICENSE.md")
+    HEADER _pugi FILES "${_tp}/pugixml/LICENSE.md")
 
   _tsc_leading_comment("${_tp}/odrSpiral/odrSpiral.h" _odr "Copyright" "Apache License, Version 2.0")
   _tsc_component(NAME "odrSpiral" VERSION "(vendored in LibCarla)" LICENSE "Apache-2.0"
@@ -221,10 +371,11 @@ function(tsc_write_third_party_notices output)
 
   # --- Boost ------------------------------------------------------------------
   _tsc_dep_dir(boost _boost)
-  # The libraries CARLA requests (CMakeLists.txt sets BOOST_INCLUDE_LIBRARIES),
-  # plus those carla-client names directly; Boost builds their dependencies.
+  # The libraries CARLA requests (CMakeLists.txt sets BOOST_INCLUDE_LIBRARIES)
+  # and those carla-client names directly; the closure adds their dependencies.
   set(_boost_libs ${BOOST_INCLUDE_LIBRARIES})
-  foreach(_lib IN LISTS _links)
+  get_target_property(_direct carla-client LINK_LIBRARIES)
+  foreach(_lib IN LISTS _direct)
     if(_lib MATCHES "^Boost::(.*)$" AND NOT CMAKE_MATCH_1 STREQUAL "python")
       list(APPEND _boost_libs "${CMAKE_MATCH_1}")
     endif()
@@ -232,6 +383,9 @@ function(tsc_write_third_party_notices output)
   list(REMOVE_DUPLICATES _boost_libs)
   list(SORT _boost_libs)
   list(JOIN _boost_libs ", " _boost_libs)
+  set(_boost_all ${_links})
+  list(FILTER _boost_all INCLUDE REGEX "^Boost::")
+  list(LENGTH _boost_all _boost_n)
   _tsc_version("${_boost}/libs/config/include/boost/version.hpp"
                "^#define BOOST_VERSION ([0-9]+)" _bv)
   math(EXPR _bmaj "${_bv} / 100000")
@@ -239,7 +393,7 @@ function(tsc_write_third_party_notices output)
   math(EXPR _bpat "${_bv} % 100")
   _tsc_component(NAME "Boost" VERSION "${_bmaj}.${_bmin}.${_bpat}" LICENSE "BSL-1.0"
     UPSTREAM "https://www.boost.org" SOURCE "${_boost}"
-    CONTAINS "${_boost_libs} and the Boost libraries they depend on"
+    CONTAINS "${_boost_libs} and their dependencies (${_boost_n} Boost libraries in all)"
     FILES "${_boost}/LICENSE_1_0.txt")
 
   # --- rpclib (CARLA's fork) --------------------------------------------------
@@ -255,7 +409,7 @@ function(tsc_write_third_party_notices output)
       "--- bundled asio (dependencies/include/asio.hpp; BSL-1.0, text in the Boost section) ---\n\n${_asio}"
       "--- bundled msgpack-c (include/rpc/msgpack.hpp, include/rpc/msgpack/; BSL-1.0, text in the Boost section, and Apache-2.0, text in the odrSpiral section) ---\n\n${_mp}"
       "--- bundled cppformat (dependencies/include/format.h, dependencies/src/format.cc, posix.cc) ---\n\n${_fmt}"
-      "--- bundled optional-lite (include/rpc/nonstd/optional.hpp) ---\n\n${_opt}\n\n${_mit_terms}")
+      "--- bundled optional-lite (include/rpc/nonstd/optional.hpp) ---\n\n${_opt}\n\n${_mit_grant}")
   _tsc_component(NAME "rpclib" VERSION "${_rv} (carla-simulator fork)" LICENSE "MIT"
     UPSTREAM "https://github.com/carla-simulator/rpclib" SOURCE "${_rpc}"
     CONTAINS "bundled asio (BSL-1.0), msgpack-c (BSL-1.0/Apache-2.0), cppformat (BSD-2-Clause), optional-lite (MIT)"
@@ -272,7 +426,7 @@ function(tsc_write_third_party_notices output)
   # --- libpng and zlib --------------------------------------------------------
   _tsc_dep_dir(libpng _png)
   _tsc_version("${_png}/png.h" "^#define PNG_LIBPNG_VER_STRING \"([0-9.]+)\"" _pngv)
-  _tsc_component(NAME "libpng" VERSION "${_pngv}" LICENSE "Libpng-2.0"
+  _tsc_component(NAME "libpng" VERSION "${_pngv}" LICENSE "libpng-2.0 AND Libpng"
     UPSTREAM "https://github.com/pnggroup/libpng" SOURCE "${_png}"
     FILES "${_png}/LICENSE")
 
@@ -287,11 +441,13 @@ function(tsc_write_third_party_notices output)
 
 typesafe_carla/_native/libtypesafe_carla_ffi.so statically links the
 components listed below. Their license notices follow, collected at build
-time from the sources the library was built from. \"Source\" paths are
-relative to the build directory where possible.
+time from the sources the library was built from.
+
+<CARLA> stands for the CARLA source tree and <deps> for the directory CARLA
+fetched its dependencies into.
 
 Fetched by CARLA but not linked: Eigen (unused by the client library) and
-SQLite (server-side tools only). Boost.Python is not built.
+SQLite (replaced by an empty stand-in; not linked). Boost.Python is not built.
 
 ${_tsc_index}${_tsc_body}")
   # Only touch <output> when it changes, so reconfiguring does not re-install it.

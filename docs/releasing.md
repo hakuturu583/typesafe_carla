@@ -128,8 +128,10 @@ so for them the recorded ref and commit are both that SHA.
 The wheel also ships `_native/THIRD_PARTY_NOTICES`, the license notices of
 everything LibCarla links statically. They are collected from the fetched
 sources at configure time by `cmake/ThirdPartyNotices.cmake`. If a ref links
-a new library, vendors a new `LibCarla/source/third-party/` directory, or
-drops a license text, configuring fails. Add the component's notice there
+a new library (directly or transitively), vendors something new in
+`LibCarla/source/third-party/`, or drops a license text, configuring fails.
+Copyright holders other than CVC in LibCarla's sources are listed
+automatically; one in a file that does not say MIT also fails. Add the component's notice there
 before releasing that ref.
 
 ## Cutting a release

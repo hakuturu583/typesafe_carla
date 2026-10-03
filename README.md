@@ -668,13 +668,15 @@ linked statically:
 
 - Boost (BSL-1.0);
 - rpclib (MIT), with its bundled asio, msgpack-c, cppformat and optional-lite;
-- RecastNavigation (Zlib), libpng (libpng-2.0) and zlib (Zlib);
+- RecastNavigation (Zlib), libpng (libpng-2.0 AND Libpng) and zlib (Zlib);
 - LibCarla's vendored pugixml, odrSpiral (Apache-2.0), moodycamel
-  ConcurrentQueue, Fast-Quadric-Mesh-Simplification and MeshReconstruction.
+  ConcurrentQueue, Fast-Quadric-Mesh-Simplification and MeshReconstruction;
+- the other MIT copyright holders named in LibCarla's own sources (e.g. the
+  DVS sensor, GNSS measurement and vehicle physics files).
 
 Their notices are shipped as `_native/THIRD_PARTY_NOTICES`. The build collects
 them from the fetched sources ([`cmake/ThirdPartyNotices.cmake`](cmake/ThirdPartyNotices.cmake)),
 with each component's version, license and source path. Configuring fails if
-a license text is missing, or if LibCarla links a library the notices do not
-cover. Codon (Apache-2.0) is redistributed by `typesafe-carla-toolchain` with
+a license text is missing, or if LibCarla links a library (directly or
+transitively) or vendors third-party code the notices do not cover. Codon (Apache-2.0) is redistributed by `typesafe-carla-toolchain` with
 its license.
