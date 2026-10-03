@@ -665,6 +665,13 @@ Implemented views (issue #24 added the last four): `Image` (BGRA bytes),
 time into the Python API's element class; `raw_data()` / `raw_size()` expose
 the bytes. `Image.convert` changes the buffer in place, as in the Python API.
 
+The V2X events of issue #42 (`CAMEvent`, `CustomV2XEvent`, LibCarla ue5-dev
+only) are not views: LibCarla's `CAMData` is a large struct with
+implementation-defined layout (`long`, `bool` flags, `std::array`s), so each
+message is copied on access into flat C structs (`tsc_cam_message_t`, with
+the two variable-length ITS lists behind their own two-call getters) and then
+into typed Codon classes.
+
 ## 17. Threading
 
 Rules:

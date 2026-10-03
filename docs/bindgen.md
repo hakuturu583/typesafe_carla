@@ -227,6 +227,14 @@ method exists on the mock and on a `ue5-dev` ref.
 `string_list`. `uint8_buffer` is a two-call buffer of `uint8_t` (semantic
 tags).
 
+`custom_v2x_bytes` (issue #42) is a struct holding a `uint8_t[100]`, which a
+Codon `@tuple` cannot express: its `codon` type is `byte`, so the Codon side
+passes a raw buffer laid out as `tsc_custom_v2x_bytes_t` (`test_ffi` checks
+the offsets). Its `to_carla` returns `tsc::CustomV2XBytes`, LibCarla's
+`rpc::CustomV2XBytes` where it exists and a stand-in of the same shape
+otherwise, so `send` compiles against CARLA 0.10.0 and its `optional` call
+raises there.
+
 A method that some supported LibCarla simply lacks (and that has no fallback)
 uses `optional` instead (see above): the generated code calls it through
 `TSC_CALL_OPTIONAL`, which raises TSC_ERROR where it is missing. `via` and

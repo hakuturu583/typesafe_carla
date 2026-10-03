@@ -24,6 +24,8 @@
 #include <variant>
 #include <vector>
 
+#include "carla/rpc/CustomV2XBytes.h"  // issue #42
+
 #define TSC_MOCK_LIBCARLA 1
 
 namespace carla {
@@ -1109,6 +1111,18 @@ class Sensor : public Actor {
   void Listen(CallbackFunctionType callback);
   void Stop();
   bool IsListening() const;
+};
+
+// LibCarla's ActorFactory makes a ServerSideSensor of every "sensor." actor
+// except the client-side lane-invasion sensor, which stays a plain Sensor
+// here (LibCarla: LaneInvasionSensor, a ClientSideSensor).
+class ServerSideSensor final : public Sensor {
+ public:
+  using Sensor::Sensor;
+  // ue5-dev (issue #42): queues a message on a custom V2X sensor
+  // (sensor.other.v2x_custom) for the next tick. On any other sensor it only
+  // logs a warning, as LibCarla does.
+  void Send(const rpc::CustomV2XBytes &data);
 };
 
 class ActorList : public std::enable_shared_from_this<ActorList> {

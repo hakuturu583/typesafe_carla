@@ -809,6 +809,28 @@ inline carla::client::Sensor &sensor_of(tsc_sensor_t *s) {
   return static_cast<carla::client::Sensor &>(*sensor_handle(s).actor);
 }
 
+// Issue #42: Send is a ServerSideSensor method; the lane-invasion sensor is
+// client-side.
+inline carla::client::ServerSideSensor &server_side_sensor_of(tsc_sensor_t *s) {
+  auto sensor = dynamic_cast<carla::client::ServerSideSensor *>(&sensor_of(s));
+  if (sensor == nullptr) {
+    fail(TSC_TYPE_ERROR, "a client-side sensor (e.g. lane invasion) cannot send V2X messages");
+  }
+  return *sensor;
+}
+
+// rpc::CustomV2XBytes (tsc::CustomV2XBytes: a stand-in without V2X).
+inline CustomV2XBytes to_carla(const tsc_custom_v2x_bytes_t &b) {
+  CustomV2XBytes r;
+  if (b.data_size > r.bytes.size()) {
+    fail(TSC_INVALID_ARGUMENT, "data_size " + std::to_string(b.data_size) + " exceeds " +
+                                   std::to_string(r.bytes.size()) + " bytes");
+  }
+  r.data_size = static_cast<uint8_t>(b.data_size);
+  std::copy(b.bytes, b.bytes + r.bytes.size(), r.bytes.begin());
+  return r;
+}
+
 // The geometry behind Transform.get_matrix & co: a tsc_transform_t by value.
 inline carla::geom::Transform transform_of(const tsc_transform_t *t) {
   return to_carla(*require_ptr(t, "transform"));

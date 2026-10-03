@@ -756,6 +756,14 @@ tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out) {
   });
 }
 
+// bindings/server_side_sensor.yaml: carla::client::ServerSideSensor
+
+tsc_status_t tsc_sensor_send(tsc_sensor_t *sensor, const tsc_custom_v2x_bytes_t *message) {
+  return TSC_GUARD({
+    TSC_CALL_OPTIONAL(server_side_sensor_of(sensor), Send, "Sensor.send", to_carla(*require_ptr(message, "message")));
+  });
+}
+
 // bindings/traffic_light.yaml: carla::client::TrafficLight
 
 tsc_status_t tsc_traffic_light_set_state(tsc_traffic_light_t *light, int32_t state) {

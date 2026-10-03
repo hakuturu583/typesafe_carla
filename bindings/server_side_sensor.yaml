@@ -1,0 +1,12 @@
+# Server-side sensor operations (issue #42): tsc_sensor_<name>, on a sensor
+# handle whose sensor is a carla::client::ServerSideSensor (TSC_TYPE_ERROR for
+# the client-side lane-invasion sensor).
+class: carla::client::ServerSideSensor
+prefix: sensor
+self: {type: tsc_sensor_t, name: sensor, get: server_side_sensor_of}
+blocks:
+  server_side_sensor:
+    send:
+      call: Send
+      args: {message: custom_v2x_bytes}
+      optional: {name: Sensor.send, missing_in: ["0.10.0"]}

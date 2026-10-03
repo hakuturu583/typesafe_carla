@@ -1,0 +1,67 @@
+# The V2X API of issue #42 with explicit types: CAM and custom V2X events,
+# CustomV2XBytes and Sensor.send. (Compiles with every LibCarla; built
+# against CARLA 0.10.0, send() and the conversions raise CarlaError.)
+# strict
+import typesafe_carla as carla
+
+def talk(world: carla.World, vehicle: carla.Vehicle) -> int:
+    lib = world.get_blueprint_library()
+    radio: carla.Sensor = world.spawn_actor(lib.find("sensor.other.v2x_custom"),
+                                            carla.Transform(), attach_to=vehicle).as_sensor()
+    cam_sensor: carla.Sensor = world.spawn_actor(lib.find("sensor.other.v2x"), carla.Transform(),
+                                                 attach_to=vehicle).as_sensor()
+    payload = carla.CustomV2XBytes()
+    payload.set_string("hello")
+    payload.set_bytes([1, 2, 3])
+    payload.data_size = 2
+    size: int = payload.data_size + payload.max_data_size()
+    text: str = payload.get_string()
+    raw: List[int] = payload.get_bytes()
+    radio.send(payload)
+    radio.send("hello")
+    world.tick()
+    total = size + len(text) + len(raw)
+
+    data: carla.SensorData = radio.wait_for_data(1.0)
+    if data.type == carla.SensorDataType.CustomV2X:
+        custom: carla.CustomV2XEvent = data.as_custom_v2x_event()
+        count: int = custom.get_message_count() + len(custom)
+        first: carla.CustomV2XData = custom[0]
+        power: float = first.power
+        message: carla.CustomV2XMessage = first.get()
+        header: carla.ItsPduHeader = message.header
+        received: carla.CustomV2XBytes = message.data
+        for m in custom:
+            total += m.get().data.data_size
+        total += count + header.station_id + header.message_id + received.data_size + int(power)
+
+    event: carla.CAMEvent = cam_sensor.wait_for_data(1.0).as_cam_event()
+    for message in event:
+        cam: carla.CAM = message.get()
+        position: carla.ReferencePosition = cam.reference_position
+        total += cam.header.station_id + cam.station_type + position.latitude
+        hf: Optional[carla.BasicVehicleContainerHighFrequency] = (
+            cam.basic_vehicle_container_high_frequency)
+        if hf is not None:
+            speed: carla.ValueConfidence = hf.speed
+            lateral: Optional[carla.ValueConfidence] = hf.lateral_acceleration
+            zone: Optional[carla.CenDsrcTollingZone] = hf.cen_dsrc_tolling_zone
+            total += speed.value + (lateral.value if lateral is not None else 0)
+            total += 0 if zone is None else zone.protected_zone_latitude
+        zones: Optional[List[carla.ProtectedCommunicationZone]] = (
+            cam.protected_communication_zones_rsu)
+        if zones is not None:
+            for z in zones:
+                radius: Optional[int] = z.protected_zone_radius
+                total += z.protected_zone_latitude + (0 if radius is None else radius)
+        low: Optional[carla.BasicVehicleContainerLowFrequency] = (
+            cam.basic_vehicle_container_low_frequency)
+        if low is not None:
+            points: List[carla.PathPoint] = low.path_history
+            total += low.exterior_lights + len(points)
+    last: carla.CAMMessage = event[-1]
+    return total + int(last.power) + event.get_message_count()
+
+# Compile-only: Codon type-checks a function only when it is called.
+w = carla.Client("localhost", 2000).get_world()
+print(talk(w, w.get_actors()[0].as_vehicle()))

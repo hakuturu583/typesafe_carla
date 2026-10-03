@@ -1,6 +1,7 @@
 // Implementation of the in-memory mock LibCarla (see carla/mock/Mock.h).
 #include "carla/mock/Mock.h"
 #include "carla/mock/SensorDataExt.h"
+#include "carla/mock/V2X.h"
 #include "carla/FileSystem.h"
 
 #include <algorithm>
@@ -8,6 +9,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <limits>
 
 namespace carla {
@@ -116,6 +118,20 @@ struct Episode : std::enable_shared_from_this<Episode> {
   float tm_global_speed_difference = 0.0f;     // percent slower than the limit
   std::map<rpc::ActorId, std::vector<uint8_t>> tm_routes;  // SetImportedRoute
   std::map<uint16_t, bool> tm_shut_down;       // by port
+  // Issue #42: V2X. Custom messages sent since the last tick, delivered at the
+  // next one (ACustomV2XSensor's "next frame" map), and each CAM sensor's
+  // generation state (the server's CaService).
+  struct V2XOutgoing {
+    rpc::ActorId sender;
+    sensor::data::CustomV2XData message;  // Power: the transmit power
+  };
+  std::vector<V2XOutgoing> v2x_outbox;
+  struct CamState {
+    std::optional<double> last_cam;  // simulation time of the last CAM
+    std::optional<double> last_low_frequency;
+    geom::Location last_position;
+  };
+  std::map<rpc::ActorId, CamState> cam_state;
 
   double Mass(const ActorData &a) const { return a.is_vehicle ? a.physics.mass : 80.0; }
 
@@ -169,10 +185,16 @@ struct Episode : std::enable_shared_from_this<Episode> {
   // on client::Sensor). Collision events need actor objects, whose
   // constructors take the episode lock, so they are built in the delivery.
   std::vector<Delivery> SenseLocked();
+  // V2X (issue #42): CAMs and custom messages, for every listening V2X sensor.
+  void SenseV2XLocked(double timestamp, std::vector<Delivery> &out);
 
   // Every actor removal goes through here so listeners never outlive their sensor.
   bool EraseActorLocked(rpc::ActorId id) {
     listeners.erase(id);
+    cam_state.erase(id);  // as the V2X sensors' EndPlay
+    v2x_outbox.erase(std::remove_if(v2x_outbox.begin(), v2x_outbox.end(),
+                                    [id](const V2XOutgoing &m) { return m.sender == id; }),
+                     v2x_outbox.end());
     auto it = actors.find(id);
     if (it == actors.end()) return false;
     destroyed.insert_or_assign(id, it->second);
@@ -471,6 +493,26 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
                      {ActorAttribute("distance", rpc::ActorAttributeType::Float, "5", true),
                       ActorAttribute("hit_radius", rpc::ActorAttributeType::Float, "0.5", true),
                       ActorAttribute("only_dynamics", rpc::ActorAttributeType::Bool, "false", true)}),
+      // Issue #42 (ue5-dev's V2X sensors; the attributes the mock reads).
+      ActorBlueprint("sensor.other.v2x", {"sensor", "other", "v2x"},
+                     {ActorAttribute("channel_id", rpc::ActorAttributeType::String, "Default", true),
+                      ActorAttribute("frequency_ghz", rpc::ActorAttributeType::Float, "5.9", true),
+                      ActorAttribute("transmit_power", rpc::ActorAttributeType::Float, "21.5", true),
+                      ActorAttribute("receiver_sensitivity", rpc::ActorAttributeType::Float, "-99.0", true),
+                      ActorAttribute("combined_antenna_gain", rpc::ActorAttributeType::Float, "10.0", true),
+                      ActorAttribute("d_ref", rpc::ActorAttributeType::Float, "1.0", true),
+                      ActorAttribute("filter_distance", rpc::ActorAttributeType::Float, "500.0", true),
+                      ActorAttribute("gen_cam_min", rpc::ActorAttributeType::Float, "0.1", true),
+                      ActorAttribute("gen_cam_max", rpc::ActorAttributeType::Float, "1.0", true),
+                      ActorAttribute("fixed_rate", rpc::ActorAttributeType::Bool, "false", true)}),
+      ActorBlueprint("sensor.other.v2x_custom", {"sensor", "other", "v2x_custom"},
+                     {ActorAttribute("channel_id", rpc::ActorAttributeType::String, "Default", true),
+                      ActorAttribute("frequency_ghz", rpc::ActorAttributeType::Float, "5.9", true),
+                      ActorAttribute("transmit_power", rpc::ActorAttributeType::Float, "21.5", true),
+                      ActorAttribute("receiver_sensitivity", rpc::ActorAttributeType::Float, "-99.0", true),
+                      ActorAttribute("combined_antenna_gain", rpc::ActorAttributeType::Float, "10.0", true),
+                      ActorAttribute("d_ref", rpc::ActorAttributeType::Float, "1.0", true),
+                      ActorAttribute("filter_distance", rpc::ActorAttributeType::Float, "500.0", true)}),
       ActorBlueprint("controller.ai.walker", {"controller", "ai", "walker"}, {}),
       ActorBlueprint("static.prop.trafficcone01", {"static", "prop", "trafficcone01"},
                      {ActorAttribute("role_name", rpc::ActorAttributeType::String, "prop", true),
@@ -480,7 +522,12 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
 
 SharedPtr<Actor> MakeActor(const std::shared_ptr<Episode> &episode, const ActorData &data) {
   if (data.is_vehicle) return std::make_shared<Vehicle>(episode, data.id);
-  if (data.type_id.rfind("sensor.", 0) == 0) return std::make_shared<Sensor>(episode, data.id);
+  if (data.type_id == "sensor.other.lane_invasion") {
+    return std::make_shared<Sensor>(episode, data.id);  // client-side in LibCarla
+  }
+  if (data.type_id.rfind("sensor.", 0) == 0) {
+    return std::make_shared<ServerSideSensor>(episode, data.id);
+  }
   if (data.is_walker()) return std::make_shared<Walker>(episode, data.id);
   if (data.is_walker_ai_controller()) {
     return std::make_shared<WalkerAIController>(episode, data.id);
@@ -1150,6 +1197,30 @@ bool Sensor::IsListening() const {
 
 Sensor::~Sensor() { Stop(); }
 
+// As ServerSideSensor::Send and ACustomV2XSensor::Send (ue5-dev): LibCarla
+// checks the blueprint id and only warns for any other sensor; the server
+// stamps the header (protocol version 2, the custom message id, the station:
+// the parent's actor id, or the sensor's own without a parent) and the
+// transmit power, and queues the message for the next tick.
+void ServerSideSensor::Send(const rpc::CustomV2XBytes &data) {
+  WithData([&](mock::ActorData &a) {
+    if (a.type_id != "sensor.other.v2x_custom") {
+      std::cerr << "WARNING: Send methods are not supported on non-V2X sensors "
+                   "(sensor.other.v2x_custom).\n";
+      return 0;
+    }
+    sensor::data::CustomV2XData message{};
+    message.Message.header.protocolVersion = 2;
+    message.Message.header.messageID = ITSContainer::messageID_custom;
+    message.Message.header.stationID = static_cast<long>(a.parent.value_or(a.id));
+    message.Message.data = data;
+    auto power = a.attributes.find("transmit_power");
+    message.Power = power == a.attributes.end() ? 21.5f : std::strtof(power->second.c_str(), nullptr);
+    _episode->v2x_outbox.push_back(mock::Episode::V2XOutgoing{a.id, message});
+    return 0;
+  });
+}
+
 namespace mock {
 
 namespace {
@@ -1191,6 +1262,7 @@ std::vector<Point> LidarSweep(const ActorData &a, uint32_t channels, uint32_t pe
 std::vector<Delivery> Episode::SenseLocked() {
   std::vector<Delivery> out;
   const double timestamp = static_cast<double>(frame) * DeltaSeconds();
+  SenseV2XLocked(timestamp, out);
   auto self = shared_from_this();
   for (auto &entry : listeners) {
     auto it = actors.find(entry.first);
@@ -1391,6 +1463,219 @@ std::vector<Delivery> Episode::SenseLocked() {
     out.push_back([cb = std::move(callback), data = std::move(data)]() { cb(data); });
   }
   return out;
+}
+
+namespace {
+
+std::string AttributeString(const ActorData &a, const std::string &key,
+                            const std::string &fallback) {
+  auto it = a.attributes.find(key);
+  return it == a.attributes.end() ? fallback : it->second;
+}
+
+double Distance(const geom::Location &p, const geom::Location &q) {
+  return std::sqrt((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y) +
+                   (p.z - q.z) * (p.z - q.z));
+}
+
+// The power (dBm) at which `to` receives a message that `from` sends with
+// `transmit_power`, or nothing when it is out of range: free-space path loss
+// at the receiver's frequency plus its antenna gain, cut at its
+// filter_distance and receiver_sensitivity. (The server's path loss models
+// add obstacles and fading; the mock's world has neither.)
+std::optional<float> ReceivePower(const ActorData &from, const ActorData &to,
+                                  float transmit_power) {
+  const double d = Distance(from.transform.location, to.transform.location);
+  if (d > AttributeDouble(to, "filter_distance", 500.0)) return std::nullopt;
+  const double hz = AttributeDouble(to, "frequency_ghz", 5.9) * 1e9;
+  const double fspl = 20.0 * std::log10(std::max(d, AttributeDouble(to, "d_ref", 1.0))) +
+                      20.0 * std::log10(hz) - 147.55;
+  const double power = transmit_power + AttributeDouble(to, "combined_antenna_gain", 10.0) - fspl;
+  if (power < AttributeDouble(to, "receiver_sensitivity", -99.0)) return std::nullopt;
+  return static_cast<float>(power);
+}
+
+// A CAM as the server's CaService builds it, from the mock's actor state.
+// Positions use the mock GNSS's flat-earth reference (see the GNSS sensor).
+CAM_t MakeCam(const ActorData &origin, const ActorData *vehicle, long station_id,
+              long station_type, double now, bool low_frequency) {
+  CAM_t cam{};
+  cam.header.protocolVersion = 2;
+  cam.header.messageID = ITSContainer::messageID_cam;
+  cam.header.stationID = station_id;
+  auto &coop = cam.cam;
+  coop.generationDeltaTime = static_cast<long>(std::llround(now * 1000.0) % 65536);
+  auto &basic = coop.camParameters.basicContainer;
+  basic.stationType = station_type;
+  const auto &p = origin.transform.location;
+  basic.referencePosition.latitude = std::lround(-p.y / 111111.0 * 1e6) * 10;
+  basic.referencePosition.longitude = std::lround(p.x / 111111.0 * 1e6) * 10;
+  basic.referencePosition.positionConfidenceEllipse = {ITSContainer::SemiAxisLength_unavailable,
+                                                       ITSContainer::SemiAxisLength_unavailable,
+                                                       ITSContainer::HeadingValue_unavailable};
+  basic.referencePosition.altitude = {std::lround(p.z * 100.0),
+                                      ITSContainer::AltitudeConfidence_unavailable};
+  auto &hfc = coop.camParameters.highFrequencyContainer;
+  auto &lfc = coop.camParameters.lowFrequencyContainer;
+  hfc.present = CAMContainer::HighFrequencyContainer_PR_NOTHING;
+  lfc.present = CAMContainer::LowFrequencyContainer_PR_NOTHING;
+  if (station_type == ITSContainer::StationType_roadSideUnit) {
+    // As CaService::AddRSUContainerHighFrequency: 16 placeholder zones.
+    hfc.present = CAMContainer::HighFrequencyContainer_PR_rsuContainerHighFrequency;
+    auto &zones = hfc.rsuContainerHighFrequency.protectedCommunicationZonesRSU;
+    zones.ProtectedCommunicationZoneCount = static_cast<long>(zones.data.size());
+    for (auto &zone : zones.data) {
+      zone = ITSContainer::ProtectedCommunicationZone_t{};
+      zone.protectedZoneType = ITSContainer::ProtectedZoneType_cenDsrcTolling;
+      zone.protectedZoneLatitude = 50;
+      zone.protectedZoneLongitude = 50;
+    }
+    return cam;
+  }
+  if (vehicle == nullptr) return cam;  // e.g. a pedestrian: no container
+  hfc.present = CAMContainer::HighFrequencyContainer_PR_basicVehicleContainerHighFrequency;
+  auto &bvc = hfc.basicVehicleContainerHighFrequency;
+  const double heading = std::fmod(vehicle->transform.rotation.yaw + 90.0 + 360.0, 360.0);
+  bvc.heading = {std::lround(heading * 10.0), ITSContainer::HeadingConfidence_equalOrWithinOneDegree};
+  const auto &v = vehicle->velocity;
+  bvc.speed = {std::lround(std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z) * 100.0), 3};
+  bvc.driveDirection = ITSContainer::DriveDirection_forward;
+  bvc.vehicleLength = {46, ITSContainer::VehicleLengthConfidenceIndication_unavailable};
+  bvc.vehicleWidth = 18;
+  const auto &acc = vehicle->acceleration;
+  bvc.longitudinalAcceleration = {std::lround(acc.x * 10.0),
+                                  ITSContainer::AccelerationConfidence_unavailable};
+  bvc.curvature = {ITSContainer::CurvatureValue_unavailable,
+                   ITSContainer::CurvatureConfidence_unavailable};
+  bvc.curvatureCalculationMode = ITSContainer::CurvatureCalculationMode_yarRateUsed;
+  bvc.yawRate = {std::lround(vehicle->angular_velocity.z * 100.0),
+                 ITSContainer::YawRateConfidence_unavailable};
+  bvc.lateralAccelerationAvailable = true;
+  bvc.lateralAcceleration = {std::lround(acc.y * 10.0),
+                             ITSContainer::AccelerationConfidence_unavailable};
+  bvc.verticalAccelerationAvailable = true;
+  bvc.verticalAcceleration = {std::lround(acc.z * 10.0),
+                              ITSContainer::AccelerationConfidence_unavailable};
+  if (low_frequency) {
+    lfc.present = CAMContainer::LowFrequencyContainer_PR_basicVehicleContainerLowFrequency;
+    auto &low = lfc.basicVehicleContainerLowFrequency;
+    low.vehicleRole = ITSContainer::VehicleRole_default;
+    // CaService::AddLowFrequencyContainer: ETSI bit string, bit 0 first.
+    using LS = rpc::VehicleLightState::LightState;
+    const std::pair<LS, int> lights[] = {
+        {LS::LowBeam, ITSContainer::ExteriorLights_lowBeamHeadlightsOn},
+        {LS::HighBeam, ITSContainer::ExteriorLights_highBeamHeadlightsOn},
+        {LS::LeftBlinker, ITSContainer::ExteriorLights_leftTurnSignalOn},
+        {LS::RightBlinker, ITSContainer::ExteriorLights_rightTurnSignalOn},
+        {LS::Reverse, ITSContainer::ExteriorLights_reverseLightOn},
+        {LS::Fog, ITSContainer::ExteriorLights_fogLightOn},
+        {LS::Position, ITSContainer::ExteriorLights_parkingLightsOn}};
+    low.exteriorLights = 0u;
+    for (const auto &[state, bit] : lights) {
+      if (vehicle->light_state & static_cast<uint32_t>(state)) {
+        low.exteriorLights |= static_cast<uint8_t>(1u << (7 - bit));
+      }
+    }
+    low.pathHistory.NumberOfPathPoint = 0;  // as the server
+  }
+  return cam;
+}
+
+}  // namespace
+
+void Episode::SenseV2XLocked(double timestamp, std::vector<Delivery> &out) {
+  namespace sd = sensor::data;
+  // CAMs: each V2X sensor (listening or not) decides whether to send this
+  // tick, as AV2XSensor::PrePhysTick / CaService::Trigger: a road-side unit
+  // (no vehicle or walker parent) every 0.5 s; otherwise after gen_cam_min
+  // when fixed_rate is set or the parent moved more than 4 m since its last
+  // CAM, and after gen_cam_max regardless. The low-frequency container is
+  // added at most every 0.5 s.
+  std::vector<std::pair<rpc::ActorId, sd::CAMData>> cams;
+  for (const auto &entry : actors) {
+    const ActorData &a = entry.second;
+    if (a.type_id != "sensor.other.v2x") continue;
+    const ActorData *parent = nullptr;
+    if (a.parent) {
+      auto p = actors.find(*a.parent);
+      if (p != actors.end()) parent = &p->second;
+    }
+    const bool vehicle = parent != nullptr && parent->is_vehicle;
+    const bool pedestrian = parent != nullptr && parent->is_walker();
+    const long station_type = vehicle      ? ITSContainer::StationType_passengerCar
+                              : pedestrian ? ITSContainer::StationType_pedestrian
+                                           : ITSContainer::StationType_roadSideUnit;
+    const ActorData &origin = parent != nullptr && (vehicle || pedestrian) ? *parent : a;
+    CamState &state = cam_state[a.id];
+    // (+1e-6: frame * delta_seconds is not exact; 0.1 s is two 0.05 s ticks.)
+    const double elapsed = state.last_cam ? timestamp - *state.last_cam + 1e-6
+                                          : std::numeric_limits<double>::infinity();
+    bool trigger = false;
+    if (station_type == ITSContainer::StationType_roadSideUnit) {
+      trigger = elapsed >= 0.5;
+    } else if (elapsed >= AttributeDouble(a, "gen_cam_min", 0.1)) {
+      trigger = AttributeString(a, "fixed_rate", "false") == "true" ||
+                Distance(origin.transform.location, state.last_position) > 4.0 ||
+                elapsed >= AttributeDouble(a, "gen_cam_max", 1.0);
+    }
+    if (!trigger) continue;
+    const bool low_frequency =
+        !state.last_low_frequency || timestamp - *state.last_low_frequency + 1e-6 >= 0.5;
+    if (low_frequency && vehicle) state.last_low_frequency = timestamp;
+    state.last_cam = timestamp;
+    state.last_position = origin.transform.location;
+    sd::CAMData cam;
+    cam.Power = static_cast<float>(AttributeDouble(a, "transmit_power", 21.5));
+    cam.Message = MakeCam(origin, vehicle ? parent : nullptr,
+                          static_cast<long>(parent != nullptr ? parent->id : a.id), station_type,
+                          timestamp, low_frequency);
+    cams.emplace_back(a.id, cam);
+  }
+  // Custom messages sent since the last tick. As ACustomV2XSensor::PrePhysTick,
+  // only a sender with a parent ("owner") moves its messages on to the
+  // receivers; each message is delivered on one tick only.
+  std::vector<V2XOutgoing> sent;
+  sent.swap(v2x_outbox);
+  for (auto &entry : listeners) {
+    auto it = actors.find(entry.first);
+    if (it == actors.end()) continue;
+    const ActorData &receiver = it->second;
+    const geom::Transform t = receiver.transform;
+    auto callback = entry.second.callback;
+    if (receiver.type_id == "sensor.other.v2x") {
+      std::vector<sd::CAMData> received;
+      for (const auto &[sender_id, cam] : cams) {
+        if (sender_id == receiver.id) continue;
+        const auto power = ReceivePower(actors.at(sender_id), receiver, cam.Power);
+        if (!power) continue;
+        received.push_back(cam);
+        received.back().Power = *power;
+      }
+      if (received.empty()) continue;
+      out.push_back([cb = std::move(callback), f = frame, timestamp, t,
+                     data = std::move(received)]() mutable {
+        cb(std::make_shared<sd::CAMEvent>(f, timestamp, t, std::move(data)));
+      });
+    } else if (receiver.type_id == "sensor.other.v2x_custom") {
+      const std::string channel = AttributeString(receiver, "channel_id", "Default");
+      std::vector<sd::CustomV2XData> received;
+      for (const auto &message : sent) {
+        if (message.sender == receiver.id) continue;
+        auto sender = actors.find(message.sender);
+        if (sender == actors.end() || !sender->second.parent) continue;
+        if (AttributeString(sender->second, "channel_id", "Default") != channel) continue;
+        const auto power = ReceivePower(sender->second, receiver, message.message.Power);
+        if (!power) continue;
+        received.push_back(message.message);
+        received.back().Power = *power;
+      }
+      if (received.empty()) continue;
+      out.push_back([cb = std::move(callback), f = frame, timestamp, t,
+                     data = std::move(received)]() mutable {
+        cb(std::make_shared<sd::CustomV2XEvent>(f, timestamp, t, std::move(data)));
+      });
+    }
+  }
 }
 
 }  // namespace mock

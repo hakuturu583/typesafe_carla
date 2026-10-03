@@ -48,7 +48,7 @@ Milestones (design section 43):
 | Waypoint | `id`, `transform`, `road_id`, `section_id`, `lane_id`, `s`, `is_junction`, `is_intersection`, `junction_id`, `lane_width`, `lane_type`, `lane_change` (`LaneChange`), `left_lane_marking` / `right_lane_marking` (→ `Optional[LaneMarking]`: `LaneMarkingType`, `LaneMarkingColor`), `is_rht`, `next`, `previous`, `next_until_lane_end`, `previous_until_lane_start`, `get_left_lane` / `get_right_lane` / `get_junction` (→ `Optional`), `get_landmarks`, `get_landmarks_of_type` |
 | Landmark | every field of the Python API (`id`, `name`, `type`, `road_id`, `s`, `t`, `distance`, `orientation` (`LandmarkOrientation`), `h_offset`, `pitch`, `roll`, `is_dynamic`, ...), `waypoint` (→ `Optional[Waypoint]`), `get_lane_validities`; `LandmarkType` |
 | Snapshots | `WorldSnapshot` (`id`, `frame` / `frame_count`, `timestamp`, `elapsed_seconds`, `delta_seconds`, `platform_timestamp`, `find` → `Optional`, `has_actor`, indexing, iteration), `ActorSnapshot`, `Timestamp` (`frame` / `frame_count`) |
-| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`; `SensorData` (`frame`, `frame_number`, `timestamp`, `transform`) with checked `as_image()` / `as_lidar()` / `as_semantic_lidar()` / `as_radar()` / `as_gnss()` / `as_imu()` / `as_collision()` / `as_obstacle()` / `as_lane_invasion()` / `as_dvs()` / `as_optical_flow()`; `Image` (zero-copy `raw_data()`, indexing and iteration → `Color`, `pixel`, `convert(ColorConverter)`, `save_to_disk(path, ColorConverter)` as PNG), `ColorConverter` (`Raw`, `Depth`, `LogarithmicDepth`, `CityScapesPalette`), `LidarMeasurement` (zero-copy `raw_data()` / `raw_points()`, iteration, `get_point_count`, `save_to_disk` as PLY), `SemanticLidarMeasurement` / `SemanticLidarDetection`, `RadarMeasurement` / `RadarDetection`, `DVSEventArray` / `DVSEvent` (`to_image`, `to_array`, `to_array_x/y/t/pol`), `OpticalFlowImage` / `OpticalFlowPixel` (`get_color_coded_flow` → `FakeImage`) — all zero-copy views of LibCarla's buffers; `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` / `ObstacleDetectionEvent` (`actor`, `other_actor` → `Optional[Actor]`, `distance`), `LaneInvasionEvent` (`crossed_lane_markings` → `List[LaneMarking]`, `actor`), `LaneInvasionSensor`, `LaneMarking` / `LaneMarkingType` / `LaneMarkingColor` / `LaneChange` |
+| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`; `SensorData` (`frame`, `frame_number`, `timestamp`, `transform`) with checked `as_image()` / `as_lidar()` / `as_semantic_lidar()` / `as_radar()` / `as_gnss()` / `as_imu()` / `as_collision()` / `as_obstacle()` / `as_lane_invasion()` / `as_dvs()` / `as_optical_flow()`; `Image` (zero-copy `raw_data()`, indexing and iteration → `Color`, `pixel`, `convert(ColorConverter)`, `save_to_disk(path, ColorConverter)` as PNG), `ColorConverter` (`Raw`, `Depth`, `LogarithmicDepth`, `CityScapesPalette`), `LidarMeasurement` (zero-copy `raw_data()` / `raw_points()`, iteration, `get_point_count`, `save_to_disk` as PLY), `SemanticLidarMeasurement` / `SemanticLidarDetection`, `RadarMeasurement` / `RadarDetection`, `DVSEventArray` / `DVSEvent` (`to_image`, `to_array`, `to_array_x/y/t/pol`), `OpticalFlowImage` / `OpticalFlowPixel` (`get_color_coded_flow` → `FakeImage`) — all zero-copy views of LibCarla's buffers; `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` / `ObstacleDetectionEvent` (`actor`, `other_actor` → `Optional[Actor]`, `distance`), `LaneInvasionEvent` (`crossed_lane_markings` → `List[LaneMarking]`, `actor`), `LaneInvasionSensor`, `LaneMarking` / `LaneMarkingType` / `LaneMarkingColor` / `LaneChange`; V2X (issue #42, LibCarla ue5-dev only): `Sensor.send(CustomV2XBytes)` / `send(str)`, `as_cam_event()` → `CAMEvent` (`get_message_count`, indexing, iteration → `CAMMessage`: `power`, `get()` → typed `CAM`), `as_custom_v2x_event()` → `CustomV2XEvent` (→ `CustomV2XData`: `power`, `get()` → `CustomV2XMessage`), `CustomV2XBytes` (`get_string` / `set_string` / `get_bytes` / `set_bytes` / `data_size` / `max_data_size`) |
 | Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyWalkerControl`, `ApplyTransform`, `ApplyLocation`, `ApplyTargetVelocity`, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, `SetAutopilot`, `SetSimulatePhysics`, `SetEnableGravity`, `SetVehicleLightState`, `SetTrafficLightState`, `ApplyVehicleAckermannControl`, `ShowDebugTelemetry`; `CommandResponse` |
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, `filter_by_attribute`, indexing, iteration), `ActorBlueprint` (`id`, `tags`, `has_tag`, `match_tags`, `has_attribute`, `get_attribute`, `set_attribute`), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`) |
 | Values | `TextureColor`, `TextureFloatColor`, `FloatColor`, `MaterialParameter`, `CityObjectLabel`, `ActorState` (issue #19), `MapLayer`, `EnvironmentObject`, `LabelledPoint` (issue #21), `Location`, `Rotation` (`get_forward_vector` / `get_right_vector` / `get_up_vector`, `get_normalized`), `Transform` (`get_forward_vector` / `get_right_vector` / `get_up_vector`, `get_matrix`, `get_inverse_matrix`, `transform` (a point or a list of points, in place), `transform_vector`), `Vector2D` (`length`, `squared_length`, `make_unit_vector`), `Vector3D`, `Velocity`, `AngularVelocity`, `Acceleration`, `Quaternion`, `BoundingBox` (`contains`, `get_local_vertices`, `get_world_vertices`), `VehicleControl`, `VehiclePhysicsControl` and `WheelPhysicsControl` (all fields: curves, gear ratios, wheels), `WorldSettings` (every LibCarla field, including `max_culling_distance`, `deterministic_ragdolls`, `tile_stream_distance`, `actor_active_distance`, `spectator_as_ego`), `Color`, `VehicleAckermannControl`, `AckermannControllerSettings`, `VehicleTelemetryData`, `WheelTelemetryData`, `WalkerBoneControlIn` / `WalkerBoneControlOut`, `bone_transform` / `bone_transform_out`; enumerations `VehicleDoor`, `VehicleWheelLocation`, `VehicleFailureState`, `AttachmentType`; constants `GBufferTextureID` |
@@ -210,7 +210,7 @@ resolved commit are compiled in: `typesafe-codon info`,
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
-| 0.1.0 | 4.0 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
+| 0.1.0 | 4.1 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
 
 ### Backends
 
@@ -545,10 +545,49 @@ Deliberate differences, all in favour of static checking:
   - DVS events are packed 13-byte records in LibCarla; `DVSEventArray` reads
     them in place, and `to_image()` / `to_array*()` are computed in Codon
     from that view (same results as LibCarla's `ToImage` / `ToArray*`).
-  - **Not supported: V2X** (`CAMEvent`, `CAMMessage`, `CustomV2XEvent`,
-    `CustomV2XData`, `CustomV2XBytes`). LibCarla 0.10.0 has no V2X data
-    types (they exist only in ue5-dev), so a 0.10.0 server cannot send them.
-    GBuffer textures (`Sensor.listen_to_gbuffer`) are not supported either.
+  - **V2X depends on the LibCarla version** (issue #42). `Sensor.send`,
+    `SensorData.as_cam_event()` / `as_custom_v2x_event()` and the
+    `CAMEvent` / `CAMMessage` / `CustomV2XEvent` / `CustomV2XData` types
+    need LibCarla ue5-dev, which has `ServerSideSensor::Send` and the V2X
+    measurement types. Built against LibCarla 0.10.0, which has neither,
+    they compile but raise `CarlaError` ("... is not available in LibCarla
+    0.10.0"); no measurement is ever `SensorDataType.CAM` / `CustomV2X`.
+    A CARLA 0.10.0 server has no `sensor.other.v2x*` blueprints at all.
+    `CustomV2XBytes` is a plain value and works with both.
+  - `CAMMessage.get()` returns a typed `CAM`, not the Python API's nested
+    dict. It holds the same content: the header (`ItsPduHeader`), the
+    generation time, the station type, the reference position (with the
+    altitude, which the Python API drops), and the containers of LibCarla's
+    `LibITS.h` as `Optional`s: `basic_vehicle_container_high_frequency`
+    (heading, speed, ... as `ValueConfidence`; its optional fields as
+    `Optional`), `protected_communication_zones_rsu` (a road-side unit's
+    `List[ProtectedCommunicationZone]`) and
+    `basic_vehicle_container_low_frequency` (vehicle role, exterior lights,
+    `List[PathPoint]`). Field names are LibITS's in snake_case and values
+    are LibCarla's raw ETSI codes and units (latitude in 0.1 microdegrees,
+    speed in cm/s, ...), where the Python API turns the enumerations into
+    display strings ("Passenger Car", "CAM"). This is the whole CAM that
+    LibCarla carries; there is no further ITS tree (DENM etc.) to bind.
+    The power is `CAMMessage.power`, not part of `get()`.
+    `CustomV2XData.get()` likewise returns a `CustomV2XMessage` (`header`,
+    `data`: `CustomV2XBytes`).
+  - `CustomV2XBytes.get_bytes()` / `set_bytes()` use `List[int]` (Codon has
+    no `bytes`); `set_bytes` rejects values outside [0, 255] with
+    `CarlaError`. `data_size` can be set within [0, 100] only (the Python
+    API accepts any uint8 and then reads past the 100-byte buffer).
+    `CustomV2XBytes.get()` (a dict of the same three values) is not bound.
+  - `Sensor.send` also takes a `str` (sent as `set_string` would store it).
+    As in LibCarla, sending through a server-side sensor that is not
+    `sensor.other.v2x_custom` only logs a warning; the client-side
+    lane-invasion sensor raises `ActorTypeError`.
+  - The mock backend mirrors ue5-dev's V2X sensors with synthetic messages:
+    CAMs from each `sensor.other.v2x` (built from the parent vehicle's
+    state; a sensor without a vehicle or walker parent is a road-side unit),
+    custom messages delivered at the next tick to the other
+    `sensor.other.v2x_custom` sensors on the same `channel_id`, and a
+    free-space receive power cut at `filter_distance` and
+    `receiver_sensitivity`.
+  - GBuffer textures (`Sensor.listen_to_gbuffer`) are not supported.
 
 **Not a difference: lookups that can miss return `None`, as in Python.**
 `World.get_actor`, `World.try_spawn_actor`, `ActorList.find`,

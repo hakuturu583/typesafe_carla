@@ -136,6 +136,7 @@ int main(void) {
   expect_null_rejected(tsc_obstacle_detection_get_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_obstacle_detection_get_actor");
   expect_null_rejected(tsc_obstacle_detection_get_other_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_obstacle_detection_get_other_actor");
   expect_null_rejected(tsc_sensor_is_listening(NULL, (int32_t[1]){0}), "tsc_sensor_is_listening");
+  expect_null_rejected(tsc_sensor_send(NULL, NULL), "tsc_sensor_send");
   expect_null_rejected(tsc_traffic_light_set_state(NULL, 99), "tsc_traffic_light_set_state");
   expect_null_rejected(tsc_traffic_light_set_green_time(NULL, NAN), "tsc_traffic_light_set_green_time");
   expect_null_rejected(tsc_traffic_light_set_yellow_time(NULL, NAN), "tsc_traffic_light_set_yellow_time");
@@ -277,6 +278,6 @@ int main(void) {
   if (tsc_world_snapshot_size(NULL) != 0) { fputs("tsc_world_snapshot_size(NULL)\n", stderr); ++g_failures; }
   expect_null_rejected(tsc_world_snapshot_get(NULL, 0, (tsc_actor_snapshot_t[1]){0}), "tsc_world_snapshot_get");
   if (g_failures != 0) return 1;
-  printf("test_generated: 256 generated functions reject NULL handles\n");
+  printf("test_generated: 257 generated functions reject NULL handles\n");
   return 0;
 }
