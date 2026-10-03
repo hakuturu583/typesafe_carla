@@ -374,12 +374,7 @@ jobs:
           CIBW_MANYLINUX_X86_64_IMAGE: ${{ env.MANYLINUX_IMAGE }}
           CIBW_ENVIRONMENT_PASS_LINUX: CARLA_GIT_REF
           CIBW_CONTAINER_ENGINE: "docker; create_args: --volume=${{ runner.temp }}/libcarla-build:/libcarla-build"
-          # The restored cache belongs to the runner user (handed back after the
-          # previous save) while the container builds as root: let git read
-          # the cached CARLA checkout ("dubious ownership" otherwise).
-          CIBW_BEFORE_BUILD: >-
-            git config --global --add safe.directory '*' &&
-            bash {project}/tools/libcarla_cache_guard.sh /libcarla-build/wheel "$CARLA_GIT_REF"
+          CIBW_BEFORE_BUILD: bash {project}/tools/libcarla_cache_guard.sh /libcarla-build/wheel "$CARLA_GIT_REF"
           # The refs as -D, not only through the environment: a restored build
           # directory's CMakeCache.txt would keep its own values otherwise.
           CIBW_CONFIG_SETTINGS: >-
