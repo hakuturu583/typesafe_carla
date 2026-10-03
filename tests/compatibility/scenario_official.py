@@ -38,6 +38,50 @@ WHEEL_BOOLS = ("affected_by_steering", "affected_by_brake", "affected_by_handbra
                "affected_by_engine", "abs_enabled", "traction_control_enabled")
 
 
+def v2x_dict_paths(world, lib):
+    """Issue #85: sends "hello v2x" between two vehicles' custom V2X sensors
+    (as upstream's smoke/test_v2x.py) and prints the first message's get()
+    dict paths."""
+    bp = lib.filter("vehicle.*")[0]
+    base = world.get_map().get_spawn_points()[-1]
+    first = world.spawn_actor(bp, base)
+    fwd = base.get_forward_vector()
+    second = None
+    for d in (12.0, 17.0, 22.0, 27.0):
+        second = world.try_spawn_actor(bp, carla.Transform(
+            base.location + carla.Location(x=fwd.x * d, y=fwd.y * d, z=0.3), base.rotation))
+        if second is not None:
+            break
+    if second is None:
+        first.destroy()
+        return "nospawn"
+    radio = lib.find("sensor.other.v2x_custom")
+    sender = world.spawn_actor(radio, carla.Transform(), attach_to=first)
+    receiver = world.spawn_actor(radio, carla.Transform(), attach_to=second)
+    received = []
+    receiver.listen(lambda data: received.extend(list(data)))
+    for _ in range(5):
+        world.tick()
+    for _ in range(20):
+        message = carla.CustomV2XBytes()
+        message.set_string("hello v2x")
+        sender.send(message)
+        world.tick()
+    for _ in range(5):
+        world.tick()
+    receiver.stop()
+    for a in (sender, receiver, first, second):
+        a.destroy()
+    if not received:
+        return "none"
+    d = received[0].get()
+    header = d["Message"]["Header"]
+    payload = d["Message"]["Message"]
+    return (f"{payload['DataSize']},{payload['MaxDataSize']},{payload['Bytes'].decode()},"
+            f"{header['Message ID']},{header['Protocol Version']},"
+            f"{int(header['Station ID'] == first.id)},{int(d['Power'] == received[0].power)}")
+
+
 client = carla.Client(host, port)
 client.set_timeout(20.0)
 out("server_version", client.get_server_version())
@@ -418,6 +462,13 @@ try:
         world.tick()
     out("constant_velocity", f"{vehicle.get_velocity().length():.3f}")
     vehicle.disable_constant_velocity()
+    # Issue #85: the custom V2X message's get() dict paths, as upstream's
+    # smoke/test_v2x.py reads them. Needs a ue5-dev server and module.
+    if ("i85_v2x_dict" in os.environ.get("TSC_SKIP_KEYS", "").split(",")
+            or not hasattr(carla, "CustomV2XBytes") or not lib.filter("sensor.other.v2x_custom")):
+        out("i85_v2x_dict", "skip")
+    else:
+        out("i85_v2x_dict", v2x_dict_paths(world, lib))
 finally:
     world.apply_settings(original)
     out("destroyed", int(vehicle.destroy()))

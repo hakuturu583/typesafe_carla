@@ -1,0 +1,176 @@
+# Issue #85 on the mock backend: the V2X results take the Python API's dict
+# keys (PythonAPI/carla/src/V2XData.cpp), each resolved at compile time, and
+# agree with the typed attributes.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+lib = world.get_blueprint_library()
+vehicle = world.get_actors()[0].as_vehicle()  # parked at (0, 0, 0.5)
+other = world.spawn_actor(lib.find("vehicle.audi.tt"),
+                          carla.Transform(carla.Location(12.0, 0.0, 0.5))).as_vehicle()
+
+def sensor(id: str, parent: Optional[carla.Vehicle], location = carla.Location()) -> carla.Sensor:
+    if parent is None:
+        return world.spawn_actor(lib.find(id), carla.Transform(location)).as_sensor()
+    return world.spawn_actor(lib.find(id), carla.Transform(location), attach_to=parent).as_sensor()
+
+def raises_key_error(f, key: str) -> bool:
+    try:
+        f()
+    except KeyError as e:
+        return str(e) == key
+    return False
+
+def test_custom():
+    sender = sensor("sensor.other.v2x_custom", vehicle)
+    receiver = sensor("sensor.other.v2x_custom", other)
+    receiver.listen()
+    sender.send("hello v2x")
+    payload = carla.CustomV2XBytes()
+    payload.set_bytes([0, 1, 255])
+    sender.send(payload)
+    world.tick()
+    event = receiver.wait_for_data(1.0).as_custom_v2x_event()
+    first = event[0]
+
+    # The upstream smoke test's path (smoke/test_v2x.py), verbatim.
+    p = first.get()["Message"]["Message"]
+    assert p["DataSize"] == len("hello v2x") and p["Bytes"] == b"hello v2x"
+    assert p["MaxDataSize"] == 100
+    # Against the attribute API.
+    m = first.get()
+    assert first.get()["Power"] == first.power == 21.5
+    assert p["DataSize"] == m.data.data_size and p["Bytes"] == m.data.get_string()
+    assert p["MaxDataSize"] == m.data.max_data_size()
+    header = first.get()["Message"]["Header"]
+    assert header["Protocol Version"] == m.header.protocol_version == 2
+    assert header["Message ID"] == "CUSTOM" and m.header.message_id == 0
+    assert header["Station ID"] == m.header.station_id == vehicle.id
+    # Binary bytes: a str of the raw bytes (zeros included).
+    q = event[1].get()["Message"]["Message"]
+    assert q["Bytes"] == "\x00\x01\xff" and q["DataSize"] == 3 and len(q["Bytes"]) == 3
+    # CustomV2XBytes.get(): the same dict as the payload's.
+    assert payload.get()["DataSize"] == 3 and payload.get()["Bytes"] == "\x00\x01\xff"
+    # get()["Power"] follows the power, as the dict built on each call.
+    first.power = 3.0
+    assert first.get()["Power"] == 3.0
+    sender.destroy()
+    receiver.destroy()
+
+def test_cam():
+    bp = lib.find("sensor.other.v2x")
+    bp.set_attribute("fixed_rate", "true")
+    tx = world.spawn_actor(bp, carla.Transform(), attach_to=vehicle).as_sensor()
+    rx = world.spawn_actor(bp, carla.Transform(), attach_to=other).as_sensor()
+    rx.listen()
+    world.tick()
+    message = rx.wait_for_data(1.0).as_cam_event()[0]
+    cam = message.get()
+    d = message.get()
+    assert d["Power"] == message.power
+    assert d["Message"]["Header"]["Message ID"] == "CAM"
+    assert d["Message"]["Header"]["Station ID"] == cam.header.station_id == vehicle.id
+    coop = d["Message"]["Message"]
+    assert coop["Generation Delta Time"] == cam.generation_delta_time
+    params = coop["CAM Parameters"]
+    basic = params["Basic Container"]
+    assert basic["Station Type"] == "Passenger Car" and cam.station_type == 5
+    ref = basic["Reference Position"]
+    assert ref["Latitude"] == cam.reference_position.latitude
+    assert ref["Longitude"] == cam.reference_position.longitude
+    ellipse = ref["Position Confidence Eliipse"]
+    assert ellipse["Semi Major Confidence"] == "Semi Axis Length Unavailable"  # 4095
+    assert ellipse["Semi Minor Confidence"] == "Semi Axis Length Unavailable"
+    assert isinstance(ellipse["Semi Major Orientation"], str)
+
+    hfc = params["High Frequency Container"]
+    assert hfc["High Frequency Container Present"] == "Basic Vehicle Container High Frequency"
+    assert raises_key_error(lambda: hfc["RSU Container High Frequency"],
+                            "RSU Container High Frequency")
+    hf = hfc["Basic Vehicle Container High Frequency"]
+    h = cam.basic_vehicle_container_high_frequency
+    assert hf["Heading"]["Value"] == h.heading.value == 900
+    assert hf["Speed"]["Value"] == h.speed.value
+    assert hf["Drive Direction"] == h.drive_direction
+    assert hf["Vehicle Length"]["Value"] == h.vehicle_length.value
+    assert hf["Vehicle Width"] == h.vehicle_width == 18
+    assert hf["Longitudinal Acceleration"]["Value"] == h.longitudinal_acceleration.value
+    assert hf["Curvature"]["Value"] == h.curvature.value
+    assert hf["Curvature Calculation Mode"] == h.curvature_calculation_mode
+    assert hf["Yaw Rate"]["Value"] == h.yaw_rate.value
+    for c in (hf["Heading"]["Confidence"], hf["Speed"]["Confidence"],
+              hf["Vehicle Length"]["Confidence"], hf["Curvature"]["Confidence"],
+              hf["Yaw Rate"]["Confidence"], hf["Longitudinal Acceleration"]["Confidence"]):
+        assert len(c) > 0
+    assert hf["Acceleration Control"] is None and hf["Lane Position"] is None
+    assert hf["Steering Wheel Angle"] is None and hf["Performance class"] is None
+    assert hf["Cen DSRC Tolling Zone"] is None
+    lat = hf["Lateral Acceleration"]
+    assert lat is not None and lat["Value"] == h.lateral_acceleration.value
+    assert hf["Vertical Acceleration"]["Value"] == h.vertical_acceleration.value
+
+    lfc = params["Low Frequency Container"]
+    assert lfc["Low Frequency Container Present"] == "Basic Vehicle Container Low Frequency"
+    low = lfc["Basic Vehicle Low Frequency"]
+    assert low["Vehicle Role"] == "Default" and cam.basic_vehicle_container_low_frequency.vehicle_role == 0
+    assert low["Exterior Light"] == cam.basic_vehicle_container_low_frequency.exterior_lights
+    assert low["Path History"] is None  # empty: None, as the Python API (the attribute is [])
+
+    # A road-side unit: a V2X sensor without a vehicle parent.
+    rsu = sensor("sensor.other.v2x", None, carla.Location(20.0, 0.0, 0.0))
+    collected = List[carla.CAMMessage]()
+    def keep(data: carla.SensorData):
+        for m in data.as_cam_event():
+            collected.append(m)
+    rx.listen(keep)
+    for _ in range(2):
+        world.tick()
+    found = False
+    for m in collected:
+        cam = m.get()
+        if cam.station_type != 15:
+            continue
+        found = True
+        params = cam["Message"]["Message"]["CAM Parameters"]
+        assert params["Basic Container"]["Station Type"] == "Road Side Unit"
+        hfc = params["High Frequency Container"]
+        assert hfc["High Frequency Container Present"] == "RSU Container High Frequency"
+        assert raises_key_error(lambda: hfc["Basic Vehicle Container High Frequency"],
+                                "Basic Vehicle Container High Frequency")
+        zones = hfc["RSU Container High Frequency"]["Protected Communication Zone"]
+        assert len(zones) == 16 == len(cam.protected_communication_zones_rsu)
+        z = zones[0]
+        assert z["Protected Zone Type"] == 0 and z["Protected Zone Latitude"] == 50
+        assert z["Protected Zone Longitude"] == 50
+        assert raises_key_error(lambda: z["Expiry Time"], "Expiry Time")
+        assert raises_key_error(lambda: z["Protected Zone ID"], "Protected Zone ID")
+        assert raises_key_error(lambda: z["Protected Zone Radius"], "Protected Zone Radius")
+        lfc = params["Low Frequency Container"]
+        assert lfc["Low Frequency Container Present"] == "No Container Present"
+        assert raises_key_error(lambda: lfc["Basic Vehicle Low Frequency"],
+                                "Basic Vehicle Low Frequency")
+    assert found
+    for s in (tx, rx, rsu):
+        s.destroy()
+
+def test_values():
+    # The parts the mock never sends, on hand-built values.
+    p = carla.PathPoint(ffi.CItsPathPoint(1, 2, 3, i32(1), i32(0), 4))
+    assert p["Delta Latitude"] == 1 and p["Delta Longitude"] == 2 and p["Delta Altitude"] == 3
+    assert p["Delta Time"] == 4
+    low = carla.BasicVehicleContainerLowFrequency(6, 0x80, [p])
+    assert low["Vehicle Role"] == "Emergency" and low["Path History"][0]["Delta Time"] == 4
+    z = carla.CenDsrcTollingZone(10, 20, None)
+    assert z["Protected Zone Latitude"] == 10 and z["Protected Zone Longitude"] == 20
+    assert raises_key_error(lambda: z["Cen DSRC Tolling Zone ID"], "Cen DSRC Tolling Zone ID")
+    assert carla.CenDsrcTollingZone(10, 20, 7)["Cen DSRC Tolling Zone ID"] == 7
+    h = carla.ItsPduHeader(2, 9, 1)
+    assert h["Message ID"] == "Not Found"
+
+test_custom()
+test_cam()
+test_values()
+other.destroy()
+print("OK")
