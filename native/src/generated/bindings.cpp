@@ -153,6 +153,10 @@ tsc_status_t tsc_actor_get_semantic_tags(tsc_actor_t *actor,
   });
 }
 
+tsc_status_t tsc_actor_get_world(tsc_actor_t *actor, tsc_world_t **out) {
+  return new_handle(__func__, out, [&] { return new tsc_world(actor_of(actor).GetWorld()); });
+}
+
 tsc_status_t tsc_actor_set_collisions(tsc_actor_t *actor, int32_t enabled) {
   return TSC_GUARD({ actor_of(actor).SetCollisions(enabled != 0); });
 }
@@ -277,6 +281,12 @@ tsc_status_t tsc_actor_blueprint_has_attribute(const tsc_actor_blueprint_t *blue
   });
 }
 
+tsc_status_t tsc_actor_blueprint_size(const tsc_actor_blueprint_t *blueprint, size_t *out_count) {
+  return TSC_GUARD({
+    assign_out(out_count, "out_count", [&] { return blueprint_of(blueprint).size(); });
+  });
+}
+
 // bindings/actor_list.yaml: carla::client::ActorList
 
 tsc_status_t tsc_actor_list_filter(const tsc_actor_list_t *list,
@@ -353,9 +363,10 @@ tsc_status_t tsc_client_get_world(tsc_client_t *client, tsc_world_t **out_world)
 }
 
 tsc_status_t tsc_client_load_world(tsc_client_t *client, const char *map_name, size_t map_name_len,
-                                   int32_t reset_settings, tsc_world_t **out_world) {
+                                   int32_t reset_settings, uint16_t map_layers,
+                                   tsc_world_t **out_world) {
   return new_handle(__func__, out_world, [&] {
-    return new tsc_world(client_of(client).LoadWorld(to_string(map_name, map_name_len, "map_name"), reset_settings != 0));
+    return new tsc_world(client_of(client).LoadWorld(to_string(map_name, map_name_len, "map_name"), reset_settings != 0, static_cast<carla::rpc::MapLayer>(map_layers)));
   }, "out_world");
 }
 
@@ -412,6 +423,25 @@ tsc_status_t tsc_client_replay_file(tsc_client_t *client, const char *name, size
 
 tsc_status_t tsc_client_stop_replayer(tsc_client_t *client, int32_t keep_actors) {
   return TSC_GUARD({ client_of(client).StopReplayer(keep_actors != 0); });
+}
+
+tsc_status_t tsc_client_start_recorder_ex(tsc_client_t *client, const char *name, size_t name_len,
+                                          int32_t additional_data, int32_t stop_replayer,
+                                          tsc_string_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { string_assign(out, r_); }), self_, StartRecorder, "Client.start_recorder(stop_replayer=False)", to_string(name, name_len, "name"), additional_data != 0, stop_replayer != 0); }(client_of(client));
+  });
+}
+
+tsc_status_t tsc_client_replay_file_ex(tsc_client_t *client, const char *name, size_t name_len,
+                                       double start, double duration, uint32_t follow_id,
+                                       int32_t replay_sensors, int32_t replay_weather,
+                                       const tsc_transform_t *offset,
+                                       const char *map_override, size_t map_override_len,
+                                       tsc_string_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { string_assign(out, r_); }), self_, ReplayFile, "Client.replay_file(replay_weather, offset, map_override)", to_string(name, name_len, "name"), start, duration, follow_id, replay_sensors != 0, replay_weather != 0, to_carla(*require_ptr(offset, "offset")), to_string(map_override, map_override_len, "map_override")); }(client_of(client));
+  });
 }
 
 tsc_status_t tsc_client_set_replayer_time_factor(tsc_client_t *client, double factor) {
@@ -639,6 +669,14 @@ tsc_status_t tsc_light_manager_set_day_night_cycle(tsc_light_manager_t *manager,
 
 // bindings/map.yaml: carla::client::Map
 
+tsc_status_t tsc_map_new_from_opendrive(const char *name, size_t name_len,
+                                        const char *xodr_content, size_t xodr_content_len,
+                                        tsc_map_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_map(new_map_from_opendrive(to_string(name, name_len, "name"), to_string(xodr_content, xodr_content_len, "xodr_content")));
+  });
+}
+
 tsc_status_t tsc_map_get_name(const tsc_map_t *map, tsc_string_t *out) {
   return TSC_GUARD({ require_ptr(out, "out"); string_assign(out, map_of(map).GetName()); });
 }
@@ -758,10 +796,34 @@ tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out) {
 
 // bindings/server_side_sensor.yaml: carla::client::ServerSideSensor
 
+tsc_status_t tsc_sensor_enable_for_ros(tsc_sensor_t *sensor) {
+  return TSC_GUARD({ server_side_sensor_of(sensor).EnableForROS(); });
+}
+
+tsc_status_t tsc_sensor_disable_for_ros(tsc_sensor_t *sensor) {
+  return TSC_GUARD({ server_side_sensor_of(sensor).DisableForROS(); });
+}
+
+tsc_status_t tsc_sensor_is_enabled_for_ros(tsc_sensor_t *sensor, int32_t *out) {
+  return TSC_GUARD({
+    assign_out(out, "out", [&] { return server_side_sensor_of(sensor).IsEnabledForROS() ? 1 : 0; });
+  });
+}
+
+tsc_status_t tsc_sensor_is_listening_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                             int32_t *out) {
+  return TSC_GUARD({
+    assign_out(out, "out", [&] { return server_side_sensor_of(sensor).IsListeningGBuffer(check_gbuffer_id(gbuffer_id)) ? 1 : 0; });
+  });
+}
+
+tsc_status_t tsc_sensor_stop_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id) {
+  return TSC_GUARD({ server_side_sensor_of(sensor).StopGBuffer(check_gbuffer_id(gbuffer_id)); });
+}
+
 tsc_status_t tsc_sensor_send(tsc_sensor_t *sensor, const uint8_t *message, size_t message_size) {
   return TSC_GUARD({
-    auto &&self_ = server_side_sensor_of(sensor);
-    TSC_CALL_OPTIONAL(self_, Send, "Sensor.send", to_custom_v2x_bytes(message, message_size, "message"));
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, Send, "Sensor.send", to_custom_v2x_bytes(message, message_size, "message")); }(server_side_sensor_of(sensor));
   });
 }
 
@@ -927,8 +989,7 @@ tsc_status_t tsc_traffic_manager_shut_down(tsc_traffic_manager_t *tm) {
 tsc_status_t tsc_traffic_manager_set_global_large_vehicle_wide_turn(tsc_traffic_manager_t *tm,
                                                                     int32_t enabled) {
   return TSC_GUARD({
-    auto &&self_ = tm_of(tm);
-    TSC_CALL_OPTIONAL(self_, SetGlobalLargeVehicleWideTurn, "TrafficManager.global_large_vehicle_wide_turn", enabled != 0);
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetGlobalLargeVehicleWideTurn, "TrafficManager.global_large_vehicle_wide_turn", enabled != 0); }(tm_of(tm));
   });
 }
 
@@ -936,8 +997,7 @@ tsc_status_t tsc_traffic_manager_set_large_vehicle_wide_turn(tsc_traffic_manager
                                                              tsc_vehicle_t *vehicle,
                                                              int32_t enabled) {
   return TSC_GUARD({
-    auto &&self_ = tm_of(tm);
-    TSC_CALL_OPTIONAL(self_, SetLargeVehicleWideTurn, "TrafficManager.vehicle_large_vehicle_wide_turn", vehicle_ptr(vehicle, "vehicle"), enabled != 0);
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetLargeVehicleWideTurn, "TrafficManager.vehicle_large_vehicle_wide_turn", vehicle_ptr(vehicle, "vehicle"), enabled != 0); }(tm_of(tm));
   });
 }
 

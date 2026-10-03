@@ -7,6 +7,7 @@
 #include "item_queue.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <initializer_list>
 #include <limits>
@@ -16,6 +17,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <typeinfo>
 #include <utility>
 #include <vector>
 
@@ -134,8 +136,8 @@ struct tsc_handle {
 
 struct tsc_client : tsc_handle {
   carla::client::Client client;
-  tsc_client(const std::string &host, uint16_t port)
-      : tsc_handle(TSC_KIND_CLIENT), client(host, port) {}
+  tsc_client(const std::string &host, uint16_t port, size_t worker_threads)
+      : tsc_handle(TSC_KIND_CLIENT), client(host, port, worker_threads) {}
 };
 
 struct tsc_world : tsc_handle {
@@ -168,6 +170,8 @@ using SensorQueue = ItemQueue<carla::SharedPtr<carla::sensor::SensorData>>;
 // Stop()). The queue is shared with the callback, so late measurements are safe.
 struct tsc_sensor : tsc_actor {
   std::shared_ptr<tsc::SensorQueue> queue;
+  // Issue #33: one queue per G-buffer texture listened to (listen_to_gbuffer).
+  std::array<std::shared_ptr<tsc::SensorQueue>, TSC_GBUFFER_TEXTURE_COUNT> gbuffer_queues;
   explicit tsc_sensor(carla::SharedPtr<carla::client::Sensor> s)
       : tsc_actor(std::move(s), TSC_KIND_SENSOR) {}
 };
@@ -376,6 +380,21 @@ inline carla::client::DebugHelper debug_of(tsc_world_t *w) { return world_of(w).
 
 inline const carla::client::Map &map_of(const tsc_map_t *m) {
   return *check_handle(m, "map", TSC_KIND_MAP)->map;
+}
+
+// carla.Map(name, xodr_content) (bindings/map.yaml). When the XML does not
+// parse, LibCarla's throw_exception rethrows its runtime_error by value as a
+// plain std::exception, whose message is just "std::exception"; that one
+// error gets a readable message. Any other error (e.g. out_of_range from a
+// well-formed but inconsistent document) passes through unchanged.
+inline carla::SharedPtr<carla::client::Map> new_map_from_opendrive(std::string name,
+                                                                   std::string xodr_content) {
+  try {
+    return std::make_shared<carla::client::Map>(std::move(name), std::move(xodr_content));
+  } catch (const std::exception &e) {
+    if (typeid(e) != typeid(std::exception)) throw;
+    throw std::runtime_error("the OpenDRIVE document does not parse");
+  }
 }
 
 inline const carla::client::BlueprintLibrary &blueprint_library_of(
@@ -814,14 +833,25 @@ inline carla::client::Sensor &sensor_of(tsc_sensor_t *s) {
   return static_cast<carla::client::Sensor &>(*sensor_handle(s).actor);
 }
 
-// A ServerSideSensor (issue #42: Send); TSC_TYPE_ERROR for the client-side
-// lane-invasion sensor.
+// Issue #33: the ROS2 and G-buffer methods are on ServerSideSensor; a sensor
+// computed on the client (lane invasion) is TSC_TYPE_ERROR.
 inline carla::client::ServerSideSensor &server_side_sensor_of(tsc_sensor_t *s) {
-  auto sensor = dynamic_cast<carla::client::ServerSideSensor *>(&sensor_of(s));
-  if (sensor == nullptr) {
-    fail(TSC_TYPE_ERROR, "a client-side sensor (e.g. lane invasion) is not a server-side sensor");
+  auto &sensor = sensor_of(s);
+  auto *server_side = dynamic_cast<carla::client::ServerSideSensor *>(&sensor);
+  if (server_side == nullptr) {
+    fail(TSC_TYPE_ERROR, "sensor '" + sensor.GetTypeId() +
+                             "' is computed on the client, not a server-side sensor");
   }
-  return *sensor;
+  return *server_side;
+}
+
+// A G-buffer texture id (GBufferTextureID); LibCarla aborts on a larger one.
+inline uint32_t check_gbuffer_id(uint32_t id) {
+  if (id >= TSC_GBUFFER_TEXTURE_COUNT) {
+    fail(TSC_INVALID_ARGUMENT, "G-buffer texture id " + std::to_string(id) + " is not below " +
+                                   std::to_string(TSC_GBUFFER_TEXTURE_COUNT));
+  }
+  return id;
 }
 
 // rpc::CustomV2XBytes (tsc::CustomV2XBytes: a stand-in without V2X).

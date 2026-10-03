@@ -29,6 +29,7 @@ from .sensor import (Sensor, SensorData, SensorDataType, Image, LidarMeasurement
                      GnssMeasurement, IMUMeasurement, CollisionEvent, dispatch_sensor_callbacks,
                      ColorConverter, RadarMeasurement, RadarDetection, SemanticLidarMeasurement,
                      SemanticLidarDetection, LaneInvasionEvent, LaneInvasionSensor,
+                     ServerSideSensor, ClientSideSensor,
                      ObstacleDetectionEvent, DVSEventArray, DVSEvent, OpticalFlowImage,
                      OpticalFlowPixel, FakeImage)
 from .v2x import (CAMEvent, CAMMessage, CAM, ItsPduHeader, ValueConfidence, ReferencePosition,

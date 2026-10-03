@@ -1,9 +1,7 @@
 # Enumerations of the Python API. The values are the official module's
 # (CARLA 0.10.0 / ue5-dev).
 
-def _enum_repr(name: str, names: List[str], value: int) -> str:
-    """The member's name, as the Python API prints it, else name(value)."""
-    return names[value] if 0 <= value < len(names) else f"{name}({value})"
+from ._enum import _IntEnum, _member_names, _member_values, _enum_repr
 
 @tuple
 class AttachmentType:
@@ -16,28 +14,35 @@ class AttachmentType:
     Rigid: ClassVar[AttachmentType] = AttachmentType(0)
     SpringArm: ClassVar[AttachmentType] = AttachmentType(1)
     SpringArmGhost: ClassVar[AttachmentType] = AttachmentType(2)
+    _MEMBERS: ClassVar[List[Tuple[str, AttachmentType]]] = [
+        ("Rigid", AttachmentType.Rigid), ("SpringArm", AttachmentType.SpringArm),
+        ("SpringArmGhost", AttachmentType.SpringArmGhost)]
+    names: ClassVar[Dict[str, AttachmentType]] = _member_names(AttachmentType._MEMBERS)
+    values: ClassVar[Dict[int, AttachmentType]] = _member_values(AttachmentType._MEMBERS)
 
     def __int__(self) -> int:
         return self.value
 
     def __repr__(self) -> str:
-        return _enum_repr("AttachmentType", ["Rigid", "SpringArm", "SpringArmGhost"], self.value)
+        return _enum_repr("AttachmentType", AttachmentType._MEMBERS, self.value)
 
 # Integer constants that no typesafe_carla call takes yet.
 
-class GBufferTextureID:
+class _GBufferTextureID(_IntEnum):
     """Unreal G-buffer textures of a camera (carla.GBufferTextureID), for
-    Sensor.listen_to_gbuffer in the Python API (not available here yet)."""
-    SceneColor: ClassVar[int] = 0
-    SceneDepth: ClassVar[int] = 1
-    SceneStencil: ClassVar[int] = 2
-    GBufferA: ClassVar[int] = 3
-    GBufferB: ClassVar[int] = 4
-    GBufferC: ClassVar[int] = 5
-    GBufferD: ClassVar[int] = 6
-    GBufferE: ClassVar[int] = 7
-    GBufferF: ClassVar[int] = 8
-    Velocity: ClassVar[int] = 9
-    SSAO: ClassVar[int] = 10
-    CustomDepth: ClassVar[int] = 11
-    CustomStencil: ClassVar[int] = 12
+    Sensor.listen_to_gbuffer / is_listening_gbuffer / stop_gbuffer."""
+    SceneColor: int = 0
+    SceneDepth: int = 1
+    SceneStencil: int = 2
+    GBufferA: int = 3
+    GBufferB: int = 4
+    GBufferC: int = 5
+    GBufferD: int = 6
+    GBufferE: int = 7
+    GBufferF: int = 8
+    Velocity: int = 9
+    SSAO: int = 10
+    CustomDepth: int = 11
+    CustomStencil: int = 12
+
+GBufferTextureID = _GBufferTextureID()

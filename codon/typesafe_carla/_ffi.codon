@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 4
-TSC_ABI_VERSION_MINOR = 1
+TSC_ABI_VERSION_MINOR = 5
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -346,7 +346,7 @@ class COpticalFlow:
     pixels: Ptr[COpticalFlowPixel]
     pixel_count: int
 
-# Issue #42 (ABI 4.1): V2X.
+# Issue #42 (ABI 4.5): V2X.
 TSC_CUSTOM_V2X_MAX_DATA_SIZE = 100
 TSC_CAM_MAX_PROTECTED_ZONES = 16
 TSC_CAM_MAX_PATH_POINTS = 40
@@ -705,6 +705,12 @@ from C import LIB.tsc_build_commit() -> cobj
 from C import LIB.tsc_backend_name() -> cobj
 from C import LIB.tsc_string_free(Ptr[CString]) -> None
 from C import LIB.tsc_actor_attribute_free(Ptr[CActorAttribute]) -> None
+# Issue #33.
+from C import LIB.tsc_actor_blueprint_get_attribute_ids(cobj, Ptr[CStringList]) -> i32
+from C import LIB.tsc_actor_blueprint_get_recommended_values(cobj, cobj, int, Ptr[CStringList]) -> i32
+# BEGIN GENERATED actor_blueprint_size from bindings/actor_blueprint.yaml, do not edit
+from C import LIB.tsc_actor_blueprint_size(cobj, Ptr[int]) -> i32
+# END GENERATED actor_blueprint_size
 
 from C import LIB.tsc_handle_retain(cobj) -> None
 from C import LIB.tsc_handle_release(cobj) -> None
@@ -712,14 +718,14 @@ from C import LIB.tsc_handle_kind(cobj) -> i32
 from C import LIB.tsc_handle_refcount(cobj) -> u32
 from C import LIB.tsc_live_handle_count() -> u64
 
-from C import LIB.tsc_client_create(cobj, int, u16, Ptr[cobj]) -> i32
+from C import LIB.tsc_client_create(cobj, int, u16, int, Ptr[cobj]) -> i32
 # BEGIN GENERATED client from bindings/client.yaml, do not edit
 from C import LIB.tsc_client_set_timeout(cobj, float) -> i32
 from C import LIB.tsc_client_get_timeout(cobj, Ptr[float]) -> i32
 from C import LIB.tsc_client_get_client_version(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_client_get_server_version(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_client_get_world(cobj, Ptr[cobj]) -> i32
-from C import LIB.tsc_client_load_world(cobj, cobj, int, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_client_load_world(cobj, cobj, int, i32, u16, Ptr[cobj]) -> i32
 from C import LIB.tsc_client_reload_world(cobj, i32, Ptr[cobj]) -> i32
 # END GENERATED client
 
@@ -806,6 +812,9 @@ from C import LIB.tsc_world_snapshot_find(cobj, u32, Ptr[CActorSnapshot]) -> i32
 # BEGIN GENERATED world_map from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_map(cobj, Ptr[cobj]) -> i32
 # END GENERATED world_map
+# BEGIN GENERATED map_new from bindings/map.yaml, do not edit
+from C import LIB.tsc_map_new_from_opendrive(cobj, int, cobj, int, Ptr[cobj]) -> i32
+# END GENERATED map_new
 # BEGIN GENERATED map_core from bindings/map.yaml, do not edit
 from C import LIB.tsc_map_get_name(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_map_to_opendrive(cobj, Ptr[CString]) -> i32
@@ -841,6 +850,20 @@ from C import LIB.tsc_sensor_is_listening(cobj, Ptr[i32]) -> i32
 # END GENERATED sensor
 from C import LIB.tsc_sensor_dropped_count(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_sensor_pending_count(cobj, Ptr[int]) -> i32  # ABI 2.1
+# Issue #33: ServerSideSensor.
+TSC_GBUFFER_TEXTURE_COUNT = 13
+# BEGIN GENERATED sensor_ros from bindings/server_side_sensor.yaml, do not edit
+from C import LIB.tsc_sensor_enable_for_ros(cobj) -> i32
+from C import LIB.tsc_sensor_disable_for_ros(cobj) -> i32
+from C import LIB.tsc_sensor_is_enabled_for_ros(cobj, Ptr[i32]) -> i32
+# END GENERATED sensor_ros
+# BEGIN GENERATED sensor_gbuffer from bindings/server_side_sensor.yaml, do not edit
+from C import LIB.tsc_sensor_is_listening_gbuffer(cobj, u32, Ptr[i32]) -> i32
+from C import LIB.tsc_sensor_stop_gbuffer(cobj, u32) -> i32
+# END GENERATED sensor_gbuffer
+from C import LIB.tsc_sensor_listen_to_gbuffer(cobj, u32, int) -> i32
+from C import LIB.tsc_sensor_gbuffer_pending_count(cobj, u32, Ptr[int]) -> i32
+from C import LIB.tsc_sensor_gbuffer_poll(cobj, u32, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_poll(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_wait_for_data(cobj, float, Ptr[cobj]) -> i32
 from C import LIB.tsc_sensor_data_get_info(cobj, Ptr[CSensorDataInfo]) -> i32
@@ -859,10 +882,10 @@ from C import LIB.tsc_sensor_data_as_semantic_lidar(cobj, Ptr[CSemanticLidar]) -
 from C import LIB.tsc_sensor_data_as_dvs(cobj, Ptr[CDvs]) -> i32
 from C import LIB.tsc_sensor_data_as_optical_flow(cobj, Ptr[COpticalFlow]) -> i32
 from C import LIB.tsc_optical_flow_color_coded(cobj, Ptr[u8], int) -> i32
-# ABI 4.1 (issue #42): V2X
-# BEGIN GENERATED server_side_sensor from bindings/server_side_sensor.yaml, do not edit
+# ABI 4.5 (issue #42): V2X
+# BEGIN GENERATED sensor_v2x from bindings/server_side_sensor.yaml, do not edit
 from C import LIB.tsc_sensor_send(cobj, Ptr[byte], int) -> i32
-# END GENERATED server_side_sensor
+# END GENERATED sensor_v2x
 from C import LIB.tsc_cam_event_get_message_count(cobj, Ptr[int]) -> i32
 from C import LIB.tsc_cam_event_get_message(cobj, int, Ptr[CCamMessage]) -> i32
 from C import LIB.tsc_cam_event_get_protected_zones(cobj, int, Ptr[CItsProtectedZone], int, Ptr[int]) -> i32
@@ -949,6 +972,8 @@ from C import LIB.tsc_client_show_recorder_collisions(cobj, cobj, int, byte, byt
 from C import LIB.tsc_client_show_recorder_actors_blocked(cobj, cobj, int, float, float, Ptr[CString]) -> i32
 from C import LIB.tsc_client_replay_file(cobj, cobj, int, float, float, u32, i32, Ptr[CString]) -> i32
 from C import LIB.tsc_client_stop_replayer(cobj, i32) -> i32
+from C import LIB.tsc_client_start_recorder_ex(cobj, cobj, int, i32, i32, Ptr[CString]) -> i32
+from C import LIB.tsc_client_replay_file_ex(cobj, cobj, int, float, float, u32, i32, i32, Ptr[CTransform], cobj, int, Ptr[CString]) -> i32
 from C import LIB.tsc_client_set_replayer_time_factor(cobj, float) -> i32
 # END GENERATED client_recorder
 # BEGIN GENERATED client_opendrive from bindings/client.yaml, do not edit
@@ -1076,7 +1101,7 @@ from C import LIB.tsc_bone_list_get(cobj, int, Ptr[CBoneTransformOut]) -> i32
 
 # Issue #23: Client, Traffic Manager, blueprint, debug and value-type gaps
 from C import LIB.tsc_string_list_free(Ptr[CStringList]) -> None
-from C import LIB.tsc_client_load_world_if_different(cobj, cobj, int, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_client_load_world_if_different(cobj, cobj, int, i32, u16, Ptr[cobj]) -> i32
 # BEGIN GENERATED client_replayer from bindings/client.yaml, do not edit
 from C import LIB.tsc_client_set_replayer_ignore_hero(cobj, i32) -> i32
 from C import LIB.tsc_client_set_replayer_ignore_spectator(cobj, i32) -> i32
@@ -1132,6 +1157,9 @@ from C import LIB.tsc_actor_is_dormant(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_actor_get_parent(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_actor_get_semantic_tags(cobj, Ptr[u8], int, Ptr[int]) -> i32
 # END GENERATED actor_state
+# BEGIN GENERATED actor_world from bindings/actor.yaml, do not edit
+from C import LIB.tsc_actor_get_world(cobj, Ptr[cobj]) -> i32
+# END GENERATED actor_world
 from C import LIB.tsc_actor_get_attributes(cobj, Ptr[CStringList], Ptr[CStringList]) -> i32
 # BEGIN GENERATED actor_physics_at_location from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_set_collisions(cobj, i32) -> i32

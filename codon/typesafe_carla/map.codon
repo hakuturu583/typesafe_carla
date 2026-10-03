@@ -1,11 +1,13 @@
 # Map and waypoints (OpenDRIVE road network queries).
 
+from ._enum import _IntEnum
 from ._ffi import (Handle, CString, CTransform, CVector3D, CWaypointInfo, take_string,
                    tsc_map_get_name, tsc_map_to_opendrive, tsc_map_get_spawn_points,
                    tsc_map_get_waypoint, tsc_map_generate_waypoints, tsc_waypoint_get_info,
                    tsc_waypoint_next, tsc_waypoint_previous, tsc_waypoint_next_until_lane_end,
                    tsc_waypoint_previous_until_lane_start, tsc_waypoint_get_left_lane,
-                   tsc_waypoint_get_right_lane, tsc_waypoint_list_size, tsc_waypoint_list_get)
+                   tsc_waypoint_get_right_lane, tsc_waypoint_list_size, tsc_waypoint_list_get,
+                   tsc_map_new_from_opendrive)
 from ._ffi import (CLandmark, CBoundingBox, tsc_map_get_topology, tsc_map_get_crosswalks,
                    tsc_landmark_free, tsc_map_get_all_landmarks, tsc_map_get_landmarks_of_type,
                    tsc_landmark_list_size, tsc_landmark_list_get, tsc_waypoint_get_junction,
@@ -27,30 +29,32 @@ from .geometry import Location, Transform, BoundingBox, _location_arg
 from .geo import GeoLocation, GeoProjection, _projection_ptr, _projection_from_c
 from .lane_marking import LaneMarking
 
-class LaneType:
+class _LaneType(_IntEnum):
     """OpenDRIVE lane types (bit flags, as carla.LaneType)."""
-    NONE: ClassVar[int] = 0x1
-    Driving: ClassVar[int] = 0x1 << 1
-    Stop: ClassVar[int] = 0x1 << 2
-    Shoulder: ClassVar[int] = 0x1 << 3
-    Biking: ClassVar[int] = 0x1 << 4
-    Sidewalk: ClassVar[int] = 0x1 << 5
-    Border: ClassVar[int] = 0x1 << 6
-    Restricted: ClassVar[int] = 0x1 << 7
-    Parking: ClassVar[int] = 0x1 << 8
-    Bidirectional: ClassVar[int] = 0x1 << 9
-    Median: ClassVar[int] = 0x1 << 10
-    Special1: ClassVar[int] = 0x1 << 11
-    Special2: ClassVar[int] = 0x1 << 12
-    Special3: ClassVar[int] = 0x1 << 13
-    RoadWorks: ClassVar[int] = 0x1 << 14
-    Tram: ClassVar[int] = 0x1 << 15
-    Rail: ClassVar[int] = 0x1 << 16
-    Entry: ClassVar[int] = 0x1 << 17
-    Exit: ClassVar[int] = 0x1 << 18
-    OffRamp: ClassVar[int] = 0x1 << 19
-    OnRamp: ClassVar[int] = 0x1 << 20
-    Any: ClassVar[int] = -2
+    NONE: int = 0x1
+    Driving: int = 0x1 << 1
+    Stop: int = 0x1 << 2
+    Shoulder: int = 0x1 << 3
+    Biking: int = 0x1 << 4
+    Sidewalk: int = 0x1 << 5
+    Border: int = 0x1 << 6
+    Restricted: int = 0x1 << 7
+    Parking: int = 0x1 << 8
+    Bidirectional: int = 0x1 << 9
+    Median: int = 0x1 << 10
+    Special1: int = 0x1 << 11
+    Special2: int = 0x1 << 12
+    Special3: int = 0x1 << 13
+    RoadWorks: int = 0x1 << 14
+    Tram: int = 0x1 << 15
+    Rail: int = 0x1 << 16
+    Entry: int = 0x1 << 17
+    Exit: int = 0x1 << 18
+    OffRamp: int = 0x1 << 19
+    OnRamp: int = 0x1 << 20
+    Any: int = -2
+
+LaneType = _LaneType()
 
 class Waypoint:
     """A point on a lane. The info fields are read once, when it is created."""
@@ -218,6 +222,15 @@ class Map:
     def __init__(self, h: Handle):
         self._h = h
 
+    def __init__(self, name: str, xodr_content: str):
+        """carla.Map(name, xodr_content): a map built client-side from an
+        OpenDRIVE document, without a server (no recommended spawn points).
+        Raises CarlaError when the document does not parse."""
+        out = Ptr[cobj](1)
+        _check(tsc_map_new_from_opendrive(name.ptr, name.len, xodr_content.ptr,
+                                          xodr_content.len, out))
+        self._h = Handle(out[0])
+
     @property
     def name(self) -> str:
         out = Ptr[CString](1)
@@ -234,7 +247,7 @@ class Map:
         return [Transform._from_c(buf[i]) for i in range(n)]
 
     def get_waypoint(self, location, project_to_road: bool = True,
-                     lane_type: int = LaneType.Driving) -> Optional[Waypoint]:
+                     lane_type: int = 2) -> Optional[Waypoint]:  # LaneType.Driving
         """None when no lane of `lane_type` matches.
 
         location: Location (a Vector3D is accepted as in the Python API)."""
@@ -274,7 +287,7 @@ class Junction:
         _check(tsc_junction_get_bounding_box(self._h.ptr, out))
         return BoundingBox._from_c(out[0])
 
-    def get_waypoints(self, lane_type: int = LaneType.Driving) -> List[Tuple[Waypoint, Waypoint]]:
+    def get_waypoints(self, lane_type: int = 2) -> List[Tuple[Waypoint, Waypoint]]:  # LaneType.Driving
         """(entry, exit) waypoint pairs of the lanes through the junction."""
         out = Ptr[cobj](1)
         _check(tsc_junction_get_waypoints(self._h.ptr, i32(lane_type), out))
@@ -283,11 +296,13 @@ class Junction:
     def __repr__(self) -> str:
         return f"Junction(id={self.id})"
 
-class LandmarkOrientation:
+class _LandmarkOrientation(_IntEnum):
     """carla.LandmarkOrientation: the road direction a landmark faces."""
-    Positive: ClassVar[int] = 0
-    Negative: ClassVar[int] = 1
-    Both: ClassVar[int] = 2
+    Positive: int = 0
+    Negative: int = 1
+    Both: int = 2
+
+LandmarkOrientation = _LandmarkOrientation()
 
 class LandmarkType:
     """carla.LandmarkType: OpenDRIVE signal types (the `type` strings of

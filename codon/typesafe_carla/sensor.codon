@@ -21,6 +21,7 @@
 #
 # Typed measurements keep their SensorData (and so the native buffer) alive.
 
+from ._enum import _IntEnum
 from ._ffi import (Handle, CString, CSensorDataInfo, CImage, CLidar, CLidarPoint, CGnss, CImu,
                    CCollision, CRadar, CRadarDetection, CSemanticLidar, CSemanticLidarDetection,
                    CLaneMarking, CDvs, COpticalFlow, COpticalFlowPixel,
@@ -46,8 +47,12 @@ from .blueprint import Color
 from .actor import Actor, _make_actor
 from .lane_marking import LaneMarking
 from .map import _read_buffer
-from ._callbacks import (_register_callback, _unregister_callback, _find_callback, _pop,
+from ._callbacks import (_register_callback, _unregister_stream, _find_callback, _pop,
                          dispatch_sensor_callbacks)
+from ._ffi import (TSC_GBUFFER_TEXTURE_COUNT, tsc_sensor_enable_for_ros,
+                   tsc_sensor_disable_for_ros, tsc_sensor_is_enabled_for_ros,
+                   tsc_sensor_listen_to_gbuffer, tsc_sensor_is_listening_gbuffer,
+                   tsc_sensor_stop_gbuffer)
 
 class SensorDataType:
     Other: ClassVar[int] = 0
@@ -65,12 +70,14 @@ class SensorDataType:
     CAM: ClassVar[int] = 12  # LibCarla ue5-dev only (issue #42)
     CustomV2X: ClassVar[int] = 13  # LibCarla ue5-dev only (issue #42)
 
-class ColorConverter:
+class _ColorConverter(_IntEnum):
     """carla.ColorConverter, for Image.convert and Image.save_to_disk."""
-    Raw: ClassVar[int] = 0
-    Depth: ClassVar[int] = 1
-    LogarithmicDepth: ClassVar[int] = 2
-    CityScapesPalette: ClassVar[int] = 3
+    Raw: int = 0
+    Depth: int = 1
+    LogarithmicDepth: int = 2
+    CityScapesPalette: int = 3
+
+ColorConverter = _ColorConverter()
 
 class SensorData:
     """One measurement. Convert with as_image(), as_lidar(), ... (checked)."""
@@ -146,7 +153,8 @@ class _Measurement:
 class _ArrayMeasurement[T]:
     """A measurement that is an array of T in LibCarla's buffer, viewed
     without copying (design section 16): valid while the measurement is
-    alive. Subclasses define _item(T) (the Python-API element) and _WHAT.
+    alive. Subclasses define _item(T) (the Python-API element), _element (its
+    inverse, for __setitem__) and _WHAT.
 
     Not derived from _Measurement: in Codon 0.19, the methods of a generic
     class that derives from a non-generic one read the wrong fields of its
@@ -182,6 +190,14 @@ class _ArrayMeasurement[T]:
         for i in range(self._count):
             yield self._item(self._items[i])
 
+    def __setitem__(self: S, index: int, value, S: type):
+        """Writes one element into LibCarla's buffer, as the Python API does
+        (issue #33): raw_data() views and other handles of this measurement
+        see the change. The value is the element class (Color for an Image,
+        LidarDetection for a LidarMeasurement, ...); fields that do not fit
+        LibCarla's element type raise CarlaError."""
+        self._items[_normalize_index(index, self._count, S._WHAT)] = self._element(value)
+
     def raw_data(self) -> Ptr[u8]:
         """Zero-copy view of the bytes, valid while this measurement is alive."""
         return Ptr[u8](self._items.as_byte())
@@ -196,6 +212,19 @@ class _CBgra:
     g: u8
     r: u8
     a: u8
+
+def _bgra(c: Color) -> _CBgra:
+    k = c._to_c()  # checks the components
+    return _CBgra(k.b, k.g, k.r, k.a)
+
+def _checked_uint(v: int, bits: int, what: str) -> int:
+    if v < 0 or v >= (1 << bits):
+        raise CarlaError(f"{what} {v} is out of range for uint{bits}", TSC_INVALID_ARGUMENT)
+    return v
+
+def _byte_of(v: int, k: int) -> u8:
+    """Byte k (0: least significant) of v."""
+    return u8((v >> (8 * k)) & 0xFF)
 
 def _bgra_color(p: _CBgra) -> Color:
     return Color(int(p.r), int(p.g), int(p.b), int(p.a))
@@ -231,6 +260,9 @@ class Image(_ArrayMeasurement[_CBgra]):
     def _item(self, p: _CBgra) -> Color:
         return _bgra_color(p)
 
+    def _element(self, c: Color) -> _CBgra:
+        return _bgra(c)
+
     def pixel(self, x: int, y: int) -> Color:
         return _pixel_at(self._items, self.width, self.height, x, y)
 
@@ -239,7 +271,7 @@ class Image(_ArrayMeasurement[_CBgra]):
         Python API; raw_data() views see the change."""
         _check(tsc_image_convert(self.data._h.ptr, i32(color_converter)))
 
-    def save_to_disk(self, path: str, color_converter: int = ColorConverter.Raw) -> str:
+    def save_to_disk(self, path: str, color_converter: int = 0) -> str:  # ColorConverter.Raw
         """Writes a PNG (the image itself is not converted); returns the path
         written. As in LibCarla's PNG-only build, another extension is
         replaced by .png; missing directories are created."""
@@ -307,6 +339,9 @@ class LidarMeasurement(_ArrayMeasurement[CLidarPoint]):
     def _item(self, p: CLidarPoint) -> LidarDetection:
         return LidarDetection(Location(float(p.x), float(p.y), float(p.z)), float(p.intensity))
 
+    def _element(self, d: LidarDetection) -> CLidarPoint:
+        return CLidarPoint(float32(d.point.x), float32(d.point.y), float32(d.point.z), float32(d.intensity))
+
     def __repr__(self) -> str:
         return f"LidarMeasurement(frame={self.frame}, channels={self.channels}, points={len(self)})"
 
@@ -360,6 +395,12 @@ class SemanticLidarMeasurement(_ArrayMeasurement[CSemanticLidarDetection]):
                                       float(p.cos_inc_angle), int(p.object_idx),
                                       int(p.object_tag))
 
+    def _element(self, d: SemanticLidarDetection) -> CSemanticLidarDetection:
+        return CSemanticLidarDetection(
+            float32(d.point.x), float32(d.point.y), float32(d.point.z), float32(d.cos_inc_angle),
+            u32(_checked_uint(d.object_idx, 32, "object_idx")),
+            u32(_checked_uint(d.object_tag, 32, "object_tag")))
+
     def __repr__(self) -> str:
         return (f"SemanticLidarMeasurement(frame={self.frame}, channels={self.channels}, "
                 f"points={len(self)})")
@@ -396,6 +437,9 @@ class RadarMeasurement(_ArrayMeasurement[CRadarDetection]):
     def _item(self, p: CRadarDetection) -> RadarDetection:
         return RadarDetection(float(p.velocity), float(p.azimuth), float(p.altitude),
                               float(p.depth))
+
+    def _element(self, d: RadarDetection) -> CRadarDetection:
+        return CRadarDetection(float32(d.velocity), float32(d.azimuth), float32(d.altitude), float32(d.depth))
 
     def __repr__(self) -> str:
         return f"RadarMeasurement(frame={self.frame}, point_count={len(self)})"
@@ -490,6 +534,14 @@ class DVSEventArray(_ArrayMeasurement[_CDvsEvent]):
         return DVSEvent(int(e.b0) | (int(e.b1) << 8), int(e.b2) | (int(e.b3) << 8), t,
                         int(e.b12) != 0)
 
+    def _element(self, e: DVSEvent) -> _CDvsEvent:
+        x = _checked_uint(e.x, 16, "x")
+        y = _checked_uint(e.y, 16, "y")
+        t = e.t  # int64, two's complement
+        return _CDvsEvent(u8(x & 0xFF), u8(x >> 8), u8(y & 0xFF), u8(y >> 8), _byte_of(t, 0),
+                          _byte_of(t, 1), _byte_of(t, 2), _byte_of(t, 3), _byte_of(t, 4),
+                          _byte_of(t, 5), _byte_of(t, 6), _byte_of(t, 7), u8(1 if e.pol else 0))
+
     def to_image(self) -> List[Color]:
         """width * height Colors: blue where an event of positive polarity
         occurred, red for negative, (0, 0, 0, 0) elsewhere (as LibCarla)."""
@@ -540,33 +592,63 @@ class OpticalFlowPixel:
 
 class FakeImage:
     """The image OpticalFlowImage.get_color_coded_flow() returns (named as in
-    the Python API): BGRA, 4 bytes per pixel, owned by this object."""
+    the Python API): BGRA, 4 bytes per pixel, owned by this object. As in the
+    Python API it is a byte vector: indexing, iteration, `in`, assignment,
+    del, append and extend work on single bytes (issue #33), and width,
+    height and fov do not follow them."""
     width: int
     height: int
     fov: float
-    _data: Ptr[u8]
+    _bytes: List[u8]
 
-    def __init__(self, width: int, height: int, fov: float, data: Ptr[u8]):
+    def __init__(self, width: int, height: int, fov: float, data: List[u8]):
         self.width = width
         self.height = height
         self.fov = fov
-        self._data = data
+        self._bytes = data
 
     def raw_data(self) -> Ptr[u8]:
-        return self._data
+        """The bytes; valid until append / extend / del (which may move them)."""
+        return self._bytes.arr.ptr
 
     def raw_size(self) -> int:
-        return 4 * self.width * self.height
+        return len(self)
 
     def __len__(self) -> int:
-        return self.raw_size()
+        return len(self._bytes)
 
     def __getitem__(self, index: int) -> int:
         """One byte, as the Python API's FakeImage indexes its bytes."""
-        return int(self._data[_normalize_index(index, len(self), "byte")])
+        return int(self._bytes[_normalize_index(index, len(self), "byte")])
+
+    def __setitem__(self, index: int, value: int):
+        self._bytes[_normalize_index(index, len(self), "byte")] = _byte(value)
+
+    def __delitem__(self, index: int):
+        self._bytes.pop(_normalize_index(index, len(self), "byte"))
+
+    def __iter__(self) -> Generator[int]:
+        for b in self._bytes:
+            yield int(b)
+
+    def __contains__(self, value: int) -> bool:
+        return 0 <= value <= 255 and u8(value) in self._bytes
+
+    def append(self, value: int):
+        self._bytes.append(_byte(value))
+
+    def extend(self, values):
+        """Appends every byte of an iterable of ints (e.g. a list or another FakeImage)."""
+        new = [_byte(v) for v in values]  # all checked before any is added
+        self._bytes.extend(new)
 
     def pixel(self, x: int, y: int) -> Color:
-        return _pixel_at(Ptr[_CBgra](self._data.as_byte()), self.width, self.height, x, y)
+        if 4 * self.width * self.height > len(self._bytes):
+            raise IndexError(f"{len(self._bytes)} bytes do not hold {self.width}x{self.height} pixels")
+        return _pixel_at(Ptr[_CBgra](self.raw_data().as_byte()), self.width, self.height, x, y)
+
+def _byte(v: int) -> u8:
+    return u8(_checked_uint(v, 8, "byte value"))
 
 class OpticalFlowImage(_ArrayMeasurement[COpticalFlowPixel]):
     """Optical flow: a zero-copy view of float32 {x, y} per pixel, row-major."""
@@ -594,12 +676,15 @@ class OpticalFlowImage(_ArrayMeasurement[COpticalFlowPixel]):
     def _item(self, p: COpticalFlowPixel) -> OpticalFlowPixel:
         return OpticalFlowPixel(float(p.x), float(p.y))
 
+    def _element(self, p: OpticalFlowPixel) -> COpticalFlowPixel:
+        return COpticalFlowPixel(float32(p.x), float32(p.y))
+
     def get_color_coded_flow(self) -> FakeImage:
         """The flow as a BGRA image (hue: direction, value: magnitude), with
         the Python API's formula; alpha is 0, as there."""
         n = 4 * self._count
-        buf = Ptr[u8](n)
-        _check(tsc_optical_flow_color_coded(self.data._h.ptr, buf, n))
+        buf = [u8(0)] * n
+        _check(tsc_optical_flow_color_coded(self.data._h.ptr, buf.arr.ptr, n))
         return FakeImage(self.width, self.height, self.fov, buf)
 
     def __repr__(self) -> str:
@@ -814,14 +899,14 @@ class Sensor(Actor):
         if queue_size < 0:
             raise CarlaError("queue_size must be 0 (unbounded) or positive",
                              TSC_INVALID_ARGUMENT)
-        _unregister_callback(self.id)
+        _unregister_stream(self.id)
         _check(tsc_sensor_listen(self._h.ptr, queue_size))
 
     def stop(self):
         """Stops the stream. In callback mode, also unregisters the callback
         and discards the measurements it has not received yet."""
         _check(tsc_sensor_stop(self._h.ptr))
-        _unregister_callback(self.id)
+        _unregister_stream(self.id)
 
     def _pop(self) -> Optional[SensorData]:
         p = _pop(self._h)
@@ -871,11 +956,68 @@ class Sensor(Actor):
         _check(tsc_sensor_wait_for_data(self._h.ptr, seconds, out))
         return SensorData(Handle(out[0]))
 
+    # Issue #33: ServerSideSensor methods. On a sensor computed on the client
+    # (lane invasion; carla.ClientSideSensor in the Python API, which lacks
+    # them) they raise ActorTypeError.
+
+    def enable_for_ros(self):
+        """Publishes this sensor's data on the server's ROS2 bridge (the server
+        must be built with ROS2; otherwise the request does nothing)."""
+        _check(tsc_sensor_enable_for_ros(self._h.ptr))
+
+    def disable_for_ros(self):
+        _check(tsc_sensor_disable_for_ros(self._h.ptr))
+
+    def is_enabled_for_ros(self) -> bool:
+        out = Ptr[i32](1)
+        _check(tsc_sensor_is_enabled_for_ros(self._h.ptr, out))
+        return int(out[0]) != 0
+
+    def listen_to_gbuffer(self, gbuffer_id: int, callback):
+        """Delivers one G-buffer texture (a GBufferTextureID) of this camera to
+        callback, like listen(callback): it takes a SensorData (as_image())
+        and runs at the same dispatch points, on the program's thread. Only
+        RGB cameras serve G-buffers: another sensor raises CarlaError (LibCarla
+        logs a warning and delivers nothing). As in LibCarla, is_listening
+        becomes True. Listening to the same texture again replaces the
+        callback; stop_gbuffer(), destroy() or a batch DestroyActor
+        unregisters it, stop() does not. A server that does not stream
+        G-buffers (CARLA 0.10.0) rejects the subscription: CarlaError."""
+        cb: Callable[[cobj], None] = _CallbackThunk(callback).run
+        id = _gbuffer_id(gbuffer_id)
+        # Before listening: _register_callback's own unregister would stop the new stream.
+        _unregister_stream(self.id, id)
+        _check(tsc_sensor_listen_to_gbuffer(self._h.ptr, u32(id), 0))
+        _register_callback(self.id, self._h, cb, id)
+
+    def is_listening_gbuffer(self, gbuffer_id: int) -> bool:
+        out = Ptr[i32](1)
+        _check(tsc_sensor_is_listening_gbuffer(self._h.ptr, u32(_gbuffer_id(gbuffer_id)), out))
+        return int(out[0]) != 0
+
+    def stop_gbuffer(self, gbuffer_id: int):
+        """Stops the texture's stream and drops its callback and undelivered data."""
+        id = _gbuffer_id(gbuffer_id)
+        if not _unregister_stream(self.id, id):  # which stops a callback's stream
+            _check(tsc_sensor_stop_gbuffer(self._h.ptr, u32(id)))
+
     def __repr__(self) -> str:
         return f"Sensor(id={self.id}, type={self.type_id})"
 
-# The Python API's carla.LaneInvasionSensor is a client-side Sensor subclass
-# with nothing of its own; here it is the same type as Sensor.
+def _gbuffer_id(gbuffer_id: int) -> int:
+    if gbuffer_id < 0 or gbuffer_id >= TSC_GBUFFER_TEXTURE_COUNT:
+        raise CarlaError(f"G-buffer texture id {gbuffer_id} is not a GBufferTextureID",
+                         TSC_INVALID_ARGUMENT)
+    return gbuffer_id
+
+# The Python API's carla.ServerSideSensor (sensors the server simulates),
+# carla.ClientSideSensor (sensors LibCarla computes on the client) and
+# carla.LaneInvasionSensor (the only client-side one) are Sensor subclasses;
+# here they are all the same type as Sensor. The ServerSideSensor methods
+# (enable_for_ros, listen_to_gbuffer, ...) raise ActorTypeError on a
+# client-side sensor.
+ServerSideSensor = Sensor
+ClientSideSensor = Sensor
 LaneInvasionSensor = Sensor
 
 @extend

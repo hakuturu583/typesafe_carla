@@ -51,9 +51,15 @@ extern "C" {
  * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37).
  * 3.8: tsc_world_get_actors_by_id (#38).
  * 4.0: tsc_world_spawn_actor / try_spawn_actor take a tsc_attachment_type_t (#34).
- * 4.1: V2X: tsc_sensor_send, CAM and custom V2X events (#42). */
+ * 4.1: tsc_client_create worker_threads; map_layers on load_world and
+ *      load_world_if_different (#35).
+ * 4.2: tsc_map_new_from_opendrive, a client-side Map from an OpenDRIVE string (#39).
+ * 4.3: tsc_client_replay_file_ex, tsc_client_start_recorder_ex (#36).
+ * 4.4: actor world, blueprint attribute ids and recommended values, sensor ROS
+ *      and G-buffer streams (#33).
+ * 4.5: V2X: tsc_sensor_send, CAM and custom V2X events (#42). */
 #define TSC_ABI_VERSION_MAJOR 4
-#define TSC_ABI_VERSION_MINOR 1
+#define TSC_ABI_VERSION_MINOR 5
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -232,8 +238,9 @@ TSC_API void tsc_actor_attribute_free(tsc_actor_attribute_t *attribute);
 /* Client                                                                   */
 /* ------------------------------------------------------------------------ */
 
+/* worker_threads: LibCarla's asynchronous worker threads, 0 for all cores. */
 TSC_API tsc_status_t tsc_client_create(const char *host, size_t host_len, uint16_t port,
-                                       tsc_client_t **out_client);
+                                       size_t worker_threads, tsc_client_t **out_client);
 /* BEGIN GENERATED client from bindings/client.yaml, do not edit */
 TSC_API tsc_status_t tsc_client_set_timeout(tsc_client_t *client, double seconds);
 TSC_API tsc_status_t tsc_client_get_timeout(tsc_client_t *client, double *out_seconds);
@@ -242,7 +249,8 @@ TSC_API tsc_status_t tsc_client_get_server_version(tsc_client_t *client, tsc_str
 TSC_API tsc_status_t tsc_client_get_world(tsc_client_t *client, tsc_world_t **out_world);
 TSC_API tsc_status_t tsc_client_load_world(tsc_client_t *client,
                                            const char *map_name, size_t map_name_len,
-                                           int32_t reset_settings, tsc_world_t **out_world);
+                                           int32_t reset_settings, uint16_t map_layers,
+                                           tsc_world_t **out_world);
 TSC_API tsc_status_t tsc_client_reload_world(tsc_client_t *client, int32_t reset_settings,
                                              tsc_world_t **out_world);
 /* END GENERATED client */
@@ -381,6 +389,18 @@ TSC_API tsc_status_t tsc_actor_blueprint_get_attribute(const tsc_actor_blueprint
 TSC_API tsc_status_t tsc_actor_blueprint_set_attribute(tsc_actor_blueprint_t *blueprint,
                                                        const char *id, size_t id_len,
                                                        const char *value, size_t value_len);
+/* Issue #33. The ids of the blueprint's attributes, in LibCarla's iteration
+ * order (ActorBlueprint::begin/end; unspecified, but stable for a blueprint). */
+TSC_API tsc_status_t tsc_actor_blueprint_get_attribute_ids(const tsc_actor_blueprint_t *blueprint,
+                                                           tsc_string_list_t *out);
+/* ActorAttribute::GetRecommendedValues of attribute `id` (often empty).
+ * TSC_NOT_FOUND if the blueprint has no such attribute. */
+TSC_API tsc_status_t tsc_actor_blueprint_get_recommended_values(
+    const tsc_actor_blueprint_t *blueprint, const char *id, size_t id_len, tsc_string_list_t *out);
+/* BEGIN GENERATED actor_blueprint_size from bindings/actor_blueprint.yaml, do not edit */
+TSC_API tsc_status_t tsc_actor_blueprint_size(const tsc_actor_blueprint_t *blueprint,
+                                              size_t *out_count);
+/* END GENERATED actor_blueprint_size */
 
 /* ------------------------------------------------------------------------ */
 /* Milestone 1 (ABI 1.2)                                                    */
@@ -446,6 +466,12 @@ typedef struct tsc_waypoint_list tsc_waypoint_list_t;
 /* BEGIN GENERATED world_map from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_map(tsc_world_t *world, tsc_map_t **out);
 /* END GENERATED world_map */
+/* BEGIN GENERATED map_new from bindings/map.yaml, do not edit */
+/* carla.Map(name, xodr_content), no server. TSC_ERROR when the XML does not parse; bad OpenDRIVE may give another status, or crash LibCarla (a road without planView). */
+TSC_API tsc_status_t tsc_map_new_from_opendrive(const char *name, size_t name_len,
+                                                const char *xodr_content, size_t xodr_content_len,
+                                                tsc_map_t **out);
+/* END GENERATED map_new */
 /* BEGIN GENERATED map_core from bindings/map.yaml, do not edit */
 TSC_API tsc_status_t tsc_map_get_name(const tsc_map_t *map, tsc_string_t *out);
 TSC_API tsc_status_t tsc_map_to_opendrive(const tsc_map_t *map, tsc_string_t *out);
@@ -693,7 +719,7 @@ typedef enum {
   TSC_SENSOR_DATA_OBSTACLE = 9,
   TSC_SENSOR_DATA_DVS = 10,
   TSC_SENSOR_DATA_OPTICAL_FLOW = 11,
-  /* ABI 4.1 (issue #42); only with a LibCarla that has V2X (ue5-dev) */
+  /* ABI 4.5 (issue #42); only with a LibCarla that has V2X (ue5-dev) */
   TSC_SENSOR_DATA_CAM = 12,
   TSC_SENSOR_DATA_CUSTOM_V2X = 13
 } tsc_sensor_data_type_t;
@@ -723,6 +749,35 @@ TSC_API tsc_status_t tsc_sensor_poll(tsc_sensor_t *sensor, tsc_sensor_data_t **o
 /* TSC_TIMEOUT when nothing arrives within timeout_seconds. */
 TSC_API tsc_status_t tsc_sensor_wait_for_data(tsc_sensor_t *sensor, double timeout_seconds,
                                               tsc_sensor_data_t **out);
+
+/* Issue #33: ServerSideSensor. A client-side sensor (lane invasion) is
+ * TSC_TYPE_ERROR. G-buffer texture ids (GBufferTextureID) are below
+ * TSC_GBUFFER_TEXTURE_COUNT (TSC_INVALID_ARGUMENT otherwise). */
+#define TSC_GBUFFER_TEXTURE_COUNT 13
+/* BEGIN GENERATED sensor_ros from bindings/server_side_sensor.yaml, do not edit */
+TSC_API tsc_status_t tsc_sensor_enable_for_ros(tsc_sensor_t *sensor);
+TSC_API tsc_status_t tsc_sensor_disable_for_ros(tsc_sensor_t *sensor);
+TSC_API tsc_status_t tsc_sensor_is_enabled_for_ros(tsc_sensor_t *sensor, int32_t *out);
+/* END GENERATED sensor_ros */
+/* BEGIN GENERATED sensor_gbuffer from bindings/server_side_sensor.yaml, do not edit */
+TSC_API tsc_status_t tsc_sensor_is_listening_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                                     int32_t *out);
+/* Stops the stream (the queue of tsc_sensor_listen_to_gbuffer stays). */
+TSC_API tsc_status_t tsc_sensor_stop_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id);
+/* END GENERATED sensor_gbuffer */
+/* Starts delivering G-buffer texture gbuffer_id into a queue of this handle
+ * (ServerSideSensor::ListenToGBuffer). TSC_INVALID_ARGUMENT for a sensor
+ * other than an RGB camera (LibCarla would only log a warning and deliver
+ * nothing). queue_capacity as in
+ * tsc_sensor_listen. Listening again replaces the stream and the queue. */
+TSC_API tsc_status_t tsc_sensor_listen_to_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                                  size_t queue_capacity);
+/* Items queued for gbuffer_id (0 if it was never listened to). */
+TSC_API tsc_status_t tsc_sensor_gbuffer_pending_count(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                                      size_t *out);
+/* *out = NULL (TSC_OK) when that queue is empty or was never created. */
+TSC_API tsc_status_t tsc_sensor_gbuffer_poll(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                             tsc_sensor_data_t **out);
 
 typedef struct {
   uint64_t frame;
@@ -896,7 +951,7 @@ TSC_API tsc_status_t tsc_optical_flow_color_coded(const tsc_sensor_data_t *data,
                                                   size_t capacity);
 
 /* ------------------------------------------------------------------------ */
-/* Issue #42: V2X (ABI 4.1)                                                 */
+/* Issue #42: V2X (ABI 4.5)                                                 */
 /*                                                                          */
 /* LibCarla ue5-dev only. Built against a LibCarla without V2X (CARLA       */
 /* 0.10.0), every function here fails with TSC_ERROR ("... is not available */
@@ -916,10 +971,10 @@ TSC_API tsc_status_t tsc_optical_flow_color_coded(const tsc_sensor_data_t *data,
  * other server-side sensor. TSC_TYPE_ERROR for a client-side sensor (lane
  * invasion); TSC_INVALID_ARGUMENT for more than TSC_CUSTOM_V2X_MAX_DATA_SIZE
  * bytes. */
-/* BEGIN GENERATED server_side_sensor from bindings/server_side_sensor.yaml, do not edit */
+/* BEGIN GENERATED sensor_v2x from bindings/server_side_sensor.yaml, do not edit */
 TSC_API tsc_status_t tsc_sensor_send(tsc_sensor_t *sensor,
                                      const uint8_t *message, size_t message_size);
-/* END GENERATED server_side_sensor */
+/* END GENERATED sensor_v2x */
 
 /* ITS PDU header (ItsPduHeader). */
 typedef struct {
@@ -1240,6 +1295,17 @@ TSC_API tsc_status_t tsc_client_replay_file(tsc_client_t *client, const char *na
                                             double start, double duration, uint32_t follow_id,
                                             int32_t replay_sensors, tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_stop_replayer(tsc_client_t *client, int32_t keep_actors);
+TSC_API tsc_status_t tsc_client_start_recorder_ex(tsc_client_t *client,
+                                                  const char *name, size_t name_len,
+                                                  int32_t additional_data, int32_t stop_replayer,
+                                                  tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_replay_file_ex(tsc_client_t *client,
+                                               const char *name, size_t name_len, double start,
+                                               double duration, uint32_t follow_id,
+                                               int32_t replay_sensors, int32_t replay_weather,
+                                               const tsc_transform_t *offset,
+                                               const char *map_override, size_t map_override_len,
+                                               tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_set_replayer_time_factor(tsc_client_t *client, double factor);
 /* END GENERATED client_recorder */
 
@@ -1756,10 +1822,11 @@ TSC_API tsc_status_t tsc_client_set_files_base_folder(tsc_client_t *client,
 /* END GENERATED client_files */
 /* LibCarla's LoadWorldIfDifferent: loads `map_name` unless it is the current
  * map (with or without the "Carla/Maps/" prefix). *out is the new world, or
- * NULL when the map was already loaded. */
+ * NULL when the map was already loaded. map_layers: CARLA MapLayer bit flags. */
 TSC_API tsc_status_t tsc_client_load_world_if_different(tsc_client_t *client,
                                                         const char *map_name, size_t map_name_len,
-                                                        int32_t reset_settings, tsc_world_t **out);
+                                                        int32_t reset_settings, uint16_t map_layers,
+                                                        tsc_world_t **out);
 
 /* --- Traffic Manager ------------------------------------------------------------ */
 
@@ -1906,6 +1973,10 @@ TSC_API tsc_status_t tsc_actor_get_parent(tsc_actor_t *actor, tsc_actor_t **out)
 TSC_API tsc_status_t tsc_actor_get_semantic_tags(tsc_actor_t *actor,
                                                  uint8_t *out, size_t capacity, size_t *out_count);
 /* END GENERATED actor_state */
+/* BEGIN GENERATED actor_world from bindings/actor.yaml, do not edit */
+/* The world (episode) the actor belongs to. */
+TSC_API tsc_status_t tsc_actor_get_world(tsc_actor_t *actor, tsc_world_t **out);
+/* END GENERATED actor_world */
 
 /* The actor's attributes (as spawned): out_ids->items[i] has the value
  * out_values->items[i]. Both lists are owned by the caller. */

@@ -55,6 +55,7 @@ class Type:
     c_param_template: str | None = None
     cpp: tuple[str, ...] = ()
     invalid: str = "0"  # a C value the conversion rejects, for test_generated
+    has_invalid: bool = False  # `invalid` is given in types.yaml (else "0" may be valid)
     # For an `assign` output: the C parameters (`{out}` is the output name)
     # checked non-NULL before the LibCarla call, so a NULL output fails
     # before anything happens. Default: `{out}`, or none with c_param.
@@ -116,9 +117,14 @@ class Function:
     # the whole C++ expression, and `ret` the C result (size_t for tsc_*_size).
     expr: str | None = None
     ret: str = "tsc_status_t"
+    # A constructor (`new: true`, issue #39): no self parameter; the function
+    # makes a new object of cpp_class from the arguments (or calls `via` with
+    # them, a helper that does) and returns its handle. `call` is the class's
+    # own name, as libclang spells constructors.
+    constructor: bool = False
 
     def c_params(self) -> list[str]:
-        params = [f"{self.self_type} *{self.self_name}"]
+        params = [] if self.constructor else [f"{self.self_type} *{self.self_name}"]
         params += [a.type.c_param(a.name) for a in self.args]
         if self.out:
             t = self.out.type
@@ -128,11 +134,21 @@ class Function:
         return params
 
     def codon_params(self) -> list[str]:
-        params = [self.self_codon] + [a.type.codon_param() for a in self.args]
+        params = [] if self.constructor else [self.self_codon]
+        params += [a.type.codon_param() for a in self.args]
         if self.out:
             t = self.out.type
             params.append(t.codon if t.c_param_template else f"Ptr[{t.codon}]")
         return params
+
+    def _assign_out(self, value: str) -> tuple[str, str]:
+        """The checks of an `assign` output, and the statement writing `value`
+        to it. The checks go before the call (C++17 evaluates the right side
+        of `=` first): a NULL output must fail before any side effect."""
+        name, t = self.out.name, self.out.type
+        checks = "".join(f'require_ptr({r}, "{r}"); ' for r in
+                         (r.replace("{out}", name) for r in t.require))
+        return checks, t.assign.replace("{out}", name).replace("{}", value)
 
     def body(self) -> str:
         if self.ret != "tsc_status_t":
@@ -140,15 +156,26 @@ class Function:
         self_ = f"{self.self_get}({self.self_name})"
         args = [a.to_carla() for a in self.args]
         if self.optional:
-            what = chr(34) + self.optional + chr(34)
+            what = f'"{self.optional}"'
+            # As for `via` below, the handle is checked before the arguments.
+            obj = "self_" if args else self_
+            checks = ""
+            if self.out is None:
+                call = f'TSC_CALL_OPTIONAL({", ".join([obj, self.call, what] + args)})'
+            else:
+                # An `assign` output, written by `use` with the result where
+                # the method exists.
+                checks, assign = self._assign_out("r_")
+                use = f"([&](auto &&r_) {{ {assign}; }})"
+                call = f'TSC_CALL_OPTIONAL_THEN({", ".join([use, obj, self.call, what] + args)})'
             if args:
-                # The handle is checked before the arguments are converted (the
-                # macro's arguments are evaluated in no fixed order).
-                return (f"auto &&self_ = {self_};\n"
-                        f'TSC_CALL_OPTIONAL({", ".join(["self_", self.call, what] + args)});')
-            return f'TSC_CALL_OPTIONAL({", ".join([self_, self.call, what])});'
+                call = f"[&](auto &self_) {{ {call}; }}({self_})"
+            return f"{checks}{call};"
         if self.expr:
             call = self.expr
+        elif self.constructor:
+            make = self.via or f"std::make_shared<{self.cpp_class}>"
+            call = f"{make}({', '.join(args)})"
         elif self.via and args:
             # The handle is checked before the arguments are converted, as in a
             # member call (function arguments are evaluated in no fixed order).
@@ -162,12 +189,9 @@ class Function:
         t = self.out.type
         if t.handle:  # the statement of new_handle's lambda (see emit.shim)
             return f"return {t.from_carla.replace('{}', call)};"
-        # The output is checked before the call (C++17 evaluates the right
-        # side of `=` first): a NULL output must fail before any side effect.
         if t.assign:
-            checks = [f'require_ptr({r}, "{r}"); ' for r in
-                      (r.replace("{out}", self.out.name) for r in t.require)]
-            return "".join(checks) + t.assign.replace("{out}", self.out.name).replace("{}", call) + ";"
+            checks, assign = self._assign_out(call)
+            return f"{checks}{assign};"
         # assign_out: checks the output, and zeroes it if the call fails.
         name = self.out.name
         return f'assign_out({name}, "{name}", [&] {{ return {t.from_carla.replace("{}", call)}; }});'
@@ -212,6 +236,7 @@ def _load_types(path: Path) -> dict[str, Type]:
                            assign=t.get("assign"),
                            struct=t.get("struct", False), handle=handle,
                            cpp=tuple(t.get("cpp", ())), invalid=str(t.get("invalid", "0")),
+                           has_invalid="invalid" in t,
                            c_param_template=t.get("c_param"),
                            require=tuple(t.get("require", [] if "c_param" in t else ["{out}"])))
     return types
@@ -276,9 +301,16 @@ def load(bindings: Path = BINDINGS) -> Spec:
         for block, entries in raw["blocks"].items():
             for short, entry in entries.items():
                 where = f"{path.name}: {short}"
-                unknown = set(entry) - {"call", "via", "args", "out", "doc", "optional"}
+                unknown = set(entry) - {"call", "new", "via", "args", "out", "doc", "optional"}
                 if unknown:
                     raise SpecError(f"{where}: unknown keys {sorted(unknown)}")
+                constructor = entry.get("new", False)
+                if not isinstance(constructor, bool):
+                    raise SpecError(f"{where}: new must be true or false")
+                if constructor and set(entry) & {"call", "optional"}:
+                    raise SpecError(f"{where}: a constructor (new: true) has no call or optional")
+                if not constructor and "call" not in entry:
+                    raise SpecError(f"{where}: missing key 'call' (or new: true for a constructor)")
                 args = tuple(Arg(n, type_of(t, where)) for n, t in (entry.get("args") or {}).items())
                 for a in args:
                     if a.type.assign:
@@ -293,10 +325,21 @@ def load(bindings: Path = BINDINGS) -> Spec:
                                         "the output handle")
                     if out.type.c_param_template and not out.type.assign:
                         raise SpecError(f"{where}: {out.type.name} is input-only")
+                if constructor and not (out and out.type.handle):
+                    raise SpecError(f"{where}: a constructor needs a handle output for the new object")
+                if constructor and not any(f"<{raw['class']}>" in p for p in out.type.cpp):
+                    raise SpecError(f"{where}: the output {out.type.name} is not a handle of "
+                                    f"{raw['class']}")
+                # test_generated passes every argument invalid and expects a rejection.
+                if constructor and not any(a.type.struct or a.type.handle or a.type.has_invalid
+                                           for a in args):
+                    raise SpecError(f"{where}: a constructor needs an argument that can be invalid "
+                                    "(a pointer, or a type with `invalid`) for test_generated")
                 optional, missing_in = None, ()
                 if "optional" in entry:
-                    if out:
-                        raise SpecError(f"{where}: an optional method has no output")
+                    if out and not (out.type.assign and not out.type.handle):
+                        raise SpecError(f"{where}: an optional method's output needs a type "
+                                        "with `assign` (e.g. string)")
                     if "via" in entry:
                         raise SpecError(f"{where}: `optional` and `via` exclude each other")
                     o = entry["optional"]
@@ -304,7 +347,8 @@ def load(bindings: Path = BINDINGS) -> Spec:
                             not isinstance(o["missing_in"], list) or not o["missing_in"]:
                         raise SpecError(f"{where}: optional must be {{name: ..., missing_in: [refs]}}")
                     optional, missing_in = str(o["name"]), tuple(str(r) for r in o["missing_in"])
-                c_params = [self_["name"]] + [a.type.c_param(a.name) for a in args]
+                c_params = [] if constructor else [self_["name"]]
+                c_params += [a.type.c_param(a.name) for a in args]
                 if out:
                     c_params.append(out.type.c_param(out.name) if out.type.c_param_template
                                     else out.name)
@@ -318,8 +362,9 @@ def load(bindings: Path = BINDINGS) -> Spec:
                 seen[name] = path.name
                 functions.append(Function(
                     name=name, block=block, spec_file=path.name, cpp_class=raw["class"],
-                    call=entry["call"], via=entry.get("via"), self_type=self_["type"], self_name=self_["name"],
-                    self_get=self_["get"], args=args, out=out, doc=entry.get("doc"),
+                    call=raw["class"].rsplit("::", 1)[-1] if constructor else entry["call"],
+                    via=entry.get("via"), constructor=constructor, self_type=self_["type"],
+                    self_name=self_["name"], self_get=self_["get"], args=args, out=out, doc=entry.get("doc"),
                     optional=optional, missing_in=missing_in,
                     self_codon=self_.get("codon", "cobj")))
     lists = _load_lists(bindings / "lists.yaml", type_of)

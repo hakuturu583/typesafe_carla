@@ -1,0 +1,11 @@
+# A G-buffer callback receives a SensorData, as with listen(): convert with as_image().
+# expect-error: 'SensorData' does not match expected type 'Image'
+import typesafe_carla as carla
+
+def on_depth(image: carla.Image):
+    print(image.width)
+
+def start(camera: carla.Sensor):
+    camera.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth, on_depth)
+
+start(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor())

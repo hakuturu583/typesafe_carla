@@ -205,3 +205,27 @@ def test_compat_literal_only_in_programs_that_use_the_path(launcher, tmp_path):
         "a Location passed as a Vector3D to Actor.add_force",
         "a Vector3D passed as a Location to Actor.set_location"}
     assert found["explicit_as_vector"] == set()
+
+
+def test_enum_names_and_values_match_the_official_module(launcher, tmp_path):
+    """Issue #33: `names` / `values` of every enumeration match those of the
+    official CARLA 0.10.0 Python module (tests/compatibility/official_enums.json,
+    dumped from it): the same member names and values, and the same value keys."""
+    import json
+
+    official = json.loads((Path(__file__).resolve().parent / "compatibility" /
+                           "official_enums.json").read_text())
+    lines = ["import typesafe_carla as carla",
+             "def dump(label: str, names, values):",
+             "    items = sorted([(k, int(v)) for k, v in names.items()])",
+             "    print(label + '|' + ','.join([k + '=' + str(v) for k, v in items]) + '|' +",
+             "          ','.join([str(k) for k in sorted(values.keys())]))"]
+    lines += [f"dump('{e}', carla.{e}.names, carla.{e}.values)" for e in sorted(official)]
+    result = launcher("run", _program(tmp_path, "\n".join(lines) + "\n"))
+    assert result.returncode == 0, result.stderr
+    ours = {}
+    for line in result.stdout.strip().splitlines():
+        label, names, values = line.split("|")
+        ours[label] = {"names": {k: int(v) for k, v in (kv.split("=") for kv in names.split(","))},
+                       "values": [int(v) for v in values.split(",")]}
+    assert ours == official

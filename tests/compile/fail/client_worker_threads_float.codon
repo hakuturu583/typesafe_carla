@@ -1,0 +1,5 @@
+# worker_threads is a thread count (an int).
+# expect-error: no function 'Client.__init__' with arguments (Client, str, int, float)
+import typesafe_carla as carla
+
+client = carla.Client("localhost", 2000, worker_threads=1.5)

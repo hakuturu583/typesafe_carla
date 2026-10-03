@@ -12,7 +12,7 @@ blocks:
     get_world: {call: GetWorld, out: {type: world_handle, name: out_world}}
     load_world:
       call: LoadWorld
-      args: {map_name: string_in, reset_settings: bool}
+      args: {map_name: string_in, reset_settings: bool, map_layers: map_layer}
       out: {type: world_handle, name: out_world}
     reload_world:
       call: ReloadWorld
@@ -43,6 +43,22 @@ blocks:
              replay_sensors: bool}
       out: string
     stop_replayer: {call: StopReplayer, args: {keep_actors: bool}}
+    # The ue5-dev overloads (issue #36): the Codon API calls the functions
+    # above while every new argument is at its default, so those defaults
+    # also work against LibCarla 0.10.0.
+    start_recorder_ex:
+      call: StartRecorder
+      optional: {name: "Client.start_recorder(stop_replayer=False)", missing_in: ["0.10.0"]}
+      args: {name: string_in, additional_data: bool, stop_replayer: bool}
+      out: string
+    replay_file_ex:
+      call: ReplayFile
+      optional: {name: "Client.replay_file(replay_weather, offset, map_override)",
+                 missing_in: ["0.10.0"]}
+      args: {name: string_in, start: double, duration: double, follow_id: uint32,
+             replay_sensors: bool, replay_weather: bool, offset: transform,
+             map_override: string_in}
+      out: string
     set_replayer_time_factor: {call: SetReplayerTimeFactor, args: {factor: positive}}
   client_opendrive:
     generate_opendrive_world:

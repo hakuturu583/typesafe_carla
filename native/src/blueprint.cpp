@@ -67,4 +67,32 @@ tsc_status_t tsc_actor_blueprint_set_attribute(tsc_actor_blueprint_t *blueprint,
 
 // --- Issue #23 -------------------------------------------------------------------
 
+// --- Issue #33 -------------------------------------------------------------------
+
+tsc_status_t tsc_actor_blueprint_get_attribute_ids(const tsc_actor_blueprint_t *blueprint,
+                                                   tsc_string_list_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+    *out = tsc_string_list_t{};
+    std::vector<std::string> ids;
+    for (const carla::client::ActorAttribute &attribute : blueprint_of(blueprint)) {
+      ids.push_back(attribute.GetId());
+    }
+    string_list_assign(out, ids);
+  });
+}
+
+tsc_status_t tsc_actor_blueprint_get_recommended_values(const tsc_actor_blueprint_t *blueprint,
+                                                        const char *id, size_t id_len,
+                                                        tsc_string_list_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+    *out = tsc_string_list_t{};
+    const auto &bp = blueprint_of(blueprint);
+    const std::string key = to_string(id, id_len, "id");
+    require_attribute(bp, key);
+    string_list_assign(out, bp.GetAttribute(key).GetRecommendedValues());
+  });
+}
+
 }  // extern "C"

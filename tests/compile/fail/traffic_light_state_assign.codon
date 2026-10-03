@@ -1,0 +1,8 @@
+# TrafficLight.state is read-only, as in the Python API: use set_state().
+# expect-error: 'TrafficLight' object has no attribute 'state'
+import typesafe_carla as carla
+
+def turn_red(light: carla.TrafficLight):
+    light.state = carla.TrafficLightState.Red
+
+turn_red(carla.Client("localhost", 2000).get_world().get_actors()[2].as_traffic_light())

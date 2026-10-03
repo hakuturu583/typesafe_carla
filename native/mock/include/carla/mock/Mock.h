@@ -28,6 +28,17 @@
 
 #define TSC_MOCK_LIBCARLA 1
 
+// Mock-only test hooks (not in ffi.h; exported by the mock build only, as
+// tsc_* symbols): what the shim last passed to LibCarla where the server has
+// nothing to read it back. Tests declare them themselves.
+#define TSC_MOCK_HOOK extern "C" __attribute__((visibility("default")))
+TSC_MOCK_HOOK size_t tsc_mock_last_worker_threads(void);  // Client(host, port, worker_threads)
+TSC_MOCK_HOOK uint16_t tsc_mock_last_map_layers(void);    // LoadWorld / LoadWorldIfDifferent
+// Live G-buffer subscriptions of the process (ListenToGBuffer minus a
+// successful StopGBuffer), leaked ones included.
+TSC_MOCK_HOOK size_t tsc_mock_gbuffer_subscriptions(void);
+#undef TSC_MOCK_HOOK
+
 namespace carla {
 
 template <typename T>
@@ -803,6 +814,7 @@ struct ActorData;
 
 class Junction;
 class Landmark;
+class World;
 class LightManager;
 
 class Timestamp {
@@ -884,6 +896,9 @@ class Waypoint : public std::enable_shared_from_this<Waypoint> {
 class Map : public std::enable_shared_from_this<Map> {
  public:
   Map();
+  // carla.Map(name, xodr_content) (issue #39); throws a plain std::exception,
+  // as LibCarla does, when the document does not parse (see mock.cpp).
+  explicit Map(std::string name, std::string xodr_content);
   const std::string &GetName() const { return _name; }
   const std::string &GetOpenDrive() const { return _xodr; }
   const std::vector<geom::Transform> &GetRecommendedSpawnPoints() const { return _spawn_points; }
@@ -915,11 +930,13 @@ class Map : public std::enable_shared_from_this<Map> {
 class ActorAttribute {
  public:
   ActorAttribute(std::string id, rpc::ActorAttributeType type, std::string value,
-                 bool is_modifiable)
-      : _id(std::move(id)), _type(type), _value(std::move(value)), _modifiable(is_modifiable) {}
+                 bool is_modifiable, std::vector<std::string> recommended_values = {})
+      : _id(std::move(id)), _type(type), _value(std::move(value)), _modifiable(is_modifiable),
+        _recommended_values(std::move(recommended_values)) {}
   const std::string &GetId() const { return _id; }
   rpc::ActorAttributeType GetType() const { return _type; }
   const std::string &GetValue() const { return _value; }
+  const std::vector<std::string> &GetRecommendedValues() const { return _recommended_values; }
   bool IsModifiable() const { return _modifiable; }
   // Throws std::invalid_argument when not modifiable or not parseable.
   void Set(std::string value);
@@ -929,6 +946,7 @@ class ActorAttribute {
   rpc::ActorAttributeType _type;
   std::string _value;
   bool _modifiable;
+  std::vector<std::string> _recommended_values;
 };
 
 class ActorBlueprint {
@@ -944,6 +962,22 @@ class ActorBlueprint {
   const ActorAttribute &GetAttribute(const std::string &id) const;
   void SetAttribute(const std::string &id, std::string value);
   size_t size() const { return _attributes.size(); }
+  // Iterates the attributes (ActorAttribute values), as LibCarla's
+  // make_map_values_const_iterator over its attribute map.
+  class const_iterator {
+   public:
+    explicit const_iterator(std::map<std::string, ActorAttribute>::const_iterator it) : _it(it) {}
+    const ActorAttribute &operator*() const { return _it->second; }
+    const ActorAttribute *operator->() const { return &_it->second; }
+    const_iterator &operator++() { ++_it; return *this; }
+    bool operator==(const const_iterator &other) const { return _it == other._it; }
+    bool operator!=(const const_iterator &other) const { return _it != other._it; }
+
+   private:
+    std::map<std::string, ActorAttribute>::const_iterator _it;
+  };
+  const_iterator begin() const { return const_iterator(_attributes.begin()); }
+  const_iterator end() const { return const_iterator(_attributes.end()); }
   rpc::ActorDescription MakeActorDescription() const;
 
  private:
@@ -962,7 +996,7 @@ class BlueprintLibrary : public std::enable_shared_from_this<BlueprintLibrary> {
   explicit BlueprintLibrary(std::vector<ActorBlueprint> blueprints)
       : _blueprints(std::move(blueprints)) {}
   SharedPtr<BlueprintLibrary> Filter(const std::string &wildcard_pattern) const;
-  // The mock's attributes have no recommended values: matches the value.
+  // As LibCarla: matches a recommended value, or the value when there are none.
   SharedPtr<BlueprintLibrary> FilterByAttribute(const std::string &name,
                                                 const std::string &value) const;
   const_pointer Find(const std::string &key) const;
@@ -1040,6 +1074,8 @@ class Actor : public std::enable_shared_from_this<Actor> {
   std::vector<geom::Transform> GetSocketWorldTransforms() const;
   std::vector<geom::Transform> GetSocketRelativeTransforms() const;
   std::vector<std::string> GetSocketNames() const;
+  // Issue #33: the world the actor lives in (ActorState::GetWorld in LibCarla).
+  World GetWorld() const;
 
  protected:
   // Locks the episode and returns the live actor record, or throws.
@@ -1110,19 +1146,41 @@ class Sensor : public Actor {
   ~Sensor() override;  // stops listening, like LibCarla's ServerSideSensor
   void Listen(CallbackFunctionType callback);
   void Stop();
+  // As LibCarla's ServerSideSensor: also true after ListenToGBuffer, until Stop().
   bool IsListening() const;
+
+ protected:
+  bool _listening_gbuffer = false;  // LibCarla's listening_mask bit 0 set by a G-buffer
 };
 
-// LibCarla's ActorFactory makes a ServerSideSensor of every "sensor." actor
-// except the client-side lane-invasion sensor, which stays a plain Sensor
-// here (LibCarla: LaneInvasionSensor, a ClientSideSensor).
-class ServerSideSensor final : public Sensor {
+// Issue #33: the sensors the server simulates (every "sensor.*" but lane
+// invasion), with LibCarla UE5's ROS2 and G-buffer methods. The mock server
+// publishes to "ROS2" (it records the flag) and sends G-buffer textures of
+// RGB cameras: one Image per tick, every pixel (id, id, id, 255).
+class ServerSideSensor : public Sensor {
  public:
   using Sensor::Sensor;
+  ~ServerSideSensor() override;  // stops the G-buffer streams, as LibCarla
+  bool Destroy() override;
+  void ListenToGBuffer(uint32_t GBufferId, CallbackFunctionType callback);
+  void StopGBuffer(uint32_t GBufferId);
+  bool IsListeningGBuffer(uint32_t id) const;
+  void EnableForROS();
+  void DisableForROS();
+  bool IsEnabledForROS();
   // ue5-dev (issue #42): queues a message on a custom V2X sensor
   // (sensor.other.v2x_custom) for the next tick. On any other sensor it only
   // logs a warning, as LibCarla does.
   void Send(const rpc::CustomV2XBytes &data);
+
+ private:
+  std::vector<uint32_t> OwnGBuffers() const;  // the textures this object listens to
+};
+
+// Sensors LibCarla computes on the client (lane invasion).
+class ClientSideSensor : public Sensor {
+ public:
+  using Sensor::Sensor;
 };
 
 class ActorList : public std::enable_shared_from_this<ActorList> {
@@ -1456,13 +1514,16 @@ class Client {
                   rpc::MapLayer map_layers = rpc::MapLayer::All) const;
   void ApplyBatch(std::vector<rpc::Command> commands, bool do_tick_cue = false) const;
   traffic_manager::TrafficManager GetInstanceTM(uint16_t port = 8000) const;
-  std::string StartRecorder(std::string name, bool additional_data = false);
+  std::string StartRecorder(std::string name, bool additional_data = false,
+                            bool stop_replayer = true);
   void StopRecorder();
   std::string ShowRecorderFileInfo(std::string name, bool show_all);
   std::string ShowRecorderCollisions(std::string name, char type1, char type2);
   std::string ShowRecorderActorsBlocked(std::string name, double min_time, double min_distance);
   std::string ReplayFile(std::string name, double start, double duration, uint32_t follow_id,
-                         bool replay_sensors);
+                         bool replay_sensors, bool replay_weather = false,
+                         const geom::Transform &offset = geom::Transform(),
+                         std::string map_override = "");
   void StopReplayer(bool keep_actors);
   void SetReplayerTimeFactor(double time_factor);
   void SetReplayerIgnoreHero(bool ignore_hero);

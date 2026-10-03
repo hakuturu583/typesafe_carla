@@ -607,6 +607,13 @@ carla.dispatch_sensor_callbacks()     # e.g. in an asynchronous main loop
 - **Exclusive modes.** `poll()` / `wait_for_data()` raise `CarlaError` on a
   sensor in callback mode, so the two consumers never compete for the queue.
 
+**G-buffer callbacks** (`Sensor.listen_to_gbuffer`, issue #33) are sensor
+callbacks too: the registry keys sensor streams by (actor id, G-buffer id,
+-1 for the measurements), and each stream has its own native queue in the
+sensor handle (`tsc_sensor_gbuffer_poll` / `_pending_count`). `stop()` and
+`stop_gbuffer(id)` drop one stream, as LibCarla's `Stop` / `StopGBuffer`;
+destroying the sensor drops all of them.
+
 **World tick callbacks** (`World.on_tick`, issue #21) use the same registry
 and dispatcher. LibCarla's `World::OnTick` callback only queues the
 `WorldSnapshot` in a native tick listener (`tsc_world_on_tick`); the Codon
@@ -663,7 +670,9 @@ Implemented views (issue #24 added the last four): `Image` (BGRA bytes),
 `OpticalFlowImage` ({x, y} floats). In Codon they share one generic base,
 `_ArrayMeasurement[T]`: `len`, indexing and iteration convert one element at a
 time into the Python API's element class; `raw_data()` / `raw_size()` expose
-the bytes. `Image.convert` changes the buffer in place, as in the Python API.
+the bytes. `Image.convert` changes the buffer in place, as in the Python API,
+and so does assigning an element (`image[i] = color`, issue #33): each
+subclass's `_element` converts the Python-API element back into `T`.
 
 The V2X events of issue #42 (`CAMEvent`, `CustomV2XEvent`, LibCarla ue5-dev
 only) are not views: LibCarla's `CAMData` is a large struct with

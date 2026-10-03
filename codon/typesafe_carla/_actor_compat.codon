@@ -240,6 +240,12 @@ class Actor:
         compat_shortcut("Actor.get_state", "[tsc-compat] Actor.get_state() without as_traffic_light()", "call as_traffic_light() first")
         return self.as_traffic_light().get_state(*args, **kwargs)
 
+    @property
+    def state(self: S, S: type) -> int:
+        _plain_actor_only(self, "state")
+        compat_shortcut("Actor.state", "[tsc-compat] Actor.state without as_traffic_light()", "call as_traffic_light() first")
+        return self.as_traffic_light().state
+
     def set_state(self: S, *args, S: type, **kwargs):
         _plain_actor_only(self, "set_state()")
         compat_shortcut("Actor.set_state", "[tsc-compat] Actor.set_state() without as_traffic_light()", "call as_traffic_light() first")
@@ -361,6 +367,40 @@ class Actor:
         _plain_actor_only(self, "wait_for_data()")
         compat_shortcut("Actor.wait_for_data", "[tsc-compat] Actor.wait_for_data() without as_sensor()", "call as_sensor() first")
         return self.as_sensor().wait_for_data(*args, **kwargs)
+
+    # Sensor: ServerSideSensor methods (issue #33)
+
+    def enable_for_ros(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "enable_for_ros()")
+        compat_shortcut("Actor.enable_for_ros", "[tsc-compat] Actor.enable_for_ros() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().enable_for_ros(*args, **kwargs)
+
+    def disable_for_ros(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "disable_for_ros()")
+        compat_shortcut("Actor.disable_for_ros", "[tsc-compat] Actor.disable_for_ros() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().disable_for_ros(*args, **kwargs)
+
+    def is_enabled_for_ros(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "is_enabled_for_ros()")
+        compat_shortcut("Actor.is_enabled_for_ros", "[tsc-compat] Actor.is_enabled_for_ros() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().is_enabled_for_ros(*args, **kwargs)
+
+    def listen_to_gbuffer(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "listen_to_gbuffer()")
+        compat_shortcut("Actor.listen_to_gbuffer", "[tsc-compat] Actor.listen_to_gbuffer() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().listen_to_gbuffer(*args, **kwargs)
+
+    def is_listening_gbuffer(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "is_listening_gbuffer()")
+        compat_shortcut("Actor.is_listening_gbuffer", "[tsc-compat] Actor.is_listening_gbuffer() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().is_listening_gbuffer(*args, **kwargs)
+
+    def stop_gbuffer(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "stop_gbuffer()")
+        compat_shortcut("Actor.stop_gbuffer", "[tsc-compat] Actor.stop_gbuffer() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().stop_gbuffer(*args, **kwargs)
+
+    # Sensor: V2X (issue #42)
 
     def send(self: S, message, S: type):
         _plain_actor_only(self, "send()")

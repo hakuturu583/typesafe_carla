@@ -1,0 +1,15 @@
+# carla.Map(name, xodr_content) (issue #39): a client-side map from an
+# OpenDRIVE string, positionally or by keyword, used like world.get_map().
+import typesafe_carla as carla
+
+def copy_map(world: carla.World) -> carla.Map:
+    m: carla.Map = carla.Map("copy", world.get_map().to_opendrive())
+    return carla.Map(name=m.name, xodr_content=m.to_opendrive())
+
+def lanes(m: carla.Map) -> int:
+    wp: Optional[carla.Waypoint] = m.get_waypoint(carla.Location(10.0, 0.0, 0.0))
+    pairs: List[Tuple[carla.Waypoint, carla.Waypoint]] = m.get_topology()
+    return len(pairs) + len(m.generate_waypoints(2.0)) + (0 if wp is None else 1)
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(lanes(copy_map(carla.Client("localhost", 2000).get_world())))

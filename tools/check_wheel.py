@@ -3,8 +3,11 @@
     python tools/check_wheel.py [--backend libcarla] [--carla-ref REF] [--carla-commit SHA]
 
 Checks that the native library loads, exports the expected ABI, was built
-with the expected backend (and CARLA ref and commit), links no libpython, and that the
-Codon sources are present. Used by the release workflow before publishing.
+with the expected backend (and CARLA ref and commit), links no libpython, and
+that the Codon sources are present. For the libcarla backend it also checks
+that the license notices of the statically linked code ship next to the
+library (LICENSE.CARLA, THIRD_PARTY_NOTICES). Used by the release workflow
+before publishing.
 """
 
 from __future__ import annotations
@@ -49,6 +52,17 @@ def main() -> int:
         paths.codon_modules_dir()
     except paths.PathError as e:
         errors.append(str(e))
+    if backend == "libcarla":
+        # Expects an installed wheel: a source-tree build dir (paths prefers
+        # build/ in a checkout) holds THIRD_PARTY_NOTICES but not LICENSE.CARLA.
+        for notice in ("LICENSE.CARLA", "THIRD_PARTY_NOTICES"):
+            path = lib.parent / notice
+            if not path.is_file() or path.stat().st_size == 0:
+                errors.append(f"{path} is missing or empty")
+        notices = lib.parent / "THIRD_PARTY_NOTICES"
+        if (notices.is_file() and commit not in ("", "unknown")
+                and commit not in notices.read_text(errors="replace")):
+            errors.append(f"{notices} does not name the CARLA commit {commit}")
     ldd = subprocess.run(["ldd", str(lib)], capture_output=True, text=True).stdout
     if "libpython" in ldd:
         errors.append("native library links libpython")

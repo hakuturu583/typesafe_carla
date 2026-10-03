@@ -8,7 +8,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**314 of 378 methods bound (83%), 217 of them generated.**
+**316 of 378 methods bound (83%), 223 of them generated.**
 
 | class | bound |
 |---|---|
@@ -18,7 +18,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `carla::client::Waypoint` | 22 / 22 |
 | `carla::client::Junction` | 3 / 3 |
 | `carla::client::Landmark` | 23 / 23 |
-| `carla::client::Actor` | 32 / 37 |
+| `carla::client::Actor` | 33 / 37 |
 | `carla::client::Vehicle` | 23 / 23 |
 | `carla::client::Walker` | 8 / 8 |
 | `carla::client::WalkerAIController` | 4 / 5 |
@@ -26,7 +26,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `carla::client::TrafficLight` | 18 / 18 |
 | `carla::client::Sensor` | 3 / 3 |
 | `carla::client::BlueprintLibrary` | 5 / 10 |
-| `carla::client::ActorBlueprint` | 8 / 11 |
+| `carla::client::ActorBlueprint` | 9 / 11 |
 | `carla::client::ActorList` | 3 / 8 |
 | `carla::client::WorldSnapshot` | 5 / 10 |
 | `carla::client::DebugHelper` | 5 / 5 |
@@ -244,7 +244,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `GetTransform` | generated |
 | `GetTypeId` | generated |
 | `GetVelocity` | generated |
-| `GetWorld` | — |
+| `GetWorld` | generated |
 | `IsActive` | generated |
 | `IsAlive` | generated |
 | `IsDormant` | generated |
@@ -354,13 +354,13 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `Filter` | generated |
 | `FilterByAttribute` | generated |
 | `Find` | hand-written |
-| `at` | hand-written |
+| `at` | generated |
 | `begin` | — |
 | `empty` | — |
 | `end` | — |
 | `operator=` | — |
 | `operator[]` | — |
-| `size` | hand-written |
+| `size` | generated |
 
 ### `carla::client::ActorBlueprint`
 
@@ -376,7 +376,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `SetAttribute` | hand-written |
 | `begin` | — |
 | `end` | — |
-| `size` | — |
+| `size` | generated |
 
 ### `carla::client::ActorList`
 
@@ -384,12 +384,12 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 |---|---|
 | `Filter` | generated |
 | `Find` | — |
-| `at` | hand-written |
+| `at` | generated |
 | `begin` | — |
 | `empty` | — |
 | `end` | — |
 | `operator[]` | — |
-| `size` | hand-written |
+| `size` | generated |
 
 ### `carla::client::WorldSnapshot`
 

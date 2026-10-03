@@ -1,0 +1,282 @@
+# Issue #33 on the mock backend: Python API members found missing by the
+# survey against CARLA 0.10.0.
+import typesafe_carla as carla
+from typesafe_carla._ffi import LIB
+
+from C import LIB.tsc_mock_gbuffer_subscriptions() -> int
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+actors = world.get_actors()
+
+def raises_type_error(f) -> bool:
+    try:
+        f()
+    except carla.ActorTypeError:
+        return True
+    return False
+
+# Actor.get_world(): the actor's world.
+vehicle = actors[0].as_vehicle()
+assert actors[0].get_world().id == world.id
+assert vehicle.get_world().id == world.id
+assert vehicle.get_world().get_actor(vehicle.id) is not None
+
+# TrafficLight.state mirrors get_state(); the plain-Actor shortcut converts.
+light = actors[2].as_traffic_light()
+light.set_state(carla.TrafficLightState.Yellow)
+assert light.state == carla.TrafficLightState.Yellow == light.get_state()
+assert actors[2].state == carla.TrafficLightState.Yellow
+assert raises_type_error(lambda: actors[0].state)
+
+# The sensor class names of the Python API are Sensor here.
+lib = world.get_blueprint_library()
+camera = world.spawn_actor(lib.find("sensor.camera.rgb"), carla.Transform(),
+                           attach_to=vehicle).as_sensor()
+sensor: carla.ServerSideSensor = camera
+assert isinstance(sensor, carla.ClientSideSensor) and isinstance(sensor, carla.Sensor)
+
+camera.destroy()
+
+# ActorAttribute.recommended_values, ActorBlueprint len() and iteration.
+model3 = lib.find("vehicle.tesla.model3")
+assert len(model3) == 5
+attributes = {a.id: a for a in model3}
+assert sorted(attributes.keys()) == ["base_mass", "color", "number_of_wheels", "role_name",
+                                     "sticky_control"]
+assert attributes["number_of_wheels"].recommended_values == ["4"]
+assert attributes["role_name"].recommended_values == ["autopilot", "scenario", "ego_vehicle"]
+assert attributes["base_mass"].recommended_values == List[str]()
+assert model3.get_attribute("color").recommended_values == ["17,37,103", "255,255,255"]
+assert attributes["color"].as_color() == carla.Color(17, 37, 103)
+# filter_by_attribute matches the recommended values, as LibCarla.
+assert len(lib.filter_by_attribute("color", "255,255,255")) == 3
+assert len(lib.filter_by_attribute("color", "17,37,103")) == 1
+assert len(lib.find("sensor.other.gnss")) == 0 and [a.id for a in lib.find("sensor.other.gnss")] == List[str]()
+# A blueprint copy keeps its own values; iteration sees set_attribute.
+model3.set_attribute("role_name", "hero")
+assert [str(a) for a in model3 if a.id == "role_name"] == ["hero"]
+assert carla.ActorAttribute("x", carla.ActorAttributeType.Int, False, "1").recommended_values == List[str]()
+
+# WeatherParameters presets as class attributes: LibCarla's values (the
+# same as preset(name)), one shared object each, as in the Python API.
+presets = [
+    ("ClearNight", carla.WeatherParameters.ClearNight), ("ClearNoon", carla.WeatherParameters.ClearNoon),
+    ("ClearSunset", carla.WeatherParameters.ClearSunset), ("CloudyNight", carla.WeatherParameters.CloudyNight),
+    ("CloudyNoon", carla.WeatherParameters.CloudyNoon), ("CloudySunset", carla.WeatherParameters.CloudySunset),
+    ("Default", carla.WeatherParameters.Default), ("DustStorm", carla.WeatherParameters.DustStorm),
+    ("HardRainNight", carla.WeatherParameters.HardRainNight), ("HardRainNoon", carla.WeatherParameters.HardRainNoon),
+    ("HardRainSunset", carla.WeatherParameters.HardRainSunset), ("MidRainSunset", carla.WeatherParameters.MidRainSunset),
+    ("MidRainyNight", carla.WeatherParameters.MidRainyNight), ("MidRainyNoon", carla.WeatherParameters.MidRainyNoon),
+    ("SoftRainNight", carla.WeatherParameters.SoftRainNight), ("SoftRainNoon", carla.WeatherParameters.SoftRainNoon),
+    ("SoftRainSunset", carla.WeatherParameters.SoftRainSunset), ("WetCloudyNight", carla.WeatherParameters.WetCloudyNight),
+    ("WetCloudyNoon", carla.WeatherParameters.WetCloudyNoon), ("WetCloudySunset", carla.WeatherParameters.WetCloudySunset),
+    ("WetNight", carla.WeatherParameters.WetNight), ("WetNoon", carla.WeatherParameters.WetNoon),
+    ("WetSunset", carla.WeatherParameters.WetSunset)
+]
+assert len(presets) == 23
+for name, weather in presets:
+    assert weather == carla.WeatherParameters.preset(name), name
+assert carla.WeatherParameters.HardRainNoon.precipitation == 100.0
+assert carla.WeatherParameters.DustStorm.dust_storm == 100.0
+assert carla.WeatherParameters.ClearNight.sun_altitude_angle == -90.0
+world.set_weather(carla.WeatherParameters.WetCloudySunset)
+assert world.get_weather() == carla.WeatherParameters.WetCloudySunset
+shared = carla.WeatherParameters.SoftRainNoon
+shared.cloudiness = 42.0
+assert carla.WeatherParameters.SoftRainNoon.cloudiness == 42.0
+assert carla.WeatherParameters.preset("SoftRainNoon").cloudiness == 20.0
+shared.cloudiness = 20.0
+
+# names / values of the enumerations (the full comparison with the official
+# module is tests/test_runtime.py::test_enum_names_and_values_match_the_official_module).
+assert carla.TrafficLightState.names["Green"] == carla.TrafficLightState.Green == 2
+assert carla.TrafficLightState.values[4] == carla.TrafficLightState.Unknown
+assert carla.LaneMarkingColor.names["White"] == carla.LaneMarkingColor.Standard
+assert len(carla.LaneMarkingColor.names) == 7 and len(carla.LaneMarkingColor.values) == 6
+assert carla.VehicleLightState.values[0xFFFFFFFF] == carla.VehicleLightState.All
+assert carla.LaneType.values[-2] == carla.LaneType.Any
+assert carla.VehicleDoor.names["All"] == carla.VehicleDoor.All
+assert carla.VehicleWheelLocation.values[1] == carla.VehicleWheelLocation.Back_Wheel
+assert carla.VehicleFailureState.values[3] == carla.VehicleFailureState.TirePuncture
+# Members still combine and compare as plain ints.
+assert carla.VehicleLightState.LowBeam | carla.VehicleLightState.Brake == 10
+assert carla.MapLayer.Buildings | carla.MapLayer.Props == 65
+# Library defaults that are members (written as literals in the library).
+marking = carla.LaneMarking()
+assert marking.type == carla.LaneMarkingType.NONE and marking.color == carla.LaneMarkingColor.Standard
+assert marking.lane_change == carla.LaneChange.NONE
+assert carla.LightState().group == carla.LightGroup.NONE
+
+# Element writes (__setitem__) go into LibCarla's buffer, as in the Python API.
+def raises_carla_error(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError:
+        return True
+    return False
+
+def raises_index_error(f) -> bool:
+    try:
+        f()
+    except IndexError:
+        return True
+    return False
+
+def spawn(id: str, w: int = 0, h: int = 0) -> carla.Sensor:
+    bp = lib.find(id)
+    if w > 0:
+        bp.set_attribute("image_size_x", str(w))
+        bp.set_attribute("image_size_y", str(h))
+    return world.spawn_actor(bp, carla.Transform(), attach_to=vehicle).as_sensor()
+
+def next_data(s: carla.Sensor) -> carla.SensorData:
+    s.listen()
+    world.tick()
+    d = s.wait_for_data(1.0)
+    s.stop()
+    return d
+
+rgb = spawn("sensor.camera.rgb", 4, 3)
+image = next_data(rgb).as_image()
+image[5] = carla.Color(1, 2, 3, 4)
+image[-1] = carla.Color(250, 251, 252, 253)
+assert image[5] == carla.Color(1, 2, 3, 4) and image.pixel(1, 1) == carla.Color(1, 2, 3, 4)
+assert image[11] == carla.Color(250, 251, 252, 253)
+assert int(image.raw_data()[20]) == 3 and int(image.raw_data()[22]) == 1  # BGRA
+assert raises_index_error(lambda: image.__setitem__(12, carla.Color()))
+assert raises_carla_error(lambda: image.__setitem__(0, carla.Color(256, 0, 0)))
+rgb.destroy()
+
+lidar_sensor = spawn("sensor.lidar.ray_cast")
+lidar = next_data(lidar_sensor).as_lidar()
+lidar[0] = carla.LidarDetection(carla.Location(1.5, -2.0, 0.25), 0.75)
+assert lidar[0].point == carla.Location(1.5, -2.0, 0.25) and lidar[0].intensity == 0.75
+assert lidar.raw_points()[0].x == float32(1.5)
+lidar_sensor.destroy()
+
+semantic_sensor = spawn("sensor.lidar.ray_cast_semantic")
+semantic = next_data(semantic_sensor).as_semantic_lidar()
+semantic[-1] = carla.SemanticLidarDetection(carla.Location(1.0, 2.0, 3.0), 0.5, 42, 7)
+last = semantic[len(semantic) - 1]
+assert last.point == carla.Location(1.0, 2.0, 3.0) and last.cos_inc_angle == 0.5
+assert last.object_idx == 42 and last.object_tag == 7
+assert raises_carla_error(lambda: semantic.__setitem__(
+    0, carla.SemanticLidarDetection(carla.Location(), 0.0, -1, 0)))
+semantic_sensor.destroy()
+
+radar_sensor = spawn("sensor.other.radar")
+radar = next_data(radar_sensor).as_radar()
+radar[2] = carla.RadarDetection(1.0, 0.5, 0.25, 12.0)
+assert radar[2].velocity == 1.0 and radar[2].depth == 12.0
+radar_sensor.destroy()
+
+dvs_sensor = spawn("sensor.camera.dvs", 8, 8)
+dvs = next_data(dvs_sensor).as_dvs()
+dvs[1] = carla.DVSEvent(300, 7, -123456789012, True)
+e = dvs[1]
+assert e.x == 300 and e.y == 7 and e.t == -123456789012 and e.pol
+assert dvs.to_array()[1] == [300, 7, -123456789012, 1]
+assert raises_carla_error(lambda: dvs.__setitem__(0, carla.DVSEvent(70000, 0, 0, False)))
+dvs_sensor.destroy()
+
+flow_sensor = spawn("sensor.camera.optical_flow", 4, 2)
+flow = next_data(flow_sensor).as_optical_flow()
+flow[3] = carla.OpticalFlowPixel(0.25, -0.5)
+assert flow[3].x == 0.25 and flow[3].y == -0.5
+
+# FakeImage is a byte vector, as in the Python API.
+fake = flow.get_color_coded_flow()
+assert len(fake) == 32 and len([b for b in fake]) == 32
+fake[0] = 7
+fake[-1] = 255
+assert fake[0] == 7 and fake[31] == 255 and 7 in fake and not (300 in fake)
+fake.append(9)
+fake.extend([10, 11])
+assert len(fake) == 35 and fake[34] == 11 and fake.raw_size() == 35
+del fake[34]
+assert len(fake) == 34 and [b for b in fake][-2:] == [9, 10]
+assert raises_carla_error(lambda: fake.append(256))
+assert raises_carla_error(lambda: fake.extend([1, -1]))
+assert len(fake) == 34  # nothing appended
+assert raises_index_error(lambda: fake.__setitem__(34, 0))
+flow_sensor.destroy()
+
+# ServerSideSensor: ROS2 publishing flag (the mock server records it).
+camera = spawn("sensor.camera.rgb", 4, 2)
+assert not camera.is_enabled_for_ros()
+camera.enable_for_ros()
+assert camera.is_enabled_for_ros()
+camera.disable_for_ros()
+assert not camera.is_enabled_for_ros()
+lane = spawn("sensor.other.lane_invasion")  # computed on the client
+assert raises_type_error(lambda: lane.enable_for_ros())
+assert raises_type_error(lambda: lane.is_listening_gbuffer(0))
+lane.destroy()
+
+# G-buffer textures, delivered at the dispatch points like listen(callback).
+depth_frames = List[int]()
+normals = List[int]()
+camera.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth,
+                         lambda d: depth_frames.append(int(d.as_image()[0].r)))
+assert camera.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
+assert not camera.is_listening_gbuffer(carla.GBufferTextureID.GBufferA)
+assert camera.is_listening  # as LibCarla: a G-buffer sets the listening flag
+assert not camera.has_callback  # the measurements' own callback
+world.tick()
+world.tick()
+assert depth_frames == [1, 1], depth_frames  # texture id 1 in every pixel (mock)
+camera.listen_to_gbuffer(carla.GBufferTextureID.GBufferA, lambda d: normals.append(d.frame))
+camera.stop()  # stops the measurements only, as LibCarla's Stop()
+world.tick()
+assert len(depth_frames) == 3 and len(normals) == 1
+camera.stop_gbuffer(carla.GBufferTextureID.SceneDepth)
+assert not camera.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
+world.tick()
+assert len(depth_frames) == 3 and len(normals) == 2
+assert raises_carla_error(lambda: camera.listen_to_gbuffer(13, lambda d: None))
+assert raises_carla_error(lambda: camera.is_listening_gbuffer(-1))
+# Through a plain Actor (compatibility shortcuts); destroy drops every stream.
+as_actor = world.get_actor(camera.id)
+assert unwrap(as_actor).is_listening_gbuffer(carla.GBufferTextureID.GBufferA) == False  # other object
+camera.destroy()
+world.tick()
+assert len(normals) == 2
+# A non-RGB camera: CarlaError (LibCarla would ignore the request with a warning).
+depth_camera = spawn("sensor.camera.depth", 4, 2)
+assert raises_carla_error(lambda: depth_camera.listen_to_gbuffer(
+    carla.GBufferTextureID.SceneColor, lambda d: normals.append(0)))
+assert not depth_camera.is_listening_gbuffer(carla.GBufferTextureID.SceneColor)
+assert not depth_camera.has_callback and not depth_camera.is_listening
+depth_camera.destroy()
+
+# G-buffer streams are stopped before the actor is destroyed: LibCarla cannot
+# unsubscribe them afterwards (the mock counts the live subscriptions).
+def gbuffer_camera() -> carla.Sensor:
+    c = spawn("sensor.camera.rgb", 4, 2)
+    c.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth, lambda d: None)
+    c.listen_to_gbuffer(carla.GBufferTextureID.GBufferA, lambda d: None)
+    assert tsc_mock_gbuffer_subscriptions() == base + 2
+    return c
+
+base = tsc_mock_gbuffer_subscriptions()
+# (a) stop() clears LibCarla's listening flag, so its Destroy() skips StopGBuffer.
+cam_a = gbuffer_camera()
+cam_a.stop()
+assert cam_a.destroy()
+assert tsc_mock_gbuffer_subscriptions() == base
+# (b) destroyed through another handle of the actor.
+cam_b = gbuffer_camera()
+assert unwrap(world.get_actor(cam_b.id)).destroy()
+assert tsc_mock_gbuffer_subscriptions() == base
+# (c) a batch DestroyActor, with and without responses.
+cam_c = gbuffer_camera()
+responses = client.apply_batch_sync([carla.command.DestroyActor(cam_c.id)])
+assert not responses[0].has_error()
+assert tsc_mock_gbuffer_subscriptions() == base
+cam_d = gbuffer_camera()
+client.apply_batch([carla.command.DestroyActor(cam_d.id)])
+assert tsc_mock_gbuffer_subscriptions() == base
+world.tick()
+
+print("OK")

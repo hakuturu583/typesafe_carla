@@ -1,0 +1,8 @@
+# enable_for_ros is a sensor method: a Vehicle has none (as carla.Vehicle).
+# expect-error: Vehicle has no method enable_for_ros()
+import typesafe_carla as carla
+
+def publish(vehicle: carla.Vehicle):
+    vehicle.enable_for_ros()
+
+publish(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

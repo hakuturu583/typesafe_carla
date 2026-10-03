@@ -55,6 +55,12 @@ class TrafficLight(Actor):
         """A TrafficLightState value."""
         return int(self._info().state)
 
+    @property
+    def state(self) -> int:
+        """The current TrafficLightState value (same as get_state(); read-only, as
+        in the Python API: change it with set_state())."""
+        return self.get_state()
+
     def set_state(self, state: int):
         _check_traffic_light_state(state)
         _check(tsc_traffic_light_set_state(self._h.ptr, i32(state)))

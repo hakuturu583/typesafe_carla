@@ -1,0 +1,95 @@
+# Issue #33: Python API members added after the survey against CARLA 0.10.0.
+# strict
+import typesafe_carla as carla
+
+def actor_world(actor: carla.Actor, vehicle: carla.Vehicle):
+    world: carla.World = actor.get_world()
+    same: carla.World = vehicle.get_world()  # subclasses inherit it
+    print(world.id == same.id)
+
+def light_state(light: carla.TrafficLight):
+    state: int = light.state
+    print(state == carla.TrafficLightState.Green)
+
+def sensor_class_names(sensor: carla.Sensor):
+    server_side: carla.ServerSideSensor = sensor
+    client_side: carla.ClientSideSensor = sensor
+    print(server_side.id, client_side.id)
+
+def blueprint_attributes(bp: carla.ActorBlueprint):
+    count: int = len(bp)
+    for attribute in bp:
+        values: List[str] = attribute.recommended_values
+        print(attribute.id, str(attribute), len(values))
+    ids = [a.id for a in bp]
+    color: List[str] = bp.get_attribute("color").recommended_values
+    print(count, ids, color)
+
+def weather_presets(world: carla.World):
+    noon: carla.WeatherParameters = carla.WeatherParameters.ClearNoon
+    world.set_weather(carla.WeatherParameters.HardRainSunset)
+    storm = carla.WeatherParameters.DustStorm
+    print(noon.cloudiness, storm.dust_storm, carla.WeatherParameters.Default == noon)
+
+def enum_maps():
+    states: Dict[str, int] = carla.TrafficLightState.names
+    by_value: Dict[int, int] = carla.LaneType.values
+    doors: Dict[str, carla.VehicleDoor] = carla.VehicleDoor.names
+    wheels: Dict[int, carla.VehicleWheelLocation] = carla.VehicleWheelLocation.values
+    failure: carla.VehicleFailureState = carla.VehicleFailureState.names["Engine"]
+    print(states["Red"], by_value[carla.LaneType.Driving], doors["All"], wheels[0], failure)
+    print(len(carla.ActorAttributeType.names), len(carla.ActorState.names),
+          len(carla.AttachmentType.names), len(carla.CityObjectLabel.names),
+          len(carla.ColorConverter.names), len(carla.GBufferTextureID.names),
+          len(carla.LandmarkOrientation.names), len(carla.LaneChange.names),
+          len(carla.LaneMarkingColor.values), len(carla.LaneMarkingType.values),
+          len(carla.LightGroup.values), len(carla.MapLayer.values),
+          len(carla.MaterialParameter.values), len(carla.VehicleLightState.values))
+
+def element_writes(data: carla.SensorData):
+    image = data.as_image()
+    image[0] = carla.Color(1, 2, 3)
+    lidar = data.as_lidar()
+    lidar[0] = carla.LidarDetection(carla.Location(1.0, 2.0, 3.0), 0.5)
+    semantic = data.as_semantic_lidar()
+    semantic[0] = carla.SemanticLidarDetection(carla.Location(), 1.0, 2, 3)
+    radar = data.as_radar()
+    radar[0] = carla.RadarDetection(1.0, 0.0, 0.0, 5.0)
+    dvs = data.as_dvs()
+    dvs[0] = carla.DVSEvent(1, 2, 3, True)
+    flow = data.as_optical_flow()
+    flow[0] = carla.OpticalFlowPixel(0.5, 0.5)
+    fake: carla.FakeImage = flow.get_color_coded_flow()
+    fake[0] = 255
+    fake.append(1)
+    fake.extend([2, 3])
+    fake.extend(flow.get_color_coded_flow())
+    del fake[0]
+    total = 0
+    for b in fake:
+        total += b
+    print(total, 4 in fake)
+
+def server_side_sensor(sensor: carla.ServerSideSensor):
+    sensor.enable_for_ros()
+    enabled: bool = sensor.is_enabled_for_ros()
+    sensor.disable_for_ros()
+    frames = List[int]()
+    sensor.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth, lambda d: frames.append(d.frame))
+    def on_normals(data: carla.SensorData):
+        print(data.as_image().width)
+    sensor.listen_to_gbuffer(carla.GBufferTextureID.GBufferA, on_normals)
+    listening: bool = sensor.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
+    sensor.stop_gbuffer(carla.GBufferTextureID.SceneDepth)
+    print(enabled, listening, frames)
+
+world = carla.Client("localhost", 2000).get_world()
+actors = world.get_actors()
+actor_world(actors[0], actors[0].as_vehicle())
+light_state(actors[2].as_traffic_light())
+sensor_class_names(actors[5].as_sensor())
+server_side_sensor(actors[5].as_sensor())
+blueprint_attributes(world.get_blueprint_library().find("vehicle.tesla.model3"))
+weather_presets(world)
+enum_maps()
+element_writes(actors[5].as_sensor().wait_for_data())

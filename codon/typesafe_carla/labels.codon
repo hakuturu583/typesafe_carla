@@ -2,35 +2,39 @@
 # integer constants like the other enumerations. Values of LibCarla ue5-dev's
 # rpc::CityObjectLabel (CARLA 0.10.0 has every value but Rock).
 
-class CityObjectLabel:
-    NONE: ClassVar[int] = 0
-    Roads: ClassVar[int] = 1
-    Sidewalks: ClassVar[int] = 2
-    Buildings: ClassVar[int] = 3
-    Walls: ClassVar[int] = 4
-    Fences: ClassVar[int] = 5
-    Poles: ClassVar[int] = 6
-    TrafficLight: ClassVar[int] = 7
-    TrafficSigns: ClassVar[int] = 8
-    Vegetation: ClassVar[int] = 9
-    Terrain: ClassVar[int] = 10
-    Sky: ClassVar[int] = 11
-    Pedestrians: ClassVar[int] = 12
-    Rider: ClassVar[int] = 13
-    Car: ClassVar[int] = 14
-    Truck: ClassVar[int] = 15
-    Bus: ClassVar[int] = 16
-    Train: ClassVar[int] = 17
-    Motorcycle: ClassVar[int] = 18
-    Bicycle: ClassVar[int] = 19
-    Static: ClassVar[int] = 20
-    Dynamic: ClassVar[int] = 21
-    Other: ClassVar[int] = 22
-    Water: ClassVar[int] = 23
-    RoadLines: ClassVar[int] = 24
-    Ground: ClassVar[int] = 25
-    Bridge: ClassVar[int] = 26
-    RailTrack: ClassVar[int] = 27
-    GuardRail: ClassVar[int] = 28
-    Rock: ClassVar[int] = 29
-    Any: ClassVar[int] = 255
+from ._enum import _IntEnum
+
+class _CityObjectLabel(_IntEnum):
+    NONE: int = 0
+    Roads: int = 1
+    Sidewalks: int = 2
+    Buildings: int = 3
+    Walls: int = 4
+    Fences: int = 5
+    Poles: int = 6
+    TrafficLight: int = 7
+    TrafficSigns: int = 8
+    Vegetation: int = 9
+    Terrain: int = 10
+    Sky: int = 11
+    Pedestrians: int = 12
+    Rider: int = 13
+    Car: int = 14
+    Truck: int = 15
+    Bus: int = 16
+    Train: int = 17
+    Motorcycle: int = 18
+    Bicycle: int = 19
+    Static: int = 20
+    Dynamic: int = 21
+    Other: int = 22
+    Water: int = 23
+    RoadLines: int = 24
+    Ground: int = 25
+    Bridge: int = 26
+    RailTrack: int = 27
+    GuardRail: int = 28
+    Rock: int = 29
+    Any: int = 255
+
+CityObjectLabel = _CityObjectLabel()
