@@ -20,11 +20,6 @@ std::vector<std::string> to_names(const tsc_string_t *names, size_t count, const
   return result;
 }
 
-std::vector<uint64_t> to_vector(const uint64_t *values, size_t count, const char *name) {
-  require_array(values, count, name);
-  return values == nullptr ? std::vector<uint64_t>() : std::vector<uint64_t>(values, values + count);
-}
-
 std::vector<carla::SharedPtr<carla::client::Actor>> traffic_lights_in_junction(
     const carla::client::World &world, int32_t junction_id) {
   // LibCarla dereferences the junction without checking that it exists.

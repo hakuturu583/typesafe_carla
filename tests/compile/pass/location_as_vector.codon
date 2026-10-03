@@ -47,6 +47,7 @@ def geometry(a: carla.Location, b: carla.Location, v: carla.Vector3D):
     n: float = a.length() + a.squared_length() + a.dot(v) + v.dot(a)
     c: carla.Vector3D = a.cross(b)
     u: carla.Vector3D = a.make_unit_vector()
+    u_eps: carla.Vector3D = a.make_unit_vector(1e-3) + v.make_unit_vector(epsilon=0.5)
     dist: float = a.distance(b) + a.distance_2d(b) + a.distance_squared(v) + a.distance_squared_2d(b)
     ang: float = a.get_vector_angle(v)
     same: bool = a == v or v == a or a != b

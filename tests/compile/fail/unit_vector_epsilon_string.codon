@@ -1,0 +1,9 @@
+# make_unit_vector's epsilon is a float (issue #40).
+# expect-error: 'str' does not match expected type 'float'
+import typesafe_carla as carla
+
+def unit(v: carla.Vector3D) -> carla.Vector3D:
+    return v.make_unit_vector(epsilon="tiny")
+
+# Compile-only: Codon type-checks a function only when it is called.
+unit(carla.Location(3.0, 4.0, 0.0))

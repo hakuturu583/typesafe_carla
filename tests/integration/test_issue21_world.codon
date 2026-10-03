@@ -68,12 +68,17 @@ print("traffic lights ahead of 30 spawn points", ahead)
 assert ahead > 0
 
 lights = [a.as_traffic_light() for a in world.get_actors() if a.is_traffic_light()]
+assert len(lights) > 0  # otherwise the freeze checks pass vacuously
 world.freeze_all_traffic_lights(True)
-world.wait_for_tick(10.0)
+deadline = time.time() + 10.0  # is_frozen() reads the snapshot: the client sees it a few ticks later
+while not all(l.is_frozen() for l in lights) and time.time() < deadline:
+    world.wait_for_tick(10.0)
 assert all(l.is_frozen() for l in lights)
 world.freeze_all_traffic_lights(False)
 world.reset_all_traffic_lights()
-world.wait_for_tick(10.0)
+deadline = time.time() + 10.0
+while any(l.is_frozen() for l in lights) and time.time() < deadline:
+    world.wait_for_tick(10.0)
 assert not any(l.is_frozen() for l in lights)
 
 # --- Vehicle light states -----------------------------------------------------------------------

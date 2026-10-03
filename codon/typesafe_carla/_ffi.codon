@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 3
-TSC_ABI_VERSION_MINOR = 7
+TSC_ABI_VERSION_MINOR = 9
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -627,6 +627,7 @@ from C import LIB.tsc_client_reload_world(cobj, i32, Ptr[cobj]) -> i32
 # BEGIN GENERATED world_core from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_id(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_world_get_actors(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_actors_by_id(cobj, Ptr[u32], int, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_blueprint_library(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_try_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
@@ -825,11 +826,11 @@ from C import LIB.tsc_world_is_weather_enabled(cobj, Ptr[i32]) -> i32
 # END GENERATED world_weather
 from C import LIB.tsc_weather_preset(cobj, int, Ptr[CWeather]) -> i32
 # BEGIN GENERATED debug_draw from bindings/debug.yaml, do not edit
-from C import LIB.tsc_debug_draw_point(cobj, Ptr[CVector3D], float, Ptr[CColor], float) -> i32
-from C import LIB.tsc_debug_draw_line(cobj, Ptr[CVector3D], Ptr[CVector3D], float, Ptr[CColor], float) -> i32
-from C import LIB.tsc_debug_draw_arrow(cobj, Ptr[CVector3D], Ptr[CVector3D], float, float, Ptr[CColor], float) -> i32
-from C import LIB.tsc_debug_draw_box(cobj, Ptr[CBoundingBox], Ptr[CRotation], float, Ptr[CColor], float) -> i32
-from C import LIB.tsc_debug_draw_string(cobj, Ptr[CVector3D], cobj, int, i32, Ptr[CColor], float) -> i32
+from C import LIB.tsc_debug_draw_point(cobj, Ptr[CVector3D], float, Ptr[CColor], float, i32) -> i32
+from C import LIB.tsc_debug_draw_line(cobj, Ptr[CVector3D], Ptr[CVector3D], float, Ptr[CColor], float, i32) -> i32
+from C import LIB.tsc_debug_draw_arrow(cobj, Ptr[CVector3D], Ptr[CVector3D], float, float, Ptr[CColor], float, i32) -> i32
+from C import LIB.tsc_debug_draw_box(cobj, Ptr[CBoundingBox], Ptr[CRotation], float, Ptr[CColor], float, i32) -> i32
+from C import LIB.tsc_debug_draw_string(cobj, Ptr[CVector3D], cobj, int, i32, Ptr[CColor], float, i32) -> i32
 # END GENERATED debug_draw
 # BEGIN GENERATED client_recorder from bindings/client.yaml, do not edit
 from C import LIB.tsc_client_start_recorder(cobj, cobj, int, i32, Ptr[CString]) -> i32

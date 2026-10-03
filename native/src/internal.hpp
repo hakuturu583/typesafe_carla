@@ -761,7 +761,12 @@ inline tsc_traffic_light *make_traffic_light_handle(carla::SharedPtr<carla::clie
 std::vector<carla::SharedPtr<carla::client::TrafficLight>> traffic_lights_of(
     const std::vector<carla::SharedPtr<carla::client::Actor>> &actors);
 std::vector<std::string> to_names(const tsc_string_t *names, size_t count, const char *name);
-std::vector<uint64_t> to_vector(const uint64_t *values, size_t count, const char *name);
+// An input array (NULL only with count 0) as a vector.
+template <typename T>
+std::vector<T> to_vector(const T *values, size_t count, const char *name) {
+  require_array(values, count, name);
+  return values == nullptr ? std::vector<T>() : std::vector<T>(values, values + count);
+}
 // The `via` helper of World.get_traffic_lights_in_junction: empty for an id
 // that names no junction (LibCarla would dereference NULL).
 std::vector<carla::SharedPtr<carla::client::Actor>> traffic_lights_in_junction(

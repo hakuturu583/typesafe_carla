@@ -1,0 +1,14 @@
+# World.get_actors(actor_ids) (issue #38), next to the no-argument overload.
+# strict
+import typesafe_carla as carla
+
+def fetch(world: carla.World) -> int:
+    every: carla.ActorList = world.get_actors()
+    ids: List[int] = [a.id for a in every]
+    some: carla.ActorList = world.get_actors(ids[:2])
+    none: carla.ActorList = world.get_actors(List[int]())
+    vehicles: carla.ActorList = world.get_actors([ids[0], 123456]).filter("vehicle.*")
+    return len(every) + len(some) + len(none) + len(vehicles)
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(fetch(carla.Client("localhost", 2000).get_world()))

@@ -79,6 +79,11 @@ out("landmarks", len(lms))
 out("landmark0", f"{lms[0].id},{lms[0].name},{lms[0].type},{lms[0].road_id}")
 lights = [a for a in world.get_actors() if a.type_id == "traffic.traffic_light"]
 out("traffic_lights", len(lights))
+# Issue #38: get_actors(actor_ids) keeps request order and leaves unknown ids out.
+unknown_id = max(a.id for a in world.get_actors()) + 100000
+by_id = world.get_actors([lights[1].id, unknown_id, lights[0].id])
+out("actors_by_id", f"{len(by_id)},{int(by_id[0].id == lights[1].id)},"
+    f"{int(by_id[1].id == lights[0].id)},{by_id[0].type_id}")
 out("light0_times", f"{lights[0].get_green_time():.3f},{lights[0].get_yellow_time():.3f},{lights[0].get_red_time():.3f}")
 wthr = world.get_weather()
 out("weather", f"{wthr.cloudiness:.3f},{wthr.precipitation:.3f},{wthr.sun_altitude_angle:.3f},{wthr.rayleigh_scattering_scale:.3f}")
@@ -435,6 +440,12 @@ n23 = carla.Rotation(-190.0, 370.0, 540.0).get_normalized()
 u23 = carla.Vector2D(3.0, 4.0).make_unit_vector()
 out("geometry_misc", f"{n23.pitch:.3f},{n23.yaw:.3f},{n23.roll:.3f},{u23.x:.3f},{u23.y:.3f},"
                      f"{carla.Vector2D(3.0, 4.0).squared_length():.3f}")
+# Issue #40: make_unit_vector(epsilon).
+out("unit_vector", ",".join([vec(carla.Vector3D(3.0, 4.0, 0.0).make_unit_vector()),
+                             vec(carla.Vector3D(0.1, 0.2, 0.0).make_unit_vector(epsilon=1.0)),
+                             vec(carla.Location(3.0, 4.0, 12.0).make_unit_vector(0.5)),
+                             vec(carla.Vector3D(0.1, 0.2, 0.0).make_unit_vector(epsilon=0.0)),
+                             vec(carla.Vector3D(1e-7, 0.0, 0.0).make_unit_vector())]))
 # carla.Quaternion exists only in a module built from ue5-dev: "skip" otherwise
 # (compare.py then skips the key on both sides).
 if not hasattr(carla, "Quaternion"):

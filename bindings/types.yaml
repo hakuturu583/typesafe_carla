@@ -363,6 +363,14 @@ uint64_array:
   to_carla: 'to_vector({name}, count, "{name}")'
   invalid: "NULL, 1"
   cpp: ["std::vector<unsigned long.*>"]
+# The same for uint32 values (actor ids: World::GetActors(actor_ids)).
+uint32_array:
+  c: uint32_t
+  c_param: "const uint32_t *{name}, size_t count"
+  codon: "Ptr[u32], int"
+  to_carla: 'to_vector({name}, count, "{name}")'
+  invalid: "NULL, 1"
+  cpp: ["std::vector<unsigned int.*>"]
 # Object names (read only, need not be NUL terminated); at least one.
 name_list:
   c: tsc_string_t
