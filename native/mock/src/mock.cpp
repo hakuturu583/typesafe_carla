@@ -1152,12 +1152,15 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
           a.transform.location = c.location;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyVehiclePhysicsControl>) {
+          // Replaced wholesale, even when the wheel count differs from the
+          // vehicle's: what the server does on such a mismatch is unverified.
           auto &a = vehicle(c.actor);
           a.physics = c.physics_control;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyWalkerState>) {
           // Moves the walker and makes it walk along the transform's forward
-          // vector at `speed`.
+          // vector at `speed`. Z is taken as given: any height adjustment the
+          // server makes for the walker's capsule is not modelled.
           auto &a = walker(c.actor);
           a.transform = c.transform;
           const double yaw = c.transform.rotation.yaw * M_PI / 180.0;

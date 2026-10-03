@@ -315,7 +315,9 @@ def ApplyVehiclePhysicsControl(actor_id = _MISSING,
 
     The control is copied now: later changes to `physics_control` do not
     affect the command. Its wheels should match the vehicle's (unlike
-    Vehicle.apply_physics_control(), this is not checked).
+    Vehicle.apply_physics_control(), this is not checked). An integer code out
+    of range (uint8 fields, int32 wheel fields) raises CarlaError here; every
+    other check (positive mass, finite values) happens at apply_batch(_sync).
     """
     c = Command(_APPLY_VEHICLE_PHYSICS_CONTROL, _actor_arg(actor_id, actor))
     c._physics = physics_control._c_buffer()

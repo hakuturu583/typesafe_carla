@@ -31,6 +31,15 @@ extern "C" {
 #define TSC_API
 #endif
 
+/* Marks an anonymous union (a C11 / C++ feature) so that strict C99
+ * (-std=c99 -pedantic-errors) accepts it too; GCC and Clang support it there
+ * as an extension. */
+#if defined(__GNUC__) && !defined(__cplusplus)
+#define TSC_ANONYMOUS_UNION __extension__
+#else
+#define TSC_ANONYMOUS_UNION
+#endif
+
 /* ABI version. Bump MAJOR on any incompatible change to this header.
  * 2.0: tsc_command_t gained `scalar` (and new command types), Milestone 4.
  * 2.1: tsc_sensor_pending_count; tsc_sensor_listen queue_capacity 0 = unbounded.
@@ -674,7 +683,9 @@ typedef struct {
   int32_t then_of;
   uint32_t actor_id;
   uint32_t parent_id; /* SPAWN_ACTOR: 0 = no parent */
-  union {
+  /* An anonymous union: its members are accessed directly (cmd.blueprint,
+   * cmd.physics_control) and share one pointer slot (ABI 4.6). */
+  TSC_ANONYMOUS_UNION union {
     const tsc_actor_blueprint_t *blueprint; /* SPAWN_ACTOR */
     /* APPLY_VEHICLE_PHYSICS_CONTROL (ABI 4.6). Read during the call only; the
      * whole control is sent (no read-modify-write as in

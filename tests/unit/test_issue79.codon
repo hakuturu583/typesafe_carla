@@ -72,6 +72,9 @@ assert invalid(lambda: client.apply_batch([carla.command.ApplyVehiclePhysicsCont
     vehicle.id, nan_curve)], False))
 
 # ApplyWalkerState: moves the walker and walks it forward at the speed.
+# Same z as the walker's spawn (1.0): the mock does not model the server's
+# z adjustment, so only x/y movement is meaningful for the real server.
+assert abs(walker.get_location().z - 1.0) < 1e-6
 state = carla.Transform(carla.Location(12.0, 3.0, 1.0), carla.Rotation(yaw=90.0))
 r = client.apply_batch_sync([carla.command.ApplyWalkerState(walker.id, state, 1.5)], False)
 assert not r[0].has_error(), r[0].error
