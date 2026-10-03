@@ -19,11 +19,12 @@ client = carla.Client(host, port)
 client.set_timeout(30.0)
 world = client.get_world()
 lib = world.get_blueprint_library()
-server = client.get_server_version()
 v2x_blueprints = [bp.id for bp in lib.filter("sensor.other.v2x*")]
-print("server", server, "LibCarla", carla.libcarla_git_ref(), "V2X blueprints", v2x_blueprints)
-if server.startswith("0.10.0"):
-    assert len(v2x_blueprints) == 0, v2x_blueprints
+print("server", client.get_server_version(), "LibCarla", carla.libcarla_git_ref(),
+      "V2X blueprints", v2x_blueprints)
+# From the blueprints: the version string cannot tell (ue5-dev servers also report "0.10.0").
+server_has_v2x = len(v2x_blueprints) > 0
+if not server_has_v2x:
     missing = False
     try:
         lib.find("sensor.other.v2x_custom")
@@ -91,7 +92,7 @@ try:
         print("send:", e.message)
         assert not libcarla_has_v2x and not_available(e), e.message
 
-    if libcarla_has_v2x and len(v2x_blueprints) > 0:
+    if libcarla_has_v2x and server_has_v2x:
         fwd = points[0].get_forward_vector()
         second: Optional[carla.Actor] = None
         for d in (12.0, 17.0, 22.0, 27.0):
