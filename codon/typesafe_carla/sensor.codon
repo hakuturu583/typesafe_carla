@@ -980,7 +980,8 @@ class Sensor(Actor):
         becomes True. Listening to the same texture again replaces the
         callback; stop_gbuffer(), destroy() or a batch DestroyActor
         unregisters it, stop() does not. A server that does not stream
-        G-buffers (CARLA 0.10.0) rejects the subscription: CarlaError."""
+        G-buffers (CARLA 0.10.0) rejects the subscription: CarlaError. Avoid
+        calling it there: a 0.10.0 server crashes and restarts after rejecting it."""
         cb: Callable[[cobj], None] = _CallbackThunk(callback).run
         id = _gbuffer_id(gbuffer_id)
         # Before listening: _register_callback's own unregister would stop the new stream.
