@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 3
-TSC_ABI_VERSION_MINOR = 7
+TSC_ABI_VERSION_MINOR = 8
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -627,6 +627,7 @@ from C import LIB.tsc_client_reload_world(cobj, i32, Ptr[cobj]) -> i32
 # BEGIN GENERATED world_core from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_id(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_world_get_actors(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_actors_by_id(cobj, Ptr[u32], int, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_blueprint_library(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_try_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, Ptr[cobj]) -> i32

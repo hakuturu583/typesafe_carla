@@ -1283,6 +1283,7 @@ class World {
   uint64_t GetId() const;
   SharedPtr<BlueprintLibrary> GetBlueprintLibrary() const;
   SharedPtr<ActorList> GetActors() const;
+  SharedPtr<ActorList> GetActors(const std::vector<rpc::ActorId> &actor_ids) const;
   SharedPtr<Actor> GetActor(rpc::ActorId id) const;
   SharedPtr<Actor> SpawnActor(const ActorBlueprint &blueprint, const geom::Transform &transform,
                               Actor *parent = nullptr,

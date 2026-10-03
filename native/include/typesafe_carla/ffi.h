@@ -48,9 +48,10 @@ extern "C" {
  *      map layers, IMU gravity, textures, on_tick, light manager (#21).
  * 3.6: sensor data frame_number, image convert/save, point cloud save, collision
  *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24).
- * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37). */
+ * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37).
+ * 3.8: tsc_world_get_actors_by_id (#38). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 7
+#define TSC_ABI_VERSION_MINOR 8
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -251,6 +252,10 @@ TSC_API tsc_status_t tsc_client_reload_world(tsc_client_t *client, int32_t reset
 /* BEGIN GENERATED world_core from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_id(tsc_world_t *world, uint64_t *out_id);
 TSC_API tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_list);
+/* In request order; ids that name no actor are left out (as in LibCarla). Destroyed actors may still be listed (LibCarla's actor cache is only cleared when an episode starts). */
+TSC_API tsc_status_t tsc_world_get_actors_by_id(tsc_world_t *world,
+                                                const uint32_t *actor_ids, size_t count,
+                                                tsc_actor_list_t **out_list);
 TSC_API tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
                                                      tsc_blueprint_library_t **out_library);
 /* parent may be NULL. */

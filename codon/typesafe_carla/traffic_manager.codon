@@ -75,13 +75,13 @@ class TrafficManager:
         _check(tsc_traffic_manager_get_port(self._h.ptr, out))
         return int(out[0])
 
-    def set_synchronous_mode(self, enabled: bool = True):
-        _check(tsc_traffic_manager_set_synchronous_mode(self._h.ptr, i32(int(enabled))))
+    def set_synchronous_mode(self, mode_switch: bool = True):
+        _check(tsc_traffic_manager_set_synchronous_mode(self._h.ptr, i32(int(mode_switch))))
 
-    def set_random_device_seed(self, seed: int):
-        if seed < 0:
+    def set_random_device_seed(self, value: int):
+        if value < 0:
             raise CarlaError("seed must be non-negative", TSC_INVALID_ARGUMENT)
-        _check(tsc_traffic_manager_set_random_device_seed(self._h.ptr, u64(seed)))
+        _check(tsc_traffic_manager_set_random_device_seed(self._h.ptr, u64(value)))
 
     def set_hybrid_physics_mode(self, enabled: bool = True):
         _check(tsc_traffic_manager_set_hybrid_physics_mode(self._h.ptr, i32(int(enabled))))
@@ -93,60 +93,60 @@ class TrafficManager:
     def set_global_distance_to_leading_vehicle(self, distance: float):
         _check(tsc_traffic_manager_set_global_distance_to_leading_vehicle(self._h.ptr, distance))
 
-    def _set(self, vehicle: Vehicle, setting: int, value: float):
-        _check(tsc_traffic_manager_set_vehicle_value(self._h.ptr, vehicle._h.ptr, i32(setting),
+    def _set(self, actor: Vehicle, setting: int, value: float):
+        _check(tsc_traffic_manager_set_vehicle_value(self._h.ptr, actor._h.ptr, i32(setting),
                                                      value))
 
-    def vehicle_percentage_speed_difference(self, vehicle: Vehicle, percentage: float):
-        self._set(vehicle, _PERCENTAGE_SPEED_DIFFERENCE, percentage)
+    def vehicle_percentage_speed_difference(self, actor: Vehicle, percentage: float):
+        self._set(actor, _PERCENTAGE_SPEED_DIFFERENCE, percentage)
 
-    def distance_to_leading_vehicle(self, vehicle: Vehicle, distance: float):
-        self._set(vehicle, _DISTANCE_TO_LEADING_VEHICLE, distance)
+    def distance_to_leading_vehicle(self, actor: Vehicle, distance: float):
+        self._set(actor, _DISTANCE_TO_LEADING_VEHICLE, distance)
 
-    def random_left_lanechange_percentage(self, vehicle: Vehicle, percentage: float):
-        self._set(vehicle, _RANDOM_LEFT_LANECHANGE, percentage)
+    def random_left_lanechange_percentage(self, actor: Vehicle, percentage: float):
+        self._set(actor, _RANDOM_LEFT_LANECHANGE, percentage)
 
-    def random_right_lanechange_percentage(self, vehicle: Vehicle, percentage: float):
-        self._set(vehicle, _RANDOM_RIGHT_LANECHANGE, percentage)
+    def random_right_lanechange_percentage(self, actor: Vehicle, percentage: float):
+        self._set(actor, _RANDOM_RIGHT_LANECHANGE, percentage)
 
-    def ignore_lights_percentage(self, vehicle: Vehicle, percentage: float):
-        self._set(vehicle, _IGNORE_LIGHTS, percentage)
+    def ignore_lights_percentage(self, actor: Vehicle, perc: float):
+        self._set(actor, _IGNORE_LIGHTS, perc)
 
-    def ignore_signs_percentage(self, vehicle: Vehicle, percentage: float):
-        self._set(vehicle, _IGNORE_SIGNS, percentage)
+    def ignore_signs_percentage(self, actor: Vehicle, perc: float):
+        self._set(actor, _IGNORE_SIGNS, perc)
 
-    def ignore_vehicles_percentage(self, vehicle: Vehicle, percentage: float):
-        self._set(vehicle, _IGNORE_VEHICLES, percentage)
+    def ignore_vehicles_percentage(self, actor: Vehicle, perc: float):
+        self._set(actor, _IGNORE_VEHICLES, perc)
 
-    def ignore_walkers_percentage(self, vehicle: Vehicle, percentage: float):
-        self._set(vehicle, _IGNORE_WALKERS, percentage)
+    def ignore_walkers_percentage(self, actor: Vehicle, perc: float):
+        self._set(actor, _IGNORE_WALKERS, perc)
 
-    def keep_right_rule_percentage(self, vehicle: Vehicle, percentage: float):
+    def keep_right_rule_percentage(self, actor: Vehicle, perc: float):
         """CARLA 0.10.0's name for keep_slow_lane_rule_percentage."""
-        self._set(vehicle, _KEEP_RIGHT, percentage)
+        self._set(actor, _KEEP_RIGHT, perc)
 
-    def keep_slow_lane_rule_percentage(self, vehicle: Vehicle, perc: float):
+    def keep_slow_lane_rule_percentage(self, actor: Vehicle, perc: float):
         """Percent of the time the vehicle keeps to the slow lane (ue5-dev's name)."""
-        self._set(vehicle, _KEEP_RIGHT, perc)
+        self._set(actor, _KEEP_RIGHT, perc)
 
-    def set_desired_speed(self, vehicle: Vehicle, speed: float):
+    def set_desired_speed(self, actor: Vehicle, speed: float):
         """km/h"""
-        self._set(vehicle, _DESIRED_SPEED, speed)
+        self._set(actor, _DESIRED_SPEED, speed)
 
-    def vehicle_lane_offset(self, vehicle: Vehicle, offset: float):
-        self._set(vehicle, _LANE_OFFSET, offset)
+    def vehicle_lane_offset(self, actor: Vehicle, offset: float):
+        self._set(actor, _LANE_OFFSET, offset)
 
-    def auto_lane_change(self, vehicle: Vehicle, enable: bool):
-        _check(tsc_traffic_manager_set_auto_lane_change(self._h.ptr, vehicle._h.ptr,
+    def auto_lane_change(self, actor: Vehicle, enable: bool):
+        _check(tsc_traffic_manager_set_auto_lane_change(self._h.ptr, actor._h.ptr,
                                                         i32(int(enable))))
 
-    def force_lane_change(self, vehicle: Vehicle, direction: bool):
+    def force_lane_change(self, actor: Vehicle, direction: bool):
         """direction: True for left, False for right."""
-        _check(tsc_traffic_manager_force_lane_change(self._h.ptr, vehicle._h.ptr,
+        _check(tsc_traffic_manager_force_lane_change(self._h.ptr, actor._h.ptr,
                                                      i32(int(direction))))
 
-    def update_vehicle_lights(self, vehicle: Vehicle, do_update: bool):
-        _check(tsc_traffic_manager_set_update_vehicle_lights(self._h.ptr, vehicle._h.ptr,
+    def update_vehicle_lights(self, actor: Vehicle, do_update: bool):
+        _check(tsc_traffic_manager_set_update_vehicle_lights(self._h.ptr, actor._h.ptr,
                                                              i32(int(do_update))))
 
     def global_lane_offset(self, offset: float):
