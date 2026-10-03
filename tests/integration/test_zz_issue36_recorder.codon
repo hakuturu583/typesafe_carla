@@ -25,14 +25,7 @@ client.set_timeout(30.0)
 world = client.get_world()
 sync = world.get_settings().synchronous_mode
 old_libcarla = carla.libcarla_git_ref() == "0.10.0"
-server = client.get_server_version()
-print("libcarla", carla.libcarla_git_ref(), "server", server)
-if not old_libcarla and server.startswith("0.10.0"):
-    # ue5-dev's LibCarla sends the 3- and 8-argument RPCs even at the
-    # defaults, which a 0.10.0 server does not bind.
-    print("skipped: ue5-dev LibCarla against a 0.10.0 server")
-    print("OK")
-    sys.exit(0)
+print("libcarla", carla.libcarla_git_ref(), "server", client.get_server_version())
 
 def advance(n: int):
     for _ in range(n):
@@ -49,7 +42,19 @@ def expect_unsupported(raised: bool, message: str):
         assert not raised, message
 
 # --- Recorder (stop_replayer at its default: the 0.10.0 call) -------------------
-text = client.start_recorder(name=NAME, additional_data=False)
+text = ""
+try:
+    text = client.start_recorder(name=NAME, additional_data=False)
+except carla.CarlaError as e:
+    # ue5-dev's LibCarla sends the 3- and 8-argument RPCs even at the
+    # defaults, which a 0.10.0 server does not bind (rpclib: "rpc_error").
+    # The server's version string cannot tell: ue5-dev servers also report
+    # "0.10.0".
+    if old_libcarla or "rpc_error" not in e.message:
+        raise e
+    print("skipped: the server does not bind ue5-dev's recorder RPCs:", e.message)
+    print("OK")
+    sys.exit(0)
 print("recorder:", text)
 assert NAME in text, text
 try:

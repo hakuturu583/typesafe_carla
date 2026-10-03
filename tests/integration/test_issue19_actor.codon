@@ -102,9 +102,9 @@ try:
         print("skeleton queries unsupported:", e.message)
         # Unsupported by this LibCarla (built from 0.10.0), or by the server: a
         # 0.10.0 server rejects the RPC (rpclib: "rpc::rpc_error during call").
-        server = client.get_server_version()
-        assert (carla.libcarla_git_ref() == "0.10.0" or server.startswith("0.10.0")
-                or "rpc_error" in e.message or "get_actor_" in e.message), (server, e.message)
+        # Not the version string: ue5-dev servers also report "0.10.0".
+        assert ("is not available in LibCarla" in e.message or "rpc_error" in e.message
+                or "get_actor_" in e.message), e.message
 
     # Textures
     texture = carla.TextureColor(8, 8)
