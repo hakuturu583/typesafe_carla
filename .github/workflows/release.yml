@@ -7,7 +7,8 @@
 # commit to build. LibCarla is built from the resolved commit SHA, so a release
 # of a moving branch such as ue5-dev is reproducible. tools/release_tag.py
 # parses the tags and resolves the commits. The PyPI version is <version>
-# alone: PyPI accepts a version once, so every release bumps it.
+# alone: PyPI accepts a version once, so every release bumps it, and a run
+# fails early (in `release` and `resolve`) if the version is already published.
 #
 # There are three ways in, and the first is the everyday one:
 #
@@ -15,10 +16,12 @@
 #                  `release:major|minor|patch` label, the `release` job bumps the
 #                  version (tools/bump_version.py), resolves the latest commit of
 #                  the CARLA release ref (repository variable CARLA_RELEASE_REF,
-#                  default ue5-dev), tags it, and the tag is built and published,
-#                  all in this one run. No label, no release.
+#                  default ue5-dev), tags it and drafts a GitHub release; the
+#                  tag is built and published, all in this one run, and the
+#                  GitHub release is published last. No label, no release.
 #   push a release tag   a hand-cut tag (another CARLA ref, a hotfix) is built
-#                  and published directly; the `release` job is skipped.
+#                  and published directly, then gets a GitHub release; the
+#                  `release` job is skipped.
 #   workflow_dispatch    a dry run: builds and checks everything from the
 #                  `carla_ref` input without tagging; with publish=true it also
 #                  uploads to TestPyPI.
@@ -67,6 +70,12 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      pull-requests: read
+    # Never two release cuts at once; a queued one runs after (and fails on the
+    # non-fast-forward push if main moved).
+    concurrency:
+      group: release-main
+      cancel-in-progress: false
     outputs:
       bump: ${{ steps.pr.outputs.bump }}
       tag: ${{ steps.tag.outputs.tag }}
@@ -79,8 +88,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # An API error fails the job; only an empty list means "no PR".
           pr_json=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
-            --jq '.[0] // empty' 2>/dev/null || true)
+            --jq '.[0] // empty')
           if [ -z "$pr_json" ]; then
             echo "No PR associated with this push: nothing to release"
             echo "bump=none" >> "$GITHUB_OUTPUT"
@@ -102,20 +112,38 @@ jobs:
           echo "bump=${bump}" >> "$GITHUB_OUTPUT"
           echo "Resolved bump level: ${bump}"
 
+      # The pushed commit, not whatever main is now: the bump is pushed to main
+      # without force, so if main has moved since, the push fails loudly
+      # (re-runs included) instead of releasing an unverified commit.
       - uses: actions/checkout@v4
         if: steps.pr.outputs.bump != 'none'
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Bump the Python and Codon package versions together
         if: steps.pr.outputs.bump != 'none'
+        id: bump
         env:
           BUMP: ${{ steps.pr.outputs.bump }}
         run: |
           set -euo pipefail
           next=$(python3 tools/bump_version.py "$BUMP")
+          echo "next=${next}" >> "$GITHUB_OUTPUT"
           echo "Bumped to ${next} (${BUMP})"
+
+      - name: Fail if the version is already tagged or published
+        if: steps.pr.outputs.bump != 'none'
+        env:
+          NEXT: ${{ steps.bump.outputs.next }}
+        run: |
+          set -euo pipefail
+          tags=$(git tag -l "${NEXT}-*")
+          if [ -n "$tags" ]; then
+            echo "::error::Version ${NEXT} is already tagged: ${tags//$'\n'/ }"
+            exit 1
+          fi
+          python3 tools/release_tag.py unpublished --version "$NEXT"
 
       - name: Resolve the CARLA ref's latest commit and form the tag
         if: steps.pr.outputs.bump != 'none'
@@ -152,7 +180,8 @@ jobs:
           git push origin "HEAD:main"
           git push origin "${TAG}"
 
-      - name: GitHub release with generated notes
+      # A draft until `github-release` publishes it, after PyPI.
+      - name: Draft the GitHub release with generated notes
         if: steps.pr.outputs.bump != 'none'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -160,7 +189,7 @@ jobs:
           CARLA_REF: ${{ steps.tag.outputs.carla_ref }}
           CARLA_COMMIT: ${{ steps.tag.outputs.carla_commit }}
         run: |
-          gh release create "${TAG}" --title "${TAG}" --generate-notes \
+          gh release create "${TAG}" --draft --verify-tag --title "${TAG}" --generate-notes \
             --notes "LibCarla built from carla-simulator/carla \`${CARLA_REF}\` at carla-simulator/carla@${CARLA_COMMIT}."
 
   # One place to work out, for all three entry points, which commit to check
@@ -176,6 +205,7 @@ jobs:
       publish: ${{ steps.r.outputs.publish }}
       index: ${{ steps.r.outputs.index }}
       ref: ${{ steps.r.outputs.ref }}
+      tag: ${{ steps.r.outputs.tag }}
       version: ${{ steps.r.outputs.version }}
       carla_ref: ${{ steps.r.outputs.carla_ref }}
       carla_build_ref: ${{ steps.r.outputs.carla_build_ref }}
@@ -191,6 +221,7 @@ jobs:
           REF: ${{ github.ref }}
           REF_NAME: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
           RELEASE_RESULT: ${{ needs.release.result }}
           BUMP: ${{ needs.release.outputs.bump }}
           TAG: ${{ needs.release.outputs.tag }}
@@ -200,21 +231,25 @@ jobs:
           INPUT_PUBLISH: ${{ inputs.publish }}
         run: |
           set -euo pipefail
-          proceed=false; publish=false; index=pypi; ref="$SHA"; version=""
+          proceed=false; publish=false; index=pypi; ref="$SHA"; tag=""; version=""
           carla_ref=""; carla_commit=""
           if [ "$EVENT" = push ] && [[ "$REF" == refs/tags/* ]]; then
             # A hand-cut tag: check it, resolve its CARLA commit, build and publish.
             out=$(mktemp)
             python3 tools/release_tag.py check "$REF_NAME" --github-output "$out"
-            # Sets version, carla_ref and carla_commit (values checked by the script).
-            # shellcheck disable=SC1090
-            . "$out"
-            proceed=true; publish=true; ref="$REF_NAME"
+            while IFS='=' read -r k v; do
+              case "$k" in
+                version) version="$v" ;;
+                carla_ref) carla_ref="$v" ;;
+                carla_commit) carla_commit="$v" ;;
+              esac
+            done < "$out"
+            proceed=true; publish=true; ref="$REF_NAME"; tag="$REF_NAME"
           elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
             # The auto-release path: build and publish only if a tag was cut.
             # The CARLA commit comes from `release`, not resolved a second time.
             if [ "$RELEASE_RESULT" = success ] && [ "$BUMP" != none ] && [ -n "$TAG" ]; then
-              proceed=true; publish=true; ref="$TAG"; version="${TAG%%-*}"
+              proceed=true; publish=true; ref="$TAG"; tag="$TAG"; version="${TAG%%-*}"
               carla_ref="$TAG_CARLA_REF"; carla_commit="$TAG_CARLA_COMMIT"
             fi
           elif [ "$EVENT" = workflow_dispatch ]; then
@@ -223,11 +258,20 @@ jobs:
             proceed=true; index=testpypi; carla_ref="${INPUT_CARLA_REF:-ue5-dev}"
             if [ "$INPUT_PUBLISH" = true ]; then publish=true; fi
           fi
+          # PyPI accepts a version once: fail now, not after the build. A re-run
+          # (attempt > 1) may be finishing a partial upload, so it is let through.
+          if [ "$publish" = true ]; then
+            if [ "$RUN_ATTEMPT" -gt 1 ]; then
+              echo "::notice::Run attempt ${RUN_ATTEMPT}: not checking ${index} for the version"
+            else
+              python3 tools/release_tag.py unpublished --index "$index" ${version:+--version "$version"}
+            fi
+          fi
           # What CMake fetches (CARLA_GIT_REF): the resolved SHA for a release.
           carla_build_ref="${carla_commit:-$carla_ref}"
           {
             echo "proceed=$proceed"; echo "publish=$publish"; echo "index=$index"
-            echo "ref=$ref"; echo "version=$version"; echo "carla_ref=$carla_ref"
+            echo "ref=$ref"; echo "tag=$tag"; echo "version=$version"; echo "carla_ref=$carla_ref"
             echo "carla_build_ref=$carla_build_ref"; echo "carla_commit=$carla_commit"
           } | tee -a "$GITHUB_OUTPUT"
 
@@ -354,28 +398,57 @@ jobs:
       id-token: write  # Trusted Publishing; no token in secrets.
     steps:
       # Named explicitly rather than "everything in the run", so nothing else a
-      # job uploads ends up in dist/.
+      # job uploads ends up in dist/. The toolchain goes to its own directory:
+      # only its upload may skip existing files.
       - uses: actions/download-artifact@v4
         with: { name: dist-sdist, path: dist }
       - uses: actions/download-artifact@v4
         with: { name: dist-wheel, path: dist }
       - uses: actions/download-artifact@v4
-        with: { name: dist-toolchain, path: dist }
-      - run: ls -l dist
+        with: { name: dist-toolchain, path: dist-toolchain }
+      - run: ls -l dist dist-toolchain
       # PyPI rejects bad metadata only after the build and the OIDC exchange;
       # failing here costs nothing.
       - name: Check the metadata before uploading
-        run: pipx run twine check --strict dist/*
-      - name: Publish to PyPI
-        if: needs.resolve.outputs.index == 'pypi'
+        run: pipx run twine check --strict dist/* dist-toolchain/*
+      # First, so typesafe-carla's dependency is installable when it appears.
+      - name: Publish typesafe-carla-toolchain
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          # The toolchain version only changes with Codon; re-releases skip it.
-          # It also lets a re-run add what an earlier attempt failed to upload.
+          repository-url: ${{ needs.resolve.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          packages-dir: dist-toolchain/
+          # The toolchain version only changes with Codon; most releases skip it.
           skip-existing: true
-      - name: Publish to TestPyPI
-        if: needs.resolve.outputs.index == 'testpypi'
+      - name: Publish typesafe-carla
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
+          repository-url: ${{ needs.resolve.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          packages-dir: dist/
+          # An existing file is an error, so a version is never "released"
+          # without uploading anything; only a re-run may finish a partial upload.
+          skip-existing: ${{ github.run_attempt > 1 }}
+
+  # Last: the GitHub release appears only once the packages are on PyPI. The
+  # auto-release path drafted it in `release`; a hand-cut tag gets one here.
+  github-release:
+    name: publish the GitHub release
+    needs: [resolve, publish]
+    if: always() && needs.publish.result == 'success' && needs.resolve.outputs.index == 'pypi'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          CARLA_REF: ${{ needs.resolve.outputs.carla_ref }}
+          CARLA_COMMIT: ${{ needs.resolve.outputs.carla_commit }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$REPO" --draft=false
+          else
+            gh release create "$TAG" --repo "$REPO" --verify-tag --title "$TAG" --generate-notes \
+              --notes "LibCarla built from carla-simulator/carla \`${CARLA_REF}\` at carla-simulator/carla@${CARLA_COMMIT}."
+          fi

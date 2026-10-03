@@ -67,14 +67,14 @@ def test_not_ue4(ref):
 SHA = "0123456789abcdef0123456789abcdef01234567"
 
 
-def fake_github(commits=None, error=None):
+def fake_github(commits=None, error=None, error_cls=release_tag.RefNotFound):
     """A fetch() standing in for the GitHub commits API; records the URLs."""
     calls = []
 
     def fetch(url):
         calls.append(url)
         if error is not None:
-            raise TagError(error)
+            raise error_cls(error)
         return commits
 
     fetch.calls = calls
@@ -122,6 +122,84 @@ def test_resolve_commit_rejects_later_commit():
     fetch = fake_github([commit_json(date="2026-09-16T00:00:01Z")])
     with pytest.raises(TagError, match="after 2026-09-15"):
         release_tag.resolve_commit("ue5-dev", datetime.date(2026, 9, 15), fetch)
+
+
+def test_resolve_commit_other_api_error_is_not_not_found():
+    fetch = fake_github(error="GitHub API 500: boom", error_cls=TagError)
+    with pytest.raises(TagError, match="500: boom") as e:
+        release_tag.resolve_commit("ue5-dev", datetime.date(2026, 9, 15), fetch)
+    assert "not found" not in str(e.value)
+
+
+@pytest.mark.parametrize("sha", ["abc", "A" * 40, None, SHA + "0"])
+def test_resolve_commit_rejects_invalid_api_sha(sha):
+    with pytest.raises(TagError, match="invalid commit SHA"):
+        release_tag.resolve_commit("ue5-dev", None, fake_github([commit_json(sha=sha)]))
+
+
+def test_sha_ref_must_resolve_to_itself():
+    # The reviewer's repro: GitHub answers a SHA with its newest ancestor by
+    # the day, which must not be built in its place.
+    want, older = "a" * 40, "b" * 40
+    fetch = fake_github([commit_json(sha=older, date="2025-01-01T00:00:00Z")])
+    with pytest.raises(TagError, match="resolves to " + older):
+        release_tag.resolve_commit(want, datetime.date(2025, 1, 1), fetch)
+
+
+@pytest.mark.parametrize("ref", [SHA, SHA[:7], SHA[:12]])
+def test_sha_ref_on_its_day(ref):
+    c = release_tag.resolve_commit(ref, datetime.date(2026, 9, 15), fake_github([commit_json()]))
+    assert c.sha == SHA
+
+
+def test_sha_ref_on_another_day():
+    with pytest.raises(TagError, match="from 2026-09-15, not 2026-09-16"):
+        release_tag.resolve_commit(SHA, datetime.date(2026, 9, 16), fake_github([commit_json()]))
+
+
+@pytest.mark.parametrize("today, ok", [
+    (datetime.date(2026, 9, 16), True),
+    (datetime.date(2026, 9, 15), False),
+    (datetime.date(2026, 9, 14), False),
+])
+def test_check_rejects_today_and_later(today, ok, capsys):
+    version = release_tag.package_version()
+    rc = release_tag.main(["check", f"{version}-ue5-dev-20260915", "--offline"],
+                          fake_github(error="offline"), today=today)
+    assert rc == (0 if ok else 1)
+    if not ok:
+        assert "not before today" in capsys.readouterr().err
+
+
+def fake_status(code):
+    calls = []
+
+    def status(url):
+        calls.append(url)
+        return code
+
+    status.calls = calls
+    return status
+
+
+def test_unpublished_ok(capsys):
+    status = fake_status(404)
+    assert release_tag.main(["unpublished", "--version", "9.9.9"], status=status) == 0
+    assert status.calls == ["https://pypi.org/pypi/typesafe-carla/9.9.9/json"]
+
+
+def test_unpublished_default_version_and_testpypi():
+    status = fake_status(404)
+    assert release_tag.main(["unpublished", "--index", "testpypi"], status=status) == 0
+    version = release_tag.package_version()
+    assert status.calls == [f"https://test.pypi.org/pypi/typesafe-carla/{version}/json"]
+
+
+@pytest.mark.parametrize("code, message", [(200, "already on pypi"), (503, "HTTP 503")])
+def test_unpublished_fails(code, message, capsys):
+    assert release_tag.main(["unpublished", "--version", "0.1.0"],
+                            status=fake_status(code)) == 1
+    assert message in capsys.readouterr().err
 
 
 def test_check_writes_github_output(tmp_path, capsys):

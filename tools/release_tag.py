@@ -17,11 +17,18 @@ Examples: ``0.1.0-ue5-dev-20260915``, ``0.1.0-0.10.0-20250320``.
 ``check`` parses and checks a tag and resolves the CARLA commit it names: the
 latest commit reachable from the ref whose committer date is on or before the
 end of that day (UTC). It fails if the ref does not exist or has no such
-commit, and warns if the commit is from an earlier day. ``--offline`` skips
-the lookup.
+commit, and warns if the commit is from an earlier day. The date must be
+before today (UTC), so that the tag always resolves to the same commit. A ref
+that is a commit SHA (7 to 40 hex digits) must resolve to that very commit,
+committed on the tag date. ``--offline`` skips the lookup.
 
 ``make`` forms the tag for the current package version and the ref's latest
-commit (used by the auto-release job after ``tools/bump_version.py``).
+commit (used by the auto-release job after ``tools/bump_version.py``). Its date
+is that commit's, which may be today: such a tag is not re-checked; the SHA
+the job records in the annotated tag and the GitHub release is authoritative.
+
+``unpublished`` fails if the package version (or ``--version``) is already on
+PyPI (or ``--index testpypi``): PyPI accepts each version once.
 
 Commits are looked up with the GitHub API (``GITHUB_TOKEN`` is used if set).
 Outputs are ``key=value`` lines (``tag``, ``version``, ``carla_ref`` as in the
@@ -49,6 +56,8 @@ except ImportError:
     import bump_version
 
 CARLA_REPO = "carla-simulator/carla"
+PACKAGE = "typesafe-carla"
+INDEX_JSON = {"pypi": "https://pypi.org/pypi", "testpypi": "https://test.pypi.org/pypi"}
 
 # A PEP 440 public version in canonical form (it never contains "-").
 _VERSION = re.compile(r"\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?(\.dev\d+)?")
@@ -58,10 +67,16 @@ _REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 # UE4 refs, rejected by the build too (cmake/FetchCarla.cmake, _tsc_check_ue5:
 # "UE4 refs such as 0.9.x or ue4-dev cannot be used").
 _UE4_REF = re.compile(r"(0\.9(\.|$)|ue4([-_/.]|$))", re.IGNORECASE)
+# A ref that names a commit by (abbreviated) SHA.
+_SHA_REF = re.compile(r"[0-9a-f]{7,40}")
 
 
 class TagError(ValueError):
     pass
+
+
+class RefNotFound(TagError):
+    """GitHub does not know the ref (HTTP 404 / 422)."""
 
 
 class ReleaseTag(NamedTuple):
@@ -82,8 +97,11 @@ class Commit(NamedTuple):
         return self.date.date()
 
 
-# fetch(url) -> decoded JSON. Raises TagError for a ref GitHub does not know.
+# fetch(url) -> decoded JSON. Raises RefNotFound for a ref GitHub does not
+# know, TagError for any other failure.
 Fetch = Callable[[str], Any]
+# status(url) -> HTTP status code of a GET.
+Status = Callable[[str], int]
 
 
 def package_version() -> str:
@@ -129,6 +147,15 @@ def parse(tag: str, expected_version: str) -> ReleaseTag:
     return ReleaseTag(version, ref, date)
 
 
+def check_past(tag: ReleaseTag, today: datetime.date | None = None) -> None:
+    """A hand-cut tag's date must be over (UTC): later commits that day would
+    otherwise change what the tag resolves to."""
+    today = today or datetime.datetime.now(datetime.timezone.utc).date()
+    if tag.date >= today:
+        raise TagError(f"tag date {tag.date.isoformat()} is not before today "
+                       f"({today.isoformat()}, UTC): commits may still land on that day")
+
+
 def commits_url(ref: str, day: datetime.date | None = None, repo: str = CARLA_REPO) -> str:
     query: dict[str, Any] = {"sha": ref, "per_page": 1}
     if day is not None:
@@ -147,10 +174,33 @@ def github_fetch(url: str) -> Any:
                                     timeout=30) as r:
             return json.load(r)
     except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
         if e.code in (404, 422):  # unknown repository / no commit for that sha
-            raise TagError(f"GitHub API {e.code} for {url}: "
-                           f"{e.read().decode(errors='replace')}") from None
-        raise
+            raise RefNotFound(f"GitHub API {e.code} for {url}: {body}") from None
+        raise TagError(f"GitHub API {e.code} for {url}: {body}") from None
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise TagError(f"GitHub API request {url} failed: {e}") from None
+
+
+def http_status(url: str) -> int:
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+    except (urllib.error.URLError, OSError) as e:
+        raise TagError(f"request {url} failed: {e}") from None
+
+
+def check_unpublished(version: str, index: str = "pypi", status: Status = http_status) -> None:
+    """Fail if ``version`` of typesafe-carla is already on the index."""
+    url = f"{INDEX_JSON[index]}/{PACKAGE}/{version}/json"
+    code = status(url)
+    if code == 200:
+        raise TagError(f"{PACKAGE} {version} is already on {index}; PyPI accepts a version "
+                       "once, so bump the version (tools/bump_version.py)")
+    if code != 404:
+        raise TagError(f"unexpected HTTP {code} from {url}")
 
 
 def resolve_commit(ref: str, day: datetime.date | None = None, fetch: Fetch = github_fetch,
@@ -158,16 +208,33 @@ def resolve_commit(ref: str, day: datetime.date | None = None, fetch: Fetch = gi
     """Latest commit reachable from ``ref``, committed on or before ``day`` (UTC) if given."""
     try:
         commits = fetch(commits_url(ref, day, repo))
-    except TagError as e:
+    except RefNotFound as e:
         raise TagError(f"CARLA ref {ref!r} not found in {repo}: {e}") from None
     if not commits:
         raise TagError(f"CARLA ref {ref!r} has no commit on or before {day}")
-    c = commits[0]
-    when = datetime.datetime.fromisoformat(c["commit"]["committer"]["date"].replace("Z", "+00:00"))
-    commit = Commit(c["sha"], when.astimezone(datetime.timezone.utc))
+    try:
+        c = commits[0]
+        sha = c["sha"]
+        when = datetime.datetime.fromisoformat(
+            c["commit"]["committer"]["date"].replace("Z", "+00:00"))
+    except (KeyError, IndexError, TypeError, ValueError) as e:
+        raise TagError(f"unexpected GitHub API response for {ref!r}: {e!r}") from None
+    if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise TagError(f"GitHub API returned an invalid commit SHA {sha!r} for {ref!r}")
+    commit = Commit(sha, when.astimezone(datetime.timezone.utc))
     if day is not None and commit.day > day:
         raise TagError(f"GitHub returned {commit.sha} from {commit.date.isoformat()}, "
                        f"after {day.isoformat()}")
+    if _SHA_REF.fullmatch(ref):
+        # GitHub answers a SHA with its newest ancestor on or before the day,
+        # which would silently build another commit.
+        if not commit.sha.startswith(ref):
+            raise TagError(f"CARLA ref {ref!r} is a commit SHA, but it resolves to "
+                           f"{commit.sha} (its last ancestor by {day}); tag {ref} "
+                           "with its own commit date")
+        if day is not None and commit.day != day:
+            raise TagError(f"CARLA commit {ref} is from {commit.day.isoformat()}, "
+                           f"not {day.isoformat()}")
     return commit
 
 
@@ -186,7 +253,8 @@ def _outputs(tag: ReleaseTag, commit: Commit | None) -> dict[str, str]:
     return out
 
 
-def main(argv: list[str] | None = None, fetch: Fetch = github_fetch) -> int:
+def main(argv: list[str] | None = None, fetch: Fetch = github_fetch,
+         status: Status = http_status, today: datetime.date | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     check = sub.add_parser("check", help="parse and check a tag, resolve its CARLA commit")
@@ -196,18 +264,28 @@ def main(argv: list[str] | None = None, fetch: Fetch = github_fetch) -> int:
     make = sub.add_parser("make", help="form the tag for the package version and a ref's "
                                        "latest commit")
     make.add_argument("ref")
-    for p in (check, make):
+    unpublished = sub.add_parser("unpublished", help="fail if the version is already on "
+                                                     "the index")
+    unpublished.add_argument("--version", help="default: the package version")
+    unpublished.add_argument("--index", choices=sorted(INDEX_JSON), default="pypi")
+    for p in (check, make, unpublished):
         p.add_argument("--github-output", metavar="FILE",
                        help="append key=value outputs to FILE instead of printing them")
     args = parser.parse_args(argv)
     log = sys.stdout if args.github_output else sys.stderr  # stdout carries outputs otherwise
     try:
+        if args.command == "unpublished":
+            version = args.version or package_version()
+            check_unpublished(version, args.index, status)
+            print(f"{PACKAGE} {version} is not on {args.index} yet", file=log)
+            return 0
         if args.command == "make":
             tag, commit = make_tag(args.ref, package_version(), fetch)
             print(f"{tag}: CARLA {tag.carla_ref} = {commit.sha} ({commit.date.isoformat()})",
                   file=log)
         else:
             tag = parse(args.tag, package_version())
+            check_past(tag, today)
             commit = None
             if not args.offline:
                 commit = resolve_commit(tag.carla_ref, tag.date, fetch)
