@@ -493,10 +493,12 @@ def _literal_key_only(where: Static[str]):
 def _unknown_key(where: Static[str], key: Static[str], keys: Static[str]):
     compile_error(where + " has no key \"" + key + "\" (the Python API's dict has " + keys + ")")
 
-def _present(present: bool, key: str):
-    """A key the Python API's dict leaves out: KeyError, as the dict."""
-    if not present:
+def _required(value, key: str):
+    """An Optional field's value. The Python API's dict leaves the key out when
+    the field is None, so that is a KeyError, as the dict."""
+    if value is None:
         raise KeyError(key)
+    return value.__val__()
 
 # The display strings of V2XData.cpp (LibITS.h codes; the default is the
 # Python API's fallback).
@@ -591,20 +593,21 @@ class CustomV2XBytes:
             _unknown_key("CustomV2XBytes", key, "\"DataSize\", \"MaxDataSize\", \"Bytes\"")
 
 @tuple
-class _CustomV2XPdu:
-    """CustomV2XData.get()["Message"]: {"Header", "Message"}."""
-    message: CustomV2XMessage
+class _Pdu[M, where: Static[str]]:
+    """get()["Message"] of both messages: {"Header", "Message"}."""
+    header: ItsPduHeader
+    message: M
 
     def __getitem__(self, key: str):
-        _literal_key_only("CustomV2XData.get()[\"Message\"]")
+        _literal_key_only(where)
 
     def __getitem__(self, key: Static[str]):
         if key == "Header":
-            return self.message.header
+            return self.header
         elif key == "Message":
-            return self.message.data
+            return self.message
         else:
-            _unknown_key("CustomV2XData.get()[\"Message\"]", key, "\"Header\", \"Message\"")
+            _unknown_key(where, key, "\"Header\", \"Message\"")
 
 @extend
 class CustomV2XMessage:
@@ -615,7 +618,8 @@ class CustomV2XMessage:
         if key == "Power":
             return self._power
         elif key == "Message":
-            return _CustomV2XPdu(self)
+            return _Pdu[CustomV2XBytes, "CustomV2XData.get()[\"Message\"]"](self.header,
+                                                                            self.data)
         else:
             _unknown_key("CustomV2XData.get()", key, "\"Power\", \"Message\"")
 
@@ -668,9 +672,7 @@ class CenDsrcTollingZone:
         elif key == "Protected Zone Longitude":
             return self.protected_zone_longitude
         elif key == "Cen DSRC Tolling Zone ID":
-            zone_id = self.cen_dsrc_tolling_zone_id
-            _present(zone_id is not None, key)
-            return zone_id.__val__()
+            return _required(self.cen_dsrc_tolling_zone_id, key)
         else:
             _unknown_key("CenDsrcTollingZone (\"Cen DSRC Tolling Zone\")", key,
                          "\"Protected Zone Latitude\", \"Protected Zone Longitude\", "
@@ -732,21 +734,15 @@ class ProtectedCommunicationZone:
         if key == "Protected Zone Type":
             return self.protected_zone_type
         elif key == "Expiry Time":
-            value = self.expiry_time
-            _present(value is not None, key)
-            return value.__val__()
+            return _required(self.expiry_time, key)
         elif key == "Protected Zone Latitude":
             return self.protected_zone_latitude
         elif key == "Protected Zone Longitude":
             return self.protected_zone_longitude
         elif key == "Protected Zone ID":
-            value = self.protected_zone_id
-            _present(value is not None, key)
-            return value.__val__()
+            return _required(self.protected_zone_id, key)
         elif key == "Protected Zone Radius":
-            value = self.protected_zone_radius
-            _present(value is not None, key)
-            return value.__val__()
+            return _required(self.protected_zone_radius, key)
         else:
             _unknown_key("ProtectedCommunicationZone", key,
                          "\"Protected Zone Type\", \"Expiry Time\", \"Protected Zone Latitude\", "
@@ -822,13 +818,10 @@ class _CAMHighFrequencyContainer:
                 return "RSU Container High Frequency"
             return "No container present"
         elif key == "Basic Vehicle Container High Frequency":
-            hf = self.cam.basic_vehicle_container_high_frequency
-            _present(hf is not None, key)
-            return hf.__val__()
+            return _required(self.cam.basic_vehicle_container_high_frequency, key)
         elif key == "RSU Container High Frequency":
-            zones = self.cam.protected_communication_zones_rsu
-            _present(zones is not None, key)
-            return _RSUContainerHighFrequency(zones.__val__())
+            zones = _required(self.cam.protected_communication_zones_rsu, key)
+            return _RSUContainerHighFrequency(zones)
         else:
             _unknown_key("\"High Frequency Container\"", key,
                          "\"High Frequency Container Present\", "
@@ -849,9 +842,7 @@ class _CAMLowFrequencyContainer:
                 return "Basic Vehicle Container Low Frequency"
             return "No Container Present"
         elif key == "Basic Vehicle Low Frequency":
-            lf = self.cam.basic_vehicle_container_low_frequency
-            _present(lf is not None, key)
-            return lf.__val__()
+            return _required(self.cam.basic_vehicle_container_low_frequency, key)
         else:
             _unknown_key("\"Low Frequency Container\"", key,
                          "\"Low Frequency Container Present\", \"Basic Vehicle Low Frequency\"")
@@ -908,22 +899,6 @@ class _CAMCoopAwareness:
             _unknown_key("CAMMessage.get()[\"Message\"][\"Message\"]", key,
                          "\"Generation Delta Time\", \"CAM Parameters\"")
 
-@tuple
-class _CAMPdu:
-    """CAMMessage.get()["Message"]: {"Header", "Message"}."""
-    cam: CAM
-
-    def __getitem__(self, key: str):
-        _literal_key_only("CAMMessage.get()[\"Message\"]")
-
-    def __getitem__(self, key: Static[str]):
-        if key == "Header":
-            return self.cam.header
-        elif key == "Message":
-            return _CAMCoopAwareness(self.cam)
-        else:
-            _unknown_key("CAMMessage.get()[\"Message\"]", key, "\"Header\", \"Message\"")
-
 @extend
 class CAM:
     def __getitem__(self, key: str):
@@ -933,6 +908,7 @@ class CAM:
         if key == "Power":
             return self._power
         elif key == "Message":
-            return _CAMPdu(self)
+            return _Pdu[_CAMCoopAwareness, "CAMMessage.get()[\"Message\"]"](
+                self.header, _CAMCoopAwareness(self))
         else:
             _unknown_key("CAMMessage.get()", key, "\"Power\", \"Message\"")
