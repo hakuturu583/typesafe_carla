@@ -91,7 +91,14 @@ try:
     reading = imu.wait_for_data(10.0).as_imu()
     print("imu", reading)
     assert 0.0 <= reading.compass <= 7.0
-    # At rest the accelerometer measures gravity.
+    # At rest the accelerometer measures gravity. The first frames after the
+    # spawn include the landing transient (issue #92), so tick until it settles.
+    for _ in range(40):
+        if 7.0 < reading.accelerometer.length() < 12.5:
+            break
+        world.tick()
+        reading = imu.wait_for_data(10.0).as_imu()
+    print("imu at rest", reading)
     assert 7.0 < reading.accelerometer.length() < 12.5, reading.accelerometer
 
     # Drive into the parked car until the collision sensor reports it.
