@@ -312,8 +312,9 @@ records the expected result per mode, CARLA ref and test. pytest and CI fail
 on an unexpected failure and on an unexpected pass, so that list only shrinks.
 [tests/upstream/GAPS.md](tests/upstream/GAPS.md) groups the failures by root
 cause, separating missing typesafe_carla features from harness and Codon
-limits. `unit` needs no server and runs in pytest and on every `libcarla` CI
-leg. The others run only with `TSC_CARLA_PORT` set. See
+limits. `unit` needs no server and runs in pytest and in CI: codon mode on
+every `libcarla` leg, cpython mode on one leg per CARLA ref. The others run
+only with `TSC_CARLA_PORT` set. See
 [tests/upstream/README.md](tests/upstream/README.md).
 
 ```sh

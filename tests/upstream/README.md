@@ -19,7 +19,7 @@ modes, and groups the failures by root cause; each group is a candidate issue.
 
 | suite | needs | runs in |
 |---|---|---|
-| `unit` | nothing | pytest (any backend; the mock uses ue5-dev's tests), every `libcarla` CI leg, both modes |
+| `unit` | nothing | pytest (any backend; the mock uses ue5-dev's tests); every `libcarla` CI leg in codon mode, the ubuntu-24.04 leg of each ref in cpython mode too |
 | `smoke`, `API`, `top` (the top-level files) | a CARLA server and the `libcarla` backend | pytest and the CLI, only with `TSC_CARLA_PORT` set |
 | `ported` ([`ported/`](ported)) | a ue5-dev server | as `smoke`: the tests that need a map no ue5-dev package ships, ported to shipped maps (see below) |
 

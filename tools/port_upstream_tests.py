@@ -23,7 +23,7 @@ The changes, and why:
 Every ported test must pass with the official module on a ue5-dev server
 (`python -m tools.upstream_tests --mode official --suite ported`).
 
-    python -m tools.port_upstream_tests [--tests-dir PythonAPI/test]
+    python -m tools.port_upstream_tests [--tests-dir PythonAPI/test] [-o DIR] [--exclude-originals]
 """
 
 from __future__ import annotations
@@ -440,21 +440,19 @@ CONTENT_LIMITS = {
     "smoke/test_streamming.py": {"TestStreamming.test_multistream":
         "extra clients with wait_for_tick intermittently hang on this server (the official "
         "module timed out; a typesafe run passed)"},
-}
-
-
-CONTENT_LIMITS["smoke/test_vehicle_physics.py"] = {
-    "TestVehicleFriction.test_vehicle_zero_friction":
-        "physics on this ue5-dev server: the official module fails it too, with "
-        "vehicle.taxi.ford's velocities after initialisation [27.599, 27.764] against the "
-        "27.778 reference",
-    "TestVehicleTireConfig.test_vehicle_wheel_collision":
-        "physics on this ue5-dev server: the official module fails it too, with "
-        "vehicle.taxi.ford's two velocities after the simulation unequal, [-0.807, -2.364]",
-    "TestVehicleTireConfig.test_vehicle_tire_long_stiff":
-        "physics on this ue5-dev server: the official module fails it too; two identical "
-        "vehicle.firetruck.actors side by side at full throttle drive 29.73 m and 24.11 m "
-        "(the test needs the second to go at least as far)",
+    "smoke/test_vehicle_physics.py": {
+        "TestVehicleFriction.test_vehicle_zero_friction":
+            "physics on this ue5-dev server: the official module fails it too, with "
+            "vehicle.taxi.ford's velocities after initialisation [27.599, 27.764] against the "
+            "27.778 reference",
+        "TestVehicleTireConfig.test_vehicle_wheel_collision":
+            "physics on this ue5-dev server: the official module fails it too, with "
+            "vehicle.taxi.ford's two velocities after the simulation unequal, [-0.807, -2.364]",
+        "TestVehicleTireConfig.test_vehicle_tire_long_stiff":
+            "physics on this ue5-dev server: the official module fails it too; two identical "
+            "vehicle.firetruck.actors side by side at full throttle drive 29.73 m and 24.11 m "
+            "(the test needs the second to go at least as far)",
+    },
 }
 
 
@@ -475,6 +473,11 @@ def exclude_originals(refs=("ue5-dev",)) -> None:
     and the ported tests that need reload_world."""
     from tools import upstream_tests as up
 
+    reload = ("exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE "
+              "parse error; the official module too)")
+    ported_excludes = [{rel: {t: reload for t in tests} for rel, tests in NEEDS_RELOAD.items()},
+                       {rel: {t: f"exclude: {why}" for t, why in tests.items()}
+                        for rel, tests in CONTENT_LIMITS.items()}]
     for mode in up.MODES:
         manifest = up.load_manifest(mode)
         for ref in refs:
@@ -482,19 +485,10 @@ def exclude_originals(refs=("ue5-dev",)) -> None:
             for rel, name in NEEDED_MAP.items():
                 entries[rel] = (f"exclude: map {name} not shipped in ue5-dev packages; "
                                 f"ported to tests/upstream/ported/{rel}")
-            for rel, tests in NEEDS_RELOAD.items():
-                ported = entries.get(f"ported/{rel}")
-                ported = ported if isinstance(ported, dict) else {}
-                for tid in tests:
-                    ported[tid] = ("exclude: needs reload_world, which fails on the ue5-dev server "
-                                   "build (OpenDRIVE parse error; the official module too)")
-                entries[f"ported/{rel}"] = ported
-            for rel, tests in CONTENT_LIMITS.items():
-                ported = entries.get(f"ported/{rel}")
-                ported = ported if isinstance(ported, dict) else {}
-                for tid, why in tests.items():
-                    ported[tid] = f"exclude: {why}"
-                entries[f"ported/{rel}"] = ported
+            for excludes in ported_excludes:
+                for rel, tests in excludes.items():
+                    ported = entries.get(f"ported/{rel}")
+                    entries[f"ported/{rel}"] = {**(ported if isinstance(ported, dict) else {}), **tests}
         up.write_manifest(mode, manifest)
     official = up.load_manifest("official")
     for ref in refs:
@@ -529,6 +523,8 @@ def main(argv: list[str] | None = None) -> int:
                                      description=__doc__.split("\n\n")[0])
     parser.add_argument("--tests-dir", type=Path,
                         help=f"PythonAPI/test at {PORT_COMMIT[:10]} (default: fetched)")
+    parser.add_argument("-o", "--out", type=Path, default=OUT,
+                        help="where to write the ported copies (default tests/upstream/ported)")
     parser.add_argument("--exclude-originals", action="store_true",
                         help="also mark the originals `exclude:` in tests/upstream/expectations.yaml (ue5-dev)")
     args = parser.parse_args(argv)
@@ -537,7 +533,7 @@ def main(argv: list[str] | None = None) -> int:
         from tools import upstream_tests
 
         tests = upstream_tests.fetch_tests(PORT_COMMIT)
-    for rel in port(tests):
+    for rel in port(tests, args.out):
         print(f"ported {rel}")
     if args.exclude_originals:
         exclude_originals()

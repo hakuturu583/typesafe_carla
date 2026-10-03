@@ -40,11 +40,13 @@ from __future__ import annotations
 
 import argparse
 import ast
+import concurrent.futures
 import json
 import os
 import re
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -87,17 +89,17 @@ GENERIC_PARAMS = {
         "inertia_tensor_scale", "extent")},
     "projection": ["GeoProjectionTM", "GeoProjectionUTM", "GeoProjectionWebMerc", "GeoProjectionLCC2SP"],
     "path": ["List[Location]", "List[Vector3D]"],
+    "in_point": VECTOR_CLASSES + ["List[Location]", "List[Vector3D]"],
 }
-GENERIC_PARAMS["in_point"] = VECTOR_CLASSES + ["List[Location]", "List[Vector3D]"]
+# Library classes that stand for the Python API's memoryview (RawData: a
+# measurement's raw_data). The runtime hands Python a memoryview of their bytes,
+# so np.frombuffer(m.raw_data, ...) works unchanged.
+MEMORYVIEWS = ["RawData"]
 # A command's target: `<x>_id` (an id or an Actor) and `<x>` (an Actor), both
 # defaulting to the `_MISSING` sentinel, exactly one passed (typesafe_carla's
 # command.codon resolves that at compile time). The wrapper takes the id as an
 # int; the runtime turns `<x>=` into `<x>_id=` and an Actor into its id.
 # A target in OPTIONAL_TARGETS may also be left out (SpawnActor's parent).
-# Library classes that stand for the Python API's memoryview (RawData: a
-# measurement's raw_data). The runtime hands Python a memoryview of their bytes,
-# so np.frombuffer(m.raw_data, ...) works unchanged.
-MEMORYVIEWS = ["RawData"]
 MISSING = "_MISSING"
 TARGETS = {"actor_id": "actor", "parent_id": "parent"}
 OPTIONAL_TARGETS = {"parent_id"}
@@ -352,13 +354,6 @@ def _split_params(sig: str) -> list[str]:
     return out + ([cur.strip()] if cur.strip() else [])
 
 
-def guarded(stmt: str) -> str:
-    """stmt. typesafe_carla's exceptions reach Python as BaseException (they
-    have no CPython type); compat/pycarla/_runtime.py raises them as
-    RuntimeError, as CARLA's Python API does."""
-    return stmt
-
-
 class Gen:
     def __init__(self, inv: Inventory, pruned: dict[str, str] | None = None) -> None:
         self.inv = inv
@@ -369,6 +364,7 @@ class Gen:
         self.out: list[str] = []
         self.keys: list[str | None] = []  # per self.out chunk: its prune key
         self.pruned = pruned or {}        # prune key -> compiler error
+        self.last_pruned = ""             # the error of the last variant fn() pruned
         self.lines: list[tuple[int, int, str]] = []
         self.stubs: dict[str, str] = {}   # "Class.member" -> why it is not wrapped
         self.api: dict[str, dict] = {}    # what carla/__init__.py builds
@@ -493,6 +489,25 @@ class Gen:
         self.keys.append(key)
         return True
 
+    def overloads(self, name: str, fs: list[Func], body, prefix=(), before=None) -> tuple[bool, str]:
+        """Emits `name` once per variant of each library overload `f` in `fs`,
+        with `body(f, params, before(f))` as its code; returns (any emitted,
+        why not). An Unsupported from `before`, `variants` or `body` skips `f`."""
+        emitted, reasons = False, []
+        for f in fs:
+            try:
+                pre = before(f) if before else None
+                made = [(params, body(f, params, pre)) for params in self.variants(f)]
+            except Unsupported as e:
+                reasons.append(str(e))
+                continue
+            for params, code in made:
+                if self.fn(name, list(prefix) + params, code):
+                    emitted = True
+                else:
+                    reasons.append(f"does not compile: {self.last_pruned}")
+        return emitted, "; ".join(sorted(set(reasons)))
+
     def emit(self, code: str) -> None:
         self.out.append(code)
         self.keys.append(None)
@@ -555,9 +570,7 @@ class Gen:
             items = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
             e = f"_e{depth}"
             kind = node.value.id
-            if kind == "List":
-                return f"_pyo([{self._conv(items[0], e, depth + 1)} for {e} in {var}].__to_py__())"
-            if kind == "Set":
+            if kind in ("List", "Set"):
                 return f"_pyo([{self._conv(items[0], e, depth + 1)} for {e} in {var}].__to_py__())"
             if kind == "Optional":
                 return (f"(_pynone() if {var} is None else "
@@ -608,36 +621,27 @@ class Gen:
         # (A `self: S` method is called on the instance too: S is inferred from it.)
         call = (f"_L_{cls}.{name}" if kind == "static" else
                 f"self.v.{name}(" if name.startswith("__") or fs[0].self_typed else f"_L_{cls}.{name}(self.v")
-        emitted, reasons = 0, []
-        for f in fs:
-            try:
-                variants = self.variants(f)
-                ret = self.conv(f.ret, "r") if kind != "setter" else None
-            except Unsupported as e:
-                reasons.append(str(e))
-                continue
-            for params in variants:
-                if kind == "property":
-                    body = f"r = {target}\nreturn {ret}"
-                elif kind == "setter":
-                    body = f"self.v.{name} = {params[0][0]}"
-                else:
-                    args = self.kwargs(params, f)
-                    if kind == "static":
-                        expr = f"{call}({args})"
-                    elif call.endswith("("):
-                        expr = f"{call}{args})"
-                    else:
-                        expr = f"{call}{', ' + args if args else ''})"
-                    body = (f"{expr}\nreturn _pynone()" if f.ret in ("None",) or ret == "_pynone()"
-                            else f"r = {expr}\nreturn {ret}")
-                if self.fn(fname, selfp + params, body):
-                    emitted += 1
-                else:
-                    reasons.append(f"does not compile: {self.last_pruned}")
+
+        def body(f: Func, params, _) -> str:
+            if kind == "setter":
+                return f"self.v.{name} = {params[0][0]}"
+            ret = self.conv(f.ret, "r")
+            if kind == "property":
+                return f"r = {target}\nreturn {ret}"
+            args = self.kwargs(params, f)
+            if kind == "static":
+                expr = f"{call}({args})"
+            elif call.endswith("("):
+                expr = f"{call}{args})"
+            else:
+                expr = f"{call}{', ' + args if args else ''})"
+            return (f"{expr}\nreturn _pynone()" if f.ret == "None" or ret == "_pynone()"
+                    else f"r = {expr}\nreturn {ret}")
+
+        emitted, reason = self.overloads(fname, fs, body, selfp)
         entry = {"fn": fname if emitted else None, "kind": kind}
         if not emitted:
-            entry["reason"] = self.stubs[f"{cls}.{name}"] = "; ".join(sorted(set(reasons)))
+            entry["reason"] = self.stubs[f"{cls}.{name}"] = reason
         self.api_of(cls)["members"][key] = entry
 
     def klass(self, cls: str) -> None:
@@ -697,20 +701,12 @@ class Gen:
             api["fields"].append({"name": fname, "get": f"{cls}__{fname}", "set": setter})
         self.cls = cls
         if "__init__" in c.members:
-            emitted, reasons = 0, []
-            for f in c.members["__init__"]:
-                try:
-                    for params in self.variants(f):
-                        if self.fn(f"{cls}__new", params,
-                                   guarded(f"return B_{cls}(_L_{cls}({self.kwargs(params, f)}))")):
-                            emitted += 1
-                        else:
-                            reasons.append(f"does not compile: {self.last_pruned}")
-                except Unsupported as e:
-                    reasons.append(str(e))
+            emitted, reason = self.overloads(
+                f"{cls}__new", c.members["__init__"],
+                lambda f, params, _: f"return B_{cls}(_L_{cls}({self.kwargs(params, f)}))")
             api["init"] = f"{cls}__new" if emitted else None
             if not emitted:
-                self.stubs[f"{cls}.__init__"] = "; ".join(sorted(set(reasons)))
+                self.stubs[f"{cls}.__init__"] = reason
         elif c.is_tuple:
             try:
                 params = [(n, self.ty(a), None) for n, a in c.fields]
@@ -721,7 +717,7 @@ class Gen:
                 self.stubs[f"{cls}.__init__"] = str(e)
         if "__iter__" in members:
             self.fn(f"{cls}____iter__", [("self", f"B_{cls}", None)],
-                    guarded("return [x for x in self.v]"))
+                    "return [x for x in self.v]")
             api["members"]["__iter__"] = {"fn": f"{cls}____iter__", "kind": "method"}
         for key, fs in members.items():
             name = fs[0].name
@@ -812,27 +808,23 @@ class Gen:
             module = fs[0].module
             if module != "command" and name not in self.inv.public:
                 continue
-            emitted, reasons = 0, []
-            for f in fs:
-                try:
-                    if f.ret is not None and f.ret != "None":
-                        self.ty(f.ret)
-                    ret = self.conv(f.ret, "r")
-                    for params in self.variants(f):
-                        if self.fn(f"_f__{name}", params,
-                                   f"r = _M_{module}.{name}({self.kwargs(params, f)})\nreturn {ret}"):
-                            emitted += 1
-                        else:
-                            reasons.append(f"does not compile: {self.last_pruned}")
-                except Unsupported as e:
-                    reasons.append(str(e))
+
+            def result(f: Func) -> str:
+                if f.ret is not None and f.ret != "None":
+                    self.ty(f.ret)
+                return self.conv(f.ret, "r")
+
+            emitted, reason = self.overloads(
+                f"_f__{name}", fs,
+                lambda f, params, ret: f"r = _M_{module}.{name}({self.kwargs(params, f)})\nreturn {ret}",
+                before=result)
             entry = {"fn": f"_f__{name}" if emitted else None, "module": module}
             targets = {TARGETS[p.name]: [p.name, i] for i, p in enumerate(fs[0].params)
                        if p.name in TARGETS and p.default == MISSING}
             if targets:
                 entry["targets"] = targets
             if not emitted:
-                entry["reason"] = self.stubs[name] = "; ".join(sorted(set(reasons)))
+                entry["reason"] = self.stubs[name] = reason
             self.api.setdefault("__functions__", {})[name] = entry
 
     def generate(self) -> str:
@@ -973,15 +965,18 @@ def generate(out: Path, pruned: dict[str, str] | None = None) -> tuple[Path, Gen
     return source, gen
 
 
+# Shared with tools/upstream_tests.py: running typesafe-codon and reading its errors.
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
-ERROR = re.compile(r"^[\s│├╰─]*(?P<file>[^\s:]+):(?P<line>\d+)(?: \([0-9-]+\))?: error: (?P<msg>.*)$")
+# `file.codon:12 (5-20): error: message`, possibly after a tree prefix (├─ ╰─).
+ERROR_LINE = re.compile(r"^[\s│├╰─]*(?P<file>[^\s:]+):(?P<line>\d+)(?: \([0-9-]+\))?: error: (?P<msg>.*)$")
 
 
-def _culprits(stderr: str, gen: Gen) -> dict[str, str]:
-    """Generated functions whose realization a compiler error passes through."""
+def error_chains(stderr: str) -> list[list[tuple[str, int, str]]]:
+    """Compiler errors as chains of (file, line, message): the error, then its
+    `during the realization` lines."""
     chains: list[list[tuple[str, int, str]]] = []
     for raw in ANSI.sub("", stderr).splitlines():
-        m = ERROR.match(raw)
+        m = ERROR_LINE.match(raw)
         if not m:
             continue
         entry = (m["file"], int(m["line"]), m["msg"].strip())
@@ -989,9 +984,21 @@ def _culprits(stderr: str, gen: Gen) -> dict[str, str]:
             chains[-1].append(entry)
         else:
             chains.append([entry])
+    return chains
+
+
+def typesafe_codon(*args: str, env: dict[str, str] | None = None,
+                   timeout: float | None = None) -> subprocess.CompletedProcess:
+    """`typesafe-codon <args>` (the launcher of this checkout's interpreter), output captured."""
+    return subprocess.run([sys.executable, "-m", "typesafe_carla.cli", *args], capture_output=True,
+                          text=True, timeout=timeout, env={**os.environ, **(env or {})})
+
+
+def _culprits(stderr: str, gen: Gen) -> dict[str, str]:
+    """Generated functions whose realization a compiler error passes through."""
     out = {}
     names = {code.split("(", 1)[0][4:]: key for code, key in zip(gen.out, gen.keys) if key}
-    for chain in chains:
+    for chain in error_chains(stderr):
         for f, ln, msg in reversed(chain):   # the outermost generated function
             # The exporter's wrapper names the function it wraps.
             m = re.search(r"F: '(\w+)\.\d+:\d+'", msg)
@@ -1007,23 +1014,17 @@ def _culprits(stderr: str, gen: Gen) -> dict[str, str]:
     return out
 
 
-def _compile(source: Path, output: Path, env: dict[str, str] | None,
-             llvm: bool = False) -> subprocess.CompletedProcess:
+def _compile(source: Path, output: Path, env: dict[str, str] | None) -> subprocess.CompletedProcess:
     output.unlink(missing_ok=True)
-    cmd = [sys.executable, "-m", "typesafe_carla.cli", "build", "--pyext", "--relocation-model=pic",
-           "--module", MODULE] + (["--llvm"] if llvm else []) + ["-o", str(output), str(source)]
-    return subprocess.run(cmd, capture_output=True, text=True,
-                          env={**os.environ, "TYPESAFE_CARLA_COMPAT_WARNINGS": "0", **(env or {})})
+    return typesafe_codon("build", "--pyext", "--relocation-model=pic", "--module", MODULE,
+                          "-o", str(output), str(source),
+                          env={"TYPESAFE_CARLA_COMPAT_WARNINGS": "0", **(env or {})})
 
 
 def _probe(out: Path, gen: Gen, shards: int, env: dict[str, str] | None) -> dict[str, str]:
     """Type-checks the generated functions in `shards` parallel compiles, each
     with every shared definition and one share of the functions; returns the
     failing functions (one per shard and round, as Codon stops at an error)."""
-    import concurrent.futures
-
-    import threading
-
     lock = threading.Lock()
     keyed = [i for i, k in enumerate(gen.keys) if k is not None]
     head = gen.text[:gen.body_start]

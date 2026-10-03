@@ -55,6 +55,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from tools.pycarla import ANSI, error_chains, typesafe_codon
+
 ROOT = Path(__file__).resolve().parent.parent
 UPSTREAM_DIR = ROOT / "tests" / "upstream"
 MANIFEST = UPSTREAM_DIR / "expectations.yaml"
@@ -71,10 +73,9 @@ GAPS = UPSTREAM_DIR / "GAPS.md"
 DEFAULT_MOCK_REF = "ue5-dev"  # the mock mirrors LibCarla ue5-dev
 REASON_MAX = 300
 SCRIPT = "<script>"  # the one "test" of a file without TestCase classes
+# Time limits in seconds: one test (or script), one on a server, one compile.
+TIMEOUT, SERVER_TIMEOUT, BUILD_TIMEOUT = 120, 900, 900
 
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
-# `file.codon:12 (5-20): error: message`, possibly after a tree prefix (├─ ╰─).
-ERROR_LINE = re.compile(r"^[\s│├╰─]*(?P<file>[^\s:]+):(?P<line>\d+)(?: \([0-9-]+\))?: error: (?P<msg>.*)$")
 RESULT_LINE = re.compile(r"^TSC-RESULT (?P<status>\w+)(?: (?P<detail>.*))?$")
 
 if str(ROOT / "python") not in sys.path:
@@ -435,26 +436,39 @@ class FileResult:
     log: str = ""
 
 
-def _launcher(*args: str, timeout: float, env: dict[str, str] | None = None):
-    return subprocess.run([sys.executable, "-m", "typesafe_carla.cli", *args],
-                          capture_output=True, text=True, timeout=timeout,
-                          env={**os.environ, **(env or {})})
+def _timeout(timeout: float | None, server: bool) -> float:
+    return timeout or (SERVER_TIMEOUT if server else TIMEOUT)
 
 
-def _error_chains(stderr: str) -> list[list[tuple[str, int, str]]]:
-    """Compiler errors as chains: the error, then its `during the realization` lines."""
-    chains: list[list[tuple[str, int, str]]] = []
-    for raw in ANSI.sub("", stderr).splitlines():
-        m = ERROR_LINE.match(raw)
-        if not m:
-            continue
-        entry = (m["file"], int(m["line"]), m["msg"].strip())
-        nested = raw.lstrip()[:1] in ("├", "╰", "│")
-        if nested and chains:
-            chains[-1].append(entry)
-        else:
-            chains.append([entry])
-    return chains
+def _first_line(text: str) -> str:
+    """The first non-blank line (Codon prints an uncaught error first, then a backtrace)."""
+    return next((ln for ln in ANSI.sub("", text).splitlines() if ln.strip()), "")
+
+
+def _last_line(stderr: str) -> str:
+    return (ANSI.sub("", stderr).strip().splitlines() or ["compilation failed"])[-1]
+
+
+def _execute(cmd: list[str], cwd: Path, timeout: float,
+             env: dict[str, str] | None = None) -> subprocess.CompletedProcess | None:
+    """Runs one test process; None if it timed out."""
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
+                              env=env, errors="replace")
+    except subprocess.TimeoutExpired:
+        return None
+
+
+def _timed_out(test_id: str, timeout: float) -> TestResult:
+    return TestResult(test_id, "timeout", f"timed out after {timeout:g} s")
+
+
+def _signal(returncode: int) -> str:
+    return signal.Signals(-returncode).name
+
+
+def _build(source: Path, exe: Path) -> subprocess.CompletedProcess:
+    return typesafe_codon("build", "-o", str(exe), str(source), timeout=BUILD_TIMEOUT)
 
 
 def _shorten(text: str) -> str:
@@ -477,6 +491,23 @@ def _located(chain: list[tuple[str, int, str]], modules: dict[str, tuple[str, in
     return f"{file}:{line}: {msg}"
 
 
+def _attribute(stderr: str, included: list[str], ranges: dict[str, tuple[int, ...]],
+               source: str, modules: dict) -> tuple[str | None, dict[str, str]]:
+    """A failed build's errors: (the first outside every test, {test: its first error})."""
+    file_error, culprits = None, {}
+    for chain in error_chains(stderr):
+        primary = _located(chain, modules)
+        hit = [t for t in included
+               if any(f == source and (ranges[t][0] <= ln <= ranges[t][1]
+                                       or ranges[t][2] <= ln <= ranges[t][3])
+                      for f, ln, _ in chain)]
+        if not hit:
+            file_error = file_error or primary
+        for t in hit:
+            culprits.setdefault(t, primary)
+    return file_error, culprits
+
+
 def run_file(tests: Path, rel: str, work: Path, skip: set[str] = frozenset(),
              server: bool = False, timeout: float | None = None,
              compile_only: bool = False) -> FileResult:
@@ -485,8 +516,8 @@ def run_file(tests: Path, rel: str, work: Path, skip: set[str] = frozenset(),
     With `compile_only`, the tests that compile are not run (outcome not-run).
     """
     result = FileResult(rel)
-    ids = [t for t in discover(tests, rel) if t not in skip]
-    script = not discover(tests, rel)
+    discovered = discover(tests, rel)
+    ids = [t for t in discovered if t not in skip]
     out_dir = work / Path(rel).parent
     out_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(SHIM, out_dir / SHIM.name)
@@ -501,94 +532,67 @@ def run_file(tests: Path, rel: str, work: Path, skip: set[str] = frozenset(),
         (out_dir / "__init__.codon").write_text(text)
         modules["__init__.codon"] = (f"{Path(rel).parent}/__init__.py", init_offset, text.count("\n"))
     exe = out_dir / Path(rel).stem
-    if script:
-        return _run_script_codon(result, module, modules, source, exe, out_dir, server,
-                                 timeout, compile_only)
+    timeout = _timeout(timeout, server)
+    if not discovered:
+        return _run_script_codon(result, module, modules, source, exe, out_dir, timeout, compile_only)
+    # A test that does not compile is dropped from the runner until the rest compiles.
     compile_errors: dict[str, str] = {}
     included = list(ids)
     logs = []
     while True:
         runner, ranges = runner_source(included, module_end + 1)
         source.write_text(module + runner)
-        build = _launcher("build", "-o", str(exe), str(source), timeout=900)
+        build = _build(source, exe)
         logs.append(ANSI.sub("", build.stderr))
+        result.log = "\n".join(logs)
         if build.returncode == 0:
             break
-        chains = _error_chains(build.stderr)
-        culprits: dict[str, str] = {}
-        file_error = None
-        for chain in chains:
-            primary = _located(chain, modules)
-            hit = [t for t in included
-                   if any(f == source.name and (ranges[t][0] <= ln <= ranges[t][1]
-                                                or ranges[t][2] <= ln <= ranges[t][3])
-                          for f, ln, _ in chain)]
-            if not hit:
-                file_error = file_error or primary
-            for t in hit:
-                culprits.setdefault(t, primary)
+        file_error, culprits = _attribute(build.stderr, included, ranges, source.name, modules)
         if file_error or not culprits:
-            result.file_error = _shorten(file_error or (ANSI.sub("", build.stderr).strip().splitlines() or ["compilation failed"])[-1])
+            result.file_error = _shorten(file_error or _last_line(build.stderr))
             result.tests = [TestResult(t, "compile", result.file_error) for t in ids]
-            result.log = "\n".join(logs)
             return result
         compile_errors.update(culprits)
         included = [t for t in included if t not in culprits]
-    result.log = "\n".join(logs)
-    timeout = timeout or (900 if server else 120)
     for test_id in ids:
         if test_id in compile_errors:
             result.tests.append(TestResult(test_id, "compile", _shorten(compile_errors[test_id])))
-            continue
-        if compile_only:
+        elif compile_only:
             result.tests.append(TestResult(test_id, "not-run"))
-            continue
-        result.tests.append(_run_one(exe, test_id, timeout, out_dir))
+        else:
+            result.tests.append(_run_one(exe, test_id, timeout, out_dir))
     return result
 
 
 def _run_script_codon(result: FileResult, module: str, modules: dict, source: Path, exe: Path,
-                      cwd: Path, server: bool, timeout: float | None,
-                      compile_only: bool) -> FileResult:
+                      cwd: Path, timeout: float, compile_only: bool) -> FileResult:
     """A file without TestCase classes is a script: compiled and run whole."""
     source.write_text(module)
-    build = _launcher("build", "-o", str(exe), str(source), timeout=900)
+    build = _build(source, exe)
     result.log = ANSI.sub("", build.stderr)
     if build.returncode != 0:
-        chains = _error_chains(build.stderr)
-        result.file_error = _shorten(_located(chains[0], modules) if chains
-                                     else (result.log.strip().splitlines() or ["compilation failed"])[-1])
+        chains = error_chains(build.stderr)
+        result.file_error = _shorten(_located(chains[0], modules) if chains else _last_line(build.stderr))
         result.tests = [TestResult(SCRIPT, "compile", result.file_error)]
-        return result
-    if compile_only:
+    elif compile_only:
         result.tests = [TestResult(SCRIPT, "not-run")]
-        return result
-    timeout = timeout or (900 if server else 120)
-    try:
-        proc = subprocess.run([str(exe)], capture_output=True, text=True, timeout=timeout,
-                              cwd=cwd, errors="replace")
-    except subprocess.TimeoutExpired:
-        result.tests = [TestResult(SCRIPT, "timeout", f"timed out after {timeout:g} s")]
-        return result
-    first = next((ln for ln in ANSI.sub("", proc.stderr).splitlines() if ln.strip()), "")
-    outcome = "pass" if proc.returncode == 0 else ("crash" if proc.returncode < 0 else "error")
-    result.tests = [TestResult(SCRIPT, outcome, "" if outcome == "pass"
-                               else _shorten(f"exit {proc.returncode}: {first}"))]
+    elif (proc := _execute([str(exe)], cwd, timeout)) is None:
+        result.tests = [_timed_out(SCRIPT, timeout)]
+    else:
+        outcome = "pass" if proc.returncode == 0 else ("crash" if proc.returncode < 0 else "error")
+        result.tests = [TestResult(SCRIPT, outcome, "" if outcome == "pass"
+                                   else _shorten(f"exit {proc.returncode}: {_first_line(proc.stderr)}"))]
     return result
 
 
 def _run_one(exe: Path, test_id: str, timeout: float, cwd: Path) -> TestResult:
-    try:
-        proc = subprocess.run([str(exe), test_id], capture_output=True, text=True,
-                              timeout=timeout, cwd=cwd, errors="replace")
-    except subprocess.TimeoutExpired:
-        return TestResult(test_id, "timeout", f"timed out after {timeout:g} s")
+    proc = _execute([str(exe), test_id], cwd, timeout)
+    if proc is None:
+        return _timed_out(test_id, timeout)
     lines = [m for m in map(RESULT_LINE.match, proc.stdout.splitlines()) if m]
-    # Codon prints an uncaught error first, then a backtrace.
-    first = next((ln for ln in ANSI.sub("", proc.stderr).splitlines() if ln.strip()), "")
+    first = _first_line(proc.stderr)
     if proc.returncode < 0:
-        sig = signal.Signals(-proc.returncode).name
-        return TestResult(test_id, "crash", _shorten(f"{sig} {first}"))
+        return TestResult(test_id, "crash", _shorten(f"{_signal(proc.returncode)} {first}"))
     if not lines:
         return TestResult(test_id, "error", _shorten(f"exit {proc.returncode}: {first}"))
     status, detail = lines[-1]["status"], lines[-1]["detail"] or ""
@@ -771,98 +775,91 @@ def _python() -> str:
 def _cpython_env(pydir: Path | None, server: bool) -> dict[str, str]:
     """The test process's environment; `pydir` None runs CARLA's official
     module (TSC_UPSTREAM_PYTHON's own `carla`) instead of the generated one."""
-    if pydir is None:
-        env = {**os.environ, "TSC_UPSTREAM_OFFICIAL": "1"}
-        env.pop("TSC_PYCARLA_PKG", None)
-        env.pop("PYTHONHOME", None)
-        if server:
-            env["TSC_PYCARLA_REDIRECT"] = (f"{os.environ.get('TSC_CARLA_HOST', '127.0.0.1')}:"
-                                           f"{os.environ.get('TSC_CARLA_PORT', '2000')}")
-        env.setdefault("PYTHONPATH", "")
-        return env
-    from typesafe_carla import paths
-
-    env = {**os.environ, "TSC_PYCARLA_PKG": str(pydir / "carla"),
-           # the library this run is about (the package may have been built against another)
-           "TYPESAFE_CARLA_LIB": os.environ.get("TYPESAFE_CARLA_LIB") or str(paths.native_library()),
-           "PYTHONPATH": os.pathsep.join(
-        [str(pydir)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else []))}
+    env = dict(os.environ)
     env.pop("PYTHONHOME", None)
-    if server:
+    if pydir is None:
+        env["TSC_UPSTREAM_OFFICIAL"] = "1"
+        env.pop("TSC_PYCARLA_PKG", None)
+        env.setdefault("PYTHONPATH", "")
+    else:
+        from typesafe_carla import paths
+
+        env["TSC_PYCARLA_PKG"] = str(pydir / "carla")
+        # the library this run is about (the package may have been built against another)
+        env["TYPESAFE_CARLA_LIB"] = os.environ.get("TYPESAFE_CARLA_LIB") or str(paths.native_library())
+        env["PYTHONPATH"] = os.pathsep.join(
+            [str(pydir)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else []))
+    if server:  # every carla.Client goes to the test server
         env["TSC_PYCARLA_REDIRECT"] = (f"{os.environ.get('TSC_CARLA_HOST', '127.0.0.1')}:"
                                        f"{os.environ.get('TSC_CARLA_PORT', '2000')}")
     return env
 
 
-def run_file_cpython(tests: Path, rel: str, pydir: Path, skip: set[str] = frozenset(),
+def _driver() -> Path:
+    """_DRIVER as a file, rewritten when it changed."""
+    driver = cache_root() / "tsc_unittest_driver.py"
+    driver.parent.mkdir(parents=True, exist_ok=True)
+    if not driver.is_file() or driver.read_text() != _DRIVER:
+        driver.write_text(_DRIVER)
+    return driver
+
+
+def _driver_result(stdout: str) -> dict | None:
+    """The driver's TSC-RESULT line, if it printed one."""
+    line = next((ln for ln in reversed(stdout.splitlines()) if ln.startswith("TSC-RESULT ")), None)
+    return None if line is None else json.loads(line[len("TSC-RESULT "):])
+
+
+def run_file_cpython(tests: Path, rel: str, pydir: Path | None, skip: set[str] = frozenset(),
                      server: bool = False, timeout: float | None = None) -> FileResult:
     """Runs one upstream file unmodified under CPython, each test in its own process.
 
     A unittest module runs test by test; a script runs whole (`<script>`).
     """
     result = FileResult(rel)
-    env = _cpython_env(pydir, server)
-    timeout = timeout or (900 if server else 120)
     if rel in INTERACTIVE:
         result.tests = [TestResult(SCRIPT, "skip", INTERACTIVE[rel])]
         return result
+    timeout = _timeout(timeout, server)
     ids = discover(tests, rel)
-    tests, rel_in = locate(tests, rel)
-    driver = cache_root() / "tsc_unittest_driver.py"
-    driver.parent.mkdir(parents=True, exist_ok=True)
-    if not driver.is_file() or driver.read_text() != _DRIVER:
-        driver.write_text(_DRIVER)
-    env = {**env, "PYTHONPATH": env["PYTHONPATH"] + os.pathsep + str(tests)}
-    if not ids:
-        result.tests = [_run_script_cpython(tests, rel_in, env, timeout, driver)]
-        if server:
-            _server_cleanup(tests, env)
-        return result
-    module = rel_in[:-3].replace("/", ".")
-    for test_id in ids:
-        if test_id in skip:
-            continue
-        try:
-            proc = subprocess.run([_python(), str(driver), f"{module}.{test_id}"], cwd=tests, env=env,
-                                  capture_output=True, text=True, timeout=timeout, errors="replace")
-        except subprocess.TimeoutExpired:
-            result.tests.append(TestResult(test_id, "timeout", f"timed out after {timeout:g} s"))
-            if server:
-                _server_cleanup(tests, env)
-            continue
-        line = next((ln for ln in reversed(proc.stdout.splitlines()) if ln.startswith("TSC-RESULT ")), None)
-        if proc.returncode < 0:
-            sig = signal.Signals(-proc.returncode).name
-            first = next((ln for ln in proc.stderr.splitlines() if ln.strip()), "")
-            result.tests.append(TestResult(test_id, "crash", _shorten(f"{sig} {first}")))
-        elif line is None:
-            tail = (proc.stderr.strip().splitlines() or [""])[-1]
-            result.tests.append(TestResult(test_id, "error", _shorten(f"exit {proc.returncode}: {tail}"),
-                                           _trace(proc.stderr)))
+    root, inner = locate(tests, rel)
+    env = _cpython_env(pydir, server)
+    env["PYTHONPATH"] += os.pathsep + str(root)
+    driver = str(_driver())
+    module = inner[:-3].replace("/", ".")
+    runs = ([(t, [driver, f"{module}.{t}"]) for t in ids if t not in skip] if ids
+            else [(SCRIPT, [driver, "--script", inner])])
+    for test_id, args in runs:
+        proc = _execute([_python(), *args], root, timeout, env)
+        if proc is None:
+            result.tests.append(_timed_out(test_id, timeout))
+        elif ids:
+            result.tests.append(_test_outcome(test_id, proc))
         else:
-            out = json.loads(line[len("TSC-RESULT "):])
-            result.tests.append(TestResult(test_id, out["status"], _shorten(out["detail"]),
-                                           out.get("trace", "")))
+            result.tests.append(_script_outcome(proc))
         if server:
-            _server_cleanup(tests, env)
+            _server_cleanup(root, env)
     return result
 
 
-def _run_script_cpython(tests: Path, rel: str, env: dict[str, str], timeout: float,
-                        driver: Path) -> TestResult:
-    try:
-        proc = subprocess.run([_python(), str(driver), "--script", rel], cwd=tests, env=env,
-                              capture_output=True, text=True, timeout=timeout, errors="replace")
-    except subprocess.TimeoutExpired:
-        return TestResult(SCRIPT, "timeout", f"timed out after {timeout:g} s")
-    line = next((ln for ln in reversed(proc.stdout.splitlines()) if ln.startswith("TSC-RESULT ")), None)
-    if line is not None:  # the harness check failed
-        out = json.loads(line[len("TSC-RESULT "):])
+def _test_outcome(test_id: str, proc: subprocess.CompletedProcess) -> TestResult:
+    out = _driver_result(proc.stdout)
+    if proc.returncode < 0:
+        return TestResult(test_id, "crash", _shorten(f"{_signal(proc.returncode)} {_first_line(proc.stderr)}"))
+    if out is None:
+        tail = (proc.stderr.strip().splitlines() or [""])[-1]
+        return TestResult(test_id, "error", _shorten(f"exit {proc.returncode}: {tail}"), _trace(proc.stderr))
+    return TestResult(test_id, out["status"], _shorten(out["detail"]), out.get("trace", ""))
+
+
+def _script_outcome(proc: subprocess.CompletedProcess) -> TestResult:
+    out = _driver_result(proc.stdout)
+    if out is not None:  # the harness check failed
         return TestResult(SCRIPT, out["status"], _shorten(out["detail"]))
     if proc.returncode == 0:
         return TestResult(SCRIPT, "pass")
     if proc.returncode < 0:
-        return TestResult(SCRIPT, "crash", signal.Signals(-proc.returncode).name)
+        return TestResult(SCRIPT, "crash", _signal(proc.returncode))
     lines = [ln for ln in proc.stderr.strip().splitlines() if ln.strip()]
     detail = next((ln for ln in reversed(lines) if not ln.startswith(" ")), lines[-1] if lines else "")
     return TestResult(SCRIPT, "error", _shorten(f"exit {proc.returncode}: {detail}"), _trace(proc.stderr))
@@ -915,20 +912,28 @@ def parse_expectation(value) -> tuple[str, str]:
     return kind, reason.strip()
 
 
+NOT_RUN = ("skip", "exclude")  # expectation kinds whose tests are not run
+
+
+def kind_of(value) -> str:
+    return parse_expectation(value)[0]
+
+
 def file_expectations(manifest: dict, ref: str, rel: str):
     """A file's entry for `ref`: None, a file-level string, or {test id: value}."""
     return (manifest.get(ref) or {}).get(rel)
 
 
-def skipped_ids(entry) -> set[str]:
+def skipped_ids(entry, kinds: tuple[str, ...] = NOT_RUN) -> set[str]:
+    """The ids of a per-test entry expected to be one of `kinds`."""
     if isinstance(entry, dict):
-        return {t for t, v in entry.items() if parse_expectation(v)[0] in ("skip", "exclude")}
+        return {t for t, v in entry.items() if kind_of(v) in kinds}
     return set()
 
 
-def not_run(entry) -> bool:
-    """A file-level skip or exclude."""
-    return isinstance(entry, str) and parse_expectation(entry)[0] in ("skip", "exclude")
+def not_run(entry, kinds: tuple[str, ...] = NOT_RUN) -> bool:
+    """A file-level skip or exclude (one of `kinds`)."""
+    return isinstance(entry, str) and kind_of(entry) in kinds
 
 
 FAILURES = ("fail", "error", "crash", "timeout", "compile")
@@ -994,7 +999,7 @@ def check(result: FileResult | None, entry, ids: list[str] | None = None) -> Che
         else:
             c.problems.append(f"{t.id}: unexpected {t.outcome}: {t.detail}")
     for t in entry:
-        if t not in {r.id for r in result.tests} and parse_expectation(entry[t])[0] not in ("skip", "exclude"):
+        if t not in {r.id for r in result.tests} and kind_of(entry[t]) not in NOT_RUN:
             c.problems.append(f"{t}: in the manifest but not in the upstream file")
     return c
 
@@ -1006,15 +1011,15 @@ def _reason(t: TestResult) -> str:
 def updated_entry(result: FileResult, entry):
     """The manifest entry that matches `result` (existing reasons kept)."""
     if result.file_error:
-        if isinstance(entry, str) and parse_expectation(entry)[0] == "xfail":
+        if isinstance(entry, str) and kind_of(entry) == "xfail":
             return entry
         return f"xfail: compile: {result.file_error}"
     old = entry if isinstance(entry, dict) else {}
     new = {}
     for t in result.tests:
         prev = old.get(t.id)
-        prev_kind = parse_expectation(prev)[0] if prev is not None else None
-        if prev_kind in ("skip", "exclude"):
+        prev_kind = kind_of(prev) if prev is not None else None
+        if prev_kind in NOT_RUN:
             new[t.id] = prev
         elif t.outcome == "not-run":
             if prev is not None:
@@ -1028,7 +1033,7 @@ def updated_entry(result: FileResult, entry):
         else:
             new[t.id] = f"xfail: {_reason(t)}"
     for tid, prev in old.items():  # not run: skipped and excluded tests
-        if tid not in new and parse_expectation(prev)[0] in ("skip", "exclude"):
+        if tid not in new and kind_of(prev) in NOT_RUN:
             new[tid] = prev
     return new
 
@@ -1055,7 +1060,7 @@ _MANIFEST_HEADER = """\
 """
 
 
-def _file_order(name: str):
+def file_order(name: str):
     return (SUITES.index(suite_of(name)), name)
 
 
@@ -1064,7 +1069,7 @@ def write_manifest(mode: str, refs: dict, path: Path = MANIFEST) -> None:
 
     data = _manifest_data(path)
     data[mode] = refs
-    out = {m: {ref: {f: data[m][ref][f] for f in sorted(data[m][ref], key=_file_order)}
+    out = {m: {ref: {f: data[m][ref][f] for f in sorted(data[m][ref], key=file_order)}
                for ref in sorted(data[m])}
            for m in MODES + ("official",) if data.get(m)}
     text = yaml.safe_dump(out, sort_keys=False, width=1000, allow_unicode=True)
@@ -1094,7 +1099,7 @@ def record_results(mode: str, target: Target, results: list[FileResult]) -> None
         traces = {t.id: t.trace for t in r.tests if t.trace}
         if traces:  # failures' last frames and full messages, for diagnosis
             data["files"][r.path]["traces"] = traces
-    data["files"] = {k: data["files"][k] for k in sorted(data["files"], key=_file_order)}
+    data["files"] = {k: data["files"][k] for k in sorted(data["files"], key=file_order)}
     p = results_path(mode, target.ref)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(data, indent=1) + "\n")
@@ -1320,40 +1325,50 @@ def _cause(m: str, rel: str, tid: str, o: str, detail: str, official: dict) -> t
     return root_cause(m, o, detail)
 
 
-def write_gaps(primary: str = "ue5-dev") -> Path:
-    """GAPS.md from tests/upstream/results: every test, its outcome per mode,
-    and the failures grouped by root cause (each group a candidate issue)."""
-    refs = sorted({p.stem for m in GAP_MODES for p in (RESULTS / m).glob("*.json")},
-                  key=lambda r: (r != primary, r))
-    lines = ["# typesafe_carla vs CARLA's own PythonAPI tests: gaps", "",
-             "Generated by `python -m tools.upstream_tests --gaps` from",
-             "`tests/upstream/results/`; do not edit. See tests/upstream/README.md.", "",
-             "Modes: **cpython**, the unmodified tests under CPython with `import carla` =",
-             "typesafe_carla through tools/pycarla (primary); **codon**, the tests compiled",
-             "with typesafe-codon; **official**, CARLA's own module on the same server, for",
-             "comparison. A failure the official module shares is not a typesafe_carla gap.",
-             "*not run*: no result recorded (e.g. needs a server). Suite `ported`: tests",
-             "ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).", "",
-             "## Summary", "", "| ref | mode | suite | commit | pass | fail | skip | not run |",
-             "|---|---|---|---|---:|---:|---:|---:|"]
-    data = {(m, r): load_results(m, r) for m in GAP_MODES for r in refs}
-    # Excluded tests (and recorded results from before their exclusion) do
-    # not count: drop them.
+_GAPS_INTRO = """\
+# typesafe_carla vs CARLA's own PythonAPI tests: gaps
+
+Generated by `python -m tools.upstream_tests --gaps` from
+`tests/upstream/results/`; do not edit. See tests/upstream/README.md.
+
+Modes: **cpython**, the unmodified tests under CPython with `import carla` =
+typesafe_carla through tools/pycarla (primary); **codon**, the tests compiled
+with typesafe-codon; **official**, CARLA's own module on the same server, for
+comparison. A failure the official module shares is not a typesafe_carla gap.
+*not run*: no result recorded (e.g. needs a server). Suite `ported`: tests
+ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
+"""
+
+_GAPS_INFRASTRUCTURE = """\
+## Infrastructure limits
+
+- CI has no CARLA server: it runs only `unit`; `smoke`, `API`, the top-level
+  files and `ported` need `TSC_CARLA_PORT` (results here come from local runs).
+- No ue5-dev package ships Town03, Town05(_Opt), Town01, Town11 or Town12: the
+  tests needing them are excluded and ported (issue #80).
+"""
+
+
+def _drop_excluded(data: dict) -> None:
+    """Drops excluded tests (and results recorded before their exclusion): they do not count."""
     for (m, r), d in data.items():
         manifest = run_manifest(m).get(r) or {}
         for rel in list(d["files"]):
             entry = manifest.get(rel)
-            if isinstance(entry, str) and parse_expectation(entry)[0] == "exclude":
+            if not_run(entry, ("exclude",)):
                 del d["files"][rel]
             elif isinstance(entry, dict):
                 tests = d["files"][rel]["tests"]
-                for tid in [t for t in tests if t in entry and parse_expectation(entry[t])[0] == "exclude"]:
+                for tid in skipped_ids(entry, ("exclude",)) & tests.keys():
                     del tests[tid]
+
+
+def _gaps_summary(refs: list[str], data: dict) -> list[str]:
+    lines = ["", "## Summary", "", "| ref | mode | suite | commit | pass | fail | skip | not run |",
+             "|---|---|---|---|---:|---:|---:|---:|"]
     for r in refs:
         for m in GAP_MODES:
             d = data[(m, r)]
-            if not d["files"]:
-                continue
             for suite in SUITES:
                 outs = [o for rel, f in d["files"].items() if suite_of(rel) == suite
                         for o, _ in f["tests"].values()]
@@ -1361,6 +1376,12 @@ def write_gaps(primary: str = "ue5-dev") -> Path:
                     lines.append(f"| {r} | {m} | {suite} | {d.get('sha', '')[:10]} | {outs.count('pass')} | "
                                  f"{sum(o in FAILURES for o in outs)} | {outs.count('skip')} | "
                                  f"{outs.count('not-run')} |")
+    return lines
+
+
+def _gaps_root_causes(refs: list[str], data: dict) -> list[str]:
+    """The failures of each ref and mode, grouped by root cause (each a candidate issue)."""
+    lines = []
     for r in refs:
         official = data[("official", r)]["files"]
         for m in GAP_MODES:
@@ -1383,53 +1404,70 @@ def write_gaps(primary: str = "ue5-dev") -> Path:
                     shown = ", ".join(f"`{t}`" for t in tests[:8]) + (f", +{len(tests) - 8} more" if len(tests) > 8 else "")
                     lines.append(f"- **{cause}**: {len(tests)} tests: {shown}")
                 lines.append("")
+    return lines
+
+
+def _gaps_table(title: str, intro: list[str], rows: list[tuple[str, str, str, str]]) -> list[str]:
+    if not rows:
+        return []
+    return (["", f"## {title}", "", *intro, "", "| ref | file | test | why |", "|---|---|---|---|"]
+            + [f"| {r} | `{rel}` | {t} | {why} |" for r, rel, t, why in rows])
+
+
+def _gaps_not_run(refs: list[str]) -> list[str]:
+    """The tests expectations.yaml excludes, and those the official module cannot run."""
     excluded = []
     for r in refs:
         for rel, entry in (load_manifest("cpython").get(r) or {}).items():
-            if isinstance(entry, str) and parse_expectation(entry)[0] == "exclude":
+            if not_run(entry, ("exclude",)):
                 excluded.append((r, rel, "(all its tests)", parse_expectation(entry)[1]))
             elif isinstance(entry, dict):
                 excluded += [(r, rel, t, parse_expectation(v)[1]) for t, v in entry.items()
-                             if parse_expectation(v)[0] == "exclude"]
-    if excluded:
-        lines += ["", "## Excluded from the target", "",
-                  "Not run, and not counted as failures (expectations.yaml `exclude:`).", "",
-                  "| ref | file | test | why |", "|---|---|---|---|"]
-        lines += [f"| {r} | `{rel}` | {t} | {why} |" for r, rel, t, why in excluded]
+                             if kind_of(v) == "exclude"]
     unmeasured = [(r, rel, t, parse_expectation(v)[1])
                   for r in refs for rel, tests in (load_manifest("official").get(r) or {}).items()
                   for t, v in tests.items()]
-    if unmeasured:
-        lines += ["", "## Not run with the official module", "",
-                  "The official module cannot run these (its own defects or this server's",
-                  "behaviour; expectations.yaml `official:`), so typesafe_carla is not compared",
-                  "with it here. typesafe_carla still runs them: a pass is a pass, a failure",
-                  "has no official baseline.", "",
-                  "| ref | file | test | why |", "|---|---|---|---|"]
-        lines += [f"| {r} | `{rel}` | {t} | {why} |" for r, rel, t, why in unmeasured]
-    lines += ["", "## Codon `--pyext` limitations (harness, not typesafe_carla gaps)", "", CODON_PYEXT_LIMITS]
-    lines += ["## Infrastructure limits", "",
-              "- CI has no CARLA server: it runs only `unit`; `smoke`, `API`, the top-level",
-              "  files and `ported` need `TSC_CARLA_PORT` (results here come from local runs).",
-              "- No ue5-dev package ships Town03, Town05(_Opt), Town01, Town11 or Town12: the",
-              "  tests needing them are excluded and ported (issue #80).", ""]
+    return (_gaps_table("Excluded from the target",
+                        ["Not run, and not counted as failures (expectations.yaml `exclude:`)."], excluded)
+            + _gaps_table("Not run with the official module",
+                          ["The official module cannot run these (its own defects or this server's",
+                           "behaviour; expectations.yaml `official:`), so typesafe_carla is not compared",
+                           "with it here. typesafe_carla still runs them: a pass is a pass, a failure",
+                           "has no official baseline."], unmeasured))
+
+
+def _gaps_every_test(refs: list[str], data: dict) -> list[str]:
+    lines = []
     for r in refs:
         lines += [f"## Every test: {r}", "", "| test | cpython | codon | official | root cause |",
                   "|---|---|---|---|---|"]
         official = data[("official", r)]["files"]
-        files = sorted(set().union(*(data[(m, r)]["files"] for m in GAP_MODES)), key=_file_order)
+        files = sorted(set().union(*(data[(m, r)]["files"] for m in GAP_MODES)), key=file_order)
         for rel in files:
-            ids = list(dict.fromkeys(t for m in GAP_MODES
-                                     for t in data[(m, r)]["files"].get(rel, {}).get("tests", {})))
-            for tid in ids:
+            results = {m: data[(m, r)]["files"].get(rel, {}).get("tests", {}) for m in GAP_MODES}
+            for tid in dict.fromkeys(t for m in GAP_MODES for t in results[m]):
                 cells, cause = [], ""
                 for m in GAP_MODES:
-                    o, detail = data[(m, r)]["files"].get(rel, {}).get("tests", {}).get(tid, ["not run", ""])
+                    o, detail = results[m].get(tid, ["not run", ""])
                     cells.append(o)
                     if not cause and o in FAILURES:
                         cause = _cause(m, rel, tid, o, detail, official)[1]
                 lines.append(f"| `{rel}::{tid}` | {' | '.join(cells)} | {cause.replace('|', '/')} |")
         lines.append("")
+    return lines
+
+
+def write_gaps(primary: str = "ue5-dev") -> Path:
+    """GAPS.md from tests/upstream/results: every test, its outcome per mode,
+    and the failures grouped by root cause (each group a candidate issue)."""
+    refs = sorted({p.stem for m in GAP_MODES for p in (RESULTS / m).glob("*.json")},
+                  key=lambda r: (r != primary, r))
+    data = {(m, r): load_results(m, r) for m in GAP_MODES for r in refs}
+    _drop_excluded(data)
+    lines = [*_GAPS_INTRO.splitlines(), *_gaps_summary(refs, data), *_gaps_root_causes(refs, data),
+             *_gaps_not_run(refs),
+             "", "## Codon `--pyext` limitations (harness, not typesafe_carla gaps)", "", CODON_PYEXT_LIMITS,
+             *_GAPS_INFRASTRUCTURE.splitlines(), "", *_gaps_every_test(refs, data)]
     GAPS.write_text("\n".join(lines) + "\n")
     return GAPS
 
@@ -1439,12 +1477,9 @@ def write_gaps(primary: str = "ue5-dev") -> Path:
 # ---------------------------------------------------------------------------
 
 def _summary(mode: str, target: Target, rows: list[tuple[str, Check]], known_ref: bool) -> str:
-    total = Check()
-    for _, c in rows:
-        total.passed += c.passed
-        total.xfailed += c.xfailed
-        total.skipped += c.skipped
-        total.problems += c.problems
+    total = Check(sum(c.passed for _, c in rows), sum(c.xfailed for _, c in rows),
+                  sum(c.skipped for _, c in rows),
+                  problems=[p for _, c in rows for p in c.problems])
     lines = [f"### CARLA PythonAPI tests vs typesafe_carla ({mode} mode): "
              f"{target.ref} @ {target.sha[:12]} ({target.backend})",
              "", f"**{total.counts()}**" + ("" if known_ref else f" (no expectations for {target.ref}: report only)"),
@@ -1472,8 +1507,7 @@ def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> 
             return rel, None, entry, ids
         server = suite_of(rel) in SERVER_SUITES
         if mode in ("cpython", "official"):
-            skip = skipped_ids(entry) if mode == "cpython" else {
-                t for t in skipped_ids(entry) if parse_expectation(entry[t])[0] == "exclude"}
+            skip = skipped_ids(entry, NOT_RUN if mode == "cpython" else ("exclude",))
             return rel, run_file_cpython(tests, rel, pydir, skip, server), entry, ids
         return rel, run_file(tests, rel, work, skipped_ids(entry), server,
                              compile_only=args.compile_only), entry, ids

@@ -28,7 +28,7 @@ MANIFESTS = {mode: up.load_manifest(mode) for mode in up.MODES}
 # Every file any ref lists, so that collection needs neither the network nor
 # the native library; a file the current ref lacks is skipped.
 FILES = {mode: sorted({rel for entries in MANIFESTS[mode].values() for rel in entries},
-                      key=up._file_order) for mode in up.MODES}
+                      key=up.file_order) for mode in up.MODES}
 CASES = [(mode, rel) for mode in up.MODES for rel in FILES[mode]]
 
 
