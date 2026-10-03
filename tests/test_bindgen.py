@@ -197,9 +197,12 @@ _COVERAGE_FIXTURE = """
 namespace carla { namespace client {
 struct Base { int size() const; };
 struct List : Base { int at(int i) const; int Find(int id) const; int Other() const; };
+struct Lights { int size() const; int at(int i) const; int Count() const; };
 }}
 template <typename Items>
 int helper(const Items &items, int i) { return items.size() + items.at(i); }
+template <typename Items>
+int count(const Items *items) { return items->Count(); }
 """
 
 
@@ -208,7 +211,9 @@ def test_coverage_counts_template_helpers(tmp_path, monkeypatch):
     generated code makes it, directly or through a shim function template
     it instantiates (list_at's `items.at(index)`: issue #45), and to the
     hand-written code otherwise. libclang leaves the template's dependent
-    calls unresolved, so they are resolved on the call site's argument types."""
+    calls unresolved, so they are resolved on each specialization's parameter
+    types: one template used with two classes counts for both, and a
+    hand-written call of the same template does not make it generated."""
     cindex = pytest.importorskip("clang.cindex")
     from tools.bindgen import clang
 
@@ -217,20 +222,25 @@ def test_coverage_counts_template_helpers(tmp_path, monkeypatch):
     (src / "helper.hpp").write_text(_COVERAGE_FIXTURE)
     (src / "generated" / "bindings.cpp").write_text(
         '#include "../helper.hpp"\n'
-        "int gen(const carla::client::List &l) { return helper(l, 0); }\n")
+        "int gen(const carla::client::List &l) { return helper(l, 0); }\n"
+        "int gen2(const carla::client::Lights &l) { return helper(l, 0) + count(&l); }\n")
     (src / "hand.cpp").write_text(
         '#include "helper.hpp"\n'
-        "int hand(const carla::client::List &l) { return l.Find(1) + l.size(); }\n")
+        "int hand(const carla::client::List &l) { return l.Find(1) + l.size(); }\n"
+        "int hand2(const carla::client::List &l) { return helper(l, 0); }\n")
     monkeypatch.setattr(clang, "SHIM_SOURCES", src)
     monkeypatch.setattr(clang, "GENERATED_SOURCES", (src / "generated").resolve())
     monkeypatch.setattr(clang, "COMPAT_HEADER", (src / "carla_compat.hpp").resolve())
-    classes = {"carla::client::Base", "carla::client::List"}
+    classes = {"carla::client::Base", "carla::client::List", "carla::client::Lights"}
 
     def calls(path):
         tu = cindex.Index.create().parse(str(path), args=["-x", "c++", "-std=c++17"])
         return clang._calls(tu, classes)
 
     assert calls(src / "generated" / "bindings.cpp") == {
-        ("carla::client::List::at", True), ("carla::client::Base::size", True)}
+        ("carla::client::List::at", True), ("carla::client::Base::size", True),
+        ("carla::client::Lights::at", True), ("carla::client::Lights::size", True),
+        ("carla::client::Lights::Count", True)}
     assert calls(src / "hand.cpp") == {
-        ("carla::client::List::Find", False), ("carla::client::Base::size", False)}
+        ("carla::client::List::Find", False), ("carla::client::Base::size", False),
+        ("carla::client::List::at", False)}

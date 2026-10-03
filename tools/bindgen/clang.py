@@ -313,7 +313,12 @@ def _member_name(call: cindex.Cursor) -> tuple[cindex.Cursor | None, str | None]
 def _param_members(template: cindex.Cursor) -> list[tuple[int, str]]:
     """(parameter index, method name) for each dependent member call a shim
     function template makes on one of its parameters, e.g. (0, "at") for
-    `items.at(index)` in list_at(const Items &items, ...)."""
+    `items.at(index)` in list_at(const Items &items, ...), or `p->name()` on a
+    raw pointer parameter. Other calls are not seen (a false "—" or
+    "hand-written", never a false "generated"): calls on an expression other
+    than the parameter itself, `->` through a smart pointer (SharedPtr's
+    operator->), and calls through a nested template the template calls.
+    None of these occur in the shim today."""
     params = [c for c in template.get_children() if c.kind == cindex.CursorKind.PARM_DECL]
     index = {p: i for i, p in enumerate(params)}
     out = []
@@ -349,7 +354,7 @@ def _calls(tu: cindex.TranslationUnit, classes: set[str]) -> set[tuple[str, bool
     it instantiates (e.g. list_at's `items.at(index)`)."""
     called = set()
     templates: dict[tuple[str, int, int], list[tuple[int, str]]] = {}
-    instantiations = []  # (call, its template's location, generated)
+    instantiations = []  # (specialization, its template's location, generated)
     for node in tu.cursor.walk_preorder():
         if node.kind == cindex.CursorKind.FUNCTION_TEMPLATE and node.is_definition() \
                 and _in_shim(node):
@@ -378,15 +383,20 @@ def _calls(tu: cindex.TranslationUnit, classes: set[str]) -> set[tuple[str, bool
         elif ref.kind == cindex.CursorKind.FUNCTION_DECL and _in_shim(ref):
             # Possibly an instantiation of a shim function template: its
             # location is the template's.
-            instantiations.append((node, _location(ref), generated))
-    # The template's dependent member calls, on the classes of the arguments
-    # this call passes to those parameters.
-    for node, where, generated in instantiations:
-        args = list(node.get_arguments())
+            instantiations.append((ref, _location(ref), generated))
+    # The template's dependent member calls, on the classes of the
+    # specialization's parameters (so explicit template arguments and
+    # conversions at the call site do not matter).
+    for spec, where, generated in instantiations:
+        params = list(spec.type.argument_types())
         for i, name in templates.get(where, ()):
-            if i >= len(args):
+            if i >= len(params):  # a parameter pack
                 continue
-            decl = args[i].type.get_canonical().get_declaration()
+            t = params[i].get_canonical()
+            if t.kind in (cindex.TypeKind.LVALUEREFERENCE, cindex.TypeKind.RVALUEREFERENCE,
+                          cindex.TypeKind.POINTER):
+                t = t.get_pointee().get_canonical()
+            decl = t.get_declaration()
             if decl.kind == cindex.CursorKind.NO_DECL_FOUND:
                 continue
             called |= {(f"{cls}::{name}", generated) for cls in _declaring_classes(decl, name)
