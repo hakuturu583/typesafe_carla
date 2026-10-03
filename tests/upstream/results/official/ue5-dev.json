@@ -190,6 +190,330 @@
     ]
    }
   },
+  "smoke/test_actor_introspection.py": {
+   "file_error": null,
+   "tests": {
+    "TestActorIntrospection.test_vehicle_components": [
+     "pass",
+     ""
+    ],
+    "TestActorIntrospection.test_vehicle_sockets_consistent": [
+     "pass",
+     ""
+    ],
+    "TestActorIntrospection.test_walker_bones": [
+     "pass",
+     ""
+    ],
+    "TestActorIntrospection.test_component_not_found_raises": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_debug_clear.py": {
+   "file_error": null,
+   "tests": {
+    "TestDebugClear.test_clear_debug_shape": [
+     "pass",
+     ""
+    ],
+    "TestDebugClear.test_clear_debug_string": [
+     "pass",
+     ""
+    ],
+    "TestDebugClear.test_clear_when_nothing_drawn": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_encoding_cameras.py": {
+   "file_error": null,
+   "tests": {
+    "TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels": [
+     "pass",
+     ""
+    ],
+    "TestEncodingCameras.test_semantic_segmentation_emits_valid_labels": [
+     "pass",
+     ""
+    ],
+    "TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_recorder.py": {
+   "file_error": null,
+   "tests": {
+    "TestRecorder.test_record_replay_blueprint_id_round_trips": [
+     "pass",
+     ""
+    ],
+    "TestRecorder.test_record_survives_same_tick_actor_destroy": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_replay_no_actor_aliasing.py": {
+   "file_error": null,
+   "tests": {
+    "TestReplayNoActorAliasing.test_replayed_actors_have_clean_state": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_traffic_manager_large_vehicle.py": {
+   "file_error": null,
+   "tests": {
+    "TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_traffic_manager_sync_step.py": {
+   "file_error": null,
+   "tests": {
+    "TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_v2x.py": {
+   "file_error": null,
+   "tests": {
+    "TestV2X.test_custom_v2x_send_and_receive": [
+     "pass",
+     ""
+    ],
+    "TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length": [
+     "pass",
+     ""
+    ],
+    "TestV2X.test_v2x_cam_generation": [
+     "pass",
+     ""
+    ],
+    "TestV2X.test_v2i_infrastructure_sensor_without_owner": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_vehicle_telemetry.py": {
+   "file_error": null,
+   "tests": {
+    "TestVehicleTelemetry.test_get_telemetry_data_shape_and_values": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_walker_bounding_box.py": {
+   "file_error": null,
+   "tests": {
+    "TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_walker_navigation.py": {
+   "file_error": null,
+   "tests": {
+    "TestWalkerNavigation.test_walker_ai_controller_routes_without_crash": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "API/prop_control.py": {
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "error",
+     "exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu)"
+    ]
+   }
+  },
+  "API/spawn_actor.py": {
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "error",
+     "exit 2: spawn_actor.py: error: the following arguments are required: -b/--blueprint"
+    ]
+   }
+  },
+  "API/test_apply_textures.py": {
+   "file_error": null,
+   "tests": {
+    "TestApplyTextures.test_apply_textures": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "API/test_no_rendering_mode.py": {
+   "file_error": null,
+   "tests": {
+    "TestNoRenderingMode.test_no_rendering_mode": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   }
+  },
+  "API/test_semantic_segmentation.py": {
+   "file_error": null,
+   "tests": {
+    "TestSemanticSegmentation.test_semantic_segmentation": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "API/test_sensor_recording.py": {
+   "file_error": null,
+   "tests": {
+    "TestSensorRecording.test_gnss": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_imu": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_radar": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_rgb": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_depth": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_instance_segmentation": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_semantic_segmentation": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_lidar": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_semantic_lidar": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   }
+  },
+  "API/test_sensor_recording_fast.py": {
+   "file_error": null,
+   "tests": {
+    "TestSensorRecording.test_gnss": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_imu": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_radar": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_rgb": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_depth": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_instance_segmentation": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_semantic_segmentation": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_lidar": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_semantic_lidar": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   }
+  },
+  "API/test_spawn_vehicles.py": {
+   "file_error": null,
+   "tests": {
+    "TestVehiclesSpawnTest.test_vehicle_spawn": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   }
+  },
+  "API/test_spawn_walkers.py": {
+   "file_error": null,
+   "tests": {
+    "TestWalkersSpawn.test_walker_spawn": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   }
+  },
+  "API/test_sync_mode.py": {
+   "file_error": null,
+   "tests": {
+    "TestSyncMode.test_sync_mode_set_transform": [
+     "fail",
+     "AssertionError: -64.64484405517578 != 68.0"
+    ]
+   }
+  },
+  "test_connection.py": {
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "test_ground_truth.py": {
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "error",
+     "exit 1: ModuleNotFoundError: No module named 'cv2'"
+    ]
+   }
+  },
+  "test_raycast_sensor.py": {
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "skip",
+     "an interactive script (a pygame loop; the official module also runs until the time-out)"
+    ]
+   }
+  },
   "ported/API/test_collision.py": {
    "file_error": null,
    "tests": {
@@ -201,12 +525,7 @@
   },
   "ported/smoke/test_blueprint.py": {
    "file_error": null,
-   "tests": {
-    "TestBlueprintLibrary.test_blueprint_ids": [
-     "fail",
-     "AssertionError: None is not true"
-    ]
-   }
+   "tests": {}
   },
   "ported/smoke/test_client.py": {
    "file_error": null,
@@ -225,8 +544,8 @@
    "file_error": null,
    "tests": {
     "TestCollisionSensor.test_single_car": [
-     "fail",
-     "AssertionError: The collision sensor have failed for the cars: vehicle.firetruck.actors vehicle.fuso.mitsubishi"
+     "pass",
+     ""
     ]
    }
   },
@@ -332,19 +651,14 @@
    "file_error": null,
    "tests": {
     "TestMap.test_load_all_maps": [
-     "error",
-     "RuntimeError: std::exception"
+     "pass",
+     ""
     ]
    }
   },
   "ported/smoke/test_props_loading.py": {
    "file_error": null,
-   "tests": {
-    "TestPropsLoading.test_spawn_loaded_props": [
-     "fail",
-     "AssertionError: 'Unknown error while trying to spawn actor' is not false"
-    ]
-   }
+   "tests": {}
   },
   "ported/smoke/test_sensor_determinism.py": {
    "file_error": null,
@@ -352,12 +666,7 @@
   },
   "ported/smoke/test_sensor_tick_time.py": {
    "file_error": null,
-   "tests": {
-    "TestSensorTickTime.test_sensor_tick_time": [
-     "fail",
-     "AssertionError: 0 != 3 :"
-    ]
-   }
+   "tests": {}
   },
   "ported/smoke/test_snapshot.py": {
    "file_error": null,
@@ -374,19 +683,14 @@
   },
   "ported/smoke/test_streamming.py": {
    "file_error": null,
-   "tests": {
-    "TestStreamming.test_multistream": [
-     "timeout",
-     "timed out after 900 s"
-    ]
-   }
+   "tests": {}
   },
   "ported/smoke/test_sync.py": {
    "file_error": null,
    "tests": {
     "TestSynchronousMode.test_sensor_transform_on_synchronous_mode": [
-     "error",
-     "RuntimeError: std::exception"
+     "pass",
+     ""
     ],
     "TestSynchronousMode.test_apply_batch_sync": [
      "pass",
@@ -399,15 +703,15 @@
    "tests": {
     "TestApplyVehiclePhysics.test_single_physics_control": [
      "error",
-     "AttributeError: module 'carla' has no attribute 'libcarla'"
+     "TypeError: No to_python (by-value) converter found for C++ type: std::__1::vector<float, std::__1::allocator<float>>"
     ],
     "TestApplyVehiclePhysics.test_multiple_physics_control": [
      "error",
-     "AttributeError: module 'carla' has no attribute 'libcarla'"
+     "TypeError: No to_python (by-value) converter found for C++ type: std::__1::vector<float, std::__1::allocator<float>>"
     ],
     "TestVehicleFriction.test_vehicle_zero_friction": [
-     "error",
-     "AttributeError: module 'carla' has no attribute 'libcarla'"
+     "fail",
+     "AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]"
     ],
     "TestVehicleFriction.test_vehicle_friction_volume": [
      "pass",
@@ -418,24 +722,24 @@
      ""
     ],
     "TestVehicleTireConfig.test_vehicle_wheel_collision": [
-     "error",
-     "AttributeError: module 'carla' has no attribute 'libcarla'"
+     "fail",
+     "AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]"
     ],
     "TestVehicleTireConfig.test_vehicle_tire_long_stiff": [
      "fail",
      "AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]"
     ],
     "TestStickyControl.test_default": [
-     "error",
-     "AttributeError: module 'carla' has no attribute 'libcarla'"
+     "pass",
+     ""
     ],
     "TestStickyControl.test_true": [
-     "error",
-     "AttributeError: module 'carla' has no attribute 'libcarla'"
+     "pass",
+     ""
     ],
     "TestStickyControl.test_false": [
-     "error",
-     "AttributeError: module 'carla' has no attribute 'libcarla'"
+     "pass",
+     ""
     ]
    }
   },

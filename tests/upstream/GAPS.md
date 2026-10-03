@@ -15,17 +15,20 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 | ref | mode | suite | commit | pass | fail | skip | not run |
 |---|---|---|---|---:|---:|---:|---:|
 | ue5-dev | cpython | unit | 0a5ce0d5b4 | 38 | 2 | 0 | 0 |
-| ue5-dev | cpython | smoke | 0a5ce0d5b4 | 16 | 6 | 0 | 0 |
-| ue5-dev | cpython | API | 0a5ce0d5b4 | 0 | 26 | 0 | 0 |
+| ue5-dev | cpython | smoke | 0a5ce0d5b4 | 20 | 2 | 0 | 0 |
+| ue5-dev | cpython | API | 0a5ce0d5b4 | 2 | 24 | 0 | 0 |
 | ue5-dev | cpython | top | 0a5ce0d5b4 | 1 | 1 | 1 | 0 |
-| ue5-dev | cpython | ported | 0a5ce0d5b4 | 19 | 21 | 0 | 0 |
+| ue5-dev | cpython | ported | 0a5ce0d5b4 | 24 | 16 | 0 | 0 |
 | ue5-dev | codon | unit | 0a5ce0d5b4 | 30 | 10 | 0 | 0 |
 | ue5-dev | codon | smoke | 0a5ce0d5b4 | 0 | 22 | 0 | 0 |
 | ue5-dev | codon | API | 0a5ce0d5b4 | 0 | 26 | 0 | 0 |
 | ue5-dev | codon | top | 0a5ce0d5b4 | 0 | 3 | 0 | 0 |
 | ue5-dev | codon | ported | 0a5ce0d5b4 | 0 | 40 | 0 | 0 |
 | ue5-dev | official | unit | 0a5ce0d5b4 | 38 | 2 | 0 | 0 |
-| ue5-dev | official | ported | 0a5ce0d5b4 | 26 | 14 | 0 | 0 |
+| ue5-dev | official | smoke | 0a5ce0d5b4 | 22 | 0 | 0 | 0 |
+| ue5-dev | official | API | 0a5ce0d5b4 | 2 | 24 | 0 | 0 |
+| ue5-dev | official | top | 0a5ce0d5b4 | 1 | 1 | 1 | 0 |
+| ue5-dev | official | ported | 0a5ce0d5b4 | 32 | 8 | 0 | 0 |
 | 0.10.0 | cpython | unit | ada75f9206 | 13 | 2 | 0 | 0 |
 | 0.10.0 | codon | unit | ada75f9206 | 13 | 2 | 0 | 0 |
 | 0.10.0 | codon | smoke | ada75f9206 | 0 | 35 | 0 | 0 |
@@ -34,44 +37,34 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 
 ## Root causes: ue5-dev, cpython mode
 
-### typesafe_carla lacks this (missing API) (2 causes, 5 tests)
+### typesafe_carla lacks this (missing API) (1 causes, 5 tests)
 
-- **missing `carla.Image.raw_data` (#78)**: 3 tests: `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids`
-- **missing `carla.command.ApplyVehiclePhysicsControl`**: 2 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume`, `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values`
+- **missing `carla.command.ApplyVehiclePhysicsControl` (#79)**: 5 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume`, `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false`
 
-### behaviour differs (assertions, errors, crashes) (5 causes, 9 tests)
+### behaviour differs (assertions, errors, crashes) (3 causes, 6 tests)
 
 - **geo round trip keeps double precision where the official module rounds to float32 (differs by up to ~0.5 at millions of metres) (#81)**: 3 tests: `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_location_to_geo_and_back`, `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_location_to_geo_and_back`, `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back`
-- **RuntimeError: 'Image' object has no attribute 'frame'**: 2 tests: `API/test_apply_textures.py::TestApplyTextures.test_apply_textures`, `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation`
-- **RuntimeError: a bytes-like object is required, not 'method' [carla.World.tick()]**: 2 tests: `ported/smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count`, `ported/smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count`
-- **RuntimeError: CustomVNXBytes.set_bytes must be in [N, N], got N**: 1 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length`
-- **sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads**: 1 tests: `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison`
+- **TypeError: 'CustomV2XMessage' object is not subscriptable (#85)**: 2 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive`, `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length`
+- **sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads (#86)**: 1 tests: `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison`
 
-### the test server's content (maps, blueprints), not typesafe_carla (3 causes, 23 tests)
+### the test server's content (maps, blueprints), not typesafe_carla (2 causes, 22 tests)
 
 - **load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way)**: 21 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +13 more
-- **blueprint `sensor.camera.rgb` has no attribute `chromatic_aberration_intensity` on this server**: 1 tests: `API/prop_control.py::<script>`
 - **the prop does not move after set_transform + tick in synchronous mode; the official module fails the same way on this server**: 1 tests: `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform`
 
-### the pycarla wrapper cannot express this yet (harness) (2 causes, 2 tests)
+### the upstream test itself (fails with the official module too) (11 causes, 12 tests)
 
-- **pycarla cannot wrap `CAMEvent.get_message_count` (self-typed generic method (Codon exporter))**: 1 tests: `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation`
-- **pycarla cannot wrap `CustomV2XEvent.get_message_count` (self-typed generic method (Codon exporter))**: 1 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive`
-
-### the upstream test itself (fails with the official module too) (7 causes, 15 tests)
-
-- **fails with the official module too: missing `carla.libcarla`**: 7 tests: `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`, `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`, `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false`
-- **fails with the official module too: RuntimeError: std::exception**: 3 tests: `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`, `ported/smoke/test_map.py::TestMap.test_load_all_maps`, `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode`
-- **fails with the official module too: assertion: AssertionError: The collision sensor have failed for the cars: vehicle.firetruck.actors vehicle.fuso.mitsubishi**: 1 tests: `ported/smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car`
+- **fails with the official module too: TypeError: No to_python (by-value) converter found for C++ type: std::__1::vector<float, std::__1::allocator<float>>**: 2 tests: `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`
+- **fails with the official module too: RuntimeError: std::exception**: 1 tests: `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`
+- **fails with the official module too: a script that needs command-line arguments (API/Tests.md documents them)**: 1 tests: `API/spawn_actor.py::<script>`
 - **fails with the official module too: assertion: AssertionError: True is not false**: 1 tests: `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points`
 - **fails with the official module too: assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff`
+- **fails with the official module too: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`
+- **fails with the official module too: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision`
+- **fails with the official module too: error: exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu)**: 1 tests: `API/prop_control.py::<script>`
+- **fails with the official module too: test dependency `cv2` not installed in the test interpreter**: 1 tests: `test_ground_truth.py::<script>`
 - **fails with the official module too: the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
 - **stale upstream test: uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction raises AttributeError**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
-
-### infrastructure (2 causes, 2 tests)
-
-- **a script that needs command-line arguments (API/Tests.md documents them)**: 1 tests: `API/spawn_actor.py::<script>`
-- **test dependency `cv2` not installed in the test interpreter**: 1 tests: `test_ground_truth.py::<script>`
 
 
 ## Root causes: ue5-dev, codon mode
@@ -106,23 +99,29 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 
 ## Root causes: ue5-dev, official mode
 
-### typesafe_carla lacks this (missing API) (1 causes, 7 tests)
+### behaviour differs (assertions, errors, crashes) (7 causes, 28 tests)
 
-- **missing `carla.libcarla`**: 7 tests: `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`, `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`, `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false`
-
-### behaviour differs (assertions, errors, crashes) (4 causes, 7 tests)
-
-- **RuntimeError: std::exception**: 4 tests: `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`, `ported/smoke/test_map.py::TestMap.test_load_all_maps`, `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode`, `ported/test_vehicle_physics.py::<script>`
-- **assertion: AssertionError: The collision sensor have failed for the cars: vehicle.firetruck.actors vehicle.fuso.mitsubishi**: 1 tests: `ported/smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car`
+- **RuntimeError: std::exception**: 21 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +13 more
+- **TypeError: No to_python (by-value) converter found for C++ type: std::__1::vector<float, std::__1::allocator<float>>**: 2 tests: `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`
 - **assertion: AssertionError: True is not false**: 1 tests: `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points`
 - **assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff`
+- **assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`
+- **assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision`
+- **error: exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu)**: 1 tests: `API/prop_control.py::<script>`
+
+### the test server's content (maps, blueprints), not typesafe_carla (2 causes, 3 tests)
+
+- **load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way)**: 2 tests: `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn`, `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn`
+- **the prop does not move after set_transform + tick in synchronous mode; the official module fails the same way on this server**: 1 tests: `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform`
 
 ### the upstream test itself (fails with the official module too) (1 causes, 1 tests)
 
 - **stale upstream test: uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction raises AttributeError**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
 
-### infrastructure (1 causes, 1 tests)
+### infrastructure (3 causes, 3 tests)
 
+- **a script that needs command-line arguments (API/Tests.md documents them)**: 1 tests: `API/spawn_actor.py::<script>`
+- **test dependency `cv2` not installed in the test interpreter**: 1 tests: `test_ground_truth.py::<script>`
 - **the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
 
 
@@ -294,60 +293,60 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `unit/test_vehicle.py::TestVehicleControl.test_default_values` | pass | pass | pass |  |
 | `unit/test_vehicle.py::TestVehicleControl.test_named_args` | pass | pass | pass |  |
 | `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args` | error | compile | error | stale upstream test: uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction raises AttributeError |
-| `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_components` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_sockets_consistent` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_actor_introspection.py::TestActorIntrospection.test_walker_bones` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_actor_introspection.py::TestActorIntrospection.test_component_not_found_raises` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_shape` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_string` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_debug_clear.py::TestDebugClear.test_clear_when_nothing_drawn` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels` | error | compile | not run | missing `carla.Image.raw_data` (#78) |
-| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels` | error | compile | not run | missing `carla.Image.raw_data` (#78) |
-| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids` | error | compile | not run | missing `carla.Image.raw_data` (#78) |
-| `smoke/test_recorder.py::TestRecorder.test_record_replay_blueprint_id_round_trips` | pass | compile | not run | does not compile: no module named 'tempfile' |
-| `smoke/test_recorder.py::TestRecorder.test_record_survives_same_tick_actor_destroy` | pass | compile | not run | does not compile: no module named 'tempfile' |
-| `smoke/test_replay_no_actor_aliasing.py::TestReplayNoActorAliasing.test_replayed_actors_have_clean_state` | pass | compile | not run | does not compile: no module named 'tempfile' |
-| `smoke/test_traffic_manager_large_vehicle.py::TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_traffic_manager_sync_step.py::TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive` | error | compile | not run | pycarla cannot wrap `CustomV2XEvent.get_message_count` (self-typed generic method (Codon exporter)) |
-| `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length` | error | compile | not run | RuntimeError: CustomVNXBytes.set_bytes must be in [N, N], got N |
-| `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation` | error | compile | not run | pycarla cannot wrap `CAMEvent.get_message_count` (self-typed generic method (Codon exporter)) |
-| `smoke/test_v2x.py::TestV2X.test_v2i_infrastructure_sensor_without_owner` | pass | compile | not run | does not compile: no module named 'array' |
-| `smoke/test_vehicle_telemetry.py::TestVehicleTelemetry.test_get_telemetry_data_shape_and_values` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_walker_bounding_box.py::TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_walker_navigation.py::TestWalkerNavigation.test_walker_ai_controller_routes_without_crash` | pass | compile | not run | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `API/prop_control.py::<script>` | error | compile | not run | blueprint `sensor.camera.rgb` has no attribute `chromatic_aberration_intensity` on this server |
-| `API/spawn_actor.py::<script>` | error | compile | not run | a script that needs command-line arguments (API/Tests.md documents them) |
-| `API/test_apply_textures.py::TestApplyTextures.test_apply_textures` | error | compile | not run | RuntimeError: 'Image' object has no attribute 'frame' |
-| `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation` | error | compile | not run | RuntimeError: 'Image' object has no attribute 'frame' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_gnss` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording.py::TestSensorRecording.test_imu` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording.py::TestSensorRecording.test_radar` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording.py::TestSensorRecording.test_rgb` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording.py::TestSensorRecording.test_depth` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording.py::TestSensorRecording.test_lidar` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_lidar` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_gnss` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_imu` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_radar` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_rgb` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_depth` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_instance_segmentation` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_segmentation` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_lidar` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_lidar` | error | compile | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn` | error | error | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn` | error | error | not run | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform` | fail | fail | not run | the prop does not move after set_transform + tick in synchronous mode; the official module fails the same way on this server |
-| `test_connection.py::<script>` | pass | compile | not run | does not compile: no module named 'argparse' |
-| `test_ground_truth.py::<script>` | error | compile | not run | test dependency `cv2` not installed in the test interpreter |
-| `test_raycast_sensor.py::<script>` | skip | compile | not run | an interactive script (a pygame loop; the official module also runs until the time-out) |
+| `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_components` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_sockets_consistent` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_actor_introspection.py::TestActorIntrospection.test_walker_bones` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_actor_introspection.py::TestActorIntrospection.test_component_not_found_raises` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_shape` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_string` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_debug_clear.py::TestDebugClear.test_clear_when_nothing_drawn` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels` | pass | compile | pass | does not compile: no module named 'queue' |
+| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels` | pass | compile | pass | does not compile: no module named 'queue' |
+| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids` | pass | compile | pass | does not compile: no module named 'queue' |
+| `smoke/test_recorder.py::TestRecorder.test_record_replay_blueprint_id_round_trips` | pass | compile | pass | does not compile: no module named 'tempfile' |
+| `smoke/test_recorder.py::TestRecorder.test_record_survives_same_tick_actor_destroy` | pass | compile | pass | does not compile: no module named 'tempfile' |
+| `smoke/test_replay_no_actor_aliasing.py::TestReplayNoActorAliasing.test_replayed_actors_have_clean_state` | pass | compile | pass | does not compile: no module named 'tempfile' |
+| `smoke/test_traffic_manager_large_vehicle.py::TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_traffic_manager_sync_step.py::TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive` | error | compile | pass | TypeError: 'CustomV2XMessage' object is not subscriptable (#85) |
+| `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length` | error | compile | pass | TypeError: 'CustomV2XMessage' object is not subscriptable (#85) |
+| `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation` | pass | compile | pass | does not compile: no module named 'array' |
+| `smoke/test_v2x.py::TestV2X.test_v2i_infrastructure_sensor_without_owner` | pass | compile | pass | does not compile: no module named 'array' |
+| `smoke/test_vehicle_telemetry.py::TestVehicleTelemetry.test_get_telemetry_data_shape_and_values` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_walker_bounding_box.py::TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `smoke/test_walker_navigation.py::TestWalkerNavigation.test_walker_ai_controller_routes_without_crash` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `API/prop_control.py::<script>` | error | compile | error | fails with the official module too: error: exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu) |
+| `API/spawn_actor.py::<script>` | error | compile | error | fails with the official module too: a script that needs command-line arguments (API/Tests.md documents them) |
+| `API/test_apply_textures.py::TestApplyTextures.test_apply_textures` | pass | compile | pass | does not compile: no module named 'argparse' |
+| `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation` | pass | compile | pass | does not compile: no module named 'argparse' |
+| `API/test_sensor_recording.py::TestSensorRecording.test_gnss` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_imu` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_radar` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_rgb` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_depth` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_lidar` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_lidar` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_gnss` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_imu` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_radar` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_rgb` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_depth` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_instance_segmentation` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_segmentation` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_lidar` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_lidar` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn` | error | error | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn` | error | error | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
+| `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform` | fail | fail | fail | the prop does not move after set_transform + tick in synchronous mode; the official module fails the same way on this server |
+| `test_connection.py::<script>` | pass | compile | pass | does not compile: no module named 'argparse' |
+| `test_ground_truth.py::<script>` | error | compile | error | fails with the official module too: test dependency `cv2` not installed in the test interpreter |
+| `test_raycast_sensor.py::<script>` | skip | compile | skip | an interactive script (a pygame loop; the official module also runs until the time-out) |
 | `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car` | error | compile | error | fails with the official module too: RuntimeError: std::exception |
 | `ported/smoke/test_client.py::TestClient.test_version` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `ported/smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car` | fail | compile | fail | fails with the official module too: assertion: AssertionError: The collision sensor have failed for the cars: vehicle.firetruck.actors vehicle.fuso.mitsubishi |
+| `ported/smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_reference` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_projection` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_location_to_geo_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
@@ -364,25 +363,25 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back` | fail | compile | pass | geo round trip keeps double precision where the official module rounds to float32 (differs by up to ~0.5 at millions of metres) (#81) |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `ported/smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count` | error | compile | pass | RuntimeError: a bytes-like object is required, not 'method' [carla.World.tick()] |
-| `ported/smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count` | error | compile | pass | RuntimeError: a bytes-like object is required, not 'method' [carla.World.tick()] |
+| `ported/smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
+| `ported/smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
 | `ported/smoke/test_lidar.py::TestASyncLidar.test_lidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
 | `ported/smoke/test_lidar.py::TestASyncLidar.test_semlidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
-| `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | error | compile | pass | sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads |
-| `ported/smoke/test_map.py::TestMap.test_load_all_maps` | error | compile | error | fails with the official module too: RuntimeError: std::exception |
+| `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | error | compile | pass | sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads (#86) |
+| `ported/smoke/test_map.py::TestMap.test_load_all_maps` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | fail | compile | fail | fails with the official module too: assertion: AssertionError: True is not false |
-| `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode` | error | compile | error | fails with the official module too: RuntimeError: std::exception |
+| `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode` | pass | compile | pass | does not compile: no module named 'queue' |
 | `ported/smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync` | pass | compile | pass | does not compile: no module named 'queue' |
-| `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
-| `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
-| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
-| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` |
-| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` |
-| `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
+| `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control` | error | compile | error | fails with the official module too: TypeError: No to_python (by-value) converter found for C++ type: std::__1::vector<float, std::__1::allocator<float>> |
+| `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control` | error | compile | error | fails with the official module too: TypeError: No to_python (by-value) converter found for C++ type: std::__1::vector<float, std::__1::allocator<float>> |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction` | error | compile | fail | fails with the official module too: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764] |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision` | error | compile | fail | fails with the official module too: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364] |
 | `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff` | error | compile | fail | fails with the official module too: assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944] |
-| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
-| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
-| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
+| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
+| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
+| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
 | `ported/smoke/test_world.py::TestWorld.test_fixed_delta_seconds` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/test_vehicle_physics.py::<script>` | pass | compile | error | does not compile: no module named 'argparse' |
 

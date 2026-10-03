@@ -289,16 +289,16 @@
    "file_error": null,
    "tests": {
     "TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels": [
-     "error",
-     "AttributeError: 'Image' object has no attribute 'raw_data'"
+     "pass",
+     ""
     ],
     "TestEncodingCameras.test_semantic_segmentation_emits_valid_labels": [
-     "error",
-     "AttributeError: 'Image' object has no attribute 'raw_data'"
+     "pass",
+     ""
     ],
     "TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids": [
-     "error",
-     "AttributeError: 'Image' object has no attribute 'raw_data'"
+     "pass",
+     ""
     ]
    }
   },
@@ -525,15 +525,15 @@
    "tests": {
     "TestV2X.test_custom_v2x_send_and_receive": [
      "error",
-     "NotImplementedError: pycarla: CustomV2XEvent.get_message_count not wrapped: self-typed generic method (Codon exporter)"
+     "TypeError: 'CustomV2XMessage' object is not subscriptable"
     ],
     "TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length": [
      "error",
-     "RuntimeError: CustomV2XBytes.set_bytes must be in [0, 255], got 67305985"
+     "TypeError: 'CustomV2XMessage' object is not subscriptable"
     ],
     "TestV2X.test_v2x_cam_generation": [
-     "error",
-     "NotImplementedError: pycarla: CAMEvent.get_message_count not wrapped: self-typed generic method (Codon exporter)"
+     "pass",
+     ""
     ],
     "TestV2X.test_v2i_infrastructure_sensor_without_owner": [
      "pass",
@@ -644,8 +644,8 @@
    "file_error": null,
    "tests": {
     "TestApplyTextures.test_apply_textures": [
-     "error",
-     "RuntimeError: 'Image' object has no attribute 'frame'"
+     "pass",
+     ""
     ]
    }
   },
@@ -663,7 +663,7 @@
    "tests": {
     "TestNoRenderingMode.test_no_rendering_mode": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
    }
   },
@@ -671,8 +671,8 @@
    "file_error": null,
    "tests": {
     "TestSemanticSegmentation.test_semantic_segmentation": [
-     "error",
-     "RuntimeError: 'Image' object has no attribute 'frame'"
+     "pass",
+     ""
     ]
    }
   },
@@ -681,39 +681,39 @@
    "tests": {
     "TestSensorRecording.test_gnss": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_imu": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_radar": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_rgb": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_depth": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_instance_segmentation": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_semantic_segmentation": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_lidar": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_semantic_lidar": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
    }
   },
@@ -722,39 +722,39 @@
    "tests": {
     "TestSensorRecording.test_gnss": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_imu": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_radar": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_rgb": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_depth": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_instance_segmentation": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_semantic_segmentation": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_lidar": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ],
     "TestSensorRecording.test_semantic_lidar": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
    }
   },
@@ -763,7 +763,7 @@
    "tests": {
     "TestVehiclesSpawnTest.test_vehicle_spawn": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
    }
   },
@@ -772,7 +772,7 @@
    "tests": {
     "TestWalkersSpawn.test_walker_spawn": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
    }
   },
@@ -781,7 +781,7 @@
    "tests": {
     "TestSyncMode.test_sync_mode_set_transform": [
      "fail",
-     "AssertionError: -64.64484405517578 != 206.0"
+     "AssertionError: -64.64484405517578 != 75.0"
     ]
    }
   },
@@ -826,18 +826,13 @@
    "tests": {
     "TestCollision.test_collision_against_side_of_car": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
+     "RuntimeError: tsc_world_spawn_actor: std::exception [carla.World.spawn_actor(ActorBlueprint, Transform)]"
     ]
    }
   },
   "ported/smoke/test_blueprint.py": {
    "file_error": null,
-   "tests": {
-    "TestBlueprintLibrary.test_blueprint_ids": [
-     "fail",
-     "AssertionError: None is not true"
-    ]
-   }
+   "tests": {}
   },
   "ported/smoke/test_client.py": {
    "file_error": null,
@@ -856,8 +851,8 @@
    "file_error": null,
    "tests": {
     "TestCollisionSensor.test_single_car": [
-     "fail",
-     "AssertionError: The collision sensor have failed for the cars: vehicle.firetruck.actors vehicle.fuso.mitsubishi"
+     "pass",
+     ""
     ]
    }
   },
@@ -938,12 +933,12 @@
    "file_error": null,
    "tests": {
     "TestSyncLidar.test_lidar_point_count": [
-     "error",
-     "RuntimeError: a bytes-like object is required, not 'method' [carla.World.tick()]"
+     "pass",
+     ""
     ],
     "TestSyncLidar.test_semlidar_point_count": [
-     "error",
-     "RuntimeError: a bytes-like object is required, not 'method' [carla.World.tick()]"
+     "pass",
+     ""
     ],
     "TestASyncLidar.test_lidar_point_count": [
      "pass",
@@ -963,19 +958,14 @@
    "file_error": null,
    "tests": {
     "TestMap.test_load_all_maps": [
-     "error",
-     "RuntimeError: tsc_world_get_map: std::exception [carla.World.get_map()]"
+     "pass",
+     ""
     ]
    }
   },
   "ported/smoke/test_props_loading.py": {
    "file_error": null,
-   "tests": {
-    "TestPropsLoading.test_spawn_loaded_props": [
-     "fail",
-     "AssertionError: 'Unknown error while trying to spawn actor' is not false"
-    ]
-   }
+   "tests": {}
   },
   "ported/smoke/test_sensor_determinism.py": {
    "file_error": null,
@@ -983,12 +973,7 @@
   },
   "ported/smoke/test_sensor_tick_time.py": {
    "file_error": null,
-   "tests": {
-    "TestSensorTickTime.test_sensor_tick_time": [
-     "fail",
-     "AssertionError: 0 != 3 :"
-    ]
-   }
+   "tests": {}
   },
   "ported/smoke/test_snapshot.py": {
    "file_error": null,
@@ -1005,19 +990,14 @@
   },
   "ported/smoke/test_streamming.py": {
    "file_error": null,
-   "tests": {
-    "TestStreamming.test_multistream": [
-     "pass",
-     ""
-    ]
-   }
+   "tests": {}
   },
   "ported/smoke/test_sync.py": {
    "file_error": null,
    "tests": {
     "TestSynchronousMode.test_sensor_transform_on_synchronous_mode": [
-     "error",
-     "IndexError: tsc_blueprint_library_find: no blueprint with id 'vehicle.ford.mustang'"
+     "pass",
+     ""
     ],
     "TestSynchronousMode.test_apply_batch_sync": [
      "pass",

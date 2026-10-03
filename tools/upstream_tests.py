@@ -1160,6 +1160,11 @@ KNOWN_ISSUES = [
     (r"_f__\w+' for given arguments \['B_(?:Vehicle|Walker|WalkerAIController|Actor|Sensor|TrafficLight|TrafficSign)'", 76),
     (r"unsupported operand type\(s\) for [+-]: '(?:Location|Vector3D)' and '(?:Location|Vector3D)'", 77),
     (r"raw_data", 78),
+    (r"has no attribute 'ApplyVehiclePhysicsControl'", 79),
+    (r"'CustomV2XMessage' object is not subscriptable", 85),
+    # Sensor callbacks run only at typesafe_carla's dispatch points, so a test
+    # blocking on a queue that a callback fills starves.
+    (r"^_?queue\.Empty\b", 86),
     (r"-?\d+\.\d{4,} != -?\d+\.\d{1,3} within [\d.]+ delta", 81),
 ]
 
