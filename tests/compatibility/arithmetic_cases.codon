@@ -12,6 +12,16 @@
 import typesafe_carla as carla
 from typesafe_carla._fmt import fmt_g
 
+def check_cases(got: str, want: str):
+    """assert got == want (";"-separated cases), printing each differing case."""
+    if got != want:
+        a = got.split(";")
+        b = want.split(";")
+        for i in range(min(len(a), len(b))):
+            if a[i] != b[i]:
+                print("case " + str(i) + ": typesafe_carla " + a[i] + "\n!= official " + b[i])
+    assert got == want
+
 def _copy(v):
     """A fresh copy of `v`, of the same type (in-place operators mutate it)."""
     if isinstance(v, carla.Vector2D):

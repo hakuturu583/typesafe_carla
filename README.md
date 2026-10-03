@@ -592,16 +592,16 @@ Deliberate differences, all in favour of static checking:
   `GeoLocation`, the geo projections, `GeoEllipsoid`, `GeoOffsetTransform`
   and `WorldSettings`' time steps. Other value types with `float` fields in
   LibCarla (the controls, the physics controls, `WeatherParameters`, ...)
-  still store the double you set: they become float32 when
-  sent to the server, so `get_control().throttle` after setting `0.2` is
+  still store the double you set: they become float32 when sent to the
+  server, so `get_control().throttle` after setting `0.2` is
   `0.2000000029802322`, and `==` compares them in float32.
 
 * **`==` / `!=` (issue #70)** follow LibCarla's `operator==` on every value
   type the Python API compares. Float fields compare exactly *in float32*, as
   LibCarla stores them: `Location(0.1) == Location(0.1 + 1e-12)` is `True`
   (both store the same float32), as is `VehicleControl(throttle=0.1) ==
-  VehicleControl(throttle=0.1 + 1e-12)` although the doubles kept there differ. Double fields (`GeoLocation`, the geo
-  projections, `GeoEllipsoid`, `GeoOffsetTransform`, and `WorldSettings`'
+  VehicleControl(throttle=0.1 + 1e-12)` although the doubles kept there
+  differ. Double fields (`GeoLocation`, the geo projections, `GeoEllipsoid`, `GeoOffsetTransform`, and `WorldSettings`'
   `fixed_delta_seconds` and `max_substep_delta_time`) compare exactly. As in
   LibCarla, some types compare less than every field. `Rotation`s are also
   equal when each pair of angles has `|a| + |b| == 180`, so
