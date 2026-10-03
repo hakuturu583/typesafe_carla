@@ -1060,6 +1060,20 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
     // Like the server: a then-command always acts on the spawned actor.
     return e.LiveLocked(future != 0 ? future : id);
   };
+  // target(), checked for the actor kind the command needs.
+  auto not_a = [](const mock::ActorData &a, const char *kind) {
+    return std::runtime_error("actor " + std::to_string(a.id) + " is not a " + kind);
+  };
+  auto vehicle = [&](rpc::ActorId id) -> mock::ActorData & {
+    auto &a = target(id);
+    if (!a.is_vehicle) throw not_a(a, "vehicle");
+    return a;
+  };
+  auto walker = [&](rpc::ActorId id) -> mock::ActorData & {
+    auto &a = target(id);
+    if (!a.is_walker()) throw not_a(a, "walker");
+    return a;
+  };
   return std::visit(
       [&](const auto &c) -> rpc::ActorId {
         using T = std::decay_t<decltype(c)>;
@@ -1078,19 +1092,16 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
           e.EraseActorLocked(id);
           return id;
         } else if constexpr (std::is_same_v<T, Command::ApplyVehicleControl>) {
-          auto &a = target(c.actor);
-          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          auto &a = vehicle(c.actor);
           a.control = c.control;
           a.ackermann.reset();
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyVehicleAckermannControl>) {
-          auto &a = target(c.actor);
-          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          auto &a = vehicle(c.actor);
           a.ackermann = c.control;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ShowDebugTelemetry>) {
-          auto &a = target(c.actor);
-          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          auto &a = vehicle(c.actor);
           a.debug_telemetry = c.enabled;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyTransform>) {
@@ -1106,15 +1117,11 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
           a.simulate_physics = c.enabled;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::SetAutopilot>) {
-          auto &a = target(c.actor);
-          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          auto &a = vehicle(c.actor);
           a.autopilot = c.enabled;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyWalkerControl>) {
-          auto &a = target(c.actor);
-          if (!a.is_walker()) {
-            throw std::runtime_error("actor " + std::to_string(a.id) + " is not a walker");
-          }
+          auto &a = walker(c.actor);
           a.walker_control = c.control;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyTargetAngularVelocity>) {
@@ -1137,8 +1144,7 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
           a.gravity = c.enabled;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::SetVehicleLightState>) {
-          auto &a = target(c.actor);
-          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          auto &a = vehicle(c.actor);
           a.light_state = c.light_state;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyLocation>) {
@@ -1146,17 +1152,13 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
           a.transform.location = c.location;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyVehiclePhysicsControl>) {
-          auto &a = target(c.actor);
-          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          auto &a = vehicle(c.actor);
           a.physics = c.physics_control;
           return a.id;
         } else if constexpr (std::is_same_v<T, Command::ApplyWalkerState>) {
           // Moves the walker and makes it walk along the transform's forward
           // vector at `speed`.
-          auto &a = target(c.actor);
-          if (!a.is_walker()) {
-            throw std::runtime_error("actor " + std::to_string(a.id) + " is not a walker");
-          }
+          auto &a = walker(c.actor);
           a.transform = c.transform;
           const double yaw = c.transform.rotation.yaw * M_PI / 180.0;
           const double pitch = c.transform.rotation.pitch * M_PI / 180.0;
