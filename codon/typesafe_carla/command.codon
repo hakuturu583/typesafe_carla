@@ -13,11 +13,12 @@
 # as actor_id= / actor= (parent_id= / parent=); anything else is a compile
 # error (see _target_id and _actor_arg).
 
-from ._ffi import CCommand, CCommandResponse, CString, take_string, TSC_INVALID_ARGUMENT
+from ._ffi import (CCommand, CCommandResponse, CString, CVehiclePhysicsControl, take_string,
+                   TSC_INVALID_ARGUMENT)
 from .errors import (CarlaError, _check_light_state, _check_port, _check_traffic_light_state,
                      _actor_id)
 from .geometry import Location, Transform, Vector3D, _vector_arg, _location_ref
-from .control import VehicleControl, WalkerControl
+from .control import VehicleControl, WalkerControl, VehiclePhysicsControl
 from .vehicle import VehicleAckermannControl
 from .blueprint import ActorBlueprint
 
@@ -43,12 +44,15 @@ _APPLY_LOCATION = 16
 _SET_TRAFFIC_LIGHT_STATE = 17
 _APPLY_VEHICLE_ACKERMANN_CONTROL = 18  # issue #20
 _SHOW_DEBUG_TELEMETRY = 19  # issue #20
+_APPLY_VEHICLE_PHYSICS_CONTROL = 20  # issue #79
+_APPLY_WALKER_STATE = 21  # issue #79
 
 _NAMES = ["", "SpawnActor", "DestroyActor", "ApplyVehicleControl", "ApplyTransform",
           "ApplyTargetVelocity", "SetAutopilot", "SetSimulatePhysics", "ApplyWalkerControl",
           "ApplyTargetAngularVelocity", "ApplyImpulse", "ApplyForce", "ApplyAngularImpulse",
           "ApplyTorque", "SetEnableGravity", "SetVehicleLightState", "ApplyLocation",
-          "SetTrafficLightState", "ApplyVehicleAckermannControl", "ShowDebugTelemetry"]
+          "SetTrafficLightState", "ApplyVehicleAckermannControl", "ShowDebugTelemetry",
+          "ApplyVehiclePhysicsControl", "ApplyWalkerState"]
 
 @tuple
 class _MissingArgument:
@@ -111,6 +115,9 @@ class Command:
     _actor_id: int
     _parent_id: int
     _blueprint: Optional[ActorBlueprint]
+    # ApplyVehiclePhysicsControl: the control in C layout, converted when the
+    # command is made; it owns (references) every array it points to.
+    _physics: Ptr[CVehiclePhysicsControl]
     _transform: Transform
     _control: VehicleControl
     _vector: Vector3D
@@ -125,6 +132,7 @@ class Command:
         self._actor_id = actor_id
         self._parent_id = 0
         self._blueprint = None
+        self._physics = Ptr[CVehiclePhysicsControl]()
         self._transform = Transform()
         self._control = VehicleControl()
         self._vector = Vector3D()
@@ -152,8 +160,10 @@ class Command:
 
     def _to_c(self, then_of: int) -> CCommand:
         bp = self._blueprint
+        # tsc_command_t's blueprint / physics_control union.
+        pointer = bp._h.ptr if bp is not None else self._physics.as_byte()
         return CCommand(i32(self._type), i32(then_of), u32(self._actor_id), u32(self._parent_id),
-                        bp._h.ptr if bp is not None else cobj(), self._transform._to_c(),
+                        pointer, self._transform._to_c(),
                         self._control._to_c(), self._vector._to_c(), i32(self._flag),
                         u16(self._tm_port), u16(0), self._scalar)
 
@@ -297,6 +307,29 @@ def ApplyVehicleAckermannControl(actor_id = _MISSING, control: VehicleAckermannC
 
 def ShowDebugTelemetry(actor_id = _MISSING, enabled: bool = _MISSING, actor = _MISSING) -> Command:
     return _flag_command(_SHOW_DEBUG_TELEMETRY, _actor_arg(actor_id, actor), int(enabled))
+
+def ApplyVehiclePhysicsControl(actor_id = _MISSING,
+                               physics_control: VehiclePhysicsControl = _MISSING,
+                               actor = _MISSING) -> Command:
+    """Applies the whole control, as Vehicle.apply_physics_control() but in a batch.
+
+    The control is copied now: later changes to `physics_control` do not
+    affect the command. Its wheels should match the vehicle's (unlike
+    Vehicle.apply_physics_control(), this is not checked). An integer code out
+    of range (uint8 fields, int32 wheel fields) raises CarlaError here; every
+    other check (positive mass, finite values) happens at apply_batch(_sync).
+    """
+    c = Command(_APPLY_VEHICLE_PHYSICS_CONTROL, _actor_arg(actor_id, actor))
+    c._physics = physics_control._c_buffer()
+    return c
+
+def ApplyWalkerState(actor_id = _MISSING, transform: Transform = _MISSING,
+                     speed: float = _MISSING, actor = _MISSING) -> Command:
+    """Moves a walker to `transform` and makes it walk forward at `speed` (m/s)."""
+    c = Command(_APPLY_WALKER_STATE, _actor_arg(actor_id, actor))
+    c._transform = transform._copy()  # a copy, as ApplyTransform
+    c._scalar = speed
+    return c
 
 def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int]:
     """C records for `commands` (then-commands follow their SpawnActor).
