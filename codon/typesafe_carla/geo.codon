@@ -5,6 +5,7 @@
 from math import cos, sin, inf
 from ._ffi import CGeoLocation, CGeoProjection
 from .geometry import Location, _location_arg
+from ._eq import _fields_eq_exact
 
 TSC_GEO_PROJECTION_TM = 0
 TSC_GEO_PROJECTION_UTM = 1
@@ -49,7 +50,7 @@ class GeoEllipsoid:
         self.f_inv = f_inv
 
     def __eq__(self, other: GeoEllipsoid) -> bool:
-        return self.a == other.a and self.f_inv == other.f_inv
+        return _fields_eq_exact(self, other)
 
     def __ne__(self, other: GeoEllipsoid) -> bool:
         return not (self == other)
@@ -86,9 +87,7 @@ class GeoOffsetTransform:
         return Location(float(float32(x)), float(float32(y)), float(float32(loc.z + self.offset_z)))
 
     def __eq__(self, other: GeoOffsetTransform) -> bool:
-        return (self.offset_x == other.offset_x and self.offset_y == other.offset_y and
-                self.offset_z == other.offset_z and self.offset_cos_h == other.offset_cos_h and
-                self.offset_sin_h == other.offset_sin_h)
+        return _fields_eq_exact(self, other)
 
     def __ne__(self, other: GeoOffsetTransform) -> bool:
         return not (self == other)
@@ -138,8 +137,7 @@ class GeoProjectionTM:
                              k=self.k, x_0=self.x_0, y_0=self.y_0)
 
     def __eq__(self, other: GeoProjectionTM) -> bool:
-        return (self.lat_0 == other.lat_0 and self.lon_0 == other.lon_0 and self.k == other.k and
-                self.x_0 == other.x_0 and self.y_0 == other.y_0 and self.ellps == other.ellps)
+        return _fields_eq_exact(self, other)
 
     def __ne__(self, other: GeoProjectionTM) -> bool:
         return not (self == other)
@@ -188,7 +186,7 @@ class GeoProjectionWebMerc:
         return _c_projection(TSC_GEO_PROJECTION_WEB_MERC, self.ellps)
 
     def __eq__(self, other: GeoProjectionWebMerc) -> bool:
-        return self.ellps == other.ellps
+        return _fields_eq_exact(self, other)
 
     def __ne__(self, other: GeoProjectionWebMerc) -> bool:
         return not (self == other)
@@ -223,9 +221,7 @@ class GeoProjectionLCC2SP:
                              y_0=self.y_0)
 
     def __eq__(self, other: GeoProjectionLCC2SP) -> bool:
-        return (self.lat_0 == other.lat_0 and self.lat_1 == other.lat_1 and
-                self.lat_2 == other.lat_2 and self.lon_0 == other.lon_0 and
-                self.x_0 == other.x_0 and self.y_0 == other.y_0 and self.ellps == other.ellps)
+        return _fields_eq_exact(self, other)
 
     def __ne__(self, other: GeoProjectionLCC2SP) -> bool:
         return not (self == other)

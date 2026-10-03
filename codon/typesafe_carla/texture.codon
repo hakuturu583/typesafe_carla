@@ -6,7 +6,7 @@
 from ._enum import _IntEnum
 from ._ffi import CColor, CFloatColor, CTextureColor, CTextureFloatColor, TSC_INVALID_ARGUMENT
 from .errors import CarlaError
-from ._eq import _f32_eq
+from ._eq import _fields_eq
 from .blueprint import Color
 
 class _MaterialParameter(_IntEnum):
@@ -33,8 +33,7 @@ class FloatColor:
 
     def __eq__(self, other: FloatColor) -> bool:
         """Exact in float32, as LibCarla."""
-        return (_f32_eq(self.r, other.r) and _f32_eq(self.g, other.g) and
-                _f32_eq(self.b, other.b) and _f32_eq(self.a, other.a))
+        return _fields_eq(self, other)
 
     def __ne__(self, other: FloatColor) -> bool:
         return not (self == other)

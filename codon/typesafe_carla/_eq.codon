@@ -23,6 +23,14 @@ def _value_eq(a, b) -> bool:
     else:
         return a == b
 
+def _fields_eq_exact(a, b) -> bool:
+    """Every field, in declaration order, with its own == (a float exactly):
+    the operator== of LibCarla's structs whose fields are doubles."""
+    for k, v in static.vars(a):
+        if not (v == getattr(b, k)):
+            return False
+    return True
+
 def _fields_eq(a, b) -> bool:
     """Every field, in declaration order, with _value_eq: the operator== of
     LibCarla's structs whose fields are all float32, ints, bools, strings,

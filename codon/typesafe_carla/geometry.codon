@@ -4,7 +4,7 @@ from ._ffi import (CVector2D, CVector3D, CRotation, CTransform, CBoundingBox,
                    tsc_transform_get_matrix, tsc_transform_get_inverse_matrix)
 from ._strict import compat_shortcut
 from .errors import _check
-from ._eq import _f32_eq
+from ._eq import _f32_eq, _fields_eq
 
 # 2 * FLT_EPSILON: LibCarla's default threshold for a zero-length vector.
 _UNIT_EPSILON = 2.0 * 1.1920928955078125e-07
@@ -164,7 +164,7 @@ class Vector2D:
 
     def __eq__(self, other: Vector2D) -> bool:
         """Exact in float32, as LibCarla."""
-        return _f32_eq(self.x, other.x) and _f32_eq(self.y, other.y)
+        return _fields_eq(self, other)
 
     def __ne__(self, other: Vector2D) -> bool:
         return not (self == other)
@@ -649,8 +649,7 @@ class Quaternion:
 
     def __eq__(self, other: Quaternion) -> bool:
         """Exact in float32, as LibCarla."""
-        return (_f32_eq(self.x, other.x) and _f32_eq(self.y, other.y) and
-                _f32_eq(self.z, other.z) and _f32_eq(self.w, other.w))
+        return _fields_eq(self, other)
 
     def __ne__(self, other: Quaternion) -> bool:
         return not (self == other)

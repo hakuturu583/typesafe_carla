@@ -121,7 +121,7 @@ class ActorAttribute:
     # raises as the typed accessor does (BadAttributeCast in LibCarla); a
     # float compares in float32 and a Color without alpha. Codon tries the
     # overloads last to first and converts bool -> int -> float implicitly,
-    # hence float before int before bool.
+    # hence float before int before bool. __ne__ forwards to the matching __eq__.
     def __eq__(self, other: ActorAttribute) -> bool:
         return self.type == other.type and self._value == other._value
 
@@ -140,22 +140,7 @@ class ActorAttribute:
     def __eq__(self, other: Color) -> bool:
         return self.as_color() == other
 
-    def __ne__(self, other: ActorAttribute) -> bool:
-        return not (self == other)
-
-    def __ne__(self, other: float) -> bool:
-        return not (self == other)
-
-    def __ne__(self, other: int) -> bool:
-        return not (self == other)
-
-    def __ne__(self, other: bool) -> bool:
-        return not (self == other)
-
-    def __ne__(self, other: str) -> bool:
-        return not (self == other)
-
-    def __ne__(self, other: Color) -> bool:
+    def __ne__(self, other) -> bool:
         return not (self == other)
 
     def __str__(self) -> str:
