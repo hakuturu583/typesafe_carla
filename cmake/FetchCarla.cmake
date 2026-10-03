@@ -68,9 +68,13 @@ macro(_tsc_set_resolved_ref fallback)
   endif()
 endmacro()
 
+# The checkout is ours, so trust it whoever owns it: a build directory written
+# by another user (root in a container, a restored CI cache) would otherwise
+# fail git's "dubious ownership" check. safe.directory needs the physical path.
 function(_tsc_git)
+  file(REAL_PATH "${_tsc_carla_dir}" _real)
   execute_process(
-    COMMAND "${GIT_EXECUTABLE}" ${ARGN}
+    COMMAND "${GIT_EXECUTABLE}" -c "safe.directory=${_real}" ${ARGN}
     WORKING_DIRECTORY "${_tsc_carla_dir}"
     RESULT_VARIABLE _result
     OUTPUT_VARIABLE _out
