@@ -52,7 +52,6 @@ class ITSContainer {
   } ReferencePosition_t;
 
   typedef enum StationType {
-    StationType_unknown = 0,
     StationType_pedestrian = 1,
     StationType_passengerCar = 5,
     StationType_roadSideUnit = 15
@@ -82,8 +81,7 @@ class ITSContainer {
   } Speed_t;
 
   typedef enum DriveDirection {
-    DriveDirection_forward = 0,
-    DriveDirection_backward = 1
+    DriveDirection_forward = 0
   } e_DriveDirection;
   typedef long DriveDirection_t;
 
@@ -195,7 +193,6 @@ class ITSContainer {
     ExteriorLights_highBeamHeadlightsOn = 1,
     ExteriorLights_leftTurnSignalOn = 2,
     ExteriorLights_rightTurnSignalOn = 3,
-    ExteriorLights_daytimeRunningLightsOn = 4,
     ExteriorLights_reverseLightOn = 5,
     ExteriorLights_fogLightOn = 6,
     ExteriorLights_parkingLightsOn = 7

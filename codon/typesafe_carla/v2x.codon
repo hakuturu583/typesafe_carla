@@ -31,7 +31,8 @@ from ._ffi import (CItsHeader, CItsValue, CItsReferencePosition, CCamBasicVehicl
                    tsc_sensor_send, tsc_cam_event_get_message_count, tsc_cam_event_get_message,
                    tsc_cam_event_get_protected_zones, tsc_cam_event_get_path_history,
                    tsc_custom_v2x_event_get_message_count, tsc_custom_v2x_event_get_message)
-from .errors import _check, CarlaError, _normalize_index
+from .errors import _check, CarlaError, _normalize_index, _u8
+from .map import _read_buffer
 from .sensor import SensorData, Sensor, _Measurement
 
 class ItsPduHeader:
@@ -96,6 +97,12 @@ def _opt(flag: i32, value: T, T: type) -> Optional[T]:
         return value
     return None
 
+def _opt_value(flag: i32, c: CItsValue) -> Optional[ValueConfidence]:
+    """_opt that converts only a present value."""
+    if int(flag) != 0:
+        return ValueConfidence._from_c(c)
+    return None
+
 class CenDsrcTollingZone:
     protected_zone_latitude: int
     protected_zone_longitude: int
@@ -137,16 +144,16 @@ class BasicVehicleContainerHighFrequency:
         self.yaw_rate = ValueConfidence._from_c(c.yaw_rate)
         self.acceleration_control = _opt(c.has_acceleration_control, c.acceleration_control)
         self.lane_position = _opt(c.has_lane_position, c.lane_position)
-        self.steering_wheel_angle = _opt(c.has_steering_wheel_angle,
-                                         ValueConfidence._from_c(c.steering_wheel_angle))
-        self.lateral_acceleration = _opt(c.has_lateral_acceleration,
-                                         ValueConfidence._from_c(c.lateral_acceleration))
-        self.vertical_acceleration = _opt(c.has_vertical_acceleration,
-                                          ValueConfidence._from_c(c.vertical_acceleration))
+        self.steering_wheel_angle = _opt_value(c.has_steering_wheel_angle, c.steering_wheel_angle)
+        self.lateral_acceleration = _opt_value(c.has_lateral_acceleration, c.lateral_acceleration)
+        self.vertical_acceleration = _opt_value(c.has_vertical_acceleration,
+                                                c.vertical_acceleration)
         self.performance_class = _opt(c.has_performance_class, c.performance_class)
-        self.cen_dsrc_tolling_zone = _opt(c.has_cen_dsrc_tolling_zone, CenDsrcTollingZone(
-            c.cen_dsrc_tolling_zone_latitude, c.cen_dsrc_tolling_zone_longitude,
-            _opt(c.has_cen_dsrc_tolling_zone_id, c.cen_dsrc_tolling_zone_id)))
+        self.cen_dsrc_tolling_zone = None
+        if int(c.has_cen_dsrc_tolling_zone) != 0:
+            self.cen_dsrc_tolling_zone = CenDsrcTollingZone(
+                c.cen_dsrc_tolling_zone_latitude, c.cen_dsrc_tolling_zone_longitude,
+                _opt(c.has_cen_dsrc_tolling_zone_id, c.cen_dsrc_tolling_zone_id))
 
     def __repr__(self) -> str:
         return (f"BasicVehicleContainerHighFrequency(heading={self.heading.value}, "
@@ -193,11 +200,13 @@ class BasicVehicleContainerLowFrequency:
         self.path_history = path_history
 
 def _its_list(fn, data: SensorData, index: int, count: int, T: type) -> List[T]:
-    """Reads a two-call ITS list of a CAM whose length is already known."""
-    buf = Ptr[T](count if count > 0 else 1)
-    n = Ptr[int](1)
-    _check(fn(data._h.ptr, index, buf, count, n))
-    return [buf[i] for i in range(min(count, n[0]))]
+    """Reads a two-call ITS list of CAM `index`, whose length `count` (from
+    the message) is the buffer's size."""
+    if count == 0:
+        return List[T]()
+    buf, n = _read_buffer(lambda h, b, cap, out_count: fn(h, index, b, cap, out_count),
+                          data._h.ptr, T, count)
+    return [buf[i] for i in range(n)]
 
 class CAM:
     """A Cooperative Awareness Message (LibITS's CAM_t): CAMMessage.get().
@@ -257,41 +266,43 @@ class CAMMessage:
         return (f"CAMData(power={self.power}, stationId={self._cam.header.station_id}, "
                 f"messageId={self._cam.header.message_id})")
 
-class CAMEvent(_Measurement):
-    """The CAMs a sensor.other.v2x received in one tick. Indexing reads
-    LibCarla's buffer on access."""
+class _V2XEvent(_Measurement):
+    """The messages a V2X sensor received in one tick. Indexing reads
+    LibCarla's buffer on access. Subclasses define _message(i) and _WHAT.
+
+    Every method reading _count takes `self: S`: in Codon 0.19, a method a
+    subclass inherits from here reads the wrong field otherwise."""
     _count: int
 
     def __init__(self, data: SensorData, count: int):
         self.data = data
         self._count = count
 
-    def get_message_count(self) -> int:
+    def get_message_count(self: S, S: type) -> int:
         return self._count
 
-    def __len__(self) -> int:
+    def __len__(self: S, S: type) -> int:
         return self._count
+
+    def __getitem__(self: S, index: int, S: type):
+        return self._message(_normalize_index(index, self._count, S._WHAT))
+
+    def __iter__(self: S, S: type):
+        for i in range(self._count):
+            yield self._message(i)
+
+    def __repr__(self: S, S: type) -> str:
+        return (f"{S._WHAT}(frame={self.frame}, timestamp={self.timestamp}, "
+                f"message_count={self._count})")
+
+class CAMEvent(_V2XEvent):
+    """The CAMs a sensor.other.v2x received in one tick."""
+    _WHAT: ClassVar[str] = "CAMEvent"
 
     def _message(self, i: int) -> CAMMessage:
         out = Ptr[CCamMessage](1)
         _check(tsc_cam_event_get_message(self.data._h.ptr, i, out))
         return CAMMessage(float(out[0].power), CAM(self.data, i, out[0]))
-
-    def __getitem__(self, index: int) -> CAMMessage:
-        return self._message(_normalize_index(index, self._count, "CAMEvent"))
-
-    def __iter__(self):
-        for i in range(self._count):
-            yield self._message(i)
-
-    def __repr__(self) -> str:
-        return (f"CAMEvent(frame={self.frame}, timestamp={self.timestamp}, "
-                f"message_count={self._count})")
-
-def _as_byte(value: int, what: str) -> byte:
-    if value < 0 or value > 255:
-        raise CarlaError(f"{what}: {value} is not a byte (0-255)", TSC_INVALID_ARGUMENT)
-    return byte(value)
 
 class CustomV2XBytes:
     """LibCarla's rpc::CustomV2XBytes: up to max_data_size() (100) bytes, the
@@ -357,7 +368,7 @@ class CustomV2XBytes:
     def set_bytes(self, bytes: List[int]):
         """Each value must be in [0, 255] (CarlaError otherwise; nothing changes)."""
         n = min(len(bytes), TSC_CUSTOM_V2X_MAX_DATA_SIZE)
-        values = [_as_byte(bytes[i], "CustomV2XBytes.set_bytes") for i in range(n)]
+        values = [byte(int(_u8(bytes[i], "CustomV2XBytes.set_bytes"))) for i in range(n)]
         for i in range(n):
             self._bytes[i] = values[i]
         self._assign(n)
@@ -406,19 +417,9 @@ class CustomV2XData:
         return (f"CustomV2XData(power={self.power}, stationId={self._message.header.station_id}, "
                 f"messageId={self._message.header.message_id}, data={self._message.data})")
 
-class CustomV2XEvent(_Measurement):
+class CustomV2XEvent(_V2XEvent):
     """The custom messages a sensor.other.v2x_custom received in one tick."""
-    _count: int
-
-    def __init__(self, data: SensorData, count: int):
-        self.data = data
-        self._count = count
-
-    def get_message_count(self) -> int:
-        return self._count
-
-    def __len__(self) -> int:
-        return self._count
+    _WHAT: ClassVar[str] = "CustomV2XEvent"
 
     def _message(self, i: int) -> CustomV2XData:
         out = Ptr[byte](TSC_CUSTOM_V2X_DATA_SIZE)
@@ -426,17 +427,6 @@ class CustomV2XEvent(_Measurement):
         header = ItsPduHeader._from_c(Ptr[CItsHeader](out + TSC_CUSTOM_V2X_DATA_HEADER_OFFSET)[0])
         payload = CustomV2XBytes._from_c(out + TSC_CUSTOM_V2X_DATA_BYTES_OFFSET)
         return CustomV2XData(float(Ptr[float32](out)[0]), CustomV2XMessage(header, payload))
-
-    def __getitem__(self, index: int) -> CustomV2XData:
-        return self._message(_normalize_index(index, self._count, "CustomV2XEvent"))
-
-    def __iter__(self):
-        for i in range(self._count):
-            yield self._message(i)
-
-    def __repr__(self) -> str:
-        return (f"CustomV2XEvent(frame={self.frame}, timestamp={self.timestamp}, "
-                f"message_count={self._count})")
 
 @extend
 class SensorData:

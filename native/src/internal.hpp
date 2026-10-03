@@ -498,6 +498,11 @@ void list_at(const Items &&items, size_t index, const char *what) = delete;
 // List elements (map.cpp, walker.cpp).
 tsc_landmark_t from_carla(const carla::client::Landmark &lm);
 tsc_bone_transform_out_t from_carla(const carla::rpc::BoneTransformDataOut &b);
+#ifdef TSC_HAS_V2X
+// The elements of a CAM's lists (sensor.cpp, issue #42).
+tsc_its_protected_zone_t from_carla(const ITSContainer::ProtectedCommunicationZone_t &z);
+tsc_its_path_point_t from_carla(const ITSContainer::PathPoint_t &p);
+#endif
 
 // The measurement behind a sensor data handle (sensor.cpp, generated code).
 inline const carla::sensor::SensorData &sensor_data_of(const tsc_sensor_data_t *d) {
@@ -809,12 +814,12 @@ inline carla::client::Sensor &sensor_of(tsc_sensor_t *s) {
   return static_cast<carla::client::Sensor &>(*sensor_handle(s).actor);
 }
 
-// Issue #42: Send is a ServerSideSensor method; the lane-invasion sensor is
-// client-side.
+// A ServerSideSensor (issue #42: Send); TSC_TYPE_ERROR for the client-side
+// lane-invasion sensor.
 inline carla::client::ServerSideSensor &server_side_sensor_of(tsc_sensor_t *s) {
   auto sensor = dynamic_cast<carla::client::ServerSideSensor *>(&sensor_of(s));
   if (sensor == nullptr) {
-    fail(TSC_TYPE_ERROR, "a client-side sensor (e.g. lane invasion) cannot send V2X messages");
+    fail(TSC_TYPE_ERROR, "a client-side sensor (e.g. lane invasion) is not a server-side sensor");
   }
   return *sensor;
 }

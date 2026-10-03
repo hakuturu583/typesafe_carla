@@ -34,6 +34,13 @@ def raises_carla_error(f) -> bool:
         return True
     return False
 
+def raises_actor_type_error(f) -> bool:
+    try:
+        f()
+    except carla.ActorTypeError:
+        return True
+    return False
+
 def test_bytes():
     b = carla.CustomV2XBytes()
     assert b.data_size == 0 and b.max_data_size() == 100
@@ -100,12 +107,7 @@ def test_custom_send():
         assert False
     except IndexError:
         pass
-    raised = False
-    try:
-        data.as_cam_event()
-    except carla.ActorTypeError:
-        raised = True
-    assert raised
+    assert raises_actor_type_error(lambda: data.as_cam_event())
     assert sender.poll() is None  # a sensor does not receive its own messages
     assert elsewhere.poll() is None  # another channel
     world.tick()
@@ -123,12 +125,7 @@ def test_custom_send():
     assert receiver.poll() is None
     # The client-side lane-invasion sensor has no send().
     lane = sensor("sensor.other.lane_invasion", vehicle)
-    raised = False
-    try:
-        lane.send("x")
-    except carla.ActorTypeError:
-        raised = True
-    assert raised
+    assert raises_actor_type_error(lambda: lane.send("x"))
     # The Python-API shortcut on a plain Actor.
     world.get_actor(sender.id).send("shortcut")
     world.tick()
@@ -211,12 +208,7 @@ def test_cam():
             assert z.expiry_time is None and z.protected_zone_id is None
             assert z.protected_zone_radius is None and z.protected_zone_type == 0
             assert cam.basic_vehicle_container_low_frequency is None
-    raised = False
-    try:
-        tx.send("a CAM sensor only warns")  # no error, as in LibCarla
-    except carla.CarlaError:
-        raised = True
-    assert not raised
+    tx.send("a CAM sensor only warns")  # no error, as in LibCarla
     vehicle.set_light_state(carla.VehicleLightState.NONE)
     for s in (tx, rx, rsu):
         s.destroy()
@@ -226,14 +218,8 @@ def test_wrong_conversions():
     gnss.listen()
     world.tick()
     data = gnss.wait_for_data(1.0)
-    for f in (lambda: data.as_cam_event().get_message_count(),
-              lambda: data.as_custom_v2x_event().get_message_count()):
-        raised = False
-        try:
-            f()
-        except carla.ActorTypeError:
-            raised = True
-        assert raised
+    assert raises_actor_type_error(lambda: data.as_cam_event().get_message_count())
+    assert raises_actor_type_error(lambda: data.as_custom_v2x_event().get_message_count())
     gnss.destroy()
 
 test_bytes()

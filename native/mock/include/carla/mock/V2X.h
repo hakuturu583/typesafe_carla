@@ -1,19 +1,19 @@
 // Mock V2X measurements (issue #42). CAMEvent and CustomV2XEvent mirror
 // LibCarla ue5-dev's sensor/data/V2XEvent.h: an Array<T> of received messages
-// (size, at, operator[], begin/end) with GetMessageCount(). The messages are
-// synthetic (see Episode::SenseV2XLocked in mock.cpp).
+// with GetMessageCount(). The messages are synthetic (see Episode::SenseV2XLocked in mock.cpp).
 #pragma once
 #include "carla/mock/Mock.h"
 #include "carla/sensor/data/V2XData.h"
 
-#include <stdexcept>
 #include <vector>
 
 namespace carla {
 namespace sensor {
 namespace data {
 
-// The subset of LibCarla's sensor::data::Array<T> the shim uses.
+// The subset of LibCarla's sensor::data::Array<T> (and of the two events
+// derived from it) that the shim uses. LibCarla's at() does not check the
+// index either (the shim does).
 template <typename T>
 class V2XArray : public SensorData {
  public:
@@ -24,30 +24,15 @@ class V2XArray : public SensorData {
       : SensorData(frame, timestamp, t), _messages(std::move(messages)) {}
 
   size_type size() const { return _messages.size(); }
-  bool empty() const { return _messages.empty(); }
-  const T &at(size_type pos) const {
-    if (pos >= size()) throw std::out_of_range("out of range");
-    return _messages[pos];
-  }
-  const T &operator[](size_type pos) const { return _messages[pos]; }
-  auto begin() const { return _messages.begin(); }
-  auto end() const { return _messages.end(); }
+  const T &at(size_type pos) const { return _messages[pos]; }
+  size_type GetMessageCount() const { return size(); }
 
  private:
   std::vector<T> _messages;
 };
 
-class CAMEvent : public V2XArray<CAMData> {
- public:
-  using V2XArray<CAMData>::V2XArray;
-  size_type GetMessageCount() const { return size(); }
-};
-
-class CustomV2XEvent : public V2XArray<CustomV2XData> {
- public:
-  using V2XArray<CustomV2XData>::V2XArray;
-  size_type GetMessageCount() const { return size(); }
-};
+using CAMEvent = V2XArray<CAMData>;
+using CustomV2XEvent = V2XArray<CustomV2XData>;
 
 }  // namespace data
 }  // namespace sensor

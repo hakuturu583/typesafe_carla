@@ -91,10 +91,8 @@ namespace tsc {
 // The payload ServerSideSensor::Send takes. Without V2X, a stand-in of the
 // same shape, which no Send accepts (TSC_CALL_OPTIONAL then raises).
 #ifdef TSC_HAS_V2X
-inline constexpr bool kHasV2X = true;
 using CustomV2XBytes = carla::rpc::CustomV2XBytes;
 #else
-inline constexpr bool kHasV2X = false;
 struct CustomV2XBytes {
   uint8_t data_size{0u};
   std::array<unsigned char, 100> bytes{};
@@ -211,7 +209,9 @@ TSC_SKELETON_QUERY(get_socket_relative_transforms, GetSocketRelativeTransforms,
 
 // The refs that must have the skeleton queries mirror ue5-dev, so they have
 // V2X too: there, a missing V2X header is a build error, not "unsupported".
-static_assert(kHasV2X || !kSkeletonQueriesRequired, "LibCarla V2X headers not found");
+#ifndef TSC_HAS_V2X
+static_assert(!kSkeletonQueriesRequired, "LibCarla V2X headers not found");
+#endif
 
 // World::GetIMUSensorGravity / SetIMUSensorGravity are in ue5-dev, not in
 // LibCarla 0.10.0's source (issue #21); there both throw (TSC_ERROR).
