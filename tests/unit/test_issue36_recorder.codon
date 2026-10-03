@@ -30,6 +30,9 @@ assert text == plain + " with weather", text
 offset = carla.Transform(carla.Location(1.0, 2.0, 3.0))
 text = client.replay_file("i36.log", offset=offset, map_override="Town10HD_Opt")
 assert text.startswith(plain + " offset by (1.0") and text.endswith(" on Town10HD_Opt"), text
+# A rotation-only offset is not the default either.
+text = client.replay_file("i36.log", offset=carla.Transform(carla.Location(), carla.Rotation(yaw=90.0)))
+assert text.startswith(plain + " offset by (0.0") and " rotated (0.000000, 90.000000, 0.000000)" in text, text
 client.stop_replayer(keep_actors=False)
 
 def raises(f) -> bool:

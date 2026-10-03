@@ -156,6 +156,10 @@ def test_missing_overload_rule():
     assert _check(replay, [old], "libcarla", "0.10.0") is None
     assert "takes 5..5 arguments" in _check(replay, [old], "libcarla", "ue5-dev")
     assert "takes 5..5 arguments" in _check(replay, [old], "mock", "unknown")
+    # An overload taking as many arguments, but of other types, is still an error.
+    wrong = Method("carla::client::Client", "ReplayFile", ["int"] * 8, "std::basic_string<char>",
+                   8, False)
+    assert "vs int" in _check(replay, [old, wrong], "libcarla", "0.10.0")
 
 
 def test_list_accessors():

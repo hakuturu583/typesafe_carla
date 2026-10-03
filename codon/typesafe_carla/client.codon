@@ -223,7 +223,8 @@ class Client:
                     replay_weather: bool = False, offset: Optional[Transform] = None,
                     map_override: str = "") -> str:
         """replay_weather, offset and map_override need LibCarla ue5-dev: a
-        value other than the default raises CarlaError elsewhere."""
+        value other than the default raises CarlaError elsewhere. Any offset
+        other than None or an exact Transform() takes the ue5-dev-only path."""
         if not _is_actor_id(follow_id):
             raise CarlaError(f"follow_id {follow_id} is out of range", TSC_INVALID_ARGUMENT)
         out = Ptr[CString](1)

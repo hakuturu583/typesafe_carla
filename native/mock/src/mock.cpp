@@ -1890,9 +1890,13 @@ std::string Client::ReplayFile(std::string name, double, double, uint32_t, bool,
                      std::to_string(RecordedFrames(mock::Connect(_endpoint, _timeout), name)) +
                      " frames of " + name;
   if (replay_weather) text += " with weather";
-  if (offset.location.x != 0.0f || offset.location.y != 0.0f || offset.location.z != 0.0f) {
-    text += " offset by (" + std::to_string(offset.location.x) + ", " +
-            std::to_string(offset.location.y) + ", " + std::to_string(offset.location.z) + ")";
+  const auto &l = offset.location;
+  const auto &r = offset.rotation;
+  if (l.x != 0.0f || l.y != 0.0f || l.z != 0.0f || r.pitch != 0.0f || r.yaw != 0.0f ||
+      r.roll != 0.0f) {
+    text += " offset by (" + std::to_string(l.x) + ", " + std::to_string(l.y) + ", " +
+            std::to_string(l.z) + ") rotated (" + std::to_string(r.pitch) + ", " +
+            std::to_string(r.yaw) + ", " + std::to_string(r.roll) + ")";
   }
   if (!map_override.empty()) text += " on " + map_override;
   return text;

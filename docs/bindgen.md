@@ -78,8 +78,8 @@ A function has:
   missing. `validate` accepts the method missing only on a libcarla build
   whose `TSC_CARLA_GIT_REF` is in `missing_in` (e.g. `["0.10.0"]`); the mock
   mirrors ue5-dev and must have it, so a misspelt `call` still fails. On those
-  refs `validate` also accepts a method that exists without an overload taking
-  the spec's arguments, e.g. `replay_file_ex` (issue #36): 0.10.0's
+  refs `validate` also accepts a method whose every overload takes fewer
+  parameters than the spec passes (a type mismatch still fails), e.g. `replay_file_ex` (issue #36): 0.10.0's
   `ReplayFile` lacks ue5-dev's `replay_weather`, `offset` and `map_override`.
   An `out` must be a type with `assign` (e.g. `string`): the output is checked
   before the call and written through `TSC_CALL_OPTIONAL_THEN` where the
