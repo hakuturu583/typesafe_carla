@@ -47,6 +47,7 @@ from .blueprint import Color
 from .actor import Actor, _make_actor
 from .lane_marking import LaneMarking
 from .map import _read_buffer
+from ._eq import _fields_eq
 from ._callbacks import (_register_callback, _unregister_stream, _find_callback, _pop,
                          dispatch_sensor_callbacks)
 from ._ffi import (TSC_GBUFFER_TEXTURE_COUNT, tsc_sensor_enable_for_ros,
@@ -586,6 +587,13 @@ class OpticalFlowPixel:
     def __init__(self, x: float = 0.0, y: float = 0.0):
         self.x = x
         self.y = y
+
+    def __eq__(self, other: OpticalFlowPixel) -> bool:
+        """Exact in float32, as LibCarla."""
+        return _fields_eq(self, other)
+
+    def __ne__(self, other: OpticalFlowPixel) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
         return f"OpticalFlowPixel(x={self.x}, y={self.y})"

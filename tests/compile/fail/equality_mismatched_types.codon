@@ -1,0 +1,10 @@
+# == between unrelated value types does not compile (the Python API answers
+# False, so a slip comparing a GeoProjectionUTM's offset with its ellipsoid
+# would go unnoticed there).
+# expect-error: unsupported operand type(s) for ==: 'GeoOffsetTransform' and 'GeoEllipsoid'
+import typesafe_carla as carla
+
+def same_offset(t: carla.GeoOffsetTransform, p: carla.GeoProjectionUTM) -> bool:
+    return t == p.ellps
+
+print(same_offset(carla.GeoOffsetTransform(), carla.GeoProjectionUTM()))

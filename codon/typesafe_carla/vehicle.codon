@@ -24,7 +24,8 @@ from .errors import _check, _i32, CarlaError
 from .map import _read_buffer
 from .geometry import Transform
 from .actor import Vehicle
-from .control import _fields_eq, _fields_repr
+from .control import _fields_repr
+from ._eq import _fields_eq
 from ._enum import _member_names, _member_values, _enum_repr
 
 @tuple
@@ -178,6 +179,12 @@ class WheelTelemetryData:
         self.long_slip = long_slip
         self.omega = omega
 
+    def __eq__(self, other: WheelTelemetryData) -> bool:
+        return _fields_eq(self, other)
+
+    def __ne__(self, other: WheelTelemetryData) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
         return _fields_repr("WheelTelemetryData", self)
 
@@ -201,6 +208,12 @@ class VehicleTelemetryData:
         self.engine_rpm = engine_rpm
         self.gear = gear
         self.wheels = wheels if wheels is not None else List[WheelTelemetryData]()
+
+    def __eq__(self, other: VehicleTelemetryData) -> bool:
+        return _fields_eq(self, other)
+
+    def __ne__(self, other: VehicleTelemetryData) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
         return (f"VehicleTelemetryData(speed={self.speed}, steer={self.steer}, "

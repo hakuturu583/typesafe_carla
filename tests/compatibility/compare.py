@@ -31,7 +31,7 @@ EXACT = ("server_version", "vehicle_blueprints", "color_type", "wheels", "type_i
          "i21_landmark_lookup", "i21_vehicle_light_states", "i21_projections",
          "frame_number", "sensor_types", "image_saved", "palette", "semantic_lidar", "lidar_ply",
          "radar_view", "actors_by_id", "map_from_xodr", "i33_world", "i33_blueprint",
-         "i33_weather_presets")
+         "i33_weather_presets", "i70_equality")
 NUMERIC = {"i21_object_names": 5.0, "settled": 0.05, "driven": 0.5, "speed": 0.3, "spawn0": 0.001, "waypoint_s": 0.001,
            "next10": 0.001, "bbox": 0.001, "physics": 0.001, "physics_all": 0.001,
            "gnss": 0.0000005, "imu_compass": 0.01, "location_vector": 0.002,

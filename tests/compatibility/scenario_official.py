@@ -10,6 +10,8 @@ import time
 
 import carla
 
+from equality_cases import equality_bits
+
 host = os.environ.get("TSC_CARLA_HOST", "localhost")
 port = int(os.environ.get("TSC_CARLA_PORT", "2000"))
 
@@ -509,4 +511,6 @@ out("i33_weather_presets", ";".join(
     f"{w.fog_falloff:.3f},{w.wetness:.3f},{w.scattering_intensity:.3f},{w.mie_scattering_scale:.3f},"
     f"{w.rayleigh_scattering_scale:.3f},{w.dust_storm:.3f}"
     for w in (getattr(carla.WeatherParameters, n) for n in PRESETS33)))
+# Issue #70: == / != on the value types (offline values).
+out("i70_equality", equality_bits())
 sys.stdout.flush()

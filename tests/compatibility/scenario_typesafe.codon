@@ -2,6 +2,7 @@
 import os
 import time
 import typesafe_carla as carla
+from equality_cases import equality_bits
 
 from C import unlink(cobj) -> i32
 
@@ -548,3 +549,5 @@ out("i33_weather_presets", ";".join([",".join([fmt(x) for x in (
     w.sun_altitude_angle, w.fog_density, w.fog_distance, w.fog_falloff, w.wetness,
     w.scattering_intensity, w.mie_scattering_scale, w.rayleigh_scattering_scale, w.dust_storm)])
     for w in presets33]))
+# Issue #70: == / != on the value types (offline values).
+out("i70_equality", equality_bits())

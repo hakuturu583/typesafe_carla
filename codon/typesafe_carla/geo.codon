@@ -48,6 +48,12 @@ class GeoEllipsoid:
         self.a = a
         self.f_inv = f_inv
 
+    def __eq__(self, other: GeoEllipsoid) -> bool:
+        return self.a == other.a and self.f_inv == other.f_inv
+
+    def __ne__(self, other: GeoEllipsoid) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
         return f"GeoEllipsoid(a={self.a}, f_inv={self.f_inv})"
 
@@ -79,10 +85,23 @@ class GeoOffsetTransform:
         y = tx * self.offset_sin_h + ty * self.offset_cos_h
         return Location(float(float32(x)), float(float32(y)), float(float32(loc.z + self.offset_z)))
 
+    def __eq__(self, other: GeoOffsetTransform) -> bool:
+        return (self.offset_x == other.offset_x and self.offset_y == other.offset_y and
+                self.offset_z == other.offset_z and self.offset_cos_h == other.offset_cos_h and
+                self.offset_sin_h == other.offset_sin_h)
+
+    def __ne__(self, other: GeoOffsetTransform) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
         return (f"GeoOffsetTransform(offset_x={self.offset_x}, offset_y={self.offset_y}, "
                 f"offset_z={self.offset_z}, offset_cos_h={self.offset_cos_h}, "
                 f"offset_sin_h={self.offset_sin_h})")
+
+def _offset_eq(a: Optional[GeoOffsetTransform], b: Optional[GeoOffsetTransform]) -> bool:
+    if a is None or b is None:
+        return a is None and b is None
+    return unwrap(a) == unwrap(b)
 
 def _ellipsoid_or_default(ellps: Optional[GeoEllipsoid]) -> GeoEllipsoid:
     return GeoEllipsoid() if ellps is None else unwrap(ellps)
@@ -118,6 +137,13 @@ class GeoProjectionTM:
         return _c_projection(TSC_GEO_PROJECTION_TM, self.ellps, lat_0=self.lat_0, lon_0=self.lon_0,
                              k=self.k, x_0=self.x_0, y_0=self.y_0)
 
+    def __eq__(self, other: GeoProjectionTM) -> bool:
+        return (self.lat_0 == other.lat_0 and self.lon_0 == other.lon_0 and self.k == other.k and
+                self.x_0 == other.x_0 and self.y_0 == other.y_0 and self.ellps == other.ellps)
+
+    def __ne__(self, other: GeoProjectionTM) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
         return (f"GeoProjectionTM(lat_0={self.lat_0}, lon_0={self.lon_0}, k={self.k}, "
                 f"x_0={self.x_0}, y_0={self.y_0}, ellps={self.ellps})")
@@ -140,6 +166,14 @@ class GeoProjectionUTM:
         return _c_projection(TSC_GEO_PROJECTION_UTM, self.ellps, zone=self.zone, north=self.north,
                              offset=self.offset)
 
+    def __eq__(self, other: GeoProjectionUTM) -> bool:
+        """The offsets match if both are None or both are equal."""
+        return (self.zone == other.zone and self.north == other.north and
+                self.ellps == other.ellps and _offset_eq(self.offset, other.offset))
+
+    def __ne__(self, other: GeoProjectionUTM) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
         return f"GeoProjectionUTM(zone={self.zone}, north={self.north}, ellps={self.ellps})"
 
@@ -152,6 +186,12 @@ class GeoProjectionWebMerc:
 
     def _to_c(self) -> CGeoProjection:
         return _c_projection(TSC_GEO_PROJECTION_WEB_MERC, self.ellps)
+
+    def __eq__(self, other: GeoProjectionWebMerc) -> bool:
+        return self.ellps == other.ellps
+
+    def __ne__(self, other: GeoProjectionWebMerc) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
         return f"GeoProjectionWebMerc(ellps={self.ellps})"
@@ -181,6 +221,14 @@ class GeoProjectionLCC2SP:
         return _c_projection(TSC_GEO_PROJECTION_LCC2SP, self.ellps, lat_0=self.lat_0,
                              lat_1=self.lat_1, lat_2=self.lat_2, lon_0=self.lon_0, x_0=self.x_0,
                              y_0=self.y_0)
+
+    def __eq__(self, other: GeoProjectionLCC2SP) -> bool:
+        return (self.lat_0 == other.lat_0 and self.lat_1 == other.lat_1 and
+                self.lat_2 == other.lat_2 and self.lon_0 == other.lon_0 and
+                self.x_0 == other.x_0 and self.y_0 == other.y_0 and self.ellps == other.ellps)
+
+    def __ne__(self, other: GeoProjectionLCC2SP) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
         return (f"GeoProjectionLCC2SP(lat_0={self.lat_0}, lat_1={self.lat_1}, "

@@ -1,0 +1,64 @@
+# Issue #70: == / != with the official semantics on every value type the
+# CARLA Python API compares.
+from ..compatibility.equality_cases import equality_bits
+import typesafe_carla as carla
+
+# tests/compatibility/equality_cases.py run with the official module (ue5-dev
+# build): per type, the == then the != result of each pair.
+OFFICIAL = "Vector3D:1101010/0010101;Location:11010/00101;Vector2D:101/010;Rotation:1111011010/0000100101;Quaternion:101/010;Transform:1101/0010;BoundingBox:1001/0110;Color:101/010;FloatColor:10/01;OpticalFlowPixel:10/01;GeoLocation:10/01;GeoEllipsoid:1001/0110;GeoOffsetTransform:1001/0110;GeoProjectionTM:1010/0101;GeoProjectionUTM:100100/011011;GeoProjectionWebMerc:10/01;GeoProjectionLCC2SP:10/01;Timestamp:10/01;VehicleControl:100/011;VehicleAckermannControl:10/01;AckermannControllerSettings:10/01;WalkerControl:100/011;WheelTelemetryData:10/01;VehicleTelemetryData:1100/0011;WheelPhysicsControl:110/001;VehiclePhysicsControl:1100/0011;WeatherParameters:1010/0101;WorldSettings:1011100/0100011;bone_transform_out:11000/00111"
+
+got = equality_bits()
+if got != OFFICIAL:
+    a = got.split(";")
+    b = OFFICIAL.split(";")
+    for i in range(min(len(a), len(b))):
+        if a[i] != b[i]:
+            print("typesafe_carla " + a[i] + " != official " + b[i])
+assert got == OFFICIAL
+
+# Float lists compare in float32 too (the official module cannot set them).
+p1 = carla.VehiclePhysicsControl(forward_gear_ratios=[0.1, 2.0])
+p2 = carla.VehiclePhysicsControl(forward_gear_ratios=[0.1 + 1e-12, 2.0])
+assert p1 == p2 and not (p1 != p2)
+assert p1 != carla.VehiclePhysicsControl(forward_gear_ratios=[0.1])
+
+# ActorAttribute (LibCarla's ActorAttributeValueAccess): against another
+# attribute, type and value (not the id); against a value, read as its type.
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+bp = world.get_blueprint_library().find("vehicle.lincoln.mkz_2020")
+wheels = bp.get_attribute("number_of_wheels")
+assert wheels == wheels and not (wheels != wheels)
+assert wheels == 4 and wheels != 3
+assert carla.ActorAttribute("x", carla.ActorAttributeType.Int, False, "4") == wheels
+assert carla.ActorAttribute("x", carla.ActorAttributeType.String, False, "4") != wheels
+assert bp.get_attribute("sticky_control") == True and bp.get_attribute("sticky_control") != False
+mass = bp.get_attribute("base_mass")
+assert mass == 1500.0 and mass == 1500.0 + 1e-12 and mass != 1500.5
+assert bp.get_attribute("role_name") == "autopilot" and bp.get_attribute("role_name") != "hero"
+bp.set_attribute("color", "10,20,30")
+assert bp.get_attribute("color") == carla.Color(10, 20, 30, 99)  # alpha ignored
+assert bp.get_attribute("color") != carla.Color(10, 20, 31)
+try:
+    _ = (wheels == "4")  # the typed accessor's check, as LibCarla's BadAttributeCast
+    assert False
+except carla.CarlaError:
+    pass
+
+# WorldSnapshot: by frame, as LibCarla (it compares the timestamps).
+settings = world.get_settings()
+settings.synchronous_mode = True
+settings.fixed_delta_seconds = 0.05
+world.apply_settings(settings)
+world.tick()
+s1 = world.get_snapshot()
+s2 = world.get_snapshot()
+assert s1 == s2 and not (s1 != s2)
+world.tick()
+s3 = world.get_snapshot()
+assert s3 != s1 and not (s3 == s1)
+settings.synchronous_mode = False
+settings.fixed_delta_seconds = None
+world.apply_settings(settings)
+
+print("OK")

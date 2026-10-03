@@ -12,6 +12,7 @@ from ._ffi import (CStringList, take_string_list, tsc_actor_blueprint_get_tags,
 from ._ffi import (tsc_actor_blueprint_size, tsc_actor_blueprint_get_attribute_ids,
                    tsc_actor_blueprint_get_recommended_values)
 from .errors import _check, _normalize_index, CarlaError
+from ._eq import _f32_eq
 
 class _ActorAttributeType(_IntEnum):
     Bool: int = 0
@@ -48,7 +49,11 @@ class Color:
         self.a = a
 
     def __eq__(self, other: Color) -> bool:
-        return self.r == other.r and self.g == other.g and self.b == other.b and self.a == other.a
+        """r, g and b, as LibCarla: alpha is not compared."""
+        return self.r == other.r and self.g == other.g and self.b == other.b
+
+    def __ne__(self, other: Color) -> bool:
+        return not (self == other)
 
     def _to_c(self) -> CColor:
         for v in (self.r, self.g, self.b, self.a):
@@ -109,6 +114,49 @@ class ActorAttribute:
             raise CarlaError(f"attribute '{self.id}' has malformed color '{self._value}'")
         return Color(int(parts[0].strip()), int(parts[1].strip()), int(parts[2].strip()),
                      int(parts[3].strip()) if len(parts) > 3 else 255)
+
+    # == / != as LibCarla's ActorAttributeValueAccess. Against another
+    # attribute: the same type and value (the ids are not compared). Against a
+    # value: the attribute read as that value's type, so a mismatched type
+    # raises as the typed accessor does (BadAttributeCast in LibCarla); a
+    # float compares in float32 and a Color without alpha. Codon tries the
+    # overloads last to first and converts bool -> int -> float implicitly,
+    # hence float before int before bool.
+    def __eq__(self, other: ActorAttribute) -> bool:
+        return self.type == other.type and self._value == other._value
+
+    def __eq__(self, other: float) -> bool:
+        return _f32_eq(self.as_float(), other)
+
+    def __eq__(self, other: int) -> bool:
+        return self.as_int() == other
+
+    def __eq__(self, other: bool) -> bool:
+        return self.as_bool() == other
+
+    def __eq__(self, other: str) -> bool:
+        return self.as_str() == other
+
+    def __eq__(self, other: Color) -> bool:
+        return self.as_color() == other
+
+    def __ne__(self, other: ActorAttribute) -> bool:
+        return not (self == other)
+
+    def __ne__(self, other: float) -> bool:
+        return not (self == other)
+
+    def __ne__(self, other: int) -> bool:
+        return not (self == other)
+
+    def __ne__(self, other: bool) -> bool:
+        return not (self == other)
+
+    def __ne__(self, other: str) -> bool:
+        return not (self == other)
+
+    def __ne__(self, other: Color) -> bool:
+        return not (self == other)
 
     def __str__(self) -> str:
         """The raw value, whatever the type (like str(attribute) in Python)."""

@@ -18,6 +18,7 @@ from ._ffi import (Handle, CVector3D, CWalkerControl, TSC_KIND_WALKER,
                    tsc_walker_set_bones, tsc_walker_get_bones, tsc_bone_list_size,
                    tsc_bone_list_get)
 from .errors import _check
+from ._eq import _fields_eq
 from .geometry import Location, Transform, _location_arg
 from .control import WalkerControl
 from .actor import Actor
@@ -49,6 +50,13 @@ class bone_transform_out:
         self.world = world if world is not None else Transform()
         self.component = component if component is not None else Transform()
         self.relative = relative if relative is not None else Transform()
+
+    def __eq__(self, other: bone_transform_out) -> bool:
+        """The name and the three transforms, as LibCarla."""
+        return _fields_eq(self, other)
+
+    def __ne__(self, other: bone_transform_out) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
         return (f"bone_transform_out(name={self.name}, world={self.world}, "
