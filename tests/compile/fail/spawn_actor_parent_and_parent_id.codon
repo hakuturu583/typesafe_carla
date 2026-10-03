@@ -1,0 +1,13 @@
+# SpawnActor takes its parent as parent_id or parent (the official overloads), not both.
+# expect-error: pass either parent_id or parent to a command, not both
+import typesafe_carla as carla
+
+def spawn(client: carla.Client, bp: carla.ActorBlueprint, vehicle: carla.Vehicle):
+    client.apply_batch([carla.command.SpawnActor(bp, carla.Transform(), vehicle.id,
+                                                 parent=vehicle)])
+
+# Compile-only: Codon type-checks a function only when it is called.
+_client = carla.Client("localhost", 2000)
+_world = _client.get_world()
+spawn(_client, _world.get_blueprint_library().find("vehicle.audi.tt"),
+      _world.get_actors()[0].as_vehicle())

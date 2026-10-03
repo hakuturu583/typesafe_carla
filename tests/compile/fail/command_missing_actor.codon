@@ -1,0 +1,9 @@
+# A command needs its actor, by actor_id or actor.
+# expect-error: missing the command's actor: pass actor_id or actor
+import typesafe_carla as carla
+
+def autopilot(client: carla.Client):
+    client.apply_batch([carla.command.SetAutopilot(enabled=True)])
+
+# Compile-only: Codon type-checks a function only when it is called.
+autopilot(carla.Client("localhost", 2000))

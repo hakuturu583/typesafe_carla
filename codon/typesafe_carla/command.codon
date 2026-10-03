@@ -3,12 +3,15 @@
 #     import typesafe_carla as carla
 #     cmd = carla.command
 #     batch = [cmd.SpawnActor(bp, transform).then(cmd.SetAutopilot(cmd.FutureActor, True)),
-#              cmd.DestroyActor(old.id)]
+#              cmd.DestroyActor(old)]
 #     for response in client.apply_batch_sync(batch, True):
 #         if response.has_error(): print(response.error)
 #
 # Every constructor returns a Command, so one list can mix command kinds.
-# Actors are given by id (`actor.id`).
+# As in the Python API, a command's actor (and SpawnActor's parent) is an
+# Actor of any kind (Vehicle, Walker, Sensor, ...) or its id, positionally or
+# as actor_id= / actor= (parent_id= / parent=); anything else is a compile
+# error (see _target_id and _actor_arg).
 
 from ._ffi import CCommand, CCommandResponse, CString, take_string, TSC_INVALID_ARGUMENT
 from .errors import (CarlaError, _check_light_state, _check_port, _check_traffic_light_state,
@@ -47,6 +50,62 @@ _NAMES = ["", "SpawnActor", "DestroyActor", "ApplyVehicleControl", "ApplyTransfo
           "ApplyTorque", "SetEnableGravity", "SetVehicleLightState", "ApplyLocation",
           "SetTrafficLightState", "ApplyVehicleAckermannControl", "ShowDebugTelemetry"]
 
+@tuple
+class _MissingArgument:
+    """Default of a constructor argument that was not passed.
+
+    The official constructors are overloads, `(int)actor_id, ...` and
+    `(carla.Actor)actor, ...` (SpawnActor: `parent_id` / `parent`). Codon 0.19
+    cannot overload on keyword names, so each constructor takes both keywords
+    with this default and _actor_arg requires exactly one. Arguments after
+    them get this default too (Python forbids a required argument after a
+    defaulted one); leaving one out is then a compile error,
+    "'_MissingArgument' does not match expected type ...".
+    """
+    pass
+
+_MISSING = _MissingArgument()
+
+def _target_id(actor, what: Literal[str]) -> int:
+    """The id of a command's `what` ("actor" or "parent"): an int id, an Actor
+    or any subclass, or an Optional actor. CarlaError (TSC_INVALID_ARGUMENT)
+    when the id is out of range or the Optional actor is None.
+
+    Resolved at compile time, like the Python API's Actor -> id conversion.
+    (A typed `Actor` parameter would not bind subclasses whose type Codon
+    infers late; see traffic_manager._any_actor.) Anything else, including a
+    literal None, an Optional[int] or a nested Optional, is a compile error.
+    """
+    if isinstance(actor, int):
+        return int(_actor_id(actor))
+    elif hasattr(actor, "as_vehicle"):  # Actor and its subclasses
+        return actor.id
+    elif isinstance(actor, Optional):
+        if hasattr(type(actor.__val__()), "as_vehicle"):  # an Optional actor
+            if actor is None:
+                raise CarlaError("a command's " + what + " is None", TSC_INVALID_ARGUMENT)
+            return actor.__val__().id
+        else:
+            compile_error("a command's " + what + " must be an Actor (a Vehicle, Walker, ...) "
+                          "or an actor id (int)")
+    else:
+        compile_error("a command's " + what + " must be an Actor (a Vehicle, Walker, ...) "
+                      "or an actor id (int)")
+
+def _actor_arg(by_id, by_actor, what: Literal[str] = "actor") -> int:
+    """The id given by exactly one of a constructor's `<what>_id` and `<what>`
+    keywords (positionally, the first). Both or neither is a compile error."""
+    if isinstance(by_actor, _MissingArgument):
+        if isinstance(by_id, _MissingArgument):
+            compile_error("missing the command's " + what + ": pass " + what + "_id or " + what)
+        else:
+            return _target_id(by_id, what)
+    else:
+        if isinstance(by_id, _MissingArgument):
+            return _target_id(by_actor, what)
+        else:
+            compile_error("pass either " + what + "_id or " + what + " to a command, not both")
+
 class Command:
     _type: int
     _actor_id: int
@@ -61,7 +120,7 @@ class Command:
     _then: List[Command]
 
     def __init__(self, kind: int, actor_id: int = 0):
-        _actor_id(actor_id)
+        """actor_id: already resolved by _actor_arg."""
         self._type = kind
         self._actor_id = actor_id
         self._parent_id = 0
@@ -118,34 +177,43 @@ class CommandResponse:
         return (f"CommandResponse(error={self.error})" if self.has_error()
                 else f"CommandResponse(actor_id={self.actor_id})")
 
-def SpawnActor(blueprint: ActorBlueprint, transform: Transform, parent_id: int = 0) -> Command:
+def SpawnActor(blueprint: ActorBlueprint, transform: Transform, parent_id = _MISSING,
+               parent = _MISSING) -> Command:
+    """parent_id / parent: the parent's id or the parent Actor (any kind);
+    neither for no parent."""
     c = Command(_SPAWN_ACTOR)
     c._blueprint = blueprint
     c._transform = transform
-    c._parent_id = int(_actor_id(parent_id))
+    if isinstance(parent_id, _MissingArgument) and isinstance(parent, _MissingArgument):
+        pass  # no parent
+    else:
+        c._parent_id = _actor_arg(parent_id, parent, "parent")
     return c
 
-def DestroyActor(actor_id: int) -> Command:
-    return Command(_DESTROY_ACTOR, actor_id)
+def DestroyActor(actor_id = _MISSING, actor = _MISSING) -> Command:
+    return Command(_DESTROY_ACTOR, _actor_arg(actor_id, actor))
 
-def ApplyVehicleControl(actor_id: int, control: VehicleControl) -> Command:
-    c = Command(_APPLY_VEHICLE_CONTROL, actor_id)
+def ApplyVehicleControl(actor_id = _MISSING, control: VehicleControl = _MISSING,
+                        actor = _MISSING) -> Command:
+    c = Command(_APPLY_VEHICLE_CONTROL, _actor_arg(actor_id, actor))
     c._control = control
     return c
 
-def ApplyTransform(actor_id: int, transform: Transform) -> Command:
-    c = Command(_APPLY_TRANSFORM, actor_id)
+def ApplyTransform(actor_id = _MISSING, transform: Transform = _MISSING,
+                   actor = _MISSING) -> Command:
+    c = Command(_APPLY_TRANSFORM, _actor_arg(actor_id, actor))
     c._transform = transform
     return c
 
-def ApplyTargetVelocity(actor_id: int, velocity) -> Command:
+def ApplyTargetVelocity(actor_id = _MISSING, velocity = _MISSING, actor = _MISSING) -> Command:
     """velocity: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_TARGET_VELOCITY, actor_id, _vector_arg(
+    return _vector_command(_APPLY_TARGET_VELOCITY, _actor_arg(actor_id, actor), _vector_arg(
         velocity, "[tsc-compat] a Location passed as a Vector3D to command.ApplyTargetVelocity"))
 
-def SetAutopilot(actor_id: int, enabled: bool, tm_port: int = 8000) -> Command:
+def SetAutopilot(actor_id = _MISSING, enabled: bool = _MISSING, tm_port: int = 8000,
+                 actor = _MISSING) -> Command:
     _check_port("tm_port", tm_port)
-    c = Command(_SET_AUTOPILOT, actor_id)
+    c = Command(_SET_AUTOPILOT, _actor_arg(actor_id, actor))
     c._flag = int(enabled)
     c._tm_port = tm_port
     return c
@@ -155,11 +223,12 @@ def _flag_command(kind: int, actor_id: int, flag: int) -> Command:
     c._flag = flag
     return c
 
-def SetSimulatePhysics(actor_id: int, enabled: bool) -> Command:
-    return _flag_command(_SET_SIMULATE_PHYSICS, actor_id, int(enabled))
+def SetSimulatePhysics(actor_id = _MISSING, enabled: bool = _MISSING, actor = _MISSING) -> Command:
+    return _flag_command(_SET_SIMULATE_PHYSICS, _actor_arg(actor_id, actor), int(enabled))
 
-def ApplyWalkerControl(actor_id: int, control: WalkerControl) -> Command:
-    c = Command(_APPLY_WALKER_CONTROL, actor_id)
+def ApplyWalkerControl(actor_id = _MISSING, control: WalkerControl = _MISSING,
+                       actor = _MISSING) -> Command:
+    c = Command(_APPLY_WALKER_CONTROL, _actor_arg(actor_id, actor))
     c._vector = control.direction
     c._scalar = control.speed
     c._flag = int(control.jump)
@@ -170,61 +239,64 @@ def _vector_command(kind: int, actor_id: int, vector: Vector3D) -> Command:
     c._vector = vector
     return c
 
-def ApplyTargetAngularVelocity(actor_id: int, angular_velocity) -> Command:
+def ApplyTargetAngularVelocity(actor_id = _MISSING, angular_velocity = _MISSING,
+                               actor = _MISSING) -> Command:
     """angular_velocity: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_TARGET_ANGULAR_VELOCITY, actor_id, _vector_arg(
+    return _vector_command(_APPLY_TARGET_ANGULAR_VELOCITY, _actor_arg(actor_id, actor), _vector_arg(
         angular_velocity, "[tsc-compat] a Location passed as a Vector3D to command.ApplyTargetAngularVelocity"))
 
-def ApplyImpulse(actor_id: int, impulse) -> Command:
+def ApplyImpulse(actor_id = _MISSING, impulse = _MISSING, actor = _MISSING) -> Command:
     """impulse: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_IMPULSE, actor_id, _vector_arg(
+    return _vector_command(_APPLY_IMPULSE, _actor_arg(actor_id, actor), _vector_arg(
         impulse, "[tsc-compat] a Location passed as a Vector3D to command.ApplyImpulse"))
 
-def ApplyForce(actor_id: int, force) -> Command:
+def ApplyForce(actor_id = _MISSING, force = _MISSING, actor = _MISSING) -> Command:
     """force: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_FORCE, actor_id, _vector_arg(
+    return _vector_command(_APPLY_FORCE, _actor_arg(actor_id, actor), _vector_arg(
         force, "[tsc-compat] a Location passed as a Vector3D to command.ApplyForce"))
 
-def ApplyAngularImpulse(actor_id: int, impulse) -> Command:
+def ApplyAngularImpulse(actor_id = _MISSING, impulse = _MISSING, actor = _MISSING) -> Command:
     """impulse: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_ANGULAR_IMPULSE, actor_id, _vector_arg(
+    return _vector_command(_APPLY_ANGULAR_IMPULSE, _actor_arg(actor_id, actor), _vector_arg(
         impulse, "[tsc-compat] a Location passed as a Vector3D to command.ApplyAngularImpulse"))
 
-def ApplyTorque(actor_id: int, torque) -> Command:
+def ApplyTorque(actor_id = _MISSING, torque = _MISSING, actor = _MISSING) -> Command:
     """torque: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_TORQUE, actor_id, _vector_arg(
+    return _vector_command(_APPLY_TORQUE, _actor_arg(actor_id, actor), _vector_arg(
         torque, "[tsc-compat] a Location passed as a Vector3D to command.ApplyTorque"))
 
-def SetEnableGravity(actor_id: int, enabled: bool) -> Command:
-    return _flag_command(_SET_ENABLE_GRAVITY, actor_id, int(enabled))
+def SetEnableGravity(actor_id = _MISSING, enabled: bool = _MISSING, actor = _MISSING) -> Command:
+    return _flag_command(_SET_ENABLE_GRAVITY, _actor_arg(actor_id, actor), int(enabled))
 
-def SetVehicleLightState(actor_id: int, light_state: int) -> Command:
+def SetVehicleLightState(actor_id = _MISSING, light_state: int = _MISSING,
+                         actor = _MISSING) -> Command:
     """light_state: VehicleLightState flags."""
     _check_light_state(light_state)
     # The bit pattern travels as int32.
-    return _flag_command(_SET_VEHICLE_LIGHT_STATE, actor_id, int(i32(light_state)))
+    return _flag_command(_SET_VEHICLE_LIGHT_STATE, _actor_arg(actor_id, actor), int(i32(light_state)))
 
-def ApplyLocation(actor_id: int, location) -> Command:
+def ApplyLocation(actor_id = _MISSING, location = _MISSING, actor = _MISSING) -> Command:
     """location: Location (a Vector3D is accepted as in the Python API)."""
-    c = Command(_APPLY_LOCATION, actor_id)
+    c = Command(_APPLY_LOCATION, _actor_arg(actor_id, actor))
     c._transform = Transform(_location_arg(
         location, "[tsc-compat] a Vector3D passed as a Location to command.ApplyLocation"))
     return c
 
-def SetTrafficLightState(actor_id: int, state: int) -> Command:
+def SetTrafficLightState(actor_id = _MISSING, state: int = _MISSING, actor = _MISSING) -> Command:
     """state: TrafficLightState."""
     _check_traffic_light_state(state)
-    return _flag_command(_SET_TRAFFIC_LIGHT_STATE, actor_id, state)
+    return _flag_command(_SET_TRAFFIC_LIGHT_STATE, _actor_arg(actor_id, actor), state)
 
-def ApplyVehicleAckermannControl(actor_id: int, control: VehicleAckermannControl) -> Command:
-    c = Command(_APPLY_VEHICLE_ACKERMANN_CONTROL, actor_id)
+def ApplyVehicleAckermannControl(actor_id = _MISSING, control: VehicleAckermannControl = _MISSING,
+                                 actor = _MISSING) -> Command:
+    c = Command(_APPLY_VEHICLE_ACKERMANN_CONTROL, _actor_arg(actor_id, actor))
     # tsc_command_t carries the five values in vector and transform.location (ffi.h).
     c._vector = Vector3D(control.steer, control.steer_speed, control.speed)
     c._transform = Transform(Location(control.acceleration, control.jerk, 0.0))
     return c
 
-def ShowDebugTelemetry(actor_id: int, enabled: bool) -> Command:
-    return _flag_command(_SHOW_DEBUG_TELEMETRY, actor_id, int(enabled))
+def ShowDebugTelemetry(actor_id = _MISSING, enabled: bool = _MISSING, actor = _MISSING) -> Command:
+    return _flag_command(_SHOW_DEBUG_TELEMETRY, _actor_arg(actor_id, actor), int(enabled))
 
 def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int]:
     """C records for `commands` (then-commands follow their SpawnActor).

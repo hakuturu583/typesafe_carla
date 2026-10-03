@@ -1,0 +1,81 @@
+# Issue #76 on the mock backend: batch commands built from Actor arguments
+# (any subclass) instead of ids, as the Python API accepts.
+import typesafe_carla as carla
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+lib = world.get_blueprint_library()
+points = world.get_map().get_spawn_points()
+
+vehicle = world.spawn_actor(lib.find("vehicle.audi.tt"), points[0]).as_vehicle()
+walker = world.spawn_actor(lib.find("walker.pedestrian.0001"), points[1]).as_walker()
+camera = lib.find("sensor.camera.rgb")
+
+# SpawnActor's parent as an Actor, and commands targeting actors of each kind.
+target = carla.Transform(carla.Location(30.0, 5.0, 1.0))
+responses = client.apply_batch_sync([
+    carla.command.SpawnActor(camera, carla.Transform(carla.Location(0.0, 0.0, 2.0)), vehicle),
+    carla.command.ApplyVehicleControl(vehicle, carla.VehicleControl(throttle=0.6)),
+    carla.command.ApplyTransform(walker, target),
+    carla.command.SetEnableGravity(vehicle, False),
+    carla.command.SetSimulatePhysics(walker, False)])
+assert len(responses) == 5
+assert not any(r.has_error() for r in responses)
+assert responses[1].actor_id == vehicle.id and responses[2].actor_id == walker.id
+sensor = world.get_actor(responses[0].actor_id).as_sensor()
+parent = sensor.parent
+assert parent is not None and parent.id == vehicle.id
+assert abs(vehicle.get_control().throttle - 0.6) < 1e-6
+assert walker.get_transform().location.distance(target.location) < 1e-6
+
+# The official keywords: actor= / actor_id= (SpawnActor: parent= / parent_id=).
+keyed = client.apply_batch_sync([
+    carla.command.SpawnActor(camera, carla.Transform(), parent=walker),
+    carla.command.SpawnActor(camera, carla.Transform(), parent_id=walker.id),
+    carla.command.ApplyVehicleControl(actor=vehicle, control=carla.VehicleControl(throttle=0.3)),
+    carla.command.SetEnableGravity(actor_id=walker.id, enabled=True)])
+assert not any(r.has_error() for r in keyed)
+for r in keyed[:2]:
+    p = world.get_actor(r.actor_id).parent
+    assert p is not None and p.id == walker.id
+assert abs(vehicle.get_control().throttle - 0.3) < 1e-6
+client.apply_batch_sync([carla.command.DestroyActor(actor=world.get_actor(r.actor_id))
+                         for r in keyed[:2]])
+
+# The Actor and id forms build the same command.
+assert str(carla.command.DestroyActor(vehicle)) == str(carla.command.DestroyActor(vehicle.id))
+
+# An Optional actor is accepted; None raises.
+raised = False
+try:
+    carla.command.DestroyActor(world.get_actor(987654))
+except carla.CarlaError:
+    raised = True
+assert raised
+
+# A None parent names the parent.
+raised = False
+try:
+    carla.command.SpawnActor(camera, carla.Transform(), parent=world.get_actor(987654))
+except carla.CarlaError as e:
+    raised = True
+    assert "parent is None" in e.message, e.message
+assert raised
+
+# A then() command still acts on the spawned actor, not on a given Actor.
+raised = False
+try:
+    carla.command.SpawnActor(camera, carla.Transform()).then(carla.command.DestroyActor(vehicle))
+except carla.CarlaError:
+    raised = True
+assert raised
+
+# Cleanup through a batch of actors (a Sensor, a Vehicle, an Optional Walker).
+cleanup = client.apply_batch_sync([carla.command.DestroyActor(sensor),
+                                   carla.command.DestroyActor(vehicle),
+                                   carla.command.DestroyActor(world.get_actor(walker.id))])
+assert not any(r.has_error() for r in cleanup)
+snapshot = world.get_snapshot()
+assert not snapshot.has_actor(sensor.id) and not snapshot.has_actor(vehicle.id)
+assert not snapshot.has_actor(walker.id)
+print("OK")
