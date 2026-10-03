@@ -1145,6 +1145,27 @@ rpc::ActorId Execute(mock::Episode &e, const Command &cmd, rpc::ActorId future) 
           auto &a = target(c.actor);
           a.transform.location = c.location;
           return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyVehiclePhysicsControl>) {
+          auto &a = target(c.actor);
+          if (!a.is_vehicle) throw std::runtime_error("actor " + std::to_string(a.id) + " is not a vehicle");
+          a.physics = c.physics_control;
+          return a.id;
+        } else if constexpr (std::is_same_v<T, Command::ApplyWalkerState>) {
+          // Moves the walker and makes it walk along the transform's forward
+          // vector at `speed`.
+          auto &a = target(c.actor);
+          if (!a.is_walker()) {
+            throw std::runtime_error("actor " + std::to_string(a.id) + " is not a walker");
+          }
+          a.transform = c.transform;
+          const double yaw = c.transform.rotation.yaw * M_PI / 180.0;
+          const double pitch = c.transform.rotation.pitch * M_PI / 180.0;
+          a.walker_control = rpc::WalkerControl(
+              geom::Vector3D(static_cast<float>(std::cos(pitch) * std::cos(yaw)),
+                             static_cast<float>(std::cos(pitch) * std::sin(yaw)),
+                             static_cast<float>(std::sin(pitch))),
+              c.speed, false);
+          return a.id;
         } else {
           static_assert(std::is_same_v<T, Command::SetTrafficLightState>);
           auto &a = target(c.actor);

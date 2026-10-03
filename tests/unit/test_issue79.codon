@@ -1,0 +1,81 @@
+# Issue #79 on the mock backend: the batch commands ApplyVehiclePhysicsControl
+# and ApplyWalkerState.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+assert ffi.CCommand.__elemsize__ == 152  # physics_control shares the blueprint slot
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+lib = world.get_blueprint_library()
+vehicle = world.spawn_actor(lib.find("vehicle.audi.tt"),
+                            world.get_map().get_spawn_points()[1]).as_vehicle()
+
+# ApplyVehiclePhysicsControl: the whole control reaches the vehicle.
+pc = vehicle.get_physics_control()
+assert len(pc.wheels) == 4
+pc.mass = pc.mass + 250.0
+pc.torque_curve = [carla.Vector2D(0.0, 400.0), carla.Vector2D(6000.0, 300.0)]
+pc.forward_gear_ratios = [3.0, 2.0, 1.0]
+pc.wheels[2].wheel_radius = 41.5
+command = carla.command.ApplyVehiclePhysicsControl(vehicle.id, pc)
+assert str(command).startswith("command.ApplyVehiclePhysicsControl(")
+pc.mass = 1.0  # the command holds a copy
+responses = client.apply_batch_sync([command], False)
+assert len(responses) == 1 and not responses[0].has_error(), responses[0].error
+assert responses[0].actor_id == vehicle.id
+got = vehicle.get_physics_control()
+pc.mass = got.mass
+assert got == pc, got
+assert abs(got.wheels[2].wheel_radius - 41.5) < 1e-4
+
+# In a then() chain it acts on the spawned vehicle.
+spawned = client.apply_batch_sync([carla.command.SpawnActor(
+    lib.find("vehicle.audi.tt"), world.get_map().get_spawn_points()[2]).then(
+        carla.command.ApplyVehiclePhysicsControl(carla.command.FutureActor, pc))], False)
+assert not spawned[0].has_error(), spawned[0].error
+other = world.get_actor(spawned[0].actor_id)
+assert other is not None
+assert other.as_vehicle().get_physics_control() == pc
+
+# Errors are per command, as on the server.
+walker = world.spawn_actor(lib.find("walker.pedestrian.0001"),
+                           carla.Transform(carla.Location(10.0, 0.0, 1.0))).as_walker()
+bad = client.apply_batch_sync([carla.command.ApplyVehiclePhysicsControl(walker.id, pc)], False)
+assert bad[0].has_error() and "not a vehicle" in bad[0].error, bad[0].error
+
+# Invalid values never reach the server: the whole batch fails.
+def invalid(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError as e:
+        return e.status == ffi.TSC_INVALID_ARGUMENT
+    return False
+
+massless = vehicle.get_physics_control()
+massless.mass = 0.0
+assert invalid(lambda: client.apply_batch_sync(
+    [carla.command.ApplyVehiclePhysicsControl(vehicle.id, massless)], False))
+nan_curve = vehicle.get_physics_control()
+nan_curve.torque_curve = [carla.Vector2D(float("nan"), 1.0)]
+assert invalid(lambda: client.apply_batch([carla.command.ApplyVehiclePhysicsControl(
+    vehicle.id, nan_curve)], False))
+
+# ApplyWalkerState: moves the walker and walks it forward at the speed.
+state = carla.Transform(carla.Location(12.0, 3.0, 1.0), carla.Rotation(yaw=90.0))
+r = client.apply_batch_sync([carla.command.ApplyWalkerState(walker.id, state, 1.5)], False)
+assert not r[0].has_error(), r[0].error
+assert walker.get_location().distance(state.location) < 1e-3
+control = walker.get_control()
+assert abs(control.speed - 1.5) < 1e-6 and not control.jump
+assert abs(control.direction.x) < 1e-6 and abs(control.direction.y - 1.0) < 1e-6
+assert str(carla.command.ApplyWalkerState(walker.id, state, 1.0)).startswith(
+    "command.ApplyWalkerState(")
+r = client.apply_batch_sync([carla.command.ApplyWalkerState(vehicle.id, state, 1.0)], False)
+assert r[0].has_error() and "not a walker" in r[0].error, r[0].error
+assert invalid(lambda: client.apply_batch(
+    [carla.command.ApplyWalkerState(walker.id, state, -1.0)], False))
+
+for a in [walker.id, vehicle.id, other.id]:
+    client.apply_batch([carla.command.DestroyActor(a)], False)
+print("OK")

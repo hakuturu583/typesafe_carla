@@ -464,8 +464,9 @@ class VehiclePhysicsControl:
         snapshot.release()
         return result
 
-    def _apply(self, vehicle: cobj):
-        # Every buffer stays referenced by a local until the call returns.
+    def _c_buffer(self) -> Ptr[CVehiclePhysicsControl]:
+        """The control in C layout. Every array it points to is a GC allocation
+        referenced from it, so they stay alive as long as the result does."""
         slips = [_curve_to_c(w.lateral_slip_graph) for w in self.wheels]
         wheels = Ptr[CWheelPhysicsControl](len(self.wheels))
         for i in range(len(self.wheels)):
@@ -474,7 +475,10 @@ class VehiclePhysicsControl:
         c[0] = self._to_c(_curve_to_c(self.torque_curve), _curve_to_c(self.steering_curve),
                           _ratios_to_c(self.forward_gear_ratios),
                           _ratios_to_c(self.reverse_gear_ratios), wheels)
-        _check(tsc_vehicle_apply_physics_control(vehicle, c))
+        return c
+
+    def _apply(self, vehicle: cobj):
+        _check(tsc_vehicle_apply_physics_control(vehicle, self._c_buffer()))
 
     def _to_c(self, torque: Ptr[CVector2D], steering: Ptr[CVector2D], forward: Ptr[float],
               reverse: Ptr[float], wheels: Ptr[CWheelPhysicsControl]) -> CVehiclePhysicsControl:

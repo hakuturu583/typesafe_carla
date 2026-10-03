@@ -1,0 +1,21 @@
+import typesafe_carla as carla
+
+def batch(client: carla.Client, vehicle: carla.Vehicle, walker: carla.Walker,
+          bp: carla.ActorBlueprint, point: carla.Transform) -> List[carla.CommandResponse]:
+    pc: carla.VehiclePhysicsControl = vehicle.get_physics_control()
+    pc.mass = 1500.0
+    commands = [carla.command.ApplyVehiclePhysicsControl(vehicle.id, pc),
+                carla.command.ApplyWalkerState(walker.id, walker.get_transform(), 1.4),
+                carla.command.SpawnActor(bp, point).then(
+                    carla.command.ApplyVehiclePhysicsControl(carla.command.FutureActor,
+                                                             carla.VehiclePhysicsControl()))]
+    client.apply_batch(commands)
+    return client.apply_batch_sync(commands, True)
+
+# Compile-only: Codon type-checks a function only when it is called.
+_client = carla.Client("localhost", 2000)
+_world = _client.get_world()
+_actors = _world.get_actors()
+print(batch(_client, _actors[0].as_vehicle(), _actors[1].as_walker(),
+            _world.get_blueprint_library().find("vehicle.audi.tt"),
+            _world.get_map().get_spawn_points()[0]))

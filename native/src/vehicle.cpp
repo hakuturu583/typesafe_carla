@@ -109,7 +109,20 @@ void write_physics(const tsc_vehicle_physics_control_t &src,
   for (size_t i = 0; i < src.wheel_count; ++i) write_wheel(src.wheels[i], dst.wheels[i]);
 }
 
+void check_mass(const tsc_vehicle_physics_control_t &c) {
+  if (!(c.mass > 0.0)) fail(TSC_INVALID_ARGUMENT, "mass must be positive");
+}
+
 }  // namespace
+
+carla::rpc::VehiclePhysicsControl tsc::to_carla(const tsc_vehicle_physics_control_t &c) {
+  check_mass(c);
+  require_array(c.wheels, c.wheel_count, "wheels");
+  carla::rpc::VehiclePhysicsControl pc;
+  pc.wheels.resize(c.wheel_count);
+  write_physics(c, pc);
+  return pc;
+}
 
 tsc_physics_control::tsc_physics_control(const carla::rpc::VehiclePhysicsControl &src)
     : tsc_handle(TSC_KIND_PHYSICS_CONTROL) {
@@ -159,7 +172,7 @@ tsc_status_t tsc_vehicle_apply_physics_control(tsc_vehicle_t *vehicle,
                                      " wheels but the vehicle has " +
                                      std::to_string(pc.wheels.size()));
     }
-    if (!(c.mass > 0.0)) fail(TSC_INVALID_ARGUMENT, "mass must be positive");
+    check_mass(c);
     write_physics(c, pc);
     v.ApplyPhysicsControl(pc);
   });
