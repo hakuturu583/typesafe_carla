@@ -2,13 +2,19 @@
 # statically into libtypesafe_carla_ffi.so, into one THIRD_PARTY_NOTICES file
 # that ships in the wheel next to LICENSE.CARLA.
 #
-#   tsc_write_third_party_notices(<output file>)
+#   tsc_collect_third_party_notices(<components file>)
+#   tsc_write_third_party_notices(<output file> <components text>)
 #
-# Call it after add_subdirectory(CARLA): it reads the license texts from the
-# sources CARLA fetched (FetchContent) and from LibCarla's vendored
-# third-party/ directory, so the notices always match what was built. Any
-# expected license file or license comment that is missing fails the
-# configure step rather than shipping an incomplete notice.
+# Call tsc_collect_third_party_notices after add_subdirectory(CARLA): it reads
+# the license texts from the sources CARLA fetched (FetchContent) and from
+# LibCarla's vendored third-party/ directory, so the notices always match what
+# was built, and writes the per-component notices (index and texts) to
+# <components file>. Any expected license file or license comment that is
+# missing fails the configure step rather than shipping an incomplete notice.
+# tsc_write_third_party_notices adds the header for this typesafe_carla. A
+# LibCarla prebuilt (cmake/LibCarlaPrebuilt.cmake) ships the components file
+# of the build it was made from, so a build from the prebuilt writes the same
+# notices without the sources.
 #
 # What carla-client links (both 0.10.0 and ue5-dev):
 #   - LibCarla itself and its vendored sources: pugixml, odrSpiral (compiled),
@@ -283,9 +289,9 @@ function(_tsc_libcarla_holders out)
   set(${out} "${_result}" PARENT_SCOPE)
 endfunction()
 
-function(tsc_write_third_party_notices output)
+function(tsc_collect_third_party_notices output)
   if(NOT TARGET carla-client)
-    message(FATAL_ERROR "tsc_write_third_party_notices: no carla-client target")
+    message(FATAL_ERROR "tsc_collect_third_party_notices: no carla-client target")
   endif()
 
   # --- Guard: everything carla-client links must be listed below. ----------
@@ -436,6 +442,19 @@ function(tsc_write_third_party_notices output)
     UPSTREAM "https://zlib.net" SOURCE "${_zlib}"
     FILES "${_zlib}/LICENSE")
 
+  _tsc_write_if_different("${output}" "${_tsc_index}${_tsc_body}")
+  message(STATUS "typesafe_carla: collected ${_tsc_n} third-party notices in ${output}")
+endfunction()
+
+# Writes <content> to <file>, touching it only when it changes, so that
+# reconfiguring does not re-install it.
+function(_tsc_write_if_different file content)
+  file(WRITE "${file}.tmp" "${content}")
+  file(COPY_FILE "${file}.tmp" "${file}" ONLY_IF_DIFFERENT)
+  file(REMOVE "${file}.tmp")
+endfunction()
+
+function(tsc_write_third_party_notices output components)
   set(_notices
 "THIRD-PARTY NOTICES for typesafe_carla ${PROJECT_VERSION} (libcarla backend)
 
@@ -449,10 +468,6 @@ fetched its dependencies into.
 Fetched by CARLA but not linked: Eigen (unused by the client library) and
 SQLite (replaced by an empty stand-in; not linked). Boost.Python is not built.
 
-${_tsc_index}${_tsc_body}")
-  # Only touch <output> when it changes, so reconfiguring does not re-install it.
-  file(WRITE "${output}.tmp" "${_notices}")
-  file(COPY_FILE "${output}.tmp" "${output}" ONLY_IF_DIFFERENT)
-  file(REMOVE "${output}.tmp")
-  message(STATUS "typesafe_carla: wrote ${_tsc_n} third-party notices to ${output}")
+${components}")
+  _tsc_write_if_different("${output}" "${_notices}")
 endfunction()

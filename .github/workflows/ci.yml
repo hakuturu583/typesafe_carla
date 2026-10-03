@@ -137,6 +137,43 @@ jobs:
       # LibCarla build of the package.
       - name: Binding spec vs LibCarla headers
         run: uv run --no-project --with pyyaml --with libclang==18.1.1 --with ziglang==0.13.0 python -m tools.bindgen validate --build-dir build
+      # A relocatable prefix of the LibCarla just built, which local builds
+      # download instead of compiling LibCarla (TSC_CARLA_PREBUILT=auto,
+      # tools/fetch_libcarla_prebuilt.py; docs/releasing.md, "LibCarla
+      # prebuilt"). Published from main only (pushes and the daily run, which
+      # also keeps the 90-day artifacts fresh), after the tests above passed.
+      - name: Assemble the LibCarla prebuilt
+        id: prebuilt
+        if: github.event_name == 'push' || github.event_name == 'schedule'
+        env:
+          SHA: ${{ steps.carla.outputs.sha }}
+        run: |
+          set -euo pipefail
+          cmake --build build --target libcarla_prebuilt
+          # Moved away from the build tree, to check that it is relocatable.
+          mv build/libcarla-prebuilt "$RUNNER_TEMP/libcarla-prebuilt"
+          du -sh "$RUNNER_TEMP/libcarla-prebuilt"
+          name=$(python3 tools/fetch_libcarla_prebuilt.py --print-name "$SHA")
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+      - name: Build the shim from the prebuilt alone
+        if: steps.prebuilt.outcome == 'success'
+        env:
+          SHA: ${{ steps.carla.outputs.sha }}
+          CARLA_REF: ${{ matrix.carla_ref }}
+        run: |
+          cmake -S . -B build-prebuilt -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF="$SHA" \
+            -DTSC_CARLA_REF_NAME="$CARLA_REF" -DTSC_CARLA_PREBUILT_DIR="$RUNNER_TEMP/libcarla-prebuilt"
+          cmake --build build-prebuilt -j "$(nproc)" --target typesafe_carla_ffi test_ffi test_generated test_image_converter
+          ctest --test-dir build-prebuilt --output-on-failure
+      - name: Publish the LibCarla prebuilt
+        if: steps.prebuilt.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.prebuilt.outputs.name }}
+          path: ${{ runner.temp }}/libcarla-prebuilt
+          retention-days: 90
+          if-no-files-found: error
+          overwrite: true  # a re-run of the job
       # Slow (minutes): one leg, and only for main and the daily run.
       - name: LibCarla API coverage report
         if: >-

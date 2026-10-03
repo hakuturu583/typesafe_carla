@@ -19,6 +19,14 @@
 #                             it, e.g. "ue5-dev" or "0.10.0"; also names a
 #                             TSC_CARLA_SOURCE_DIR build. Default: the ref
 #                             fetched ("local" for TSC_CARLA_SOURCE_DIR).
+#   TSC_CARLA_PREBUILT_DIR    [TSC_CARLA_PREBUILT_DIR] Use this LibCarla prebuilt
+#                             (cmake/LibCarlaPrebuilt.cmake) instead of fetching
+#                             and building LibCarla. Its compiler ABI and CARLA
+#                             commit must match this build's, or configuring fails.
+#   TSC_CARLA_PREBUILT        [TSC_CARLA_PREBUILT] "auto": download CI's prebuilt
+#                             for TSC_CARLA_GIT_REF and this compiler
+#                             (tools/fetch_libcarla_prebuilt.py, needs an
+#                             authenticated `gh`), else build from source as usual.
 #
 # The cache variables carry a TSC_ prefix because CARLA's own project() call
 # defines CARLA_SOURCE_DIR.
@@ -28,6 +36,10 @@
 #   TSC_CARLA_RESOLVED_REF  The ref recorded: TSC_CARLA_REF_NAME, else the
 #                           requested ref ("local" for TSC_CARLA_SOURCE_DIR).
 #   TSC_CARLA_COMMIT        Resolved commit SHA ("unknown" if not a git tree).
+#   TSC_CARLA_PREBUILT_PREFIX  The LibCarla prebuilt to use, or empty to build
+#                           LibCarla from TSC_CARLA_DIR (then unset).
+#   TSC_CARLA_PREBUILT_SHA  For a prebuilt TSC_CARLA_PREBUILT=auto found: the
+#                           commit the download was already checked against.
 
 include_guard(GLOBAL)
 
@@ -81,6 +93,39 @@ endfunction()
 
 find_package(Git QUIET)
 
+# A full SHA is immutable; branches and tags are re-fetched (and a prebuilt
+# re-checked) only when the requested ref changes (pass -DTSC_CARLA_REFRESH=ON
+# to update a branch).
+option(TSC_CARLA_REFRESH "Re-fetch TSC_CARLA_GIT_REF even if it was fetched before" OFF)
+
+# --- LibCarla prebuilt ---------------------------------------------------------
+set(TSC_CARLA_PREBUILT_DIR "$ENV{TSC_CARLA_PREBUILT_DIR}" CACHE PATH
+    "LibCarla prebuilt prefix to use instead of building LibCarla; empty to build it")
+set(TSC_CARLA_PREBUILT "$ENV{TSC_CARLA_PREBUILT}" CACHE STRING
+    "auto: download CI's LibCarla prebuilt for this ref and compiler if there is one")
+set(TSC_CARLA_PREBUILT_PREFIX "")
+set(TSC_CARLA_PREBUILT_SHA "")
+if(TSC_CARLA_PREBUILT_DIR)
+  if(TSC_CARLA_SOURCE_DIR)
+    message(FATAL_ERROR "Set TSC_CARLA_PREBUILT_DIR or TSC_CARLA_SOURCE_DIR, not both")
+  endif()
+  set(TSC_CARLA_PREBUILT_PREFIX "${TSC_CARLA_PREBUILT_DIR}")
+  return()
+endif()
+if(TSC_CARLA_PREBUILT STREQUAL "auto")
+  if(TSC_CARLA_SOURCE_DIR)
+    message(STATUS "typesafe_carla: TSC_CARLA_PREBUILT=auto ignored: TSC_CARLA_SOURCE_DIR is set")
+  else()
+    include("${CMAKE_CURRENT_LIST_DIR}/LibCarlaPrebuilt.cmake")
+    tsc_fetch_libcarla_prebuilt(TSC_CARLA_PREBUILT_PREFIX TSC_CARLA_PREBUILT_SHA)
+    if(TSC_CARLA_PREBUILT_PREFIX)
+      return()
+    endif()
+  endif()
+elseif(TSC_CARLA_PREBUILT AND NOT TSC_CARLA_PREBUILT MATCHES "^(OFF|off|0|NO|no|FALSE|false)$")
+  message(FATAL_ERROR "TSC_CARLA_PREBUILT must be auto or empty/OFF, not '${TSC_CARLA_PREBUILT}'")
+endif()
+
 if(TSC_CARLA_SOURCE_DIR)
   get_filename_component(TSC_CARLA_DIR "${TSC_CARLA_SOURCE_DIR}" ABSOLUTE)
   _tsc_check_ue5("${TSC_CARLA_DIR}")
@@ -108,10 +153,6 @@ set(_tsc_have "")
 if(EXISTS "${_tsc_stamp}" AND EXISTS "${_tsc_carla_dir}/.git")
   file(READ "${_tsc_stamp}" _tsc_have)
 endif()
-
-# A ref that is a full SHA is immutable; branches and tags are re-fetched only
-# when the requested ref changes (pass -DTSC_CARLA_REFRESH=ON to update a branch).
-option(TSC_CARLA_REFRESH "Re-fetch TSC_CARLA_GIT_REF even if it was fetched before" OFF)
 
 if(NOT _tsc_have STREQUAL _tsc_want OR TSC_CARLA_REFRESH)
   message(STATUS "typesafe_carla: fetching CARLA ${TSC_CARLA_GIT_REF} from ${TSC_CARLA_GIT_REPOSITORY}")
