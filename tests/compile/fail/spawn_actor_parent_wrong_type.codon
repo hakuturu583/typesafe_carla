@@ -1,0 +1,10 @@
+# SpawnActor's parent is an Actor or an actor id (int), not a Transform.
+# expect-error: a command's actor must be an Actor (a Vehicle, Walker, ...) or an actor id (int)
+import typesafe_carla as carla
+
+def spawn(client: carla.Client, bp: carla.ActorBlueprint, t: carla.Transform):
+    client.apply_batch([carla.command.SpawnActor(bp, t, t)])
+
+# Compile-only: Codon type-checks a function only when it is called.
+_client = carla.Client("localhost", 2000)
+spawn(_client, _client.get_world().get_blueprint_library().find("vehicle.audi.tt"), carla.Transform())

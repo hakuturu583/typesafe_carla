@@ -1,0 +1,10 @@
+# A batch command's actor is an Actor or an actor id (int); anything else,
+# such as a str id, is a compile error.
+# expect-error: a command's actor must be an Actor (a Vehicle, Walker, ...) or an actor id (int)
+import typesafe_carla as carla
+
+def destroy(client: carla.Client, name: str):
+    client.apply_batch([carla.command.DestroyActor(name)])
+
+# Compile-only: Codon type-checks a function only when it is called.
+destroy(carla.Client("localhost", 2000), "42")

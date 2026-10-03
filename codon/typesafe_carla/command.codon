@@ -3,12 +3,14 @@
 #     import typesafe_carla as carla
 #     cmd = carla.command
 #     batch = [cmd.SpawnActor(bp, transform).then(cmd.SetAutopilot(cmd.FutureActor, True)),
-#              cmd.DestroyActor(old.id)]
+#              cmd.DestroyActor(old)]
 #     for response in client.apply_batch_sync(batch, True):
 #         if response.has_error(): print(response.error)
 #
 # Every constructor returns a Command, so one list can mix command kinds.
-# Actors are given by id (`actor.id`).
+# As in the Python API, a command's actor (and SpawnActor's parent) is an
+# Actor of any kind (Vehicle, Walker, Sensor, ...) or its id; anything else
+# is a compile error (see _target_id).
 
 from ._ffi import CCommand, CCommandResponse, CString, take_string, TSC_INVALID_ARGUMENT
 from .errors import (CarlaError, _check_light_state, _check_port, _check_traffic_light_state,
@@ -46,6 +48,26 @@ _NAMES = ["", "SpawnActor", "DestroyActor", "ApplyVehicleControl", "ApplyTransfo
           "ApplyTargetAngularVelocity", "ApplyImpulse", "ApplyForce", "ApplyAngularImpulse",
           "ApplyTorque", "SetEnableGravity", "SetVehicleLightState", "ApplyLocation",
           "SetTrafficLightState", "ApplyVehicleAckermannControl", "ShowDebugTelemetry"]
+
+def _target_id(actor) -> int:
+    """The id of a command's actor: an int id, or an Actor or any subclass.
+
+    Resolved at compile time, like the Python API's Actor -> id conversion.
+    (A typed `Actor` parameter would not bind subclasses whose type Codon
+    infers late; see traffic_manager._any_actor.) An Optional actor, such as
+    `world.get_actor(id)`, is accepted; None raises CarlaError, as the Python
+    API rejects None.
+    """
+    if isinstance(actor, int):
+        return actor
+    elif isinstance(actor, Optional):
+        if actor is None:
+            raise CarlaError("a command's actor is None", TSC_INVALID_ARGUMENT)
+        return _target_id(actor.__val__())
+    elif hasattr(actor, "as_vehicle"):  # Actor and its subclasses
+        return actor.id
+    else:
+        compile_error("a command's actor must be an Actor (a Vehicle, Walker, ...) or an actor id (int)")
 
 class Command:
     _type: int
@@ -118,34 +140,35 @@ class CommandResponse:
         return (f"CommandResponse(error={self.error})" if self.has_error()
                 else f"CommandResponse(actor_id={self.actor_id})")
 
-def SpawnActor(blueprint: ActorBlueprint, transform: Transform, parent_id: int = 0) -> Command:
+def SpawnActor(blueprint: ActorBlueprint, transform: Transform, parent_id = 0) -> Command:
+    """parent_id: the parent Actor (any kind) or its id; 0 for none."""
     c = Command(_SPAWN_ACTOR)
     c._blueprint = blueprint
     c._transform = transform
-    c._parent_id = int(_actor_id(parent_id))
+    c._parent_id = int(_actor_id(_target_id(parent_id)))
     return c
 
-def DestroyActor(actor_id: int) -> Command:
-    return Command(_DESTROY_ACTOR, actor_id)
+def DestroyActor(actor_id) -> Command:
+    return Command(_DESTROY_ACTOR, _target_id(actor_id))
 
-def ApplyVehicleControl(actor_id: int, control: VehicleControl) -> Command:
-    c = Command(_APPLY_VEHICLE_CONTROL, actor_id)
+def ApplyVehicleControl(actor_id, control: VehicleControl) -> Command:
+    c = Command(_APPLY_VEHICLE_CONTROL, _target_id(actor_id))
     c._control = control
     return c
 
-def ApplyTransform(actor_id: int, transform: Transform) -> Command:
-    c = Command(_APPLY_TRANSFORM, actor_id)
+def ApplyTransform(actor_id, transform: Transform) -> Command:
+    c = Command(_APPLY_TRANSFORM, _target_id(actor_id))
     c._transform = transform
     return c
 
-def ApplyTargetVelocity(actor_id: int, velocity) -> Command:
+def ApplyTargetVelocity(actor_id, velocity) -> Command:
     """velocity: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_TARGET_VELOCITY, actor_id, _vector_arg(
+    return _vector_command(_APPLY_TARGET_VELOCITY, _target_id(actor_id), _vector_arg(
         velocity, "[tsc-compat] a Location passed as a Vector3D to command.ApplyTargetVelocity"))
 
-def SetAutopilot(actor_id: int, enabled: bool, tm_port: int = 8000) -> Command:
+def SetAutopilot(actor_id, enabled: bool, tm_port: int = 8000) -> Command:
     _check_port("tm_port", tm_port)
-    c = Command(_SET_AUTOPILOT, actor_id)
+    c = Command(_SET_AUTOPILOT, _target_id(actor_id))
     c._flag = int(enabled)
     c._tm_port = tm_port
     return c
@@ -155,11 +178,11 @@ def _flag_command(kind: int, actor_id: int, flag: int) -> Command:
     c._flag = flag
     return c
 
-def SetSimulatePhysics(actor_id: int, enabled: bool) -> Command:
-    return _flag_command(_SET_SIMULATE_PHYSICS, actor_id, int(enabled))
+def SetSimulatePhysics(actor_id, enabled: bool) -> Command:
+    return _flag_command(_SET_SIMULATE_PHYSICS, _target_id(actor_id), int(enabled))
 
-def ApplyWalkerControl(actor_id: int, control: WalkerControl) -> Command:
-    c = Command(_APPLY_WALKER_CONTROL, actor_id)
+def ApplyWalkerControl(actor_id, control: WalkerControl) -> Command:
+    c = Command(_APPLY_WALKER_CONTROL, _target_id(actor_id))
     c._vector = control.direction
     c._scalar = control.speed
     c._flag = int(control.jump)
@@ -170,61 +193,61 @@ def _vector_command(kind: int, actor_id: int, vector: Vector3D) -> Command:
     c._vector = vector
     return c
 
-def ApplyTargetAngularVelocity(actor_id: int, angular_velocity) -> Command:
+def ApplyTargetAngularVelocity(actor_id, angular_velocity) -> Command:
     """angular_velocity: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_TARGET_ANGULAR_VELOCITY, actor_id, _vector_arg(
+    return _vector_command(_APPLY_TARGET_ANGULAR_VELOCITY, _target_id(actor_id), _vector_arg(
         angular_velocity, "[tsc-compat] a Location passed as a Vector3D to command.ApplyTargetAngularVelocity"))
 
-def ApplyImpulse(actor_id: int, impulse) -> Command:
+def ApplyImpulse(actor_id, impulse) -> Command:
     """impulse: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_IMPULSE, actor_id, _vector_arg(
+    return _vector_command(_APPLY_IMPULSE, _target_id(actor_id), _vector_arg(
         impulse, "[tsc-compat] a Location passed as a Vector3D to command.ApplyImpulse"))
 
-def ApplyForce(actor_id: int, force) -> Command:
+def ApplyForce(actor_id, force) -> Command:
     """force: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_FORCE, actor_id, _vector_arg(
+    return _vector_command(_APPLY_FORCE, _target_id(actor_id), _vector_arg(
         force, "[tsc-compat] a Location passed as a Vector3D to command.ApplyForce"))
 
-def ApplyAngularImpulse(actor_id: int, impulse) -> Command:
+def ApplyAngularImpulse(actor_id, impulse) -> Command:
     """impulse: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_ANGULAR_IMPULSE, actor_id, _vector_arg(
+    return _vector_command(_APPLY_ANGULAR_IMPULSE, _target_id(actor_id), _vector_arg(
         impulse, "[tsc-compat] a Location passed as a Vector3D to command.ApplyAngularImpulse"))
 
-def ApplyTorque(actor_id: int, torque) -> Command:
+def ApplyTorque(actor_id, torque) -> Command:
     """torque: Vector3D (a Location is accepted as in the Python API)."""
-    return _vector_command(_APPLY_TORQUE, actor_id, _vector_arg(
+    return _vector_command(_APPLY_TORQUE, _target_id(actor_id), _vector_arg(
         torque, "[tsc-compat] a Location passed as a Vector3D to command.ApplyTorque"))
 
-def SetEnableGravity(actor_id: int, enabled: bool) -> Command:
-    return _flag_command(_SET_ENABLE_GRAVITY, actor_id, int(enabled))
+def SetEnableGravity(actor_id, enabled: bool) -> Command:
+    return _flag_command(_SET_ENABLE_GRAVITY, _target_id(actor_id), int(enabled))
 
-def SetVehicleLightState(actor_id: int, light_state: int) -> Command:
+def SetVehicleLightState(actor_id, light_state: int) -> Command:
     """light_state: VehicleLightState flags."""
     _check_light_state(light_state)
     # The bit pattern travels as int32.
-    return _flag_command(_SET_VEHICLE_LIGHT_STATE, actor_id, int(i32(light_state)))
+    return _flag_command(_SET_VEHICLE_LIGHT_STATE, _target_id(actor_id), int(i32(light_state)))
 
-def ApplyLocation(actor_id: int, location) -> Command:
+def ApplyLocation(actor_id, location) -> Command:
     """location: Location (a Vector3D is accepted as in the Python API)."""
-    c = Command(_APPLY_LOCATION, actor_id)
+    c = Command(_APPLY_LOCATION, _target_id(actor_id))
     c._transform = Transform(_location_arg(
         location, "[tsc-compat] a Vector3D passed as a Location to command.ApplyLocation"))
     return c
 
-def SetTrafficLightState(actor_id: int, state: int) -> Command:
+def SetTrafficLightState(actor_id, state: int) -> Command:
     """state: TrafficLightState."""
     _check_traffic_light_state(state)
-    return _flag_command(_SET_TRAFFIC_LIGHT_STATE, actor_id, state)
+    return _flag_command(_SET_TRAFFIC_LIGHT_STATE, _target_id(actor_id), state)
 
-def ApplyVehicleAckermannControl(actor_id: int, control: VehicleAckermannControl) -> Command:
-    c = Command(_APPLY_VEHICLE_ACKERMANN_CONTROL, actor_id)
+def ApplyVehicleAckermannControl(actor_id, control: VehicleAckermannControl) -> Command:
+    c = Command(_APPLY_VEHICLE_ACKERMANN_CONTROL, _target_id(actor_id))
     # tsc_command_t carries the five values in vector and transform.location (ffi.h).
     c._vector = Vector3D(control.steer, control.steer_speed, control.speed)
     c._transform = Transform(Location(control.acceleration, control.jerk, 0.0))
     return c
 
-def ShowDebugTelemetry(actor_id: int, enabled: bool) -> Command:
-    return _flag_command(_SHOW_DEBUG_TELEMETRY, actor_id, int(enabled))
+def ShowDebugTelemetry(actor_id, enabled: bool) -> Command:
+    return _flag_command(_SHOW_DEBUG_TELEMETRY, _target_id(actor_id), int(enabled))
 
 def _flatten(commands: List[Command]) -> Tuple[Ptr[CCommand], int]:
     """C records for `commands` (then-commands follow their SpawnActor).
