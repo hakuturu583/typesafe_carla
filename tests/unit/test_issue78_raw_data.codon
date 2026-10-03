@@ -127,6 +127,17 @@ for _ in range(200000):  # grows more than once
     fake.append(2)
 assert churn(100256) == 2000 and before == snapshot
 assert fake[100255] == 1 and fake[100256] == 2 and len(fake) == 300256
+# FakeImage copies the list it is built from: growing the caller's list
+# cannot free the bytes under a view (nor change the image).
+mine = [u8(i & 0xFF) for i in range(256)]
+own = carla.FakeImage(16, 4, 90.0, mine)
+view = own.raw_data
+snapshot = view.tobytes()
+mine.extend([u8(7)] * 100000)  # past its capacity: GC_realloc frees the old block
+mine[0] = u8(99)
+assert churn(256) == 2000
+assert view == snapshot  # the bytes the view was taken of are intact
+assert len(own) == 256 and own[0] == 0  # the image no longer aliases the list
 # del shifts the bytes in place: the view sees the shifted bytes.
 small = carla.FakeImage(1, 1, 90.0, [u8(1), u8(2), u8(3), u8(4)])
 view = small.raw_data

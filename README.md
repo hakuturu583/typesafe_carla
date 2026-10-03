@@ -579,7 +579,9 @@ Deliberate differences, all in favour of static checking:
     `<memory at 0x...>`. For a `FakeImage`, `append` / `extend` move the
     bytes to a new buffer, so an earlier view keeps showing the bytes it was
     taken of (a Python `memoryview` would block the resize instead); `del`
-    shifts them in place, and an earlier view sees the shifted bytes. Codon
+    shifts them in place, and an earlier view sees the shifted bytes.
+    `FakeImage(width, height, fov, data)` copies `data`: changing the
+    caller's list afterwards does not change the image. Codon
     has no `bytes`: `bytes(m.raw_data)` becomes `m.raw_data.tobytes()` (a
     copy in a `str`), and, as Codon's `np.frombuffer`
     takes only a `str`, `np.frombuffer(m.raw_data, dtype=np.uint8)` becomes

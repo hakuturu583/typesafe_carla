@@ -712,10 +712,13 @@ class FakeImage:
     _bytes: List[u8]
 
     def __init__(self, width: int, height: int, fov: float, data: List[u8]):
+        """Copies data: the image owns its bytes, so changing or growing the
+        caller's list neither changes the image nor frees the bytes under a
+        raw_data view (List growth frees the old block)."""
         self.width = width
         self.height = height
         self.fov = fov
-        self._bytes = data
+        self._bytes = List[u8](data)
 
     @property
     def raw_data(self) -> RawData:
