@@ -37,7 +37,9 @@ try:
     assert name != "" and class_name != ""
     attrs = vehicle.attributes
     print("attributes", attrs)
-    assert attrs["role_name"] == "issue19" and attrs["number_of_wheels"] == "4"
+    # The actor carries its blueprint's values (ue5-dev's lincoln.mkz says 3 wheels).
+    assert attrs["role_name"] == "issue19"
+    assert attrs["number_of_wheels"] == str(bp.get_attribute("number_of_wheels"))
     tags = vehicle.semantic_tags
     print("semantic_tags", tags)
     assert len(tags) > 0 and carla.CityObjectLabel.Car in tags, tags

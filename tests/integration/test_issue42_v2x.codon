@@ -22,8 +22,9 @@ lib = world.get_blueprint_library()
 server = client.get_server_version()
 v2x_blueprints = [bp.id for bp in lib.filter("sensor.other.v2x*")]
 print("server", server, "LibCarla", carla.libcarla_git_ref(), "V2X blueprints", v2x_blueprints)
-if server.startswith("0.10.0"):
-    assert len(v2x_blueprints) == 0, v2x_blueprints
+# Whether the server has V2X sensors, from its blueprints: the version string
+# cannot tell (ue5-dev servers also report "0.10.0").
+if len(v2x_blueprints) == 0:
     missing = False
     try:
         lib.find("sensor.other.v2x_custom")
