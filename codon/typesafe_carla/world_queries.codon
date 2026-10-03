@@ -70,8 +70,9 @@ class EnvironmentObject:
         self.type = type
 
     def __repr__(self) -> str:
-        return (f"EnvironmentObject(id={self.id}, name={self.name}, type={self.type}, "
-                f"transform={self.transform}, bounding_box={self.bounding_box})")
+        # As the Python API's str(), which prints "Mesh(...)"; id is LibCarla's uint64.
+        return (f"Mesh(id={u64(self.id)}, name={self.name}, transform={self.transform}, "
+                f"bounding_box={self.bounding_box})")
 
 class LabelledPoint:
     """A point hit by a ray cast or projection, with its semantic label."""

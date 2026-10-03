@@ -25,7 +25,7 @@ assert bp.get_attribute("number_of_wheels").as_int() == 4
 assert bp.get_attribute("sticky_control").as_bool()
 assert bp.get_attribute("base_mass").as_float() == 1500.0
 assert bp.get_attribute("role_name").as_str() == "autopilot"
-assert str(bp.get_attribute("number_of_wheels")) == "4"
+assert str(bp.get_attribute("number_of_wheels")) == "ActorAttribute(id=number_of_wheels,type=int,value=4(const))"
 
 spawn = carla.Transform(carla.Location(10.0, 20.0, 0.5), carla.Rotation(0.0, 90.0, 0.0))
 actor = world.spawn_actor(bp, spawn)

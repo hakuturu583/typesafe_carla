@@ -5,6 +5,7 @@ from ._ffi import (CVector2D, CVector3D, CRotation, CTransform, CBoundingBox,
 from ._strict import compat_shortcut
 from .errors import _check
 from ._eq import _f32_eq, _fields_eq
+from ._fmt import fmt_fields
 
 # 2 * FLT_EPSILON: LibCarla's default threshold for a zero-length vector.
 _UNIT_EPSILON = 2.0 * 1.1920928955078125e-07
@@ -131,7 +132,7 @@ class Vector3D:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"Vector3D(x={self.x}, y={self.y}, z={self.z})"
+        return fmt_fields("Vector3D", self)
 
     def _to_c(self) -> CVector3D:
         return CVector3D(self.x, self.y, self.z)
@@ -170,7 +171,7 @@ class Vector2D:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"Vector2D(x={self.x}, y={self.y})"
+        return fmt_fields("Vector2D", self)
 
     def _to_c(self) -> CVector2D:
         return CVector2D(self.x, self.y)
@@ -207,7 +208,7 @@ class Location(Vector3D):
         return Vector3D(self.x, self.y, self.z)
 
     def __repr__(self) -> str:
-        return f"Location(x={self.x}, y={self.y}, z={self.z})"
+        return fmt_fields("Location", self)
 
     @staticmethod
     def _from_c(v: CVector3D) -> Location:
@@ -224,7 +225,7 @@ class Velocity(Vector3D):
         super().__init__(rhs.x, rhs.y, rhs.z)
 
     def __repr__(self) -> str:
-        return f"Velocity(x={self.x}, y={self.y}, z={self.z})"
+        return fmt_fields("Velocity", self)
 
 class AngularVelocity(Vector3D):
     """An angular velocity, as carla.AngularVelocity: a Vector3D."""
@@ -236,7 +237,7 @@ class AngularVelocity(Vector3D):
         super().__init__(rhs.x, rhs.y, rhs.z)
 
     def __repr__(self) -> str:
-        return f"AngularVelocity(x={self.x}, y={self.y}, z={self.z})"
+        return fmt_fields("AngularVelocity", self)
 
 class Acceleration(Vector3D):
     """A linear acceleration in m/s^2, as carla.Acceleration: a Vector3D."""
@@ -248,7 +249,7 @@ class Acceleration(Vector3D):
         super().__init__(rhs.x, rhs.y, rhs.z)
 
     def __repr__(self) -> str:
-        return f"Acceleration(x={self.x}, y={self.y}, z={self.z})"
+        return fmt_fields("Acceleration", self)
 
 def _vector_arg(v, what: Literal[str]) -> Vector3D:
     """An API argument documented as Vector3D: a Vector3D, or a Location.
@@ -366,7 +367,7 @@ class Rotation:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"Rotation(pitch={self.pitch}, yaw={self.yaw}, roll={self.roll})"
+        return fmt_fields("Rotation", self)
 
     def _to_c(self) -> CRotation:
         return CRotation(self.pitch, self.yaw, self.roll)
@@ -512,7 +513,7 @@ class BoundingBox:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"BoundingBox({self.location}, Extent(x={self.extent.x}, y={self.extent.y}, z={self.extent.z}), {self.rotation})"
+        return f"BoundingBox({self.location}, {fmt_fields('Extent', self.extent)}, {self.rotation})"
 
     def contains(self, world_point, point: Transform) -> bool:
         """Whether `world_point` (a Location) is inside this box placed by the
@@ -655,4 +656,4 @@ class Quaternion:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"Quaternion(x={self.x}, y={self.y}, z={self.z}, w={self.w})"
+        return fmt_fields("Quaternion", self)

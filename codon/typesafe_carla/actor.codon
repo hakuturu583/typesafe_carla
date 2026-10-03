@@ -40,6 +40,7 @@ from ._callbacks import _unregister_callback, _stop_gbuffers
 from .geometry import BoundingBox, Location, Transform, Vector3D, _vector_arg, _location_arg
 from .control import VehicleControl, VehiclePhysicsControl
 from .texture import TextureColor, TextureFloatColor
+from ._fmt import fmt_list
 
 TM_DEFAULT_PORT = 8000
 
@@ -357,6 +358,8 @@ class Actor:
         return not (self == other)
 
     def __repr__(self) -> str:
+        """`Actor(id=.., type=..)`, as the Python API's str(); its subclasses
+        (Vehicle, Walker, Sensor, TrafficLight, ...) print the same."""
         return f"Actor(id={self.id}, type={self.type_id})"
 
 class Vehicle(Actor):
@@ -412,9 +415,6 @@ class Vehicle(Actor):
         _check_port("tm_port", tm_port)
         _check(tsc_vehicle_set_autopilot(self._h.ptr, i32(int(enabled)), u16(tm_port)))
 
-    def __repr__(self) -> str:
-        return f"Vehicle(id={self.id}, type={self.type_id})"
-
 # Defined after Vehicle because the return type refers to it.
 @extend
 class Actor:
@@ -461,4 +461,4 @@ class ActorList:
         return ActorList(Handle(out[0]))
 
     def __repr__(self) -> str:
-        return f"ActorList(size={len(self)})"
+        return fmt_list(self)

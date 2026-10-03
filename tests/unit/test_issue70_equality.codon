@@ -37,7 +37,7 @@ world = client.get_world()
 bp = world.get_blueprint_library().find("vehicle.lincoln.mkz_2020")
 wheels = bp.get_attribute("number_of_wheels")
 assert wheels == wheels and not (wheels != wheels)
-assert wheels.as_int() == 4 and int(str(wheels)) == 4
+assert wheels.as_int() == 4
 assert raises(lambda: wheels == 4) and raises(lambda: wheels != 3)  # BadAttributeCast there
 assert carla.ActorAttribute("x", carla.ActorAttributeType.Int, False, "4") == wheels
 assert carla.ActorAttribute("x", carla.ActorAttributeType.String, False, "4") != wheels

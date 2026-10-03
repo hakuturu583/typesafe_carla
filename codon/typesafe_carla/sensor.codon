@@ -43,6 +43,7 @@ from ._ffi import (Handle, CString, CSensorDataInfo, CImage, CLidar, CLidarPoint
                    TSC_DVS_EVENT_SIZE, TSC_INVALID_ARGUMENT, TSC_ERROR)
 from .errors import _check, CarlaError, _normalize_index
 from .geometry import Location, Transform, Vector3D, _location_arg
+from ._fmt import fmt_f, fmt_f32, fmt_b01, fmt_fields
 from .blueprint import Color
 from .actor import Actor, _make_actor
 from .lane_marking import LaneMarking
@@ -129,6 +130,14 @@ def _event_actor(fn, data: SensorData) -> Optional[Actor]:
 def _saved_path(status: i32, out: Ptr[CString]) -> str:
     _check(status)
     return take_string(out)
+
+def _head(name: str, m) -> str:
+    """`Name(frame=N, timestamp=T` as the Python API prints a measurement."""
+    return f"{name}(frame={m.frame}, timestamp={fmt_f(m.timestamp)}"
+
+def _other_actor_str(a: Optional[Actor]) -> str:
+    # The Python API streams the SharedPtr itself (an address); print the actor.
+    return str(a) if a is not None else "nullptr"
 
 class _Measurement:
     """A typed view of a SensorData, which it keeps alive."""
@@ -281,7 +290,7 @@ class Image(_ArrayMeasurement[_CBgra]):
                                                   i32(color_converter), out), out)
 
     def __repr__(self) -> str:
-        return f"Image(frame={self.frame}, size={self.width}x{self.height}, fov={self.fov})"
+        return _head("Image", self) + f", size={self.width}x{self.height})"
 
 class LidarDetection:
     point: Location
@@ -294,7 +303,8 @@ class LidarDetection:
         self.intensity = intensity
 
     def __repr__(self) -> str:
-        return f"LidarDetection({self.point}, intensity={self.intensity})"
+        return (f"LidarDetection(x={fmt_f32(self.point.x)}, y={fmt_f32(self.point.y)}, "
+                f"z={fmt_f32(self.point.z)}, intensity={fmt_f32(self.intensity)})")
 
 def _channel_point_count(data: SensorData, channels: int, channel: int) -> int:
     if channel < 0 or channel >= channels:
@@ -344,7 +354,7 @@ class LidarMeasurement(_ArrayMeasurement[CLidarPoint]):
         return CLidarPoint(float32(d.point.x), float32(d.point.y), float32(d.point.z), float32(d.intensity))
 
     def __repr__(self) -> str:
-        return f"LidarMeasurement(frame={self.frame}, channels={self.channels}, points={len(self)})"
+        return _head("LidarMeasurement", self) + f", number_of_points={len(self)})"
 
 class SemanticLidarDetection:
     point: Location
@@ -362,7 +372,8 @@ class SemanticLidarDetection:
         self.object_tag = object_tag
 
     def __repr__(self) -> str:
-        return (f"SemanticLidarDetection({self.point}, cos_inc_angle={self.cos_inc_angle}, "
+        return (f"SemanticLidarDetection(x={fmt_f32(self.point.x)}, y={fmt_f32(self.point.y)}, "
+                f"z={fmt_f32(self.point.z)}, cos_inc_angle={fmt_f32(self.cos_inc_angle)}, "
                 f"object_idx={self.object_idx}, object_tag={self.object_tag})")
 
 class SemanticLidarMeasurement(_ArrayMeasurement[CSemanticLidarDetection]):
@@ -403,8 +414,7 @@ class SemanticLidarMeasurement(_ArrayMeasurement[CSemanticLidarDetection]):
             u32(_checked_uint(d.object_tag, 32, "object_tag")))
 
     def __repr__(self) -> str:
-        return (f"SemanticLidarMeasurement(frame={self.frame}, channels={self.channels}, "
-                f"points={len(self)})")
+        return _head("SemanticLidarMeasurement", self) + f", number_of_points={len(self)})"
 
 class RadarDetection:
     velocity: float  # m/s
@@ -420,8 +430,7 @@ class RadarDetection:
         self.depth = depth
 
     def __repr__(self) -> str:
-        return (f"RadarDetection(velocity={self.velocity}, azimuth={self.azimuth}, "
-                f"altitude={self.altitude}, depth={self.depth})")
+        return fmt_fields("RadarDetection", self)
 
 class RadarMeasurement(_ArrayMeasurement[CRadarDetection]):
     """Radar detections: a zero-copy view of LibCarla's array."""
@@ -443,7 +452,7 @@ class RadarMeasurement(_ArrayMeasurement[CRadarDetection]):
         return CRadarDetection(float32(d.velocity), float32(d.azimuth), float32(d.altitude), float32(d.depth))
 
     def __repr__(self) -> str:
-        return f"RadarMeasurement(frame={self.frame}, point_count={len(self)})"
+        return _head("RadarMeasurement", self) + f", point_count={len(self)})"
 
 class DVSEvent:
     x: int
@@ -458,7 +467,8 @@ class DVSEvent:
         self.pol = pol
 
     def __repr__(self) -> str:
-        return f"DVSEvent(x={self.x}, y={self.y}, t={self.t}, pol={self.pol})"
+        # As the Python API: "Event(...)", pol through std::to_string (1 / 0).
+        return f"Event(x={self.x}, y={self.y}, t={self.t}, pol={fmt_b01(self.pol)})"
 
 @tuple
 class _CDvsEvent:
@@ -577,7 +587,7 @@ class DVSEventArray(_ArrayMeasurement[_CDvsEvent]):
         return self._column(self._pol)
 
     def __repr__(self) -> str:
-        return (f"DVSEventArray(frame={self.frame}, dimensions={self.width}x{self.height}, "
+        return (_head("EventArray", self) + f", dimensions={self.width}x{self.height}, "
                 f"number_of_events={len(self)})")
 
 class OpticalFlowPixel:
@@ -596,7 +606,7 @@ class OpticalFlowPixel:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"OpticalFlowPixel(x={self.x}, y={self.y})"
+        return f"Color({fmt_f32(self.x)},{fmt_f32(self.y)})"  # sic, as the Python API
 
 class FakeImage:
     """The image OpticalFlowImage.get_color_coded_flow() returns (named as in
@@ -696,7 +706,7 @@ class OpticalFlowImage(_ArrayMeasurement[COpticalFlowPixel]):
         return FakeImage(self.width, self.height, self.fov, buf)
 
     def __repr__(self) -> str:
-        return f"OpticalFlowImage(frame={self.frame}, size={self.width}x{self.height})"
+        return _head("OpticalFlowImage", self) + f", size={self.width}x{self.height})"
 
 class GnssMeasurement(_Measurement):
     latitude: float
@@ -710,8 +720,8 @@ class GnssMeasurement(_Measurement):
         self.altitude = c.altitude
 
     def __repr__(self) -> str:
-        return (f"GnssMeasurement(frame={self.frame}, lat={self.latitude}, lon={self.longitude}, "
-                f"alt={self.altitude})")
+        return (_head("GnssMeasurement", self) + f", lat={fmt_f(self.latitude)}, "
+                f"lon={fmt_f(self.longitude)}, alt={fmt_f(self.altitude)})")
 
 class IMUMeasurement(_Measurement):
     accelerometer: Vector3D  # m/s^2
@@ -725,8 +735,8 @@ class IMUMeasurement(_Measurement):
         self.compass = c.compass
 
     def __repr__(self) -> str:
-        return (f"IMUMeasurement(frame={self.frame}, accelerometer={self.accelerometer}, "
-                f"gyroscope={self.gyroscope}, compass={self.compass})")
+        return (_head("IMUMeasurement", self) + f", accelerometer={self.accelerometer}, "
+                f"gyroscope={self.gyroscope}, compass={fmt_f32(self.compass)})")
 
 class CollisionEvent(_Measurement):
     actor_id: int  # the actor the sensor is attached to
@@ -750,8 +760,8 @@ class CollisionEvent(_Measurement):
         return _event_actor(tsc_collision_event_get_other_actor, self.data)
 
     def __repr__(self) -> str:
-        return (f"CollisionEvent(frame={self.frame}, actor_id={self.actor_id}, "
-                f"other_actor_id={self.other_actor_id}, normal_impulse={self.normal_impulse})")
+        return (_head("CollisionEvent", self) +
+                f", other_actor={_other_actor_str(self.other_actor)})")
 
 class ObstacleDetectionEvent(_Measurement):
     distance: float  # m
@@ -771,7 +781,8 @@ class ObstacleDetectionEvent(_Measurement):
         return _event_actor(tsc_obstacle_detection_get_other_actor, self.data)
 
     def __repr__(self) -> str:
-        return f"ObstacleDetectionEvent(frame={self.frame}, distance={self.distance})"
+        return (_head("ObstacleDetectionEvent", self) +
+                f", other_actor={_other_actor_str(self.other_actor)})")
 
 class LaneInvasionEvent(_Measurement):
     crossed_lane_markings: List[LaneMarking]
@@ -793,8 +804,7 @@ class LaneInvasionEvent(_Measurement):
         return a
 
     def __repr__(self) -> str:
-        return (f"LaneInvasionEvent(frame={self.frame}, "
-                f"crossed_lane_markings={self.crossed_lane_markings})")
+        return _head("LaneInvasionEvent", self) + ")"
 
 @extend
 class SensorData:
@@ -1010,9 +1020,6 @@ class Sensor(Actor):
         id = _gbuffer_id(gbuffer_id)
         if not _unregister_stream(self.id, id):  # which stops a callback's stream
             _check(tsc_sensor_stop_gbuffer(self._h.ptr, u32(id)))
-
-    def __repr__(self) -> str:
-        return f"Sensor(id={self.id}, type={self.type_id})"
 
 def _gbuffer_id(gbuffer_id: int) -> int:
     if gbuffer_id < 0 or gbuffer_id >= TSC_GBUFFER_TEXTURE_COUNT:

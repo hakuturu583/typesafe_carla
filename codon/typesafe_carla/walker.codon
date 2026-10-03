@@ -35,7 +35,8 @@ class bone_transform:
         self.transform = transform if transform is not None else Transform()
 
     def __repr__(self) -> str:
-        return f"bone_transform(name={self.name}, transform={self.transform})"
+        # The Python API prints the underlying std::pair: "(name,Transform(...))".
+        return f"({self.name},{self.transform})"
 
 class bone_transform_out:
     """One bone of Walker.get_bones(), as carla.bone_transform_out."""
@@ -59,7 +60,7 @@ class bone_transform_out:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return (f"bone_transform_out(name={self.name}, world={self.world}, "
+        return (f"BoneTransformDataOut(name={self.name}, world={self.world}, "
                 f"component={self.component}, relative={self.relative})")
 
 class WalkerBoneControlIn:
@@ -79,7 +80,8 @@ class WalkerBoneControlIn:
         self.bone_transforms = [bone_transform(name, t) for name, t in bone_transforms]
 
     def __repr__(self) -> str:
-        return f"WalkerBoneControlIn(bones={len(self.bone_transforms)})"
+        bones = "".join([f"(name={b.name}, transform={b.transform})" for b in self.bone_transforms])
+        return "WalkerBoneControlIn(bone_transforms(" + bones + "))"
 
 class WalkerBoneControlOut:
     """Walker.get_bones(), as carla.WalkerBoneControlOut."""
@@ -90,7 +92,9 @@ class WalkerBoneControlOut:
                                 else List[bone_transform_out]())
 
     def __repr__(self) -> str:
-        return f"WalkerBoneControlOut(bones={len(self.bone_transforms)})"
+        bones = "".join([f"(name={b.name}, world={b.world}, component={b.component}, "
+                         f"relative={b.relative})" for b in self.bone_transforms])
+        return "WalkerBoneControlOut(bone_transforms(" + bones + "))"
 
 class Walker(Actor):
     def __init__(self, h: Handle):
@@ -152,9 +156,6 @@ class Walker(Actor):
         """Copies the current animation frame into the custom pose."""
         _check(tsc_walker_get_pose_from_animation(self._h.ptr))
 
-    def __repr__(self) -> str:
-        return f"Walker(id={self.id}, type={self.type_id})"
-
 class WalkerAIController(Actor):
     """Steers the walker it is attached to (spawn with attach_to=walker)."""
 
@@ -178,9 +179,6 @@ class WalkerAIController(Actor):
     def set_max_speed(self, speed: float):
         """m/s"""
         _check(tsc_walker_ai_controller_set_max_speed(self._h.ptr, speed))
-
-    def __repr__(self) -> str:
-        return f"WalkerAIController(id={self.id})"
 
 @extend
 class Actor:

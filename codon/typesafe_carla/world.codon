@@ -17,6 +17,7 @@ from .blueprint import ActorBlueprint, BlueprintLibrary
 from .map import Map
 from .snapshot import WorldSnapshot
 from ._callbacks import dispatch_callbacks, _await_tick_callbacks
+from ._fmt import fmt_g, fmt_g32, fmt_bool
 
 def _fixed_step(fixed: Optional[float]) -> float:
     """fixed_delta_seconds as LibCarla keeps it: a positive value, else unset (0)."""
@@ -78,17 +79,18 @@ class WorldSettings:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return (f"WorldSettings(synchronous_mode={self.synchronous_mode}, "
-                f"no_rendering_mode={self.no_rendering_mode}, "
-                f"fixed_delta_seconds={self.fixed_delta_seconds}, "
-                f"substepping={self.substepping}, "
-                f"max_substep_delta_time={self.max_substep_delta_time}, "
-                f"max_substeps={self.max_substeps}, "
-                f"max_culling_distance={self.max_culling_distance}, "
-                f"deterministic_ragdolls={self.deterministic_ragdolls}, "
-                f"tile_stream_distance={self.tile_stream_distance}, "
-                f"actor_active_distance={self.actor_active_distance}, "
-                f"spectator_as_ego={self.spectator_as_ego})")
+        """As the Python API's str(): no spaces after commas, %g numbers. The
+        official str() raises (bad_optional_access) when fixed_delta_seconds
+        is unset; this prints "fixed_delta_seconds=None" instead."""
+        fixed = self.fixed_delta_seconds
+        return ("WorldSettings(synchronous_mode=" + fmt_bool(self.synchronous_mode) +
+                ",no_rendering_mode=" + fmt_bool(self.no_rendering_mode) +
+                ",fixed_delta_seconds=" + (fmt_g(fixed) if fixed is not None else "None") +
+                ",substepping=" + fmt_bool(self.substepping) +
+                ",max_substep_delta_time=" + fmt_g(self.max_substep_delta_time) +
+                ",max_substeps=" + str(self.max_substeps) +
+                ",max_culling_distance=" + fmt_g32(self.max_culling_distance) +
+                ",deterministic_ragdolls=" + fmt_bool(self.deterministic_ragdolls) + ")")
 
     def _to_c(self) -> CWorldSettings:
         fixed = self.fixed_delta_seconds
@@ -264,7 +266,7 @@ class World:
         return int(out[0])
 
     def __repr__(self) -> str:
-        return f"World(id={self.id})"
+        return f"World(id={u64(self.id)})"  # LibCarla's uint64 episode id
 
 @extend
 class Actor:

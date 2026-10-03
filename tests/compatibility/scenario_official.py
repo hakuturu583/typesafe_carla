@@ -542,3 +542,14 @@ out("i70_attr_equality", "".join([
     attr_eq(veh70, "role_name", lambda a: a == a.as_int()),
 ]))
 sys.stdout.flush()
+# Issue #71: str() in the Python API's format, for server objects.
+m71 = world.get_map()
+bp71 = lib.find("vehicle.lincoln.mkz")
+attrs71 = [bp71.get_attribute(a) for a in ("number_of_wheels", "role_name", "color", "sticky_control")
+           if bp71.has_attribute(a)]
+attrs71.append(lib.find("sensor.camera.rgb").get_attribute("fov"))
+out("i71_str", " | ".join([str(m71.get_waypoint(p0.location)), str(world.get_spectator()), str(m71)] +
+                          [str(a) for a in attrs71]))
+import re
+# Each run of digits becomes one "#": the frame and times grow between the runs.
+out("i71_timestamp", re.sub(r"\d+", "#", str(world.get_snapshot().timestamp)))
