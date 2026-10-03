@@ -1,5 +1,5 @@
 # SpawnActor's parent is an Actor or an actor id (int), not a Transform.
-# expect-error: a command's actor must be an Actor (a Vehicle, Walker, ...) or an actor id (int)
+# expect-error: a command's parent must be an Actor (a Vehicle, Walker, ...) or an actor id (int)
 import typesafe_carla as carla
 
 def spawn(client: carla.Client, bp: carla.ActorBlueprint, t: carla.Transform):

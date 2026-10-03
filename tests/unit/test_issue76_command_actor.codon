@@ -28,6 +28,20 @@ assert parent is not None and parent.id == vehicle.id
 assert abs(vehicle.get_control().throttle - 0.6) < 1e-6
 assert walker.get_transform().location.distance(target.location) < 1e-6
 
+# The official keywords: actor= / actor_id= (SpawnActor: parent= / parent_id=).
+keyed = client.apply_batch_sync([
+    carla.command.SpawnActor(camera, carla.Transform(), parent=walker),
+    carla.command.SpawnActor(camera, carla.Transform(), parent_id=walker.id),
+    carla.command.ApplyVehicleControl(actor=vehicle, control=carla.VehicleControl(throttle=0.3)),
+    carla.command.SetEnableGravity(actor_id=walker.id, enabled=True)])
+assert not any(r.has_error() for r in keyed)
+for r in keyed[:2]:
+    p = world.get_actor(r.actor_id).parent
+    assert p is not None and p.id == walker.id
+assert abs(vehicle.get_control().throttle - 0.3) < 1e-6
+client.apply_batch_sync([carla.command.DestroyActor(actor=world.get_actor(r.actor_id))
+                         for r in keyed[:2]])
+
 # The Actor and id forms build the same command.
 assert str(carla.command.DestroyActor(vehicle)) == str(carla.command.DestroyActor(vehicle.id))
 
@@ -37,6 +51,15 @@ try:
     carla.command.DestroyActor(world.get_actor(987654))
 except carla.CarlaError:
     raised = True
+assert raised
+
+# A None parent names the parent.
+raised = False
+try:
+    carla.command.SpawnActor(camera, carla.Transform(), parent=world.get_actor(987654))
+except carla.CarlaError as e:
+    raised = True
+    assert "parent is None" in e.message, e.message
 assert raised
 
 # A then() command still acts on the spawned actor, not on a given Actor.

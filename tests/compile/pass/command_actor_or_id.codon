@@ -1,5 +1,6 @@
 # Batch command constructors take an Actor of any kind or its id, as the
-# Python API does (issue #76); SpawnActor's parent too.
+# Python API does (issue #76); SpawnActor's parent too. The official keywords
+# work: actor_id= / actor= (SpawnActor: parent_id= / parent=).
 # strict
 import typesafe_carla as carla
 
@@ -39,7 +40,7 @@ def by_actor(client: carla.Client, bp: carla.ActorBlueprint, actor: carla.Actor,
                  carla.command.SetSimulatePhysics(carla.command.FutureActor, False)),
              carla.command.DestroyActor(actor),
              carla.command.DestroyActor(sensor),
-             carla.command.DestroyActor(actor_id=walker),
+             carla.command.DestroyActor(actor=walker),
              carla.command.ApplyVehicleControl(vehicle, carla.VehicleControl(throttle=0.5)),
              carla.command.ApplyVehicleAckermannControl(vehicle, carla.VehicleAckermannControl(speed=1.0)),
              carla.command.ApplyWalkerControl(walker, carla.WalkerControl()),
@@ -58,6 +59,33 @@ def by_actor(client: carla.Client, bp: carla.ActorBlueprint, actor: carla.Actor,
              carla.command.SetVehicleLightState(vehicle, int(carla.VehicleLightState.Position)),
              carla.command.SetTrafficLightState(light, carla.TrafficLightState.Green),
              carla.command.ShowDebugTelemetry(vehicle, True)]
+    # The official keywords.
+    batch.append(carla.command.SpawnActor(bp, carla.Transform(), parent=vehicle))
+    batch.append(carla.command.SpawnActor(bp, carla.Transform(), parent_id=vehicle.id))
+    batch.append(carla.command.DestroyActor(actor=vehicle))
+    batch.append(carla.command.DestroyActor(actor_id=vehicle.id))
+    batch.append(carla.command.SetAutopilot(actor=vehicle, enabled=True))
+    batch.append(carla.command.SetAutopilot(actor=vehicle, enabled=True, tm_port=8000))
+    batch.append(carla.command.SetAutopilot(actor_id=vehicle.id, enabled=False))
+    batch.append(carla.command.ApplyVehicleControl(actor=vehicle, control=carla.VehicleControl()))
+    batch.append(carla.command.ApplyVehicleAckermannControl(
+        actor=vehicle, control=carla.VehicleAckermannControl()))
+    batch.append(carla.command.ApplyWalkerControl(actor=walker, control=carla.WalkerControl()))
+    batch.append(carla.command.ApplyTransform(actor=sensor, transform=carla.Transform()))
+    batch.append(carla.command.ApplyLocation(actor=actor, location=carla.Location()))
+    batch.append(carla.command.ApplyTargetVelocity(actor=vehicle, velocity=v))
+    batch.append(carla.command.ApplyTargetAngularVelocity(actor=vehicle, angular_velocity=v))
+    batch.append(carla.command.ApplyImpulse(actor=vehicle, impulse=v))
+    batch.append(carla.command.ApplyForce(actor=walker, force=v))
+    batch.append(carla.command.ApplyAngularImpulse(actor=vehicle, impulse=v))
+    batch.append(carla.command.ApplyTorque(actor=vehicle, torque=v))
+    batch.append(carla.command.SetSimulatePhysics(actor=actor, enabled=False))
+    batch.append(carla.command.SetEnableGravity(actor=walker, enabled=False))
+    batch.append(carla.command.SetVehicleLightState(
+        actor=vehicle, light_state=int(carla.VehicleLightState.Position)))
+    batch.append(carla.command.SetTrafficLightState(actor=light, state=carla.TrafficLightState.Red))
+    batch.append(carla.command.ShowDebugTelemetry(actor=vehicle, enabled=True))
+    batch.append(carla.command.DestroyActor(actor=maybe))
     # An Optional actor (world.get_actor) is accepted; None raises CarlaError.
     batch.append(carla.command.DestroyActor(maybe))
     # Both forms mix in one batch.
