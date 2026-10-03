@@ -89,6 +89,18 @@ GENERIC_PARAMS = {
     "path": ["List[Location]", "List[Vector3D]"],
 }
 GENERIC_PARAMS["in_point"] = VECTOR_CLASSES + ["List[Location]", "List[Vector3D]"]
+# A command's target: `<x>_id` (an id or an Actor) and `<x>` (an Actor), both
+# defaulting to the `_MISSING` sentinel, exactly one passed (typesafe_carla's
+# command.codon resolves that at compile time). The wrapper takes the id as an
+# int; the runtime turns `<x>=` into `<x>_id=` and an Actor into its id.
+# A target in OPTIONAL_TARGETS may also be left out (SpawnActor's parent).
+# Library classes that stand for the Python API's memoryview (RawData: a
+# measurement's raw_data). The runtime hands Python a memoryview of their bytes,
+# so np.frombuffer(m.raw_data, ...) works unchanged.
+MEMORYVIEWS = ["RawData"]
+MISSING = "_MISSING"
+TARGETS = {"actor_id": "actor", "parent_id": "parent"}
+OPTIONAL_TARGETS = {"parent_id"}
 # With more than this many defaulted generic parameters, each takes one
 # Optional of its most general type instead of one overload per type (the
 # product would explode, e.g. WheelPhysicsControl's six vectors).
@@ -411,10 +423,22 @@ class Gen:
             raise Unsupported("*args/**kwargs")
         lists: list[list[tuple[str, str, str | None]]] = [[]]
         n_defaulted = sum(1 for p in f.params if p.ann is None and p.default == "None")
+        names = {p.name for p in f.params}
         for p in f.params:
             if p.ann is not None and re.search(r"\b(type|Literal|Static)\b", p.ann):
                 raise Unsupported(f"static parameter '{p.name}' (Codon exporter)")
-            d = self.default(p.default, f.module)
+            if p.default == MISSING:
+                # A sentinel default: the argument is required (see TARGETS).
+                if p.name in TARGETS.values() and f"{p.name}_id" in names:
+                    continue  # passed as <name>_id by the runtime
+                if p.name in TARGETS:
+                    present = [lst + [(p.name, "int", None)] for lst in lists]
+                    lists = present + (lists if p.name in OPTIONAL_TARGETS else [])
+                    continue
+                if p.ann is not None:
+                    lists = [lst + [(p.name, self.ty(p.ann), None)] for lst in lists]
+                    continue
+            d = None if p.default == MISSING else self.default(p.default, f.module)
             if p.ann is not None:
                 t = self.ty(p.ann)
                 lists = [lst + [(p.name, t, d)] for lst in lists]
@@ -803,6 +827,10 @@ class Gen:
                 except Unsupported as e:
                     reasons.append(str(e))
             entry = {"fn": f"_f__{name}" if emitted else None, "module": module}
+            targets = {TARGETS[p.name]: [p.name, i] for i, p in enumerate(fs[0].params)
+                       if p.name in TARGETS and p.default == MISSING}
+            if targets:
+                entry["targets"] = targets
             if not emitted:
                 entry["reason"] = self.stubs[name] = "; ".join(sorted(set(reasons)))
             self.api.setdefault("__functions__", {})[name] = entry
@@ -1066,6 +1094,7 @@ def write_package(pkg: Path, gen: Gen) -> None:
         "command": inv.command,
         "command_constants": inv.constants.get("command", {}),
         "exceptions": EXCEPTIONS,
+        "memoryviews": [c for c in MEMORYVIEWS if c in gen.api],
         "stubs": gen.stubs,
         "variants": gen.variant_names,
         "native_library": str(_native_library()),

@@ -34,6 +34,7 @@ if not os.environ.get("TYPESAFE_CARLA_LIB") and _SPEC.get("native_library"):
 from . import _carla as _ext  # noqa: E402  (needs TYPESAFE_CARLA_LIB)
 
 _BOXES: dict[type, type] = {}
+_MEMORYVIEWS = frozenset(_SPEC.get("memoryviews", ()))
 
 
 class _Overloads:
@@ -72,6 +73,8 @@ def _wrap(v):
     if cls is not None:
         obj = cls.__new__(cls)
         obj._o = v
+        if cls.__name__ in _MEMORYVIEWS:  # e.g. raw_data: a memoryview in CARLA's API
+            return memoryview(bytes(obj.tolist()))
         return obj
     if type(v) is list:
         return [_wrap(x) for x in v]
@@ -120,6 +123,29 @@ def _describe(fn, args, kwargs) -> str:
              for a in args[1:]] if member != "__init__" else [repr(a) for a in args]
     shown += [f"{k}={v!r}" for k, v in kwargs.items() if isinstance(v, (str, int, float, bool))]
     return f"carla.{cls}.{member}({', '.join(shown)})"
+
+
+def _targets(targets: dict, args: tuple, kwargs: dict) -> tuple:
+    """A command's target (`actor_id` / `actor`, `parent_id` / `parent`) as
+    the wrapper takes it: by `<x>_id`, an Actor replaced by its id."""
+    args, kwargs = list(args), dict(kwargs)
+    for alias, (name, pos) in targets.items():
+        if alias in kwargs:
+            if name in kwargs or len(args) > pos:
+                raise TypeError(f"pass either {name} or {alias}, not both")
+            kwargs[name] = kwargs.pop(alias)
+        if name in kwargs:
+            kwargs[name] = _actor_id(kwargs[name])
+        elif len(args) > pos:
+            args[pos] = _actor_id(args[pos])
+    return tuple(args), kwargs
+
+
+_ACTOR = None  # carla.Actor, once the package is built
+
+
+def _actor_id(v):
+    return v.id if _ACTOR is not None and isinstance(v, _ACTOR) else v
 
 
 def _stub(qualname: str, reason: str):
@@ -253,6 +279,10 @@ def install(g: dict) -> None:
     for name, entry in _SPEC["functions"].items():
         if entry["fn"] is None:
             fn = _stub(name, entry.get("reason", ""))
+        elif entry.get("targets"):
+            def fn(*a, _f=_fn(entry["fn"]), _t=entry["targets"], **k):
+                return _call(_f, *_targets(_t, a, k))
+            fn.__name__ = name
         else:
             def fn(*a, _f=_fn(entry["fn"]), **k):
                 return _call(_f, a, k)
@@ -268,3 +298,5 @@ def install(g: dict) -> None:
     g["command"] = command
     sys.modules["carla.command"] = command
     g["CarlaObject"] = CarlaObject
+    global _ACTOR
+    _ACTOR = g.get("Actor")

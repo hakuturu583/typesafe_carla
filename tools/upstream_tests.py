@@ -935,6 +935,9 @@ def check(result: FileResult | None, entry, ids: list[str] | None = None) -> Che
                 c.problems.append(f"{result.path}: compiles now (expected xfail: {reason}); "
                                   "list its tests in the manifest")
             return c
+    if result is None:  # not run, and no file-level expectation says why
+        c.skipped = len(ids or [])
+        return c
     entry = entry if isinstance(entry, dict) else {}
     for t in result.tests:
         kind, reason = parse_expectation(entry.get(t.id, "pass"))
