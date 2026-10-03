@@ -1,6 +1,7 @@
 # Issue #33 against a real CARLA server: Python API members found missing by
 # the survey against CARLA 0.10.0.
 import os
+import time
 import typesafe_carla as carla
 
 host = os.getenv("TSC_CARLA_HOST", "localhost")
@@ -47,7 +48,10 @@ try:
         changed_light = light
         light.freeze(True)
         light.set_state(carla.TrafficLightState.Red)
-        world.wait_for_tick(10.0)
+        # The state is read from the client snapshot, which can lag a frame.
+        deadline = time.time() + 10.0
+        while light.state != carla.TrafficLightState.Red and time.time() < deadline:
+            world.wait_for_tick(10.0)
         print("state", light.state)
         assert light.state == carla.TrafficLightState.Red
 
