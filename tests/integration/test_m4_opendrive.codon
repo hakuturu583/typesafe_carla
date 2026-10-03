@@ -19,8 +19,9 @@ try:
             xodr, carla.OpendriveGenerationParameters(vertex_distance=2.0, max_road_length=50.0))
     except carla.CarlaError as e:
         # Some servers (the local ue5-dev build) reject OpenDRIVE worlds with a
-        # bare std::exception; the official Python API fails the same way.
-        if "std::exception" not in e.message:
+        # bare std::exception (the shim reports "<function>: std::exception");
+        # the official Python API fails the same way.
+        if not e.message.endswith(": std::exception"):
             raise e
         print("note: the server cannot generate OpenDRIVE worlds:", e.message)
         print("OK")

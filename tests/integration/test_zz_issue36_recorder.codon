@@ -48,9 +48,11 @@ try:
 except carla.CarlaError as e:
     # ue5-dev's LibCarla sends the 3- and 8-argument RPCs even at the
     # defaults, which a 0.10.0 server does not bind (rpclib: "rpc_error").
-    # The server's version string cannot tell: ue5-dev servers also report
-    # "0.10.0".
-    if old_libcarla or "rpc_error" not in e.message:
+    # The server is told apart by its V2X blueprints, not its version string
+    # (ue5-dev servers also report "0.10.0"); against a ue5-dev server the
+    # error is a real failure.
+    old_server = len(world.get_blueprint_library().filter("sensor.other.v2x*")) == 0
+    if old_libcarla or not old_server or "rpc_error" not in e.message:
         raise e
     print("skipped: the server does not bind ue5-dev's recorder RPCs:", e.message)
     print("OK")

@@ -40,6 +40,7 @@ try:
     # The actor carries its blueprint's values (ue5-dev's lincoln.mkz says 3 wheels).
     assert attrs["role_name"] == "issue19"
     assert attrs["number_of_wheels"] == str(bp.get_attribute("number_of_wheels"))
+    assert int(attrs["number_of_wheels"]) > 0
     tags = vehicle.semantic_tags
     print("semantic_tags", tags)
     assert len(tags) > 0 and carla.CityObjectLabel.Car in tags, tags
@@ -100,11 +101,15 @@ try:
         assert missing
     except carla.CarlaError as e:
         print("skeleton queries unsupported:", e.message)
-        # Unsupported by this LibCarla (built from 0.10.0), or by the server: a
-        # 0.10.0 server rejects the RPC (rpclib: "rpc::rpc_error during call").
-        # Not the version string: ue5-dev servers also report "0.10.0".
-        assert ("is not available in LibCarla" in e.message or "rpc_error" in e.message
-                or "get_actor_" in e.message), e.message
+        # Unsupported by this LibCarla (built from 0.10.0), or by a server
+        # without ue5-dev's features, which rejects the RPC (rpclib:
+        # "rpc::rpc_error during call"). The server is told apart by its V2X
+        # blueprints, not its version string (ue5-dev servers also report
+        # "0.10.0").
+        old_server = len(lib.filter("sensor.other.v2x*")) == 0
+        old_libcarla = carla.libcarla_git_ref() == "0.10.0"
+        assert ("is not available in LibCarla" in e.message
+                or ("rpc_error" in e.message and (old_server or old_libcarla))), e.message
 
     # Textures
     texture = carla.TextureColor(8, 8)
