@@ -29,6 +29,13 @@ class Timestamp:
     def frame_count(self, value: int):
         self.frame = value
 
+    def __eq__(self, other: Timestamp) -> bool:
+        """The frame only, as LibCarla (the times are not compared)."""
+        return self.frame == other.frame
+
+    def __ne__(self, other: Timestamp) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
         return (f"Timestamp(frame={self.frame},elapsed_seconds={fmt_f(self.elapsed_seconds)},"
                 f"delta_seconds={fmt_f(self.delta_seconds)},"
@@ -132,6 +139,14 @@ class WorldSnapshot:
     def __iter__(self) -> Generator[ActorSnapshot]:
         for i in range(len(self)):
             yield self._get(i)
+
+    def __eq__(self, other: WorldSnapshot) -> bool:
+        """The frame only, as LibCarla (it compares the timestamps; neither the
+        id nor the actors)."""
+        return self.frame == other.frame
+
+    def __ne__(self, other: WorldSnapshot) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
         return f"WorldSnapshot(frame={self.frame})"

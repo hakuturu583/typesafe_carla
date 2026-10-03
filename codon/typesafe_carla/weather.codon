@@ -3,6 +3,7 @@
 from ._ffi import (CWeather, tsc_world_get_weather, tsc_world_set_weather, tsc_weather_preset,
                    tsc_world_is_weather_enabled)
 from .errors import _check
+from ._eq import _fields_eq
 from ._fmt import fmt_fields
 from .world import World
 
@@ -83,7 +84,8 @@ class WeatherParameters:
         return WeatherParameters._from_c(out[0])
 
     def __eq__(self, other: WeatherParameters) -> bool:
-        return self._to_c() == other._to_c()
+        """Every field, exact in float32, as LibCarla."""
+        return _fields_eq(self, other)
 
     def __ne__(self, other: WeatherParameters) -> bool:
         return not (self == other)

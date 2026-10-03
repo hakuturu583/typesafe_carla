@@ -9,6 +9,7 @@ from ._ffi import (Handle, CTransform, CWorldSettings, tsc_world_get_id, tsc_wor
 from ._ffi import CWorldSettingsExt, tsc_world_get_settings_ext, tsc_world_apply_settings_ext
 from ._ffi import tsc_actor_get_world
 from .errors import _check, _is_actor_id, _actor_id, _i32
+from ._eq import _f32_eq
 from .constants import AttachmentType
 from .geometry import Transform
 from .actor import Actor, ActorList, _make_actor
@@ -17,6 +18,13 @@ from .map import Map
 from .snapshot import WorldSnapshot
 from ._callbacks import dispatch_callbacks, _await_tick_callbacks
 from ._fmt import fmt_g, fmt_g32, fmt_bool
+
+def _fixed_step(fixed: Optional[float]) -> float:
+    """fixed_delta_seconds as LibCarla keeps it: a positive value, else unset (0)."""
+    if fixed is None:
+        return 0.0
+    f = unwrap(fixed)
+    return f if f > 0.0 else 0.0
 
 class WorldSettings:
     synchronous_mode: bool
@@ -50,6 +58,25 @@ class WorldSettings:
         self.tile_stream_distance = tile_stream_distance
         self.actor_active_distance = actor_active_distance
         self.spectator_as_ego = spectator_as_ego
+
+    def __eq__(self, other: WorldSettings) -> bool:
+        """Every field, as LibCarla's EpisodeSettings: the time steps (doubles)
+        exactly, the distances in float32. A fixed_delta_seconds that is None
+        or not positive means a variable time-step, as there."""
+        return (self.synchronous_mode == other.synchronous_mode and
+                self.no_rendering_mode == other.no_rendering_mode and
+                self.substepping == other.substepping and
+                _fixed_step(self.fixed_delta_seconds) == _fixed_step(other.fixed_delta_seconds) and
+                self.max_substep_delta_time == other.max_substep_delta_time and
+                self.max_substeps == other.max_substeps and
+                _f32_eq(self.max_culling_distance, other.max_culling_distance) and
+                self.deterministic_ragdolls == other.deterministic_ragdolls and
+                _f32_eq(self.tile_stream_distance, other.tile_stream_distance) and
+                _f32_eq(self.actor_active_distance, other.actor_active_distance) and
+                self.spectator_as_ego == other.spectator_as_ego)
+
+    def __ne__(self, other: WorldSettings) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
         """As the Python API's str(): no spaces after commas, %g numbers. The

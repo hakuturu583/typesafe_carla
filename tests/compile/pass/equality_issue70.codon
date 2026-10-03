@@ -1,0 +1,63 @@
+# Issue #70: == and != on every value type the CARLA Python API compares.
+# strict
+import typesafe_carla as carla
+
+def same[T](a: T, b: T) -> bool:
+    return a == b and not (a != b)
+
+def values() -> List[bool]:
+    v = carla.Vector3D(1.0, 2.0, 3.0)
+    loc = carla.Location(1.0, 2.0, 3.0)
+    off = carla.GeoOffsetTransform(1.0, 2.0, 3.0, 0.5)
+    utm = carla.GeoProjectionUTM(31, True, carla.GeoEllipsoid(6378137.0, 298.257223563))
+    utm.offset = off
+    return [
+        same(carla.AckermannControllerSettings(), carla.AckermannControllerSettings()),
+        same(carla.BoundingBox(), carla.BoundingBox()),
+        same(carla.Color(1, 2, 3), carla.Color(1, 2, 3)),
+        same(carla.FloatColor(), carla.FloatColor()),
+        same(carla.GeoEllipsoid(), carla.GeoEllipsoid()),
+        same(carla.GeoLocation(), carla.GeoLocation()),
+        same(off, carla.GeoOffsetTransform(1.0, 2.0, 3.0, 0.5)),
+        same(carla.GeoProjectionLCC2SP(), carla.GeoProjectionLCC2SP()),
+        same(carla.GeoProjectionTM(), carla.GeoProjectionTM()),
+        same(utm, carla.GeoProjectionUTM()),
+        same(carla.GeoProjectionWebMerc(), carla.GeoProjectionWebMerc()),
+        same(loc, carla.Location()),
+        v == loc, loc == v, v != loc, loc != v,
+        same(carla.OpticalFlowPixel(), carla.OpticalFlowPixel()),
+        same(carla.Quaternion(), carla.Quaternion()),
+        same(carla.Rotation(), carla.Rotation()),
+        same(carla.Timestamp(), carla.Timestamp()),
+        same(carla.Transform(), carla.Transform()),
+        same(carla.Vector2D(), carla.Vector2D()),
+        same(v, carla.Vector3D()),
+        same(carla.VehicleAckermannControl(), carla.VehicleAckermannControl()),
+        same(carla.VehicleControl(), carla.VehicleControl()),
+        same(carla.VehiclePhysicsControl(), carla.VehiclePhysicsControl()),
+        same(carla.VehicleTelemetryData(), carla.VehicleTelemetryData()),
+        same(carla.WalkerControl(), carla.WalkerControl()),
+        same(carla.WeatherParameters(), carla.WeatherParameters.ClearNoon),
+        same(carla.WheelPhysicsControl(), carla.WheelPhysicsControl()),
+        same(carla.WheelTelemetryData(), carla.WheelTelemetryData()),
+        same(carla.WorldSettings(), carla.WorldSettings()),
+        same(carla.bone_transform_out(), carla.bone_transform_out()),
+        # An Optional of one compares with a value, as in the upstream tests
+        # (assertEqual(p.offset, offset)).
+        utm.offset == off,
+    ]
+
+def handles(world: carla.World) -> List[bool]:
+    bp = world.get_blueprint_library().find("vehicle.audi.tt")
+    a = bp.get_attribute("number_of_wheels")
+    return [
+        same(a, bp.get_attribute("color")),
+        a == 4, a != 4, a == 4.0, a != 4.0, a == True, a != False, a == "4", a != "4",
+        a == carla.Color(1, 2, 3), a != carla.Color(1, 2, 3),
+        same(world.get_snapshot(), world.get_snapshot()),
+        same(world.get_settings(), world.get_settings()),
+        same(world.get_snapshot().timestamp, world.get_snapshot().timestamp),
+    ]
+
+print(values())
+print(handles(carla.Client("localhost", 2000).get_world()))

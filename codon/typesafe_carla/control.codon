@@ -5,6 +5,7 @@ from ._ffi import (Handle, CVehicleControl, CWalkerControl, CVector2D, CVehicleP
                    CWheelPhysicsControl, tsc_vehicle_get_physics_control,
                    tsc_physics_control_view, tsc_vehicle_apply_physics_control)
 from .errors import _check, _u8, _i32
+from ._eq import _fields_eq
 from .geometry import Location, Vector2D, Vector3D, _vector_or, _location_or
 from ._fmt import fmt_f32, fmt_g32, fmt_b01, fmt_list, fmt_fields
 
@@ -29,10 +30,7 @@ class VehicleControl:
         self.gear = gear
 
     def __eq__(self, other: VehicleControl) -> bool:
-        return (self.throttle == other.throttle and self.steer == other.steer and
-                self.brake == other.brake and self.hand_brake == other.hand_brake and
-                self.reverse == other.reverse and
-                self.manual_gear_shift == other.manual_gear_shift and self.gear == other.gear)
+        return _fields_eq(self, other)
 
     def __ne__(self, other: VehicleControl) -> bool:
         return not (self == other)
@@ -67,14 +65,6 @@ def _ratios_to_c(ratios: List[float]) -> Ptr[float]:
     for i in range(len(ratios)):
         out[i] = ratios[i]
     return out
-
-# Field-by-field __eq__ in declaration order, for the classes whose field
-# lists are too long to keep a hand-written copy of in sync.
-def _fields_eq(a, b) -> bool:
-    for k, v in static.vars(a):
-        if not (v == getattr(b, k)):
-            return False
-    return True
 
 class WheelPhysicsControl:
     """Per-wheel physics: every field of CARLA's WheelPhysicsControl, with the
@@ -545,6 +535,12 @@ class WalkerControl:
             "[tsc-compat] a Location passed as a Vector3D to WalkerControl(direction=...)")
         self.speed = speed
         self.jump = jump
+
+    def __eq__(self, other: WalkerControl) -> bool:
+        return _fields_eq(self, other)
+
+    def __ne__(self, other: WalkerControl) -> bool:
+        return not (self == other)
 
     def __repr__(self) -> str:
         return fmt_fields("WalkerControl", self)
