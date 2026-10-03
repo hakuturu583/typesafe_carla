@@ -100,8 +100,8 @@
      ""
     ],
     "TestTransform.test_print": [
-     "fail",
-     "Transform(Location(x=1, y=2, z=3), Rotation(pitch=4, yaw=5, roll=6)) != Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pitch=4.000000, yaw=5.000000, roll=6.000000))"
+     "pass",
+     ""
     ],
     "TestTransform.test_translation": [
      "pass",
@@ -140,8 +140,8 @@
      ""
     ],
     "TestTransform.test_geo_offset_transform_equality": [
-     "compile",
-     "unit/test_transform.py:295: unsupported operand type(s) for ==: 'GeoOffsetTransform' and 'GeoOffsetTransform'"
+     "pass",
+     ""
     ],
     "TestTransform.test_geo_projection_utm": [
      "pass",
@@ -152,24 +152,24 @@
      ""
     ],
     "TestTransform.test_geo_projection_utm_with_offset": [
-     "compile",
-     "unit/test_transform.py:326: unsupported operand type(s) for ==: 'GeoOffsetTransform' and 'GeoOffsetTransform' [optional.codon:68]"
+     "pass",
+     ""
     ],
     "TestTransform.test_geo_projection_utm_offset_setter": [
-     "compile",
-     "unit/test_transform.py:334: unsupported operand type(s) for ==: 'GeoOffsetTransform' and 'GeoOffsetTransform' [optional.codon:68]"
+     "pass",
+     ""
     ],
     "TestTransform.test_geo_projection_utm_equality": [
-     "compile",
-     "unit/test_transform.py:354: unsupported operand type(s) for ==: 'GeoProjectionUTM' and 'GeoProjectionUTM'"
+     "pass",
+     ""
     ],
     "TestTransform.test_geo_projection_utm_constructor_3_args": [
-     "compile",
-     "unit/test_transform.py:361: unsupported operand type(s) for ==: 'GeoEllipsoid' and 'GeoEllipsoid' [tsc_unittest.codon:52]"
+     "pass",
+     ""
     ],
     "TestTransform.test_geo_projection_utm_constructor_3_args_positional": [
-     "compile",
-     "unit/test_transform.py:369: unsupported operand type(s) for ==: 'GeoEllipsoid' and 'GeoEllipsoid' [tsc_unittest.codon:52]"
+     "pass",
+     ""
     ]
    }
   },

@@ -24,7 +24,7 @@ cpython:
       TestRotation.test_default_values: pass
       TestRotation.test_named_args: pass
       TestTransform.test_values: pass
-      TestTransform.test_print: 'xfail: fail: ? +++++++ +++++++ +++++++ +++++++ +++++++ +++++++'
+      TestTransform.test_print: pass
       TestTransform.test_translation: pass
       TestTransform.test_rotation: pass
       TestTransform.test_rotation_and_translation: pass
@@ -59,7 +59,7 @@ cpython:
       TestVector.test_make_unit_vector_2d_no_argument: pass
       TestVector.test_make_unit_vector_2d_epsilon_keyword: pass
       TestTransform.test_values: pass
-      TestTransform.test_print: 'xfail: fail: ? +++++++ +++++++ +++++++ +++++++ +++++++ +++++++'
+      TestTransform.test_print: pass
       TestTransform.test_translation: pass
       TestTransform.test_rotation: pass
       TestTransform.test_rotation_and_translation: pass
@@ -69,14 +69,14 @@ cpython:
       TestTransform.test_geo_offset_transform_translation: pass
       TestTransform.test_geo_offset_transform_rotation: pass
       TestTransform.test_geo_offset_transform_and_rotation: pass
-      TestTransform.test_geo_offset_transform_equality: 'xfail: fail: AssertionError: False is not true'
+      TestTransform.test_geo_offset_transform_equality: pass
       TestTransform.test_geo_projection_utm: pass
       TestTransform.test_geo_projection_utm_offset_none: pass
-      TestTransform.test_geo_projection_utm_with_offset: 'xfail: fail: AssertionError: GeoOf[19 chars]t_x=1, offset_y=2, offset_z=3, offset_cos_h=1, offset_sin_h=-0) != GeoOf[19 chars]t_x=1, offset_y=2, offset_z=3, offset_cos_h=1, offset_sin_h=-0)'
-      TestTransform.test_geo_projection_utm_offset_setter: 'xfail: fail: AssertionError: GeoOf[34 chars]=6, offset_z=7, offset_cos_h=0.995004, offset_sin_h=-0.0998334) != GeoOf[34 chars]=6, offset_z=7, offset_cos_h=0.995004, offset_sin_h=-0.0998334)'
+      TestTransform.test_geo_projection_utm_with_offset: pass
+      TestTransform.test_geo_projection_utm_offset_setter: pass
       TestTransform.test_geo_projection_utm_equality: pass
-      TestTransform.test_geo_projection_utm_constructor_3_args: 'xfail: fail: AssertionError: GeoEllipsoid(a=6.37814e+06, f_inv=298.257) != GeoEllipsoid(a=6.37814e+06, f_inv=298.257)'
-      TestTransform.test_geo_projection_utm_constructor_3_args_positional: 'xfail: fail: AssertionError: GeoEllipsoid(a=6.37814e+06, f_inv=298.257) != GeoEllipsoid(a=6.37814e+06, f_inv=298.257)'
+      TestTransform.test_geo_projection_utm_constructor_3_args: pass
+      TestTransform.test_geo_projection_utm_constructor_3_args_positional: pass
     unit/test_vehicle.py:
       TestVehicleControl.test_default_values: pass
       TestVehicleControl.test_named_args: pass
@@ -237,7 +237,7 @@ codon:
       TestRotation.test_default_values: pass
       TestRotation.test_named_args: pass
       TestTransform.test_values: pass
-      TestTransform.test_print: 'xfail: fail: Transform(Location(x=1, y=2, z=3), Rotation(pitch=4, yaw=5, roll=6)) != Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pitch=4.000000, yaw=5.000000, roll=6.000000))'
+      TestTransform.test_print: pass
       TestTransform.test_translation: pass
       TestTransform.test_rotation: pass
       TestTransform.test_rotation_and_translation: pass
@@ -304,7 +304,7 @@ codon:
       TestVector.test_make_unit_vector_2d_no_argument: pass
       TestVector.test_make_unit_vector_2d_epsilon_keyword: pass
       TestTransform.test_values: pass
-      TestTransform.test_print: 'xfail: fail: Transform(Location(x=1, y=2, z=3), Rotation(pitch=4, yaw=5, roll=6)) != Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pitch=4.000000, yaw=5.000000, roll=6.000000))'
+      TestTransform.test_print: pass
       TestTransform.test_translation: pass
       TestTransform.test_rotation: pass
       TestTransform.test_rotation_and_translation: pass
@@ -314,14 +314,14 @@ codon:
       TestTransform.test_geo_offset_transform_translation: pass
       TestTransform.test_geo_offset_transform_rotation: pass
       TestTransform.test_geo_offset_transform_and_rotation: pass
-      TestTransform.test_geo_offset_transform_equality: 'xfail: compile: unit/test_transform.py:295: unsupported operand type(s) for ==: ''GeoOffsetTransform'' and ''GeoOffsetTransform'''
+      TestTransform.test_geo_offset_transform_equality: pass
       TestTransform.test_geo_projection_utm: pass
       TestTransform.test_geo_projection_utm_offset_none: pass
-      TestTransform.test_geo_projection_utm_with_offset: 'xfail: compile: unit/test_transform.py:326: unsupported operand type(s) for ==: ''GeoOffsetTransform'' and ''GeoOffsetTransform'' [optional.codon:68]'
-      TestTransform.test_geo_projection_utm_offset_setter: 'xfail: compile: unit/test_transform.py:334: unsupported operand type(s) for ==: ''GeoOffsetTransform'' and ''GeoOffsetTransform'' [optional.codon:68]'
-      TestTransform.test_geo_projection_utm_equality: 'xfail: compile: unit/test_transform.py:354: unsupported operand type(s) for ==: ''GeoProjectionUTM'' and ''GeoProjectionUTM'''
-      TestTransform.test_geo_projection_utm_constructor_3_args: 'xfail: compile: unit/test_transform.py:361: unsupported operand type(s) for ==: ''GeoEllipsoid'' and ''GeoEllipsoid'' [tsc_unittest.codon:52]'
-      TestTransform.test_geo_projection_utm_constructor_3_args_positional: 'xfail: compile: unit/test_transform.py:369: unsupported operand type(s) for ==: ''GeoEllipsoid'' and ''GeoEllipsoid'' [tsc_unittest.codon:52]'
+      TestTransform.test_geo_projection_utm_with_offset: pass
+      TestTransform.test_geo_projection_utm_offset_setter: pass
+      TestTransform.test_geo_projection_utm_equality: pass
+      TestTransform.test_geo_projection_utm_constructor_3_args: pass
+      TestTransform.test_geo_projection_utm_constructor_3_args_positional: pass
     unit/test_vehicle.py:
       TestVehicleControl.test_default_values: pass
       TestVehicleControl.test_named_args: pass

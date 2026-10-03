@@ -631,7 +631,9 @@ def last(tb):
             return lines[i]
     return lines[-1] if lines else ""
 if result.errors:
-    out = {"status": "error", "detail": last(result.errors[0][1])}
+    tb = result.errors[0][1]
+    out = {"status": "error",
+           "detail": ("in tearDown: " if "in tearDown" in tb.split("Traceback")[-1] else "") + last(tb)}
 elif result.failures:
     out = {"status": "fail", "detail": last(result.failures[0][1])}
 elif result.skipped:
@@ -642,6 +644,46 @@ else:
     out = {"status": "pass", "detail": ""}
 print("TSC-RESULT " + json.dumps(out), flush=True)
 """
+
+
+# Run after each server test, with the generated package: a test that fails
+# before its own clean-up (or whose tearDown fails, e.g. on a missing map)
+# must not leave actors or synchronous mode behind for the next one.
+_CLEANUP = r"""
+import importlib.util, os, sys
+pkg = os.environ["TSC_PYCARLA_PKG"]
+spec = importlib.util.spec_from_file_location("carla", os.path.join(pkg, "__init__.py"),
+                                              submodule_search_locations=[pkg])
+carla = importlib.util.module_from_spec(spec); sys.modules["carla"] = carla; spec.loader.exec_module(carla)
+client = carla.Client("127.0.0.1", 2000)  # redirected to the test server
+client.set_timeout(30.0)
+world = client.get_world()
+try:
+    client.get_trafficmanager().set_synchronous_mode(False)
+except Exception:
+    pass
+settings = world.get_settings()
+if settings.synchronous_mode:
+    settings.synchronous_mode = False
+    world.apply_settings(settings)
+gone = 0
+for actor in world.get_actors():
+    if actor.type_id.split(".")[0] in ("vehicle", "walker", "sensor", "controller", "static"):
+        try:
+            actor.destroy()
+            gone += 1
+        except Exception:
+            pass
+print(f"cleanup: destroyed {gone} actors")
+"""
+
+
+def _server_cleanup(tests: Path, env: dict[str, str]) -> None:
+    try:
+        subprocess.run([_python(), "-c", _CLEANUP], cwd=tests, env=env, capture_output=True,
+                       text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 def pycarla_dir(build: bool = True) -> Path | None:
@@ -692,6 +734,9 @@ def run_file_cpython(tests: Path, rel: str, pydir: Path, skip: set[str] = frozen
     result = FileResult(rel)
     env = _cpython_env(pydir, server)
     timeout = timeout or (900 if server else 120)
+    if rel in INTERACTIVE:
+        result.tests = [TestResult(SCRIPT, "skip", INTERACTIVE[rel])]
+        return result
     ids = discover(tests, rel)
     driver = cache_root() / "tsc_unittest_driver.py"
     driver.parent.mkdir(parents=True, exist_ok=True)
@@ -700,6 +745,8 @@ def run_file_cpython(tests: Path, rel: str, pydir: Path, skip: set[str] = frozen
     env = {**env, "PYTHONPATH": env["PYTHONPATH"] + os.pathsep + str(tests)}
     if not ids:
         result.tests = [_run_script_cpython(tests, rel, env, timeout, driver)]
+        if server:
+            _server_cleanup(tests, env)
         return result
     module = rel[:-3].replace("/", ".")
     for test_id in ids:
@@ -710,6 +757,8 @@ def run_file_cpython(tests: Path, rel: str, pydir: Path, skip: set[str] = frozen
                                   capture_output=True, text=True, timeout=timeout, errors="replace")
         except subprocess.TimeoutExpired:
             result.tests.append(TestResult(test_id, "timeout", f"timed out after {timeout:g} s"))
+            if server:
+                _server_cleanup(tests, env)
             continue
         line = next((ln for ln in reversed(proc.stdout.splitlines()) if ln.startswith("TSC-RESULT ")), None)
         if proc.returncode < 0:
@@ -722,6 +771,8 @@ def run_file_cpython(tests: Path, rel: str, pydir: Path, skip: set[str] = frozen
         else:
             out = json.loads(line[len("TSC-RESULT "):])
             result.tests.append(TestResult(test_id, out["status"], _shorten(out["detail"])))
+        if server:
+            _server_cleanup(tests, env)
     return result
 
 
@@ -937,6 +988,21 @@ def record_results(mode: str, target: Target, results: list[FileResult]) -> None
 # Root cause of a failure, from its outcome and message: (category, cause).
 _CAUSES = [
     (r"^harness: (.*)", "pycarla", lambda m: f"harness: {m[1]}"),
+    # The test server's content (a local package), not typesafe_carla: the
+    # official module fails the same way there.
+    (r"tsc_client_(?:load|reload)_world: std::exception|tsc_world_get_map: std::exception", "server",
+     lambda m: "map not in the server's package (load_world/get_map fail; the official module too)"),
+    (r"tsc_blueprint_library_find: no blueprint with id '([\w.]+)'", "server",
+     lambda m: f"blueprint `{m[1]}` not in the server's blueprint library"),
+    (r"tsc_actor_blueprint_set_attribute: blueprint '([\w.]+)' has no attribute '(\w+)'", "server",
+     lambda m: f"blueprint `{m[1]}` has no attribute `{m[2]}` on this server"),
+    (r"error: the following arguments are required", "infrastructure",
+     lambda m: "a script that needs command-line arguments (API/Tests.md documents them)"),
+    (r"_queue\.Empty|queue\.Empty", "behaviour",
+     lambda m: "sensor data did not arrive: callbacks run at dispatch points (World.tick, "
+               "wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads"),
+    (r"unsupported operand type\(s\) for ([^:]+): '(\w+)' and '(\w+)'", "signature",
+     lambda m: f"`carla.{m[2]} {m[1]} carla.{m[3]}` is not supported"),
     (r"NotImplementedError: pycarla: (\S+) not wrapped: result type Ptr\[(\w+)\]", "signature",
      lambda m: f"`carla.{m[1]}` returns a raw pointer (Ptr[{m[2]}]), not a buffer / Python object"),
     (r"NotImplementedError: pycarla: (\S+) not wrapped: (.*)", "pycarla",
@@ -974,9 +1040,49 @@ def _class_of(text: str) -> str:
     return ("carla." + m[1]) if m and "[" not in text[:len(m[0])] else text[:40]
 
 
+# Upstream tests that fail with CARLA's official module too (checked against
+# the module built from the same CARLA tree): not typesafe_carla gaps.
+UPSTREAM_STALE = {
+    "unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args":
+        "uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official "
+        "constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction "
+        "raises AttributeError",
+}
+# Tests that fail the same way with the official module on the test server
+# (checked by running them with it): the server's behaviour or content.
+SERVER_ALSO_FAILS = {
+    "API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform":
+        "the prop does not move after set_transform + tick in synchronous mode; the official "
+        "module fails the same way on this server",
+}
+# Scripts that do not terminate on their own (interactive, pygame loops).
+INTERACTIVE = {
+    "test_raycast_sensor.py": "an interactive script (a pygame loop; the official module "
+                              "also runs until the time-out)",
+}
+
+# Causes already filed as typesafe_carla issues: (pattern on the detail, issue).
+KNOWN_ISSUES = [
+    (r"_f__\w+' for given arguments \['B_(?:Vehicle|Walker|WalkerAIController|Actor|Sensor|TrafficLight|TrafficSign)'", 76),
+    (r"unsupported operand type\(s\) for [+-]: '(?:Location|Vector3D)' and '(?:Location|Vector3D)'", 77),
+    (r"raw_data", 78),
+]
+
+
 def root_cause(mode: str, outcome: str, detail: str) -> tuple[str, str]:
+    """(category, cause) of a failed test, with the issue it is filed as."""
+    cat, cause = _root_cause(mode, outcome, detail)
+    for pattern, issue in KNOWN_ISSUES:
+        if re.search(pattern, detail):
+            cause += f" (#{issue})"
+            break
+    return cat, cause
+
+
+def _root_cause(mode: str, outcome: str, detail: str) -> tuple[str, str]:
     """(category, cause) of a failed test. Categories: missing, signature,
-    behaviour (typesafe_carla); pycarla, codon (the harness); infrastructure."""
+    behaviour (typesafe_carla); server (the test server's content); pycarla,
+    codon (the harness); infrastructure."""
     if outcome == "compile":
         cause = re.sub(r"^\S+:\d+: ", "", detail)
         cause = re.sub(r" \[\S+:\d+\]$", "", cause)
@@ -998,8 +1104,10 @@ _CATEGORY_TITLES = {
     "missing": "typesafe_carla lacks this (missing API)",
     "signature": "typesafe_carla has it, with an incompatible signature",
     "behaviour": "behaviour differs (assertions, errors, crashes)",
+    "server": "the test server's content (maps, blueprints), not typesafe_carla",
     "pycarla": "the pycarla wrapper cannot express this yet (harness)",
     "codon": "Codon-direct mode: does not compile",
+    "upstream": "the upstream test itself (fails with the official module too)",
     "infrastructure": "infrastructure",
 }
 
@@ -1076,7 +1184,16 @@ def write_gaps(primary: str = "ue5-dev") -> Path:
             for rel, f in data[(m, r)]["files"].items():
                 for tid, (o, detail) in f["tests"].items():
                     if o in FAILURES:
-                        groups.setdefault(root_cause(m, o, detail), []).append(f"{rel}::{tid}")
+                        key = f"{rel}::{tid}"
+                        if m == "cpython" and key in UPSTREAM_STALE:
+                            cause = ("upstream", f"stale upstream test: {UPSTREAM_STALE[key]}")
+                        elif m == "cpython" and key in SERVER_ALSO_FAILS:
+                            cause = ("server", SERVER_ALSO_FAILS[key])
+                        elif rel in INTERACTIVE and m == "cpython":
+                            cause = ("infrastructure", INTERACTIVE[rel])
+                        else:
+                            cause = root_cause(m, o, detail)
+                        groups.setdefault(cause, []).append(f"{rel}::{tid}")
             if not groups:
                 continue
             lines += ["", f"## Root causes: {r}, {m} mode", ""]

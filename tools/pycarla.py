@@ -81,7 +81,7 @@ GENERIC_PARAMS = {
     "actor": ACTOR_CLASSES,
     "other_actor": ACTOR_CLASSES,
     "callback": ["pyobj"],
-    "other": ["@self", "Location", "Vector3D"],   # operators (invalid pairs are pruned)
+    "other": ["@self", "@vectors"],   # operators: the same class (vectors: Location / Vector3D too)
     **{n: VECTOR_CLASSES for n in (
         "offset", "suspension_axis", "suspension_force_offset", "old_location", "center_of_mass",
         "inertia_tensor_scale", "extent")},
@@ -179,6 +179,7 @@ class Inventory:
         self.aliases: dict[str, str] = {}
         self.command: list[str] = []
         self.constants: dict[str, dict] = {}   # module -> its literal top-level constants
+        self.unions: dict[str, list[str]] = {}  # `X = Union[A, B]` aliases
         trees = {p.stem: ast.parse(_source(p.stem)) for p in sorted(PACKAGE.glob("*.codon"))}
         extends = []
         for m, tree in trees.items():
@@ -200,6 +201,9 @@ class Inventory:
                     names.add(node.targets[0].id)
                     if isinstance(node.value, ast.Name):
                         self.aliases[node.targets[0].id] = node.value.id
+                    elif isinstance(node.value, ast.Subscript) and ast.unparse(node.value.value) == "Union":
+                        elts = node.value.slice.elts if isinstance(node.value.slice, ast.Tuple) else [node.value.slice]
+                        self.unions[node.targets[0].id] = [ast.unparse(e) for e in elts]
                 elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                     names.add(node.target.id)
                     if node.value is not None and not node.target.id.startswith("_"):
@@ -415,7 +419,11 @@ class Gen:
             cands = GENERIC_PARAMS.get(p.name)
             if not cands:
                 raise Unsupported(f"untyped parameter '{p.name}'")
-            cands = [self.cls if c == "@self" else c for c in cands]
+            vector_family = self.cls in self.inv.classes and "Vector3D" in self.inv.mro(self.cls)
+            cands = [x for c in cands for x in (
+                [self.cls] if c == "@self" else
+                ([v for v in VECTOR_CLASSES if v != self.cls] if vector_family else []) if c == "@vectors"
+                else [c])]
             if d == "None" and n_defaulted > MAX_EXPANDED and cands[-1] != "pyobj":
                 general = "Vector3D" if "Vector3D" in cands else cands[-1]
                 lists = [lst + [(p.name, f"Optional[{self._cand(general)}]", "None")] for lst in lists]
@@ -503,6 +511,12 @@ class Gen:
             n = inv.resolve(node.id)
             if n in ("None", "NoneType"):
                 return "_pynone()"
+            if n in inv.unions:  # a Union: the member it holds at run time
+                expr = "_pynone()"
+                for member in reversed(inv.unions[n]):
+                    inner = self._conv(ast.Name(member), f"__internal__.union_get_data({var}, _L_{member})", depth + 1)
+                    expr = f"({inner} if isinstance({var}, _L_{member}) else {expr})"
+                return expr
             if n in PRIMS:
                 return f"_pyo({var}.__to_py__())"
             if n in self.public:

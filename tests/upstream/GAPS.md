@@ -11,63 +11,65 @@ with typesafe-codon. *not run*: no result recorded (e.g. needs a server).
 
 | ref | mode | commit | pass | fail | skip | not run |
 |---|---|---|---:|---:|---:|---:|
-| ue5-dev | cpython | 0a5ce0d5b4 | 47 | 97 | 0 | 0 |
-| ue5-dev | codon | 0a5ce0d5b4 | 23 | 121 | 0 | 0 |
-| 0.10.0 | cpython | ada75f9206 | 12 | 3 | 0 | 0 |
-| 0.10.0 | codon | ada75f9206 | 12 | 65 | 0 | 3 |
+| ue5-dev | cpython | 0a5ce0d5b4 | 53 | 91 | 0 | 0 |
+| ue5-dev | codon | 0a5ce0d5b4 | 30 | 114 | 0 | 0 |
+| 0.10.0 | cpython | ada75f9206 | 13 | 2 | 0 | 0 |
+| 0.10.0 | codon | ada75f9206 | 13 | 64 | 0 | 3 |
 
 ## Root causes: ue5-dev, cpython mode
 
-### typesafe_carla lacks this (missing API) (6 causes, 24 tests)
+### typesafe_carla lacks this (missing API) (4 causes, 20 tests)
 
 - **missing `carla.command.FutureActor`**: 14 tests: `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_two_cars`, `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_three_cars`, `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_bike`, `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_walker`, `smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`, `smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`, `smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume`, +6 more
-- **missing `carla.SensorData.raw_data`**: 3 tests: `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids`
+- **missing `carla.SensorData.raw_data` (#78)**: 3 tests: `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids`
 - **missing `carla.SensorData.get_message_count`**: 2 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive`, `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation`
-- **no value equality: equal-looking `carla.GeoEllipsoid` objects compare unequal (missing `__eq__`?)**: 2 tests: `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args`, `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args_positional`
-- **no value equality: equal-looking `carla.GeoOffsetTransform` objects compare unequal (missing `__eq__`?)**: 2 tests: `unit/test_transform.py::TestTransform.test_geo_projection_utm_with_offset`, `unit/test_transform.py::TestTransform.test_geo_projection_utm_offset_setter`
 - **missing `carla.Actor.stop`**: 1 tests: `smoke/test_walker_navigation.py::TestWalkerNavigation.test_walker_ai_controller_routes_without_crash`
 
-### typesafe_carla has it, with an incompatible signature (2 causes, 2 tests)
+### typesafe_carla has it, with an incompatible signature (1 causes, 1 tests)
 
 - **`carla.CustomV2XBytes.set_bytes`: these arguments are not accepted**: 1 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length`
-- **`carla.WheelPhysicsControl.__init__`: these arguments are not accepted**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
 
-### behaviour differs (assertions, errors, crashes) (14 causes, 68 tests)
+### behaviour differs (assertions, errors, crashes) (4 causes, 6 tests)
 
-- **RuntimeError: tsc_client_load_world: std::exception**: 49 tests: `smoke/test_blueprint.py::TestBlueprintLibrary.test_blueprint_ids`, `smoke/test_client.py::TestClient.test_version`, `smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car`, `smoke/test_determinism.py::TestDeterminism.test_determ`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_reference`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_location_to_geo_and_back`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_to_location_and_back`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_zero_conversion`, +41 more
-- **RuntimeError: tsc_client_reload_world: std::exception**: 4 tests: `smoke/test_map.py::TestMap.test_reload_world`, `smoke/test_sensor_determinism.py::TestSensorDeterminism.test_all_sensors`, `smoke/test_snapshot.py::TestSnapshot.test_spawn_points`, `smoke/test_sync.py::TestSynchronousMode.test_reloading_map`
 - **RuntimeError: 'SensorData' object has no attribute 'channels'**: 2 tests: `smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count`, `smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count`
 - **RuntimeError: 'SensorData' object has no attribute 'convert'**: 2 tests: `API/test_apply_textures.py::TestApplyTextures.test_apply_textures`, `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation`
-- **RuntimeError: tsc_world_get_map: std::exception**: 2 tests: `smoke/test_map.py::TestMap.test_load_all_maps`, `smoke/test_props_loading.py::TestPropsLoading.test_spawn_loaded_props`
-- **IndexError: tsc_actor_blueprint_set_attribute: blueprint 'sensor.camera.rgb' has no attribute 'chromatic_aberration_intensity'**: 1 tests: `API/prop_control.py::<script>`
-- **IndexError: tsc_blueprint_library_find: no blueprint with id 'vehicle.ford.mustang'**: 1 tests: `smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode`
-- **RuntimeError: tsc_world_spawn_actor: std::exception**: 1 tests: `test_raycast_sensor.py::<script>`
-- **`str(carla.Transform)` differs from CARLA's (number formatting?)**: 1 tests: `unit/test_transform.py::TestTransform.test_print`
-- **assertion: AssertionError: -64.64484405517578 != 291.0**: 1 tests: `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform`
-- **assertion: AssertionError: False is not true**: 1 tests: `unit/test_transform.py::TestTransform.test_geo_offset_transform_equality`
 - **assertion: AssertionError: unexpectedly None : could not spawn a large vehicle at any spawn point**: 1 tests: `smoke/test_traffic_manager_large_vehicle.py::TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans`
-- **error: _queue.Empty**: 1 tests: `smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison`
-- **error: exit 2: spawn_actor.py: error: the following arguments are required: -b/--blueprint**: 1 tests: `API/spawn_actor.py::<script>`
+- **sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads**: 1 tests: `smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison`
+
+### the test server's content (maps, blueprints), not typesafe_carla (4 causes, 58 tests)
+
+- **map not in the server's package (load_world/get_map fail; the official module too)**: 55 tests: `smoke/test_blueprint.py::TestBlueprintLibrary.test_blueprint_ids`, `smoke/test_client.py::TestClient.test_version`, `smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car`, `smoke/test_determinism.py::TestDeterminism.test_determ`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_reference`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_location_to_geo_and_back`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_to_location_and_back`, `smoke/test_geoconversion.py::TestGeoLocationConversion.test_zero_conversion`, +47 more
+- **blueprint `sensor.camera.rgb` has no attribute `chromatic_aberration_intensity` on this server**: 1 tests: `API/prop_control.py::<script>`
+- **blueprint `vehicle.ford.mustang` not in the server's blueprint library**: 1 tests: `smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode`
+- **the prop does not move after set_transform + tick in synchronous mode; the official module fails the same way on this server**: 1 tests: `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform`
 
 ### the pycarla wrapper cannot express this yet (harness) (1 causes, 1 tests)
 
 - **pycarla cannot wrap `Map.get_geoprojection` (result type GeoProjection)**: 1 tests: `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_projection`
 
-### infrastructure (2 causes, 2 tests)
+### the upstream test itself (fails with the official module too) (1 causes, 1 tests)
 
+- **stale upstream test: uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction raises AttributeError**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
+
+### infrastructure (4 causes, 4 tests)
+
+- **a script that needs command-line arguments (API/Tests.md documents them)**: 1 tests: `API/spawn_actor.py::<script>`
+- **an interactive script (a pygame loop; the official module also runs until the time-out)**: 1 tests: `test_raycast_sensor.py::<script>`
 - **test dependency `cv2` not installed in the test interpreter**: 1 tests: `test_ground_truth.py::<script>`
 - **the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
 
 
 ## Root causes: ue5-dev, codon mode
 
-### behaviour differs (assertions, errors, crashes) (3 causes, 4 tests)
+### behaviour differs (assertions, errors, crashes) (1 causes, 1 tests)
 
-- **CarlaError: tsc_client_load_world: std::exception**: 2 tests: `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn`, `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn`
 - **assertion: -64.6448 != 11**: 1 tests: `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform`
-- **assertion: Transform(Location(x=1, y=2, z=3), Rotation(pitch=4, yaw=5, roll=6)) != Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pit**: 1 tests: `unit/test_transform.py::TestTransform.test_print`
 
-### Codon-direct mode: does not compile (17 causes, 117 tests)
+### the test server's content (maps, blueprints), not typesafe_carla (1 causes, 2 tests)
+
+- **map not in the server's package (load_world/get_map fail; the official module too)**: 2 tests: `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn`, `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn`
+
+### Codon-direct mode: does not compile (14 causes, 111 tests)
 
 - **does not compile: 'SmokeTest' object has no attribute 'testing_address'**: 39 tests: `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_components`, `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_sockets_consistent`, `smoke/test_actor_introspection.py::TestActorIntrospection.test_walker_bones`, `smoke/test_actor_introspection.py::TestActorIntrospection.test_component_not_found_raises`, `smoke/test_blueprint.py::TestBlueprintLibrary.test_blueprint_ids`, `smoke/test_client.py::TestClient.test_version`, `smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car`, `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_shape`, +31 more
 - **does not compile: no module named 'glob'**: 19 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +11 more
@@ -78,25 +80,18 @@ with typesafe-codon. *not run*: no result recorded (e.g. needs a server).
 - **does not compile: no module named 'filecmp'**: 5 tests: `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_two_cars`, `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_three_cars`, `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_bike`, `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_walker`, `smoke/test_sensor_determinism.py::TestSensorDeterminism.test_all_sensors`
 - **does not compile: no module named 'array'**: 4 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive`, `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length`, `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation`, `smoke/test_v2x.py::TestV2X.test_v2i_infrastructure_sensor_without_owner`
 - **does not compile: no module named 'tempfile'**: 3 tests: `smoke/test_recorder.py::TestRecorder.test_record_replay_blueprint_id_round_trips`, `smoke/test_recorder.py::TestRecorder.test_record_survives_same_tick_actor_destroy`, `smoke/test_replay_no_actor_aliasing.py::TestReplayNoActorAliasing.test_replayed_actors_have_clean_state`
-- **does not compile: unsupported operand type(s) for ==: 'GeoOffsetTransform' and 'GeoOffsetTransform'**: 3 tests: `unit/test_transform.py::TestTransform.test_geo_offset_transform_equality`, `unit/test_transform.py::TestTransform.test_geo_projection_utm_with_offset`, `unit/test_transform.py::TestTransform.test_geo_projection_utm_offset_setter`
-- **does not compile: unsupported operand type(s) for ==: 'GeoEllipsoid' and 'GeoEllipsoid'**: 2 tests: `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args`, `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args_positional`
 - **does not compile: 'List[float]' does not match expected type 'List[int]'**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
 - **does not compile: cannot import name 'random' from 'numpy.__init__'**: 1 tests: `smoke/test_determinism.py::TestDeterminism.test_determ`
 - **does not compile: no module named 'ast'**: 1 tests: `unit/test_lidar_smoke_helpers.py::TestLidarSmokeHelpers.test_get_current_detection_points_is_instance_method`
 - **does not compile: no module named 'cv2'**: 1 tests: `test_ground_truth.py::<script>`
 - **does not compile: no module named 'subprocess'**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
-- **does not compile: unsupported operand type(s) for ==: 'GeoProjectionUTM' and 'GeoProjectionUTM'**: 1 tests: `unit/test_transform.py::TestTransform.test_geo_projection_utm_equality`
 
 
 ## Root causes: 0.10.0, cpython mode
 
-### typesafe_carla has it, with an incompatible signature (1 causes, 1 tests)
+### the upstream test itself (fails with the official module too) (1 causes, 1 tests)
 
-- **`carla.WheelPhysicsControl.__init__`: these arguments are not accepted**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
-
-### behaviour differs (assertions, errors, crashes) (1 causes, 1 tests)
-
-- **`str(carla.Transform)` differs from CARLA's (number formatting?)**: 1 tests: `unit/test_transform.py::TestTransform.test_print`
+- **stale upstream test: uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction raises AttributeError**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
 
 ### infrastructure (1 causes, 1 tests)
 
@@ -104,10 +99,6 @@ with typesafe-codon. *not run*: no result recorded (e.g. needs a server).
 
 
 ## Root causes: 0.10.0, codon mode
-
-### behaviour differs (assertions, errors, crashes) (1 causes, 1 tests)
-
-- **assertion: Transform(Location(x=1, y=2, z=3), Rotation(pitch=4, yaw=5, roll=6)) != Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pit**: 1 tests: `unit/test_transform.py::TestTransform.test_print`
 
 ### Codon-direct mode: does not compile (9 causes, 64 tests)
 
@@ -198,7 +189,7 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `unit/test_transform.py::TestVector.test_make_unit_vector_2d_no_argument` | pass | pass |  |
 | `unit/test_transform.py::TestVector.test_make_unit_vector_2d_epsilon_keyword` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_values` | pass | pass |  |
-| `unit/test_transform.py::TestTransform.test_print` | fail | fail | `str(carla.Transform)` differs from CARLA's (number formatting?) |
+| `unit/test_transform.py::TestTransform.test_print` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_translation` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_rotation` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_rotation_and_translation` | pass | pass |  |
@@ -208,14 +199,14 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `unit/test_transform.py::TestTransform.test_geo_offset_transform_translation` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_geo_offset_transform_rotation` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_geo_offset_transform_and_rotation` | pass | pass |  |
-| `unit/test_transform.py::TestTransform.test_geo_offset_transform_equality` | fail | compile | assertion: AssertionError: False is not true |
+| `unit/test_transform.py::TestTransform.test_geo_offset_transform_equality` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_geo_projection_utm` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_geo_projection_utm_offset_none` | pass | pass |  |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_with_offset` | fail | compile | no value equality: equal-looking `carla.GeoOffsetTransform` objects compare unequal (missing `__eq__`?) |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_offset_setter` | fail | compile | no value equality: equal-looking `carla.GeoOffsetTransform` objects compare unequal (missing `__eq__`?) |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_equality` | pass | compile | does not compile: unsupported operand type(s) for ==: 'GeoProjectionUTM' and 'GeoProjectionUTM' |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args` | fail | compile | no value equality: equal-looking `carla.GeoEllipsoid` objects compare unequal (missing `__eq__`?) |
-| `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args_positional` | fail | compile | no value equality: equal-looking `carla.GeoEllipsoid` objects compare unequal (missing `__eq__`?) |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_with_offset` | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_offset_setter` | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_equality` | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args` | pass | pass |  |
+| `unit/test_transform.py::TestTransform.test_geo_projection_utm_constructor_3_args_positional` | pass | pass |  |
 | `unit/test_vehicle.py::TestVehicleControl.test_default_values` | pass | pass |  |
 | `unit/test_vehicle.py::TestVehicleControl.test_named_args` | pass | pass |  |
 | `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args` | error | compile | `carla.WheelPhysicsControl.__init__`: these arguments are not accepted |
@@ -223,55 +214,55 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_sockets_consistent` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_actor_introspection.py::TestActorIntrospection.test_walker_bones` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_actor_introspection.py::TestActorIntrospection.test_component_not_found_raises` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_blueprint.py::TestBlueprintLibrary.test_blueprint_ids` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_client.py::TestClient.test_version` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_blueprint.py::TestBlueprintLibrary.test_blueprint_ids` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_client.py::TestClient.test_version` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
 | `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_two_cars` | error | compile | missing `carla.command.FutureActor` |
 | `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_three_cars` | error | compile | missing `carla.command.FutureActor` |
 | `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_bike` | error | compile | missing `carla.command.FutureActor` |
 | `smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_walker` | error | compile | missing `carla.command.FutureActor` |
-| `smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
 | `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_shape` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_string` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_debug_clear.py::TestDebugClear.test_clear_when_nothing_drawn` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_determinism.py::TestDeterminism.test_determ` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels` | error | compile | missing `carla.SensorData.raw_data` |
-| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels` | error | compile | missing `carla.SensorData.raw_data` |
-| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids` | error | compile | missing `carla.SensorData.raw_data` |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_reference` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_determinism.py::TestDeterminism.test_determ` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels` | error | compile | missing `carla.SensorData.raw_data` (#78) |
+| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels` | error | compile | missing `carla.SensorData.raw_data` (#78) |
+| `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids` | error | compile | missing `carla.SensorData.raw_data` (#78) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_reference` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
 | `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_projection` | error | compile | pycarla cannot wrap `Map.get_geoprojection` (result type GeoProjection) |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_zero_conversion` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_relative_offset_preserved` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_geo_to_location_and_back` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_location_to_geo_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_to_location_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_zero_conversion` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_relative_offset_preserved` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_location_to_geo_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_geo_to_location_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_location_to_geo_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_geo_to_location_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_location_to_geo_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_geo_to_location_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_location_to_geo_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_geo_to_location_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_geo_to_location_and_back` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
 | `smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count` | error | compile | RuntimeError: 'SensorData' object has no attribute 'channels' |
 | `smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count` | error | compile | RuntimeError: 'SensorData' object has no attribute 'channels' |
-| `smoke/test_lidar.py::TestASyncLidar.test_lidar_point_count` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_lidar.py::TestASyncLidar.test_semlidar_point_count` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | error | compile | error: _queue.Empty |
-| `smoke/test_map.py::TestMap.test_reload_world` | error | compile | RuntimeError: tsc_client_reload_world: std::exception |
-| `smoke/test_map.py::TestMap.test_load_all_maps` | error | compile | RuntimeError: tsc_world_get_map: std::exception |
-| `smoke/test_props_loading.py::TestPropsLoading.test_spawn_loaded_props` | error | compile | RuntimeError: tsc_world_get_map: std::exception |
+| `smoke/test_lidar.py::TestASyncLidar.test_lidar_point_count` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_lidar.py::TestASyncLidar.test_semlidar_point_count` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | error | compile | sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads |
+| `smoke/test_map.py::TestMap.test_reload_world` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_map.py::TestMap.test_load_all_maps` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_props_loading.py::TestPropsLoading.test_spawn_loaded_props` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
 | `smoke/test_recorder.py::TestRecorder.test_record_replay_blueprint_id_round_trips` | pass | compile | does not compile: no module named 'tempfile' |
 | `smoke/test_recorder.py::TestRecorder.test_record_survives_same_tick_actor_destroy` | pass | compile | does not compile: no module named 'tempfile' |
 | `smoke/test_replay_no_actor_aliasing.py::TestReplayNoActorAliasing.test_replayed_actors_have_clean_state` | pass | compile | does not compile: no module named 'tempfile' |
-| `smoke/test_sensor_determinism.py::TestSensorDeterminism.test_all_sensors` | error | compile | RuntimeError: tsc_client_reload_world: std::exception |
-| `smoke/test_sensor_tick_time.py::TestSensorTickTime.test_sensor_tick_time` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_snapshot.py::TestSnapshot.test_spawn_points` | error | compile | RuntimeError: tsc_client_reload_world: std::exception |
-| `smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_streamming.py::TestStreamming.test_multistream` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `smoke/test_sync.py::TestSynchronousMode.test_reloading_map` | error | compile | RuntimeError: tsc_client_reload_world: std::exception |
-| `smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode` | error | compile | IndexError: tsc_blueprint_library_find: no blueprint with id 'vehicle.ford.mustang' |
-| `smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `smoke/test_sensor_determinism.py::TestSensorDeterminism.test_all_sensors` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_sensor_tick_time.py::TestSensorTickTime.test_sensor_tick_time` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_snapshot.py::TestSnapshot.test_spawn_points` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_streamming.py::TestStreamming.test_multistream` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_sync.py::TestSynchronousMode.test_reloading_map` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode` | error | compile | blueprint `vehicle.ford.mustang` not in the server's blueprint library |
+| `smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
 | `smoke/test_traffic_manager_large_vehicle.py::TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans` | fail | compile | assertion: AssertionError: unexpectedly None : could not spawn a large vehicle at any spawn point |
 | `smoke/test_traffic_manager_sync_step.py::TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive` | error | compile | missing `carla.SensorData.get_message_count` |
@@ -291,38 +282,38 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `smoke/test_vehicle_telemetry.py::TestVehicleTelemetry.test_get_telemetry_data_shape_and_values` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_walker_bounding_box.py::TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset` | pass | compile | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_walker_navigation.py::TestWalkerNavigation.test_walker_ai_controller_routes_without_crash` | error | compile | missing `carla.Actor.stop` |
-| `smoke/test_world.py::TestWorld.test_fixed_delta_seconds` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/prop_control.py::<script>` | error | compile | IndexError: tsc_actor_blueprint_set_attribute: blueprint 'sensor.camera.rgb' has no attribute 'chromatic_aberration_intensity' |
-| `API/spawn_actor.py::<script>` | error | compile | error: exit 2: spawn_actor.py: error: the following arguments are required: -b/--blueprint |
+| `smoke/test_world.py::TestWorld.test_fixed_delta_seconds` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/prop_control.py::<script>` | error | compile | blueprint `sensor.camera.rgb` has no attribute `chromatic_aberration_intensity` on this server |
+| `API/spawn_actor.py::<script>` | error | compile | a script that needs command-line arguments (API/Tests.md documents them) |
 | `API/test_apply_textures.py::TestApplyTextures.test_apply_textures` | error | compile | RuntimeError: 'SensorData' object has no attribute 'convert' |
-| `API/test_collision.py::TestCollision.test_collision_against_side_of_car` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_collision.py::TestCollision.test_collision_against_side_of_car` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
 | `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation` | error | compile | RuntimeError: 'SensorData' object has no attribute 'convert' |
-| `API/test_sensor_recording.py::TestSensorRecording.test_gnss` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording.py::TestSensorRecording.test_imu` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording.py::TestSensorRecording.test_radar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording.py::TestSensorRecording.test_rgb` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording.py::TestSensorRecording.test_depth` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording.py::TestSensorRecording.test_lidar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_lidar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_gnss` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_imu` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_radar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_rgb` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_depth` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_instance_segmentation` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_segmentation` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_lidar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_lidar` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn` | error | error | RuntimeError: tsc_client_load_world: std::exception |
-| `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn` | error | error | RuntimeError: tsc_client_load_world: std::exception |
+| `API/test_sensor_recording.py::TestSensorRecording.test_gnss` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_imu` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_radar` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_rgb` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_depth` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_lidar` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording.py::TestSensorRecording.test_semantic_lidar` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_gnss` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_imu` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_radar` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_rgb` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_depth` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_instance_segmentation` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_segmentation` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_lidar` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_sensor_recording_fast.py::TestSensorRecording.test_semantic_lidar` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn` | error | error | map not in the server's package (load_world/get_map fail; the official module too) |
+| `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn` | error | error | map not in the server's package (load_world/get_map fail; the official module too) |
 | `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform` | fail | fail | assertion: AssertionError: -64.64484405517578 != 291.0 |
 | `test_connection.py::<script>` | pass | compile | does not compile: no module named 'argparse' |
 | `test_ground_truth.py::<script>` | error | compile | test dependency `cv2` not installed in the test interpreter |
 | `test_raycast_sensor.py::<script>` | error | compile | RuntimeError: tsc_world_spawn_actor: std::exception |
-| `test_vehicle_physics.py::<script>` | error | compile | RuntimeError: tsc_client_load_world: std::exception |
+| `test_vehicle_physics.py::<script>` | error | compile | map not in the server's package (load_world/get_map fail; the official module too) |
 
 ## Every test: 0.10.0
 
@@ -334,7 +325,7 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `unit/test_transform.py::TestRotation.test_default_values` | pass | pass |  |
 | `unit/test_transform.py::TestRotation.test_named_args` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_values` | pass | pass |  |
-| `unit/test_transform.py::TestTransform.test_print` | fail | fail | `str(carla.Transform)` differs from CARLA's (number formatting?) |
+| `unit/test_transform.py::TestTransform.test_print` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_translation` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_rotation` | pass | pass |  |
 | `unit/test_transform.py::TestTransform.test_rotation_and_translation` | pass | pass |  |

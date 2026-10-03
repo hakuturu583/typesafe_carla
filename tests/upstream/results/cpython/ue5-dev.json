@@ -100,8 +100,8 @@
      ""
     ],
     "TestTransform.test_print": [
-     "fail",
-     "AssertionError: 'Transform(Location(x=1, y=2, z=3), Rotation(pitch=4, yaw=5, roll=6))' != 'Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pitch=4.000000, yaw=5.000000, roll=6.000000))'"
+     "pass",
+     ""
     ],
     "TestTransform.test_translation": [
      "pass",
@@ -140,8 +140,8 @@
      ""
     ],
     "TestTransform.test_geo_offset_transform_equality": [
-     "fail",
-     "AssertionError: False is not true"
+     "pass",
+     ""
     ],
     "TestTransform.test_geo_projection_utm": [
      "pass",
@@ -152,24 +152,24 @@
      ""
     ],
     "TestTransform.test_geo_projection_utm_with_offset": [
-     "fail",
-     "AssertionError: GeoOffsetTransform(offset_x=1, offset_y=2, offset_z=3, offset_cos_h=1, offset_sin_h=-0) != GeoOffsetTransform(offset_x=1, offset_y=2, offset_z=3, offset_cos_h=1, offset_sin_h=-0)"
+     "pass",
+     ""
     ],
     "TestTransform.test_geo_projection_utm_offset_setter": [
-     "fail",
-     "AssertionError: GeoOffsetTransform(offset_x=5, offset_y=6, offset_z=7, offset_cos_h=0.995004, offset_sin_h=-0.0998334) != GeoOffsetTransform(offset_x=5, offset_y=6, offset_z=7, offset_cos_h=0.995004, offset_sin_h=-0.0998334)"
+     "pass",
+     ""
     ],
     "TestTransform.test_geo_projection_utm_equality": [
      "pass",
      ""
     ],
     "TestTransform.test_geo_projection_utm_constructor_3_args": [
-     "fail",
-     "AssertionError: GeoEllipsoid(a=6.37814e+06, f_inv=298.257) != GeoEllipsoid(a=6.37814e+06, f_inv=298.257)"
+     "pass",
+     ""
     ],
     "TestTransform.test_geo_projection_utm_constructor_3_args_positional": [
-     "fail",
-     "AssertionError: GeoEllipsoid(a=6.37814e+06, f_inv=298.257) != GeoEllipsoid(a=6.37814e+06, f_inv=298.257)"
+     "pass",
+     ""
     ]
    }
   },
