@@ -143,7 +143,8 @@ def _unparse(node) -> str | None:
 
 
 def _strip_static(base: str) -> str:
-    return re.sub(r"^Static\[(.*)\]$", r"\1", base)
+    """`Static[B]` / `B[T]` -> `B` (the base class's name)."""
+    return re.sub(r"\[.*\]$", "", re.sub(r"^Static\[(.*)\]$", r"\1", base))
 
 
 def _func(node: ast.FunctionDef, module: str) -> Func:
@@ -155,7 +156,11 @@ def _func(node: ast.FunctionDef, module: str) -> Func:
                for a, d in zip(args.kwonlyargs, args.kw_defaults)]
     self_typed = bool(params) and params[0].name == "self" and params[0].ann is not None
     if params and params[0].name == "self":
-        params = params[1:]
+        if self_typed:
+            # `self: S, ..., S: type`: S is inferred from the instance call.
+            params = [q for q in params[1:] if not (q.name == params[0].ann and q.ann == "type")]
+        else:
+            params = params[1:]
     kind = "method"
     for d in node.decorator_list:
         text = ast.unparse(d)
@@ -404,8 +409,6 @@ class Gen:
         """Typed (name, type, default) parameter lists for one library overload."""
         if f.varargs:
             raise Unsupported("*args/**kwargs")
-        if f.self_typed:
-            raise Unsupported("self-typed generic method (Codon exporter)")
         lists: list[list[tuple[str, str, str | None]]] = [[]]
         n_defaulted = sum(1 for p in f.params if p.ann is None and p.default == "None")
         for p in f.params:
@@ -578,8 +581,9 @@ class Gen:
         # call ambiguous for the exporter ("cannot typecheck").
         target = f"_L_{cls}.{name}" if kind == "static" else f"self.v.{name}"
         # (Special methods keep the instance call: `C.__repr__(x)` is a type's repr.)
+        # (A `self: S` method is called on the instance too: S is inferred from it.)
         call = (f"_L_{cls}.{name}" if kind == "static" else
-                f"self.v.{name}(" if name.startswith("__") else f"_L_{cls}.{name}(self.v")
+                f"self.v.{name}(" if name.startswith("__") or fs[0].self_typed else f"_L_{cls}.{name}(self.v")
         emitted, reasons = 0, []
         for f in fs:
             try:

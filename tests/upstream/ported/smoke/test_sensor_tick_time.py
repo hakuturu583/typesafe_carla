@@ -1,0 +1,78 @@
+# Ported from CARLA's PythonAPI/test/smoke/test_sensor_tick_time.py at carla-simulator/carla@0a5ce0d5b4952bd8294a163c12d49f197bdb2aba
+# by tools/port_upstream_tests.py (typesafe_carla issue #80): the original needs a map
+# (Town03 / Town05 / Town01) that no ue5-dev package ships. Do not edit by hand:
+# change the rules there and regenerate. Changes:
+#   - none: copied so that `from . import SmokeTest` uses the ported base, whose tearDown loads a shipped map instead of Town03
+#
+# Copyright (c) 2026 Computer Vision Center (CVC) at the Universitat Autonoma de
+# Barcelona (UAB).
+#
+# This work is licensed under the terms of the MIT license.
+# For a copy, see <https://opensource.org/licenses/MIT>.
+
+from . import SyncSmokeTest
+
+import carla
+import time
+import math
+
+class Sensor():
+  def __init__(self, world, bp_sensor, sensor_tick):
+    self.bp_sensor = bp_sensor
+    bp_sensor.set_attribute("sensor_tick", str(sensor_tick))
+    self.sensor = world.spawn_actor(bp_sensor, carla.Transform())
+    self.sensor.listen(lambda sensor_data: self.listen(sensor_data))
+    self.num_ticks = 0
+
+  def destroy(self):
+    self.sensor.destroy()
+
+  def listen(self, sensor_data):
+    self.num_ticks += 1
+
+class TestSensorTickTime(SyncSmokeTest):
+  def test_sensor_tick_time(self):
+    print("TestSensorTickTime.test_sensor_tick_time")
+
+    bp_lib = self.world.get_blueprint_library()
+
+    sensor_exception = {
+      "sensor.camera.depth",
+      "sensor.camera.normals",
+      "sensor.camera.optical_flow",
+      "sensor.camera.rgb",
+      "sensor.camera.semantic_segmentation",
+      "sensor.camera.dvs",
+      "sensor.other.obstacle",
+      "sensor.camera.instance_segmentation",
+      "sensor.camera.rgb_fisheye",
+      "sensor.camera.depth_fisheye",
+      "sensor.camera.semantic_segmentation_fisheye",
+      "sensor.camera.instance_segmentation_fisheye"
+    }
+    spawned_sensors = []
+    sensor_tick = 1.0
+
+    for bp_sensor in bp_lib.filter("sensor.*"):
+
+      if bp_sensor.id in sensor_exception:
+         continue
+
+      if bp_sensor.has_attribute("sensor_tick"):
+        spawned_sensors.append(Sensor(self.world, bp_sensor, sensor_tick))
+
+    num_ticks = 50
+    for _ in range(0, num_ticks):
+      self.world.tick()
+    time.sleep(1.0)
+
+    dt = self.world.get_settings().fixed_delta_seconds
+    total_time = num_ticks * dt
+    num_sensor_ticks = int(math.ceil(total_time/sensor_tick))
+
+    for sensor in spawned_sensors:
+      self.assertEqual(sensor.num_ticks, num_sensor_ticks,
+        "\n\n {} does not match tick count".format(sensor.bp_sensor.id))
+      sensor.destroy()
+
+

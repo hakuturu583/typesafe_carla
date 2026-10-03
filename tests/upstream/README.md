@@ -21,6 +21,13 @@ modes, and groups the failures by root cause; each group is a candidate issue.
 |---|---|---|
 | `unit` | nothing | pytest (any backend; the mock uses ue5-dev's tests), every `libcarla` CI leg, both modes |
 | `smoke`, `API`, `top` (the top-level files) | a CARLA server and the `libcarla` backend | pytest and the CLI, only with `TSC_CARLA_PORT` set |
+| `ported` ([`ported/`](ported)) | a ue5-dev server | as `smoke`: the tests that need a map no ue5-dev package ships, ported to shipped maps (see below) |
+
+A third mode, `--mode official`, runs any suite with CARLA's own `carla`
+module (`TSC_UPSTREAM_PYTHON`'s), every `carla.Client` redirected to the test
+server like the other modes. With `--update` its results go to
+`results/official/`, and GAPS.md attributes a failure the official module
+shares to the server or the upstream test, not to typesafe_carla.
 
 ## Running
 
@@ -86,6 +93,37 @@ codon:
     unit/test_client.py: "xfail: compile: ..."    # the whole module does not compile
     smoke/test_x.py:
       TestX.test_y: "skip: crashes the server"    # never run
+```
+
+## Ported tests (issue #80)
+
+About 55 upstream tests load Town03, Town05(_Opt) or Town01, mostly through
+`SmokeTest.tearDown`. No ue5-dev package ships those maps, and the official
+module fails these tests the same way. `tools/port_upstream_tests.py` writes
+ported copies to [`ported/`](ported), from the upstream tests at the test
+server's commit, by mechanical rules. Each file's header records its source,
+commit and changes:
+
+- the ported `smoke/__init__.py` reloads a shipped map (Town10HD_Opt) in
+  `tearDown`. Smoke tests that fail only through it are copied unchanged, so
+  that `from . import SmokeTest` uses the ported base;
+- explicit loads of a missing map load a shipped one: Town10HD_Opt, or Town15
+  / Mine_01 for the tests that need long straight roads. The test is skipped
+  when the server has none of them;
+- coordinates written for a straight road of Town03 / Town05 / Town01 go
+  through a `MapFrame`, which places that road on the longest straight driving
+  lane of the loaded map, keeping distances and angles. Readings (`.y`,
+  velocities, yaw) map back, so the assertions are unchanged.
+
+The originals are `exclude:` in expectations.yaml: they are not run, not
+counted as failures, and listed in their own GAPS.md section. Each ported test
+must first pass with the official module on a ue5-dev server:
+
+```sh
+TYPESAFE_CARLA_BUILD_DIR=build-carla TSC_CARLA_HOST=127.0.0.1 TSC_CARLA_PORT=2000 \
+  TSC_UPSTREAM_PYTHON=/path/to/venv-with-carla/bin/python \
+  uv run python -m tools.upstream_tests --mode official --suite ported --update -j1 -v
+python -m tools.port_upstream_tests --exclude-originals   # regenerate after a rule change
 ```
 
 ## cpython mode: tools/pycarla

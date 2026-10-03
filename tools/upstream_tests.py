@@ -60,9 +60,12 @@ UPSTREAM_DIR = ROOT / "tests" / "upstream"
 MANIFEST = UPSTREAM_DIR / "expectations.yaml"
 SHIM = UPSTREAM_DIR / "tsc_unittest.codon"
 REPOSITORY = "https://github.com/carla-simulator/carla"
-SUITES = ("unit", "smoke", "API", "top")   # top: the files directly in PythonAPI/test
-SERVER_SUITES = ("smoke", "API", "top")
-MODES = ("cpython", "codon")
+# top: the files directly in PythonAPI/test; ported: tests/upstream/ported
+# (map-dependent tests ported to maps shipped in ue5-dev, issue #80).
+SUITES = ("unit", "smoke", "API", "top", "ported")
+SERVER_SUITES = ("smoke", "API", "top", "ported")
+MODES = ("cpython", "codon")   # with expectations; `official` runs CARLA's own module
+PORTED_DIR = UPSTREAM_DIR / "ported"
 RESULTS = UPSTREAM_DIR / "results"
 GAPS = UPSTREAM_DIR / "GAPS.md"
 DEFAULT_MOCK_REF = "ue5-dev"  # the mock mirrors LibCarla ue5-dev
@@ -208,10 +211,21 @@ def suite_of(rel: str) -> str:
 
 def test_files(tests: Path, suite: str) -> list[str]:
     """Every Python file of a suite (unittest modules and scripts), relative
-    to PythonAPI/test."""
+    to PythonAPI/test (`ported/...` for the ported suite)."""
+    if suite == "ported":
+        return sorted(f"ported/{p.relative_to(PORTED_DIR).as_posix()}"
+                      for p in PORTED_DIR.rglob("*.py") if p.name != "__init__.py")
     d = tests if suite == "top" else tests / suite
     return sorted((p.name if suite == "top" else f"{suite}/{p.name}")
                   for p in d.glob("*.py") if p.name != "__init__.py")
+
+
+def locate(tests: Path, rel: str) -> tuple[Path, str]:
+    """(root, path below it) of a test file: the upstream checkout, or
+    tests/upstream/ported for `ported/...`."""
+    if rel.startswith("ported/"):
+        return PORTED_DIR, rel[len("ported/"):]
+    return tests, rel
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +270,8 @@ def _test_classes(classes: dict, known: dict) -> dict[str, list[str]]:
 
 def discover(tests: Path, rel: str) -> list[str]:
     """Test ids (`Class.test_method`) of one upstream file, in source order."""
-    path = tests / rel
+    root, rel = locate(tests, rel)
+    path = root / rel
     init = path.parent / "__init__.py"
     known = _classes(init.read_text()) if init.is_file() else {}
     cases = _test_classes(_classes(path.read_text()), known)
@@ -474,11 +489,12 @@ def run_file(tests: Path, rel: str, work: Path, skip: set[str] = frozenset(),
     out_dir = work / Path(rel).parent
     out_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(SHIM, out_dir / SHIM.name)
-    module, offset = convert_source((tests / rel).read_text(), tests / rel, server)
+    root, inner = locate(tests, rel)
+    module, offset = convert_source((root / inner).read_text(), root / inner, server)
     module_end = module.count("\n")
     source = out_dir / (Path(rel).stem + ".codon")
     modules = {source.name: (rel, offset, module_end)}
-    init = tests / Path(rel).parent / "__init__.py"
+    init = root / Path(inner).parent / "__init__.py"
     if init.is_file():
         text, init_offset = convert_source(init.read_text(), init, server)
         (out_dir / "__init__.codon").write_text(text)
@@ -589,9 +605,27 @@ def _run_one(exe: Path, test_id: str, timeout: float, cwd: Path) -> TestResult:
 # generated `carla` package first on sys.path.
 _DRIVER = r"""
 import json, os, sys, traceback, unittest
+# Official mode: CARLA's own module, with every Client sent to the test server
+# (as the generated package's TSC_PYCARLA_REDIRECT does).
+if os.environ.get("TSC_UPSTREAM_OFFICIAL"):
+    import carla
+    target = os.environ.get("TSC_PYCARLA_REDIRECT")
+    if target:
+        _Client = carla.Client
+        host, _, port = target.rpartition(":")
+
+        class Client(_Client):
+            def __init__(self, *args, **kwargs):
+                kwargs = {k: v for k, v in kwargs.items() if k not in ("host", "port")}
+                super().__init__(host, int(port), *args[2:], **kwargs)
+
+        carla.Client = Client
+    os.environ["TSC_PYCARLA_PKG"] = os.path.dirname(carla.__file__)
 # The tests must see the generated package, never an installed official one
 # (an editable install's import hook would win over sys.path): load it first.
 try:
+    if os.environ.get("TSC_UPSTREAM_OFFICIAL"):
+        raise StopIteration
     import importlib.util
     pkg = os.environ["TSC_PYCARLA_PKG"]
     spec = importlib.util.spec_from_file_location(
@@ -602,6 +636,8 @@ try:
     import carla
     ok = os.path.realpath(carla.__file__).startswith(os.path.realpath(os.environ["TSC_PYCARLA_PKG"]))
     why = f"`import carla` found {carla.__file__}, not the generated package"
+except StopIteration:
+    ok, why = True, ""
 except BaseException as e:
     ok, why = False, "import carla failed: " + "".join(traceback.format_exception_only(type(e), e)).strip()
 if not ok:
@@ -651,11 +687,16 @@ print("TSC-RESULT " + json.dumps(out), flush=True)
 # must not leave actors or synchronous mode behind for the next one.
 _CLEANUP = r"""
 import importlib.util, os, sys
-pkg = os.environ["TSC_PYCARLA_PKG"]
-spec = importlib.util.spec_from_file_location("carla", os.path.join(pkg, "__init__.py"),
-                                              submodule_search_locations=[pkg])
-carla = importlib.util.module_from_spec(spec); sys.modules["carla"] = carla; spec.loader.exec_module(carla)
-client = carla.Client("127.0.0.1", 2000)  # redirected to the test server
+if os.environ.get("TSC_UPSTREAM_OFFICIAL"):
+    import carla
+    host, _, port = os.environ["TSC_PYCARLA_REDIRECT"].rpartition(":")
+    client = carla.Client(host, int(port))
+else:
+    pkg = os.environ["TSC_PYCARLA_PKG"]
+    spec = importlib.util.spec_from_file_location("carla", os.path.join(pkg, "__init__.py"),
+                                                  submodule_search_locations=[pkg])
+    carla = importlib.util.module_from_spec(spec); sys.modules["carla"] = carla; spec.loader.exec_module(carla)
+    client = carla.Client("127.0.0.1", 2000)  # redirected to the test server
 client.set_timeout(30.0)
 world = client.get_world()
 try:
@@ -710,7 +751,18 @@ def _python() -> str:
     return os.environ.get("TSC_UPSTREAM_PYTHON") or sys.executable
 
 
-def _cpython_env(pydir: Path, server: bool) -> dict[str, str]:
+def _cpython_env(pydir: Path | None, server: bool) -> dict[str, str]:
+    """The test process's environment; `pydir` None runs CARLA's official
+    module (TSC_UPSTREAM_PYTHON's own `carla`) instead of the generated one."""
+    if pydir is None:
+        env = {**os.environ, "TSC_UPSTREAM_OFFICIAL": "1"}
+        env.pop("TSC_PYCARLA_PKG", None)
+        env.pop("PYTHONHOME", None)
+        if server:
+            env["TSC_PYCARLA_REDIRECT"] = (f"{os.environ.get('TSC_CARLA_HOST', '127.0.0.1')}:"
+                                           f"{os.environ.get('TSC_CARLA_PORT', '2000')}")
+        env.setdefault("PYTHONPATH", "")
+        return env
     from typesafe_carla import paths
 
     env = {**os.environ, "TSC_PYCARLA_PKG": str(pydir / "carla"),
@@ -738,17 +790,18 @@ def run_file_cpython(tests: Path, rel: str, pydir: Path, skip: set[str] = frozen
         result.tests = [TestResult(SCRIPT, "skip", INTERACTIVE[rel])]
         return result
     ids = discover(tests, rel)
+    tests, rel_in = locate(tests, rel)
     driver = cache_root() / "tsc_unittest_driver.py"
     driver.parent.mkdir(parents=True, exist_ok=True)
     if not driver.is_file() or driver.read_text() != _DRIVER:
         driver.write_text(_DRIVER)
     env = {**env, "PYTHONPATH": env["PYTHONPATH"] + os.pathsep + str(tests)}
     if not ids:
-        result.tests = [_run_script_cpython(tests, rel, env, timeout, driver)]
+        result.tests = [_run_script_cpython(tests, rel_in, env, timeout, driver)]
         if server:
             _server_cleanup(tests, env)
         return result
-    module = rel[:-3].replace("/", ".")
+    module = rel_in[:-3].replace("/", ".")
     for test_id in ids:
         if test_id in skip:
             continue
@@ -815,12 +868,14 @@ def load_manifest(mode: str = "cpython", path: Path = MANIFEST) -> dict:
 
 
 def parse_expectation(value) -> tuple[str, str]:
-    """('pass' | 'xfail' | 'skip', reason)."""
+    """('pass' | 'xfail' | 'skip' | 'exclude', reason). `exclude`: not run and
+    not part of the target, e.g. a test ported to tests/upstream/ported."""
     text = str(value).strip()
     kind, _, reason = text.partition(":")
     kind = kind.strip()
-    if kind not in ("pass", "xfail", "skip"):
-        raise ValueError(f"bad expectation {value!r}: use pass, 'xfail: <reason>' or 'skip: <reason>'")
+    if kind not in ("pass", "xfail", "skip", "exclude"):
+        raise ValueError(f"bad expectation {value!r}: use pass, 'xfail: <reason>', "
+                         "'skip: <reason>' or 'exclude: <reason>'")
     return kind, reason.strip()
 
 
@@ -831,8 +886,13 @@ def file_expectations(manifest: dict, ref: str, rel: str):
 
 def skipped_ids(entry) -> set[str]:
     if isinstance(entry, dict):
-        return {t for t, v in entry.items() if parse_expectation(v)[0] == "skip"}
+        return {t for t, v in entry.items() if parse_expectation(v)[0] in ("skip", "exclude")}
     return set()
+
+
+def not_run(entry) -> bool:
+    """A file-level skip or exclude."""
+    return isinstance(entry, str) and parse_expectation(entry)[0] in ("skip", "exclude")
 
 
 FAILURES = ("fail", "error", "crash", "timeout", "compile")
@@ -843,10 +903,12 @@ class Check:
     passed: int = 0
     xfailed: int = 0
     skipped: int = 0
+    excluded: int = 0
     problems: list[str] = field(default_factory=list)
 
     def counts(self) -> str:
         text = f"{self.passed} pass, {self.xfailed} xfail, {self.skipped} skip"
+        text += f", {self.excluded} excluded" if self.excluded else ""
         return text + (f", {len(self.problems)} unexpected" if self.problems else "")
 
 
@@ -863,6 +925,9 @@ def check(result: FileResult | None, entry, ids: list[str] | None = None) -> Che
         if kind == "skip":
             c.skipped = len(ids or [])
             return c
+        if kind == "exclude":
+            c.excluded = len(ids or [])
+            return c
         if kind == "xfail":
             if result.file_error:
                 c.xfailed = len(result.tests)
@@ -875,6 +940,8 @@ def check(result: FileResult | None, entry, ids: list[str] | None = None) -> Che
         kind, reason = parse_expectation(entry.get(t.id, "pass"))
         if kind == "skip":
             c.skipped += 1
+        elif kind == "exclude":
+            c.excluded += 1
         elif t.outcome == "not-run":
             pass
         elif t.outcome == "skip":
@@ -888,7 +955,7 @@ def check(result: FileResult | None, entry, ids: list[str] | None = None) -> Che
         else:
             c.problems.append(f"{t.id}: unexpected {t.outcome}: {t.detail}")
     for t in entry:
-        if t not in {r.id for r in result.tests} and parse_expectation(entry[t])[0] != "skip":
+        if t not in {r.id for r in result.tests} and parse_expectation(entry[t])[0] not in ("skip", "exclude"):
             c.problems.append(f"{t}: in the manifest but not in the upstream file")
     return c
 
@@ -908,7 +975,7 @@ def updated_entry(result: FileResult, entry):
     for t in result.tests:
         prev = old.get(t.id)
         prev_kind = parse_expectation(prev)[0] if prev is not None else None
-        if prev_kind == "skip":
+        if prev_kind in ("skip", "exclude"):
             new[t.id] = prev
         elif t.outcome == "not-run":
             if prev is not None:
@@ -921,6 +988,9 @@ def updated_entry(result: FileResult, entry):
             new[t.id] = prev
         else:
             new[t.id] = f"xfail: {_reason(t)}"
+    for tid, prev in old.items():  # not run: skipped and excluded tests
+        if tid not in new and parse_expectation(prev)[0] in ("skip", "exclude"):
+            new[tid] = prev
     return new
 
 
@@ -990,7 +1060,14 @@ _CAUSES = [
     (r"^harness: (.*)", "pycarla", lambda m: f"harness: {m[1]}"),
     # The test server's content (a local package), not typesafe_carla: the
     # official module fails the same way there.
-    (r"tsc_client_(?:load|reload)_world: std::exception|tsc_world_get_map: std::exception", "server",
+    (r"tsc_client_load_world: std::exception \[carla\.Client\.load_world\('(?:Town10HD_Opt|Town15|Mine_01|"
+     r"EmptyMap|OpenDriveMap|RoadgenCross)'", "server",
+     lambda m: "load_world of a shipped map exceeds the client's default 5 s timeout on this server "
+               "(Town10HD_Opt takes ~8 s; the official module fails the same way)"),
+    (r"tsc_client_reload_world: std::exception", "server",
+     lambda m: "reload_world fails on this ue5-dev server build (OpenDRIVE parse error in its log; "
+               "the official module fails the same way)"),
+    (r"tsc_client_load_world: std::exception|tsc_world_get_map: std::exception", "server",
      lambda m: "map not in the server's package (load_world/get_map fail; the official module too)"),
     (r"tsc_blueprint_library_find: no blueprint with id '([\w.]+)'", "server",
      lambda m: f"blueprint `{m[1]}` not in the server's blueprint library"),
@@ -1050,11 +1127,20 @@ UPSTREAM_STALE = {
 }
 # Tests that fail the same way with the official module on the test server
 # (checked by running them with it): the server's behaviour or content.
+_LOAD_TIMEOUT = ("load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this "
+                 "server (it takes ~8 s; the official module fails the same way)")
 SERVER_ALSO_FAILS = {
     "API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform":
         "the prop does not move after set_transform + tick in synchronous mode; the official "
         "module fails the same way on this server",
+    "API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn": _LOAD_TIMEOUT,
+    "API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn": _LOAD_TIMEOUT,
 }
+# Files that load Town10HD_Opt with the default 5 s client timeout, like
+# test_spawn_vehicles: a load_world failure there is the same timeout.
+LOAD_TIMEOUT_FILES = {"API/test_spawn_vehicles.py", "API/test_spawn_walkers.py",
+                      "API/test_sensor_recording.py", "API/test_sensor_recording_fast.py",
+                      "API/test_no_rendering_mode.py"}
 # Scripts that do not terminate on their own (interactive, pygame loops).
 INTERACTIVE = {
     "test_raycast_sensor.py": "an interactive script (a pygame loop; the official module "
@@ -1157,43 +1243,76 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 """
 
 
+GAP_MODES = MODES + ("official",)
+
+
+def _cause(m: str, rel: str, tid: str, o: str, detail: str, official: dict) -> tuple[str, str]:
+    """The root cause of a failure in mode `m`, given the official module's results."""
+    key = f"{rel}::{tid}"
+    if key in UPSTREAM_STALE:
+        return "upstream", f"stale upstream test: {UPSTREAM_STALE[key]}"
+    if key in SERVER_ALSO_FAILS:
+        return "server", SERVER_ALSO_FAILS[key]
+    if rel in LOAD_TIMEOUT_FILES and "load_world" in detail:
+        return "server", _LOAD_TIMEOUT
+    if rel in INTERACTIVE:
+        return "infrastructure", INTERACTIVE[rel]
+    off = official.get(rel, {}).get("tests", {}).get(tid)
+    if m != "official" and off and off[0] in FAILURES and o != "compile":
+        cat, cause = root_cause("official", off[0], off[1])
+        return ("server" if cat == "server" else "upstream"), f"fails with the official module too: {cause}"
+    return root_cause(m, o, detail)
+
+
 def write_gaps(primary: str = "ue5-dev") -> Path:
     """GAPS.md from tests/upstream/results: every test, its outcome per mode,
     and the failures grouped by root cause (each group a candidate issue)."""
-    refs = sorted({p.stem for m in MODES for p in (RESULTS / m).glob("*.json")},
+    refs = sorted({p.stem for m in GAP_MODES for p in (RESULTS / m).glob("*.json")},
                   key=lambda r: (r != primary, r))
     lines = ["# typesafe_carla vs CARLA's own PythonAPI tests: gaps", "",
              "Generated by `python -m tools.upstream_tests --gaps` from",
              "`tests/upstream/results/`; do not edit. See tests/upstream/README.md.", "",
              "Modes: **cpython**, the unmodified tests under CPython with `import carla` =",
              "typesafe_carla through tools/pycarla (primary); **codon**, the tests compiled",
-             "with typesafe-codon. *not run*: no result recorded (e.g. needs a server).", "",
-             "## Summary", "", "| ref | mode | commit | pass | fail | skip | not run |",
-             "|---|---|---|---:|---:|---:|---:|"]
-    data = {(m, r): load_results(m, r) for m in MODES for r in refs}
+             "with typesafe-codon; **official**, CARLA's own module on the same server, for",
+             "comparison. A failure the official module shares is not a typesafe_carla gap.",
+             "*not run*: no result recorded (e.g. needs a server). Suite `ported`: tests",
+             "ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).", "",
+             "## Summary", "", "| ref | mode | suite | commit | pass | fail | skip | not run |",
+             "|---|---|---|---|---:|---:|---:|---:|"]
+    data = {(m, r): load_results(m, r) for m in GAP_MODES for r in refs}
+    # Excluded tests (and recorded results from before their exclusion) do
+    # not count: drop them.
+    for (m, r), d in data.items():
+        manifest = load_manifest("cpython" if m == "official" else m).get(r) or {}
+        for rel in list(d["files"]):
+            entry = manifest.get(rel)
+            if isinstance(entry, str) and parse_expectation(entry)[0] == "exclude":
+                del d["files"][rel]
+            elif isinstance(entry, dict):
+                tests = d["files"][rel]["tests"]
+                for tid in [t for t in tests if t in entry and parse_expectation(entry[t])[0] == "exclude"]:
+                    del tests[tid]
     for r in refs:
-        for m in MODES:
+        for m in GAP_MODES:
             d = data[(m, r)]
-            outs = [o for f in d["files"].values() for o, _ in f["tests"].values()]
-            lines.append(f"| {r} | {m} | {d.get('sha', '')[:10]} | {outs.count('pass')} | "
-                         f"{sum(o in FAILURES for o in outs)} | {outs.count('skip')} | "
-                         f"{outs.count('not-run')} |")
+            if not d["files"]:
+                continue
+            for suite in SUITES:
+                outs = [o for rel, f in d["files"].items() if suite_of(rel) == suite
+                        for o, _ in f["tests"].values()]
+                if outs:
+                    lines.append(f"| {r} | {m} | {suite} | {d.get('sha', '')[:10]} | {outs.count('pass')} | "
+                                 f"{sum(o in FAILURES for o in outs)} | {outs.count('skip')} | "
+                                 f"{outs.count('not-run')} |")
     for r in refs:
-        for m in MODES:
+        official = data[("official", r)]["files"]
+        for m in GAP_MODES:
             groups: dict[tuple[str, str], list[str]] = {}
             for rel, f in data[(m, r)]["files"].items():
                 for tid, (o, detail) in f["tests"].items():
                     if o in FAILURES:
-                        key = f"{rel}::{tid}"
-                        if m == "cpython" and key in UPSTREAM_STALE:
-                            cause = ("upstream", f"stale upstream test: {UPSTREAM_STALE[key]}")
-                        elif m == "cpython" and key in SERVER_ALSO_FAILS:
-                            cause = ("server", SERVER_ALSO_FAILS[key])
-                        elif rel in INTERACTIVE and m == "cpython":
-                            cause = ("infrastructure", INTERACTIVE[rel])
-                        else:
-                            cause = root_cause(m, o, detail)
-                        groups.setdefault(cause, []).append(f"{rel}::{tid}")
+                        groups.setdefault(_cause(m, rel, tid, o, detail, official), []).append(f"{rel}::{tid}")
             if not groups:
                 continue
             lines += ["", f"## Root causes: {r}, {m} mode", ""]
@@ -1208,28 +1327,41 @@ def write_gaps(primary: str = "ue5-dev") -> Path:
                     shown = ", ".join(f"`{t}`" for t in tests[:8]) + (f", +{len(tests) - 8} more" if len(tests) > 8 else "")
                     lines.append(f"- **{cause}**: {len(tests)} tests: {shown}")
                 lines.append("")
+    excluded = []
+    for r in refs:
+        for rel, entry in (load_manifest("cpython").get(r) or {}).items():
+            if isinstance(entry, str) and parse_expectation(entry)[0] == "exclude":
+                excluded.append((r, rel, "(all its tests)", parse_expectation(entry)[1]))
+            elif isinstance(entry, dict):
+                excluded += [(r, rel, t, parse_expectation(v)[1]) for t, v in entry.items()
+                             if parse_expectation(v)[0] == "exclude"]
+    if excluded:
+        lines += ["", "## Excluded from the target", "",
+                  "Not run, and not counted as failures (expectations.yaml `exclude:`).", "",
+                  "| ref | file | test | why |", "|---|---|---|---|"]
+        lines += [f"| {r} | `{rel}` | {t} | {why} |" for r, rel, t, why in excluded]
     lines += ["", "## Codon `--pyext` limitations (harness, not typesafe_carla gaps)", "", CODON_PYEXT_LIMITS]
     lines += ["## Infrastructure limits", "",
-              "- CI has no CARLA server: it runs only `unit`; `smoke`, `API` and the top-level",
-              "  files need `TSC_CARLA_PORT` (results here come from local runs).",
-              "- A test that also fails on its own ref's official Python API, or needs a",
-              "  server feature the test server lacks, is listed under its cause above; the",
-              "  0.10.0 server's limitations are those failing only in the 0.10.0 results.", ""]
+              "- CI has no CARLA server: it runs only `unit`; `smoke`, `API`, the top-level",
+              "  files and `ported` need `TSC_CARLA_PORT` (results here come from local runs).",
+              "- No ue5-dev package ships Town03, Town05(_Opt), Town01, Town11 or Town12: the",
+              "  tests needing them are excluded and ported (issue #80).", ""]
     for r in refs:
-        lines += [f"## Every test: {r}", "", "| test | cpython | codon | root cause (cpython, else codon) |",
-                  "|---|---|---|---|"]
-        files = sorted(set(data[("cpython", r)]["files"]) | set(data[("codon", r)]["files"]), key=_file_order)
+        lines += [f"## Every test: {r}", "", "| test | cpython | codon | official | root cause |",
+                  "|---|---|---|---|---|"]
+        official = data[("official", r)]["files"]
+        files = sorted(set().union(*(data[(m, r)]["files"] for m in GAP_MODES)), key=_file_order)
         for rel in files:
-            ids = list(dict.fromkeys(list(data[("cpython", r)]["files"].get(rel, {}).get("tests", {}))
-                                     + list(data[("codon", r)]["files"].get(rel, {}).get("tests", {}))))
+            ids = list(dict.fromkeys(t for m in GAP_MODES
+                                     for t in data[(m, r)]["files"].get(rel, {}).get("tests", {})))
             for tid in ids:
                 cells, cause = [], ""
-                for m in MODES:
+                for m in GAP_MODES:
                     o, detail = data[(m, r)]["files"].get(rel, {}).get("tests", {}).get(tid, ["not run", ""])
                     cells.append(o)
                     if not cause and o in FAILURES:
-                        cause = root_cause(m, o, detail)[1]
-                lines.append(f"| `{rel}::{tid}` | {cells[0]} | {cells[1]} | {cause.replace('|', '/')} |")
+                        cause = _cause(m, rel, tid, o, detail, official)[1]
+                lines.append(f"| `{rel}::{tid}` | {' | '.join(cells)} | {cause.replace('|', '/')} |")
         lines.append("")
     GAPS.write_text("\n".join(lines) + "\n")
     return GAPS
@@ -1259,19 +1391,23 @@ def _summary(mode: str, target: Target, rows: list[tuple[str, Check]], known_ref
 
 def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> tuple[list, bool]:
     """Runs `files` in one mode; returns (rows, known_ref)."""
-    manifest = load_manifest(mode)
-    known_ref = target.ref in manifest
+    # Official mode compares with CARLA's own module: no expectations, but the
+    # cpython ones decide what is excluded.
+    manifest = load_manifest("cpython" if mode == "official" else mode)
+    known_ref = target.ref in manifest and mode != "official"
     work = cache_root() / target.sha / "build"
     pydir = pycarla_dir() if mode == "cpython" else None
 
     def one(rel: str):
         entry = file_expectations(manifest, target.ref, rel)
         ids = discover(tests, rel) or [SCRIPT]
-        if isinstance(entry, str) and parse_expectation(entry)[0] == "skip":
+        if not_run(entry):
             return rel, None, entry, ids
         server = suite_of(rel) in SERVER_SUITES
-        if mode == "cpython":
-            return rel, run_file_cpython(tests, rel, pydir, skipped_ids(entry), server), entry, ids
+        if mode in ("cpython", "official"):
+            skip = skipped_ids(entry) if mode == "cpython" else {
+                t for t in skipped_ids(entry) if parse_expectation(entry[t])[0] == "exclude"}
+            return rel, run_file_cpython(tests, rel, pydir, skip, server), entry, ids
         return rel, run_file(tests, rel, work, skipped_ids(entry), server,
                              compile_only=args.compile_only), entry, ids
 
@@ -1280,7 +1416,7 @@ def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> 
     jobs = 1 if any(suite_of(f) in SERVER_SUITES for f in files) and not args.compile_only else args.jobs
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
         for rel, result, entry, ids in pool.map(one, files):
-            c = check(result, entry, ids)
+            c = check(result, entry if mode != "official" else None, ids)
             rows.append((rel, c))
             print(f"[{mode}] {rel}: {c.counts()}", flush=True)
             if result and (args.verbose or c.problems):
@@ -1292,10 +1428,11 @@ def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> 
                 print(f"  UNEXPECTED {p}")
             if result is not None:
                 results.append(result)
-                if args.update:
+                if args.update and mode != "official":
                     manifest.setdefault(target.ref, {})[rel] = updated_entry(result, entry)
     if args.update:
-        write_manifest(mode, manifest)
+        if mode != "official":
+            write_manifest(mode, manifest)
         record_results(mode, target, results)
         print(f"updated {MANIFEST.relative_to(ROOT)} and {results_path(mode, target.ref).relative_to(ROOT)}")
     return rows, known_ref
@@ -1303,9 +1440,10 @@ def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m tools.upstream_tests", description=__doc__.split("\n\n")[0])
-    parser.add_argument("--mode", choices=MODES + ("all",), default="cpython",
+    parser.add_argument("--mode", choices=MODES + ("all", "official"), default="cpython",
                         help="cpython: unmodified tests, carla = tools/pycarla (default); "
-                             "codon: converted and compiled with typesafe-codon; all: both")
+                             "codon: converted and compiled with typesafe-codon; all: both; "
+                             "official: CARLA's own module (TSC_UPSTREAM_PYTHON's), for comparison")
     parser.add_argument("--suite", action="append", choices=SUITES,
                         help="suite(s) to run (default: unit, plus smoke, API and top when TSC_CARLA_PORT is set)")
     parser.add_argument("--file", action="append", help="only these files (relative to PythonAPI/test)")
@@ -1326,7 +1464,9 @@ def main(argv: list[str] | None = None) -> int:
     suites = args.suite or (["unit"] + (list(SERVER_SUITES) if os.environ.get("TSC_CARLA_PORT") else []))
     if (any(s in SERVER_SUITES for s in suites) and not os.environ.get("TSC_CARLA_PORT")
             and not (args.compile_only and modes == ["codon"])):
-        parser.error("smoke, API and top need a CARLA server: set TSC_CARLA_PORT (and TSC_CARLA_HOST)")
+        parser.error("smoke, API, top and ported need a CARLA server: set TSC_CARLA_PORT (and TSC_CARLA_HOST)")
+    if "official" in modes and not os.environ.get("TSC_UPSTREAM_PYTHON"):
+        parser.error("official mode needs TSC_UPSTREAM_PYTHON: an interpreter with CARLA's carla module")
 
     target = resolve_target()
     tests = fetch_tests(target.sha)

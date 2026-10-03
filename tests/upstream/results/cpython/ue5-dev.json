@@ -216,7 +216,7 @@
    "tests": {
     "TestBlueprintLibrary.test_blueprint_ids": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -225,7 +225,7 @@
    "tests": {
     "TestClient.test_version": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -234,19 +234,19 @@
    "tests": {
     "TestCollisionDeterminism.test_two_cars": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestCollisionDeterminism.test_three_cars": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestCollisionDeterminism.test_car_bike": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestCollisionDeterminism.test_car_walker": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -255,7 +255,7 @@
    "tests": {
     "TestCollisionSensor.test_single_car": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -290,15 +290,15 @@
    "tests": {
     "TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels": [
      "error",
-     "AttributeError: 'SensorData' object has no attribute 'raw_data'"
+     "AttributeError: 'Image' object has no attribute 'raw_data'"
     ],
     "TestEncodingCameras.test_semantic_segmentation_emits_valid_labels": [
      "error",
-     "AttributeError: 'SensorData' object has no attribute 'raw_data'"
+     "AttributeError: 'Image' object has no attribute 'raw_data'"
     ],
     "TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids": [
      "error",
-     "AttributeError: 'SensorData' object has no attribute 'raw_data'"
+     "AttributeError: 'Image' object has no attribute 'raw_data'"
     ]
    }
   },
@@ -307,67 +307,67 @@
    "tests": {
     "TestGeoLocationConversion.test_geo_reference": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_geo_projection": [
      "error",
-     "NotImplementedError: pycarla: Map.get_geoprojection not wrapped: result type GeoProjection"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_location_to_geo_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_geo_to_location_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_zero_conversion": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_relative_offset_preserved": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_tm_location_to_geo_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_tm_geo_to_location_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_utm_north_location_to_geo_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_utm_north_geo_to_location_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_utm_south_location_to_geo_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_utm_south_geo_to_location_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_webmerc_location_to_geo_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_webmerc_geo_to_location_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_lcc_location_to_geo_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestGeoLocationConversion.test_lcc_geo_to_location_and_back": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -376,19 +376,19 @@
    "tests": {
     "TestSyncLidar.test_lidar_point_count": [
      "error",
-     "RuntimeError: 'SensorData' object has no attribute 'channels'"
+     "RuntimeError: 'LidarMeasurement' object is not iterable"
     ],
     "TestSyncLidar.test_semlidar_point_count": [
      "error",
-     "RuntimeError: 'SensorData' object has no attribute 'channels'"
+     "RuntimeError: 'SemanticLidarMeasurement' object is not iterable"
     ],
     "TestASyncLidar.test_lidar_point_count": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestASyncLidar.test_semlidar_point_count": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ],
     "TestCompareLidars.test_lidar_comparison": [
      "error",
@@ -454,7 +454,7 @@
    "tests": {
     "TestSensorTickTime.test_sensor_tick_time": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -472,7 +472,7 @@
    "tests": {
     "TestSpawnpoints.test_spawn_points": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -481,7 +481,7 @@
    "tests": {
     "TestStreamming.test_multistream": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -498,7 +498,7 @@
     ],
     "TestSynchronousMode.test_apply_batch_sync": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -506,8 +506,8 @@
    "file_error": null,
    "tests": {
     "TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans": [
-     "fail",
-     "AssertionError: unexpectedly None : could not spawn a large vehicle at any spawn point"
+     "pass",
+     ""
     ]
    }
   },
@@ -525,15 +525,15 @@
    "tests": {
     "TestV2X.test_custom_v2x_send_and_receive": [
      "error",
-     "AttributeError: 'SensorData' object has no attribute 'get_message_count'"
+     "NotImplementedError: pycarla: CustomV2XEvent.get_message_count not wrapped: self-typed generic method (Codon exporter)"
     ],
     "TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length": [
      "error",
-     "TypeError: could not find callable method 'CustomV2XBytes__set_bytes' for given arguments ['B_CustomV2XBytes', 'array'] []"
+     "RuntimeError: CustomV2XBytes.set_bytes must be in [0, 255], got 67305985"
     ],
     "TestV2X.test_v2x_cam_generation": [
      "error",
-     "AttributeError: 'SensorData' object has no attribute 'get_message_count'"
+     "NotImplementedError: pycarla: CAMEvent.get_message_count not wrapped: self-typed generic method (Codon exporter)"
     ],
     "TestV2X.test_v2i_infrastructure_sensor_without_owner": [
      "pass",
@@ -546,43 +546,43 @@
    "tests": {
     "TestApplyVehiclePhysics.test_single_physics_control": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
     "TestApplyVehiclePhysics.test_multiple_physics_control": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
     "TestVehicleFriction.test_vehicle_zero_friction": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
     "TestVehicleFriction.test_vehicle_friction_volume": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
     "TestVehicleFriction.test_vehicle_friction_values": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
     "TestVehicleTireConfig.test_vehicle_wheel_collision": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
     "TestVehicleTireConfig.test_vehicle_tire_long_stiff": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
     "TestStickyControl.test_default": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
     "TestStickyControl.test_true": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
     "TestStickyControl.test_false": [
      "error",
-     "AttributeError: module 'carla.command' has no attribute 'FutureActor'"
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ]
    }
   },
@@ -608,8 +608,8 @@
    "file_error": null,
    "tests": {
     "TestWalkerNavigation.test_walker_ai_controller_routes_without_crash": [
-     "error",
-     "AttributeError: 'Actor' object has no attribute 'stop'"
+     "pass",
+     ""
     ]
    }
   },
@@ -618,7 +618,7 @@
    "tests": {
     "TestWorld.test_fixed_delta_seconds": [
      "error",
-     "RuntimeError: tsc_client_load_world: std::exception"
+     "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
   },
@@ -645,7 +645,7 @@
    "tests": {
     "TestApplyTextures.test_apply_textures": [
      "error",
-     "RuntimeError: 'SensorData' object has no attribute 'convert'"
+     "RuntimeError: 'Image' object has no attribute 'frame'"
     ]
    }
   },
@@ -672,7 +672,7 @@
    "tests": {
     "TestSemanticSegmentation.test_semantic_segmentation": [
      "error",
-     "RuntimeError: 'SensorData' object has no attribute 'convert'"
+     "RuntimeError: 'Image' object has no attribute 'frame'"
     ]
    }
   },
@@ -781,7 +781,7 @@
    "tests": {
     "TestSyncMode.test_sync_mode_set_transform": [
      "fail",
-     "AssertionError: -64.64484405517578 != 291.0"
+     "AssertionError: -64.64484405517578 != 206.0"
     ]
    }
   },
@@ -807,8 +807,8 @@
    "file_error": null,
    "tests": {
     "<script>": [
-     "error",
-     "exit 1: RuntimeError: tsc_world_spawn_actor: std::exception"
+     "skip",
+     "an interactive script (a pygame loop; the official module also runs until the time-out)"
     ]
    }
   },

@@ -91,7 +91,7 @@ def _unwrap(v):
     if type(v) in (list, tuple):
         return type(v)(_unwrap(x) for x in v)
     if isinstance(v, (bytes, bytearray, memoryview)) or type(v).__name__ == "array":
-        return list(v)
+        return list(memoryview(v).cast("B"))  # a buffer's bytes, as CARLA's API reads it
     if isinstance(v, dict):
         return {k: _unwrap(x) for k, x in v.items()}
     if callable(v) and not isinstance(v, type):
@@ -107,8 +107,19 @@ def _call(fn, args, kwargs):
         # CPython type and arrive as plain BaseException; CARLA's Python API
         # raises RuntimeError.
         if type(e) is BaseException:
-            raise RuntimeError(str(e)) from None
+            raise RuntimeError(f"{e} [{_describe(fn, args, kwargs)}]") from None
         raise
+
+
+def _describe(fn, args, kwargs) -> str:
+    """`carla.Client.load_world('Town10HD_Opt')`: the call an error came from."""
+    name = getattr(fn, "name", "?")
+    cls, _, member = name.partition("__")
+    member = {"new": "__init__"}.get(member, member)
+    shown = [repr(a) if isinstance(a, (str, int, float, bool)) or a is None else type(a).__name__
+             for a in args[1:]] if member != "__init__" else [repr(a) for a in args]
+    shown += [f"{k}={v!r}" for k, v in kwargs.items() if isinstance(v, (str, int, float, bool))]
+    return f"carla.{cls}.{member}({', '.join(shown)})"
 
 
 def _stub(qualname: str, reason: str):

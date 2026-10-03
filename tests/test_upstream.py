@@ -68,7 +68,7 @@ def _run(request, mode: str, upstream, rel: str, record_property) -> up.Check:
     entry = up.file_expectations(manifest, target.ref, rel)
     ids = up.discover(tests, rel) or [up.SCRIPT]
     server = up.suite_of(rel) in up.SERVER_SUITES
-    if isinstance(entry, str) and up.parse_expectation(entry)[0] == "skip":
+    if up.not_run(entry):
         result = None
     elif mode == "cpython":
         result = up.run_file_cpython(tests, rel, request.getfixturevalue("pycarla"),
@@ -89,7 +89,8 @@ def _run(request, mode: str, upstream, rel: str, record_property) -> up.Check:
 def test_upstream(request, upstream, backend, mode, rel, record_property):
     _runnable(up.suite_of(rel), backend)
     target, tests, _ = upstream
-    if not (tests / rel).is_file():
+    root, inner = up.locate(tests, rel)
+    if not (root / inner).is_file():
         pytest.skip(f"not in CARLA {target.ref} @ {target.sha[:12]}")
     c = _run(request, mode, upstream, rel, record_property)
     if target.ref in MANIFESTS[mode]:
