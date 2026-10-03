@@ -518,12 +518,12 @@
    "file_error": null,
    "tests": {
     "TestCollision.test_collision_against_side_of_car": [
-     "error",
-     "RuntimeError: std::exception"
+     "fail",
+     "AssertionError: 0 == 0"
     ]
    },
    "traces": {
-    "TestCollision.test_collision_against_side_of_car": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/API/test_collision.py\", line 192, in test_collision_against_side_of_car\n    bp = bp_lib.filter(\"*mkz_2020*\")[0]\nRuntimeError: std::exception"
+    "TestCollision.test_collision_against_side_of_car": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/API/test_collision.py\", line 210, in test_collision_against_side_of_car\n    self.assertNotEqual(self.collisions, 0)\nAssertionError: 0 == 0"
    }
   },
   "ported/smoke/test_blueprint.py": {

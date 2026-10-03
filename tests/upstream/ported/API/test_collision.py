@@ -5,6 +5,7 @@
 #   - loads a shipped map instead of Town01, with a 60 s client timeout (the default 5 s was enough for Town01 on UE4; Town10HD_Opt takes ~8 s)
 #   - the walker and the vehicle behind it, on Town01's road at y = 199 heading +x, go through a MapFrame onto a straight road of the loaded map
 #   - blueprint *mkz_2020* (UE4) is vehicle.lincoln.mkz on ue5-dev (stale upstream id; Docs/catalogue_vehicles.md at the same commit)
+#   - upstream bug: the collision callback passes `self. event` (self.event, an AttributeError raised inside the callback), so no collision could ever be counted; it passes `event`
 #   - they spawn through MapFrame.spawn: a blocked spawn (UE4's flat-ground z) is retried 1 m higher, and the walker's further along the lane, the frame moving with it so the vehicle still starts 23 m behind it
 #
 
@@ -196,7 +197,7 @@ class TestCollision(unittest.TestCase):
 
         collision_bp = bp_lib.find('sensor.other.collision')
         sensor_collision = world.spawn_actor(collision_bp, carla.Transform(), attach_to=vehicle)
-        sensor_collision.listen(lambda event: self._on_collision(self. event))
+        sensor_collision.listen(lambda event: self._on_collision(event))
 
         vehicle.apply_control(carla.VehicleControl(throttle=1))
 

@@ -54,8 +54,8 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 
 ### the upstream test itself (fails with the official module too) (6 causes, 6 tests)
 
-- **fails with the official module too: RuntimeError: std::exception**: 1 tests: `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`
 - **fails with the official module too: a script that needs command-line arguments (API/Tests.md documents them)**: 1 tests: `API/spawn_actor.py::<script>`
+- **fails with the official module too: assertion: AssertionError: 0 == 0**: 1 tests: `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`
 - **fails with the official module too: error: exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu)**: 1 tests: `API/prop_control.py::<script>`
 - **fails with the official module too: test dependency `cv2` not installed in the test interpreter**: 1 tests: `test_ground_truth.py::<script>`
 - **fails with the official module too: the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
@@ -94,9 +94,10 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 
 ## Root causes: ue5-dev, official mode
 
-### behaviour differs (assertions, errors, crashes) (2 causes, 21 tests)
+### behaviour differs (assertions, errors, crashes) (3 causes, 21 tests)
 
-- **RuntimeError: std::exception**: 20 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +12 more
+- **RuntimeError: std::exception**: 19 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +11 more
+- **assertion: AssertionError: 0 == 0**: 1 tests: `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`
 - **error: exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu)**: 1 tests: `API/prop_control.py::<script>`
 
 ### the test server's content (maps, blueprints), not typesafe_carla (2 causes, 3 tests)
@@ -349,7 +350,7 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `test_connection.py::<script>` | pass | compile | pass | does not compile: no module named 'argparse' |
 | `test_ground_truth.py::<script>` | error | compile | error | fails with the official module too: test dependency `cv2` not installed in the test interpreter |
 | `test_raycast_sensor.py::<script>` | skip | compile | skip | an interactive script (a pygame loop; the official module also runs until the time-out) |
-| `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car` | error | compile | error | fails with the official module too: RuntimeError: std::exception |
+| `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car` | error | compile | fail | fails with the official module too: assertion: AssertionError: 0 == 0 |
 | `ported/smoke/test_client.py::TestClient.test_version` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_reference` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |

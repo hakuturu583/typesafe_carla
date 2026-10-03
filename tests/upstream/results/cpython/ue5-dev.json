@@ -826,11 +826,11 @@
    "tests": {
     "TestCollision.test_collision_against_side_of_car": [
      "error",
-     "IndexError: blueprint library index 0 out of range"
+     "RuntimeError: 'TestCollision' object has no attribute 'event' [carla.World.tick()]"
     ]
    },
    "traces": {
-    "TestCollision.test_collision_against_side_of_car": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/API/test_collision.py\", line 192, in test_collision_against_side_of_car\n    bp = bp_lib.filter(\"*mkz_2020*\")[0]\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 169, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 107, in _call\n    return _wrap(fn(*(_unwrap(a) for a in args), **{k: _unwrap(x) for k, x in kwargs.items()}))\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 52, in __call__\n    return f(*args, **kwargs)\nIndexError: blueprint library index 0 out of range"
+    "TestCollision.test_collision_against_side_of_car": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/API/test_collision.py\", line 204, in test_collision_against_side_of_car\n    world.tick()\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 169, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 113, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: 'TestCollision' object has no attribute 'event' [carla.World.tick()]"
    }
   },
   "ported/smoke/test_blueprint.py": {
