@@ -346,6 +346,8 @@ jobs:
       CARLA_GIT_REF: ${{ needs.resolve.outputs.carla_build_ref }}
       CARLA_COMMIT: ${{ needs.resolve.outputs.carla_commit }}
       CARLA_REF: ${{ needs.resolve.outputs.carla_ref }}
+      # Recorded in the wheel as its CARLA ref, next to the commit SHA.
+      CARLA_REF_NAME: ${{ needs.resolve.outputs.carla_ref }}
       # Shared by cibuildwheel and the cache key. cibuildwheel is pinned
       # exactly (and named in the key) because each release pins its own
       # manylinux image, i.e. its own compiler.
@@ -373,7 +375,12 @@ jobs:
           CIBW_ENVIRONMENT_PASS_LINUX: CARLA_GIT_REF
           CIBW_CONTAINER_ENGINE: "docker; create_args: --volume=${{ runner.temp }}/libcarla-build:/libcarla-build"
           CIBW_BEFORE_BUILD: bash {project}/tools/libcarla_cache_guard.sh /libcarla-build/wheel "$CARLA_GIT_REF"
-          CIBW_CONFIG_SETTINGS: cmake.define.TSC_BACKEND=libcarla build-dir=/libcarla-build/wheel
+          # The refs as -D, not only through the environment: a restored build
+          # directory's CMakeCache.txt would keep its own values otherwise.
+          CIBW_CONFIG_SETTINGS: >-
+            cmake.define.TSC_BACKEND=libcarla build-dir=/libcarla-build/wheel
+            cmake.define.TSC_CARLA_GIT_REF=${{ env.CARLA_GIT_REF }}
+            cmake.define.TSC_CARLA_REF_NAME=${{ env.CARLA_REF_NAME }}
           # cibuildwheel's own test install would resolve typesafe-carla-toolchain
           # from PyPI, which does not exist before the first release; the wheel
           # is checked in the next step instead, without dependencies.
@@ -392,7 +399,7 @@ jobs:
           python -m venv /tmp/check
           /tmp/check/bin/pip install --no-deps dist/*.whl
           cd /tmp && /tmp/check/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" \
-            --backend libcarla --carla-ref "$CARLA_GIT_REF" \
+            --backend libcarla --carla-ref "$CARLA_REF_NAME" \
             ${CARLA_COMMIT:+--carla-commit "$CARLA_COMMIT"}
       - uses: actions/upload-artifact@v4
         with: { name: dist-wheel, path: dist/*.whl }

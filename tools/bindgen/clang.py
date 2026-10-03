@@ -281,13 +281,21 @@ def _cache_var(build_dir: Path, name: str) -> str:
     return m.group(1) if m else "unknown"
 
 
+def _carla_ref(build_dir: Path) -> str:
+    """The CARLA ref `missing_in` is matched against: TSC_CARLA_REF_NAME (the
+    ref a commit SHA was resolved from, e.g. "0.10.0", as CI and releases
+    build), else TSC_CARLA_GIT_REF."""
+    name = _cache_var(build_dir, "TSC_CARLA_REF_NAME")
+    return name if name not in ("", "unknown") else _cache_var(build_dir, "TSC_CARLA_GIT_REF")
+
+
 def validate(spec: Spec, build_dir: Path) -> int:
     source, args = _shim_tu(build_dir)
     defs = _class_definitions(_parse(source, args, bodies=False))
     methods = {cls: _methods(defs, cls) for cls in spec.classes()}
     failures = []
     backend = _cache_var(build_dir, "TSC_BACKEND")
-    ref = _cache_var(build_dir, "TSC_CARLA_GIT_REF")
+    ref = _carla_ref(build_dir)
     for f in spec.functions:
         overloads = (_constructors(defs, f.cpp_class) if f.constructor
                      else methods[f.cpp_class].get(f.call, []))
@@ -455,7 +463,7 @@ def coverage(spec: Spec, build_dir: Path, output: Path | None) -> int:
     # and at (bindings/lists.yaml, through list_at).
     spec_calls = {f"{f.cpp_class}::{f.call}" for f in spec.functions}
     generated_calls = {key for key, gen in calls if gen}
-    ref = _cache_var(build_dir, "TSC_CARLA_GIT_REF")
+    ref = _carla_ref(build_dir)
 
     lines = ["# LibCarla API coverage", "",
              f"Which public methods of the main LibCarla client classes the C shim calls, "

@@ -80,7 +80,9 @@ A function has:
   raises TSC_ERROR naming `name` (e.g.
   `TrafficManager.global_large_vehicle_wide_turn`) where the method is
   missing. `validate` accepts the method missing only on a libcarla build
-  whose `TSC_CARLA_GIT_REF` is in `missing_in` (e.g. `["0.10.0"]`); the mock
+  whose recorded CARLA ref is in `missing_in` (e.g. `["0.10.0"]`): the ref
+  name `TSC_CARLA_REF_NAME` when it builds from a resolved SHA, as CI and
+  releases do, else `TSC_CARLA_GIT_REF`; the mock
   mirrors ue5-dev and must have it, so a misspelt `call` still fails. On those
   refs `validate` also accepts a method whose every overload takes fewer
   parameters than the spec passes (a type mismatch still fails), e.g. `replay_file_ex` (issue #36): 0.10.0's

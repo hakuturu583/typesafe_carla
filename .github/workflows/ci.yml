@@ -100,7 +100,11 @@ jobs:
           # defaults apply (the objects are kept; make decides what is stale).
           if [ "$HIT" = false ]; then rm -f build/CMakeCache.txt; fi
       - name: Configure (CARLA ${{ matrix.carla_ref }} @ ${{ steps.carla.outputs.sha }})
-        run: cmake -S . -B build -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF=${{ steps.carla.outputs.sha }}
+        # Built from the SHA; the ref name is what the build records (and
+        # what bindgen's `missing_in` matches).
+        run: >-
+          cmake -S . -B build -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF=${{ steps.carla.outputs.sha }}
+          -DTSC_CARLA_REF_NAME=${{ matrix.carla_ref }}
       - name: Build (cache ${{ steps.cache.outputs.cache-hit == 'true' && 'hit' || steps.cache.outputs.cache-hit == 'false' && 'partial hit' || 'miss' }})
         # A bare -j means unlimited jobs; LibCarla/Boost TUs need ~1-2 GB each.
         run: cmake --build build -j "$(nproc)" --target typesafe_carla_ffi test_ffi test_generated test_image_converter

@@ -228,6 +228,7 @@ latest `ue5-dev`; any branch, tag or commit SHA can be selected:
 | pip / uv build setting | `-C cmake.define.TSC_CARLA_GIT_REF=<ref>` |
 | local checkout | `CARLA_SOURCE_DIR=~/carla` or `-DTSC_CARLA_SOURCE_DIR=...` |
 | other repository (fork) | `-DTSC_CARLA_GIT_REPOSITORY=https://github.com/<you>/carla.git` |
+| ref name to record for a SHA | `-DTSC_CARLA_REF_NAME=ue5-dev` (or `CARLA_REF_NAME`) |
 
 Released wheels name their CARLA ref in the release tag,
 `<version>-<CARLA ref>-<YYYYMMDD>` (e.g. `0.1.0-ue5-dev-20260915`: `ue5-dev`
@@ -238,7 +239,10 @@ blob-filtered, sparse checkout (a few MB, not the multi-GB repository). A
 moving branch is re-fetched only on `-DTSC_CARLA_REFRESH=ON`. The ref and the
 resolved commit are compiled in: `typesafe-codon info`,
 `carla.libcarla_git_ref()` / `carla.libcarla_git_commit()` in Codon, and
-`_native/BUILD_INFO.json` in the wheel.
+`_native/BUILD_INFO.json` in the wheel. When the ref is a commit SHA resolved
+from a branch or tag (CI and releases build that way), `TSC_CARLA_REF_NAME`
+names that branch or tag, and it is what is recorded as the ref: e.g.
+`ue5-dev` with commit `1360bb9…`.
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|

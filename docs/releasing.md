@@ -146,9 +146,12 @@ SHA. UE4 refs (`0.9.x`, `ue4-dev`) are rejected.
   `carla.libcarla_git_commit()` in Codon;
 - `typesafe_carla/_native/BUILD_INFO.json` inside the wheel.
 
-Releases set `CARLA_GIT_REF` to the commit SHA resolved from the release tag
-(a dry run, to the current commit of its `carla_ref`), so for them the
-recorded ref and commit are both that SHA.
+Releases build from the commit SHA resolved from the release tag (a dry
+run, from the current commit of its `carla_ref`) and pass the ref itself as
+`TSC_CARLA_REF_NAME`, so a wheel records e.g. ref `ue5-dev` and commit
+`1360bb9…`; `tools/check_wheel.py --carla-ref <ref> --carla-commit <sha>`
+checks both. `tools.bindgen validate` matches `missing_in` against that ref
+name.
 
 ### LibCarla build cache
 
