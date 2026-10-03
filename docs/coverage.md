@@ -8,7 +8,7 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 - **hand-written**: called from a hand-written shim function
 - **—**: not bound yet
 
-**314 of 378 methods bound (83%), 217 of them generated.**
+**314 of 378 methods bound (83%), 221 of them generated.**
 
 | class | bound |
 |---|---|
@@ -354,13 +354,13 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 | `Filter` | generated |
 | `FilterByAttribute` | generated |
 | `Find` | hand-written |
-| `at` | hand-written |
+| `at` | generated |
 | `begin` | — |
 | `empty` | — |
 | `end` | — |
 | `operator=` | — |
 | `operator[]` | — |
-| `size` | hand-written |
+| `size` | generated |
 
 ### `carla::client::ActorBlueprint`
 
@@ -384,12 +384,12 @@ Regenerate with `uv run python -m tools.bindgen coverage --build-dir <build> -o 
 |---|---|
 | `Filter` | generated |
 | `Find` | — |
-| `at` | hand-written |
+| `at` | generated |
 | `begin` | — |
 | `empty` | — |
 | `end` | — |
 | `operator[]` | — |
-| `size` | hand-written |
+| `size` | generated |
 
 ### `carla::client::WorldSnapshot`
 
