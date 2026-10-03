@@ -297,8 +297,10 @@ CARLA_PYTHON=/path/to/venv-with-carla/bin/python uv run python tests/compatibili
 
 ### CARLA's own PythonAPI tests
 
-Every file of CARLA's test suite (`PythonAPI/test`: `unit`, `smoke`, `API`
-and the top-level files) runs against typesafe_carla, from the CARLA commit
+CARLA's test suite (`PythonAPI/test`: `unit`, `smoke`, `API` and the
+top-level files; the few that need a map no ue5-dev package ships run as
+ports under `tests/upstream/ported`, and interactive scripts are skipped)
+runs against typesafe_carla, from the CARLA commit
 the native library was built from, in two modes:
 
 - **cpython**: the tests run unmodified under CPython, with `import carla`

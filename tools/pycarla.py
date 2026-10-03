@@ -101,6 +101,13 @@ MEMORYVIEWS = ["RawData"]
 # int; the runtime turns `<x>=` into `<x>_id=` and an Actor into its id.
 # A target in OPTIONAL_TARGETS may also be left out (SpawnActor's parent).
 MISSING = "_MISSING"
+# Parameter names an exported function must not have: Codon's exporter
+# (wrap_multiple in python.codon) realizes the library call with the
+# wrapper's parameters in scope, and one named `type` shadows the builtin it
+# uses ("int takes 0 generics (1 given)", seen on LaneMarking(type, ...)).
+# The wrapper takes them with a trailing underscore; the runtime renames the
+# keyword (spec "renamed").
+SHADOWING = {"type": "type_"}
 TARGETS = {"actor_id": "actor", "parent_id": "parent"}
 OPTIONAL_TARGETS = {"parent_id"}
 # With more than this many defaulted generic parameters, each takes one
@@ -428,16 +435,16 @@ class Gen:
                 if p.name in TARGETS.values() and f"{p.name}_id" in names:
                     continue  # passed as <name>_id by the runtime
                 if p.name in TARGETS:
-                    present = [lst + [(p.name, "int", None)] for lst in lists]
+                    present = [lst + [(SHADOWING.get(p.name, p.name), "int", None)] for lst in lists]
                     lists = present + (lists if p.name in OPTIONAL_TARGETS else [])
                     continue
                 if p.ann is not None:
-                    lists = [lst + [(p.name, self.ty(p.ann), None)] for lst in lists]
+                    lists = [lst + [(SHADOWING.get(p.name, p.name), self.ty(p.ann), None)] for lst in lists]
                     continue
             d = None if p.default == MISSING else self.default(p.default, f.module)
             if p.ann is not None:
                 t = self.ty(p.ann)
-                lists = [lst + [(p.name, t, d)] for lst in lists]
+                lists = [lst + [(SHADOWING.get(p.name, p.name), t, d)] for lst in lists]
                 continue
             cands = GENERIC_PARAMS.get(p.name)
             if not cands:
@@ -449,7 +456,7 @@ class Gen:
                 else [c])]
             if d == "None" and n_defaulted > MAX_EXPANDED and cands[-1] != "pyobj":
                 general = "Vector3D" if "Vector3D" in cands else cands[-1]
-                lists = [lst + [(p.name, f"Optional[{self._cand(general)}]", "None")] for lst in lists]
+                lists = [lst + [(SHADOWING.get(p.name, p.name), f"Optional[{self._cand(general)}]", "None")] for lst in lists]
                 continue
             if d == "None" and "NoneType" not in cands:
                 # Left out: passed as None (the library's default), not by
@@ -457,7 +464,7 @@ class Gen:
                 cands = cands + ["NoneType"]
             # (None as Optional[NoneType]: the exporter's default for a bare
             # NoneType parameter fails to unpack.)
-            lists = [lst + [(p.name, {"pyobj": "pyobj", "NoneType": "Optional[NoneType]"}.get(c, self._cand(c)),
+            lists = [lst + [(SHADOWING.get(p.name, p.name), {"pyobj": "pyobj", "NoneType": "Optional[NoneType]"}.get(c, self._cand(c)),
                              "None" if c == "NoneType" else None)]
                      for lst in lists for c in cands]
         return lists
@@ -518,15 +525,17 @@ class Gen:
         parameters in order (a virtual method's dispatch thunk takes no
         keywords), by keyword after a left-out one."""
         out, i = [], 0
+        library_name = {v: k for k, v in SHADOWING.items()}
         for n, t, _ in params:
             # A Python callable reaches the library as a Codon callable.
             v = f"_PyCallback({n})" if t == "pyobj" else ("None" if t == "Optional[NoneType]" else n)
-            if i < len(f.params) and f.params[i].name == n:
+            name = library_name.get(n, n)
+            if i < len(f.params) and f.params[i].name == name:
                 out.append(v)
                 i += 1
             else:
                 i = len(f.params)
-                out.append(f"{n}={v}")
+                out.append(f"{name}={v}")
         return ", ".join(out)
 
     def api_of(self, cls: str) -> dict:
@@ -1053,7 +1062,40 @@ def _probe(out: Path, gen: Gen, shards: int, env: dict[str, str] | None) -> dict
     return found
 
 
-def compile_module(out: Path, env: dict[str, str] | None = None, log=print, shards: int = 4) -> Gen:
+# The compile errors a pruned variant may have: the library rejecting that
+# combination of argument types by design (its own compile-time checks). Any
+# other error fails the build instead of silently dropping API.
+PRUNABLE = (re.compile(r"does not match expected type"),
+            re.compile(r"takes exactly one argument"))
+
+
+def _check_prunable(key: str, msg: str) -> None:
+    if not any(p.search(msg) for p in PRUNABLE):
+        raise RuntimeError(f"pyext build: {key} does not compile, and not because the library rejects "
+                           f"that combination of argument types (a generator bug?): {msg}\n"
+                           f"(only errors matching {[p.pattern for p in PRUNABLE]} are pruned; "
+                           f"see {PRUNED})")
+
+
+# A probe compile of the whole module takes about this much memory.
+PROBE_GB = 8
+
+
+def probe_shards() -> int:
+    """Parallel probe compiles: PYCARLA_SHARDS, else as many as the available
+    memory holds (1 to 4; a 16 GB CI runner gets 1)."""
+    if os.environ.get("PYCARLA_SHARDS"):
+        return max(1, int(os.environ["PYCARLA_SHARDS"]))
+    try:
+        with open("/proc/meminfo") as f:
+            kb = next(int(ln.split()[1]) for ln in f if ln.startswith("MemAvailable:"))
+    except (OSError, StopIteration, ValueError):
+        return 1
+    return max(1, min(4, kb // (PROBE_GB * 1024 * 1024)))
+
+
+def compile_module(out: Path, env: dict[str, str] | None = None, log=print,
+                   shards: int | None = None) -> Gen:
     """Generates and compiles `_carla.o`, pruning variants that do not compile.
 
     An untyped library parameter is exported as one overload per type it may
@@ -1063,6 +1105,8 @@ def compile_module(out: Path, env: dict[str, str] | None = None, log=print, shar
     (sharded type checks find several per round).
     """
     pruned = json.loads(PRUNED.read_text()) if PRUNED.is_file() else {}
+    for key, msg in pruned.items():
+        _check_prunable(key, msg)
     obj = out / f"{MODULE}.o"
     for _ in range(200):
         source, gen = generate(out, pruned)
@@ -1076,11 +1120,12 @@ def compile_module(out: Path, env: dict[str, str] | None = None, log=print, shar
             if "" in culprits:
                 raise RuntimeError(f"pyext build failed in a shared definition:\n{culprits['']}")
             for key, msg in culprits.items():
+                _check_prunable(key, msg)
                 log(f"pycarla: pruned {key}: {msg}")
                 pruned[key] = msg
             PRUNED.write_text(json.dumps(pruned, indent=1, sort_keys=True) + "\n")
             _, gen = generate(out, pruned)
-            culprits = _probe(out, gen, shards, env)
+            culprits = _probe(out, gen, shards or probe_shards(), env)
     raise RuntimeError("pyext build: too many pruning rounds")
 
 
@@ -1096,6 +1141,7 @@ def write_package(pkg: Path, gen: Gen) -> None:
         "command_constants": inv.constants.get("command", {}),
         "exceptions": EXCEPTIONS,
         "memoryviews": [c for c in MEMORYVIEWS if c in gen.api],
+        "renamed": SHADOWING,
         "stubs": gen.stubs,
         "variants": gen.variant_names,
         "native_library": str(_native_library()),
@@ -1106,6 +1152,32 @@ def write_package(pkg: Path, gen: Gen) -> None:
     (pkg / "__init__.py").write_text(
         '"""carla: typesafe_carla as a CPython package (generated by tools/pycarla.py)."""\n'
         "from ._runtime import install as _install\n_install(globals())\ndel _install\n")
+
+
+STAMP = "stamp"  # in the output directory: source_stamp() of the build
+
+
+def source_stamp() -> str:
+    """What a build depends on: typesafe_carla's Codon sources, this
+    generator, the runtime, pruned.json and the Codon toolchain's version."""
+    import hashlib
+    from importlib import metadata
+
+    h = hashlib.sha256()
+    for p in sorted(PACKAGE.glob("*.codon")) + [Path(__file__), RUNTIME, PRUNED]:
+        h.update(p.name.encode() + b"\0" + (p.read_bytes() if p.is_file() else b"") + b"\0")
+    try:
+        h.update(metadata.version("typesafe-carla-toolchain").encode())
+    except metadata.PackageNotFoundError:
+        h.update(b"no toolchain package")
+    return h.hexdigest()
+
+
+def is_current(out: Path) -> bool:
+    """`out` holds a build of the current sources."""
+    stamp = out / STAMP
+    return (out / "carla" / f"{MODULE}.so").is_file() and stamp.is_file() \
+        and stamp.read_text().strip() == source_stamp()
 
 
 def build(out: Path, env: dict[str, str] | None = None) -> Path:
@@ -1121,6 +1193,7 @@ def build(out: Path, env: dict[str, str] | None = None) -> Path:
     link += [f"-L{d}" for d in libdirs] + ["-lcodonrt"] + [f"-Wl,-rpath,{d}" for d in libdirs]
     subprocess.run(link, check=True)
     write_package(pkg, gen)
+    (out / STAMP).write_text(source_stamp() + "\n")
     return out
 
 

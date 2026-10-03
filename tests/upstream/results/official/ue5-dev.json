@@ -19,7 +19,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "unit/test_client.py": {
    "file_error": null,
@@ -28,7 +30,9 @@
      "error",
      "subprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "unit/test_lidar_smoke_helpers.py": {
    "file_error": null,
@@ -37,7 +41,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "unit/test_numpy_compat.py": {
    "file_error": null,
@@ -54,7 +60,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "unit/test_transform.py": {
    "file_error": null,
@@ -171,7 +179,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "unit/test_vehicle.py": {
    "file_error": null,
@@ -188,7 +198,9 @@
      "error",
      "AttributeError: 'VehiclePhysicsControl' object has no attribute 'moi'"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_actor_introspection.py": {
    "file_error": null,
@@ -209,7 +221,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_debug_clear.py": {
    "file_error": null,
@@ -226,7 +240,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_encoding_cameras.py": {
    "file_error": null,
@@ -243,7 +259,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_recorder.py": {
    "file_error": null,
@@ -256,7 +274,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_replay_no_actor_aliasing.py": {
    "file_error": null,
@@ -265,7 +285,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_traffic_manager_large_vehicle.py": {
    "file_error": null,
@@ -274,7 +296,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_traffic_manager_sync_step.py": {
    "file_error": null,
@@ -283,7 +307,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_v2x.py": {
    "file_error": null,
@@ -304,7 +330,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_vehicle_telemetry.py": {
    "file_error": null,
@@ -313,7 +341,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_walker_bounding_box.py": {
    "file_error": null,
@@ -322,7 +352,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_walker_navigation.py": {
    "file_error": null,
@@ -331,7 +363,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/prop_control.py": {
    "file_error": null,
@@ -340,7 +374,9 @@
      "error",
      "exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu)"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/spawn_actor.py": {
    "file_error": null,
@@ -349,7 +385,9 @@
      "error",
      "exit 2: spawn_actor.py: error: the following arguments are required: -b/--blueprint"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_apply_textures.py": {
    "file_error": null,
@@ -358,7 +396,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_no_rendering_mode.py": {
    "file_error": null,
@@ -367,7 +407,9 @@
      "error",
      "RuntimeError: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_semantic_segmentation.py": {
    "file_error": null,
@@ -376,7 +418,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_sensor_recording.py": {
    "file_error": null,
@@ -417,7 +461,9 @@
      "error",
      "RuntimeError: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_sensor_recording_fast.py": {
    "file_error": null,
@@ -458,7 +504,9 @@
      "error",
      "RuntimeError: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_spawn_vehicles.py": {
    "file_error": null,
@@ -467,7 +515,9 @@
      "error",
      "RuntimeError: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_spawn_walkers.py": {
    "file_error": null,
@@ -476,7 +526,9 @@
      "error",
      "RuntimeError: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_sync_mode.py": {
    "file_error": null,
@@ -485,7 +537,9 @@
      "fail",
      "AssertionError: -64.64484405517578 != 68.0"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "test_connection.py": {
    "file_error": null,
@@ -494,7 +548,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "test_ground_truth.py": {
    "file_error": null,
@@ -503,7 +559,9 @@
      "error",
      "exit 1: ModuleNotFoundError: No module named 'cv2'"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "test_raycast_sensor.py": {
    "file_error": null,
@@ -512,7 +570,9 @@
      "skip",
      "an interactive script (a pygame loop; the official module also runs until the time-out)"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/API/test_collision.py": {
    "file_error": null,
@@ -521,11 +581,15 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_blueprint.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_client.py": {
    "file_error": null,
@@ -534,11 +598,15 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_collision_determinism.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_collision_sensor.py": {
    "file_error": null,
@@ -547,11 +615,15 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_determinism.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_geoconversion.py": {
    "file_error": null,
@@ -620,7 +692,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_lidar.py": {
    "file_error": null,
@@ -645,7 +719,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_map.py": {
    "file_error": null,
@@ -654,23 +730,33 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_props_loading.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_sensor_determinism.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_sensor_tick_time.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_snapshot.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_spawnpoints.py": {
    "file_error": null,
@@ -679,11 +765,15 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_streamming.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_sync.py": {
    "file_error": null,
@@ -696,7 +786,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_vehicle_physics.py": {
    "file_error": null,
@@ -721,7 +813,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_world.py": {
    "file_error": null,
@@ -730,7 +824,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/test_vehicle_physics.py": {
    "file_error": null,
@@ -739,10 +835,10 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   }
  },
- "ref": "ue5-dev",
- "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
- "backend": "libcarla"
+ "ref": "ue5-dev"
 }

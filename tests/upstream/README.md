@@ -25,9 +25,22 @@ modes, and groups the failures by root cause; each group is a candidate issue.
 
 A third mode, `--mode official`, runs any suite with CARLA's own `carla`
 module (`TSC_UPSTREAM_PYTHON`'s), every `carla.Client` redirected to the test
-server like the other modes. With `--update` its results go to
-`results/official/`, and GAPS.md attributes a failure the official module
-shares to the server or the upstream test, not to typesafe_carla.
+server like the other modes. It runs what the cpython manifest runs (not
+`skip:` or `exclude:` entries, nor the manifest's `official:` section). With
+`--update` its results go to `results/official/`, each file with the CARLA
+commit it ran, and GAPS.md attributes a failure the official module shares
+(the same outcome and exception) to the server or the upstream test, not to
+typesafe_carla. A failure where official passes, or fails differently, stays
+a typesafe_carla gap, with the official failure noted.
+
+A suite without expectations for the ref (e.g. 0.10.0's server suites,
+recorded in codon mode only; verification is primarily on ue5-dev) is
+report-only: its failures are shown, not failed on. `ported` is skipped for a
+ref without ported expectations.
+
+Before a server suite and after each server test, every mode resets the
+server (actors, synchronous mode; Codon mode with a small typesafe program).
+An unreachable server aborts the run.
 
 ## Running
 
@@ -93,7 +106,14 @@ codon:
     unit/test_client.py: "xfail: compile: ..."    # the whole module does not compile
     smoke/test_x.py:
       TestX.test_y: "skip: crashes the server"    # never run
+      TestX.test_z: "selfskip: needs numpy"       # run; expected to skip itself
+    ported/smoke/test_x.py:
+      TestX.test_w: "exclude: ..."                # not run, not part of the target
 ```
+
+`skip:` is for a test that must not run (a hang, an interactive script); a
+test that calls `skipTest` is recorded as `selfskip:` and keeps running.
+`exclude:` is only for the ported originals (below).
 
 ## Ported tests (issue #80)
 
@@ -127,11 +147,12 @@ python -m tools.port_upstream_tests --exclude-originals   # regenerate after a r
 ```
 
 A ported test that still fails with the official module after a reasonable
-port is not a yardstick for typesafe_carla. It is excluded in both modes, with
-the official failure quoted, when the server's content or physics is at fault
-(`CONTENT_LIMITS`, `NEEDS_RELOAD` in tools/port_upstream_tests.py). When the
-official module's own bindings are at fault (`OFFICIAL_DEFECTS`), it goes in
-the manifest's `official:` section instead: official runs leave it out, while
+port, because of the server's content or physics (`CONTENT_LIMITS`,
+`NEEDS_RELOAD` in tools/port_upstream_tests.py), stays measured: `xfail:` in
+the typesafe modes (`skip:` for the one that hangs intermittently, `FLAKY`),
+and official mode runs it, recording the official failure as the evidence.
+When the official module's own bindings are at fault (`OFFICIAL_DEFECTS`), it
+goes in the manifest's `official:` section: official runs leave it out,
 typesafe runs keep it, and GAPS.md lists it under "Not run with the official
 module". Failures record their last traceback frames and full message in
 `results/<mode>/<ref>.json` (`traces`), and `-v` prints them.

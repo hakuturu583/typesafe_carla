@@ -146,13 +146,36 @@ jobs:
       # its expectations are per CARLA ref, not per toolchain: it runs on one
       # OS per ref. The launcher comes from python/ and Codon from ./toolchain,
       # so the package's LibCarla is not built a second time.
+      # The pycarla build is cached, keyed by what it is generated from and the
+      # CARLA commit (outside build/, which the LibCarla cache saves).
+      - name: Restore the pycarla build
+        id: pycarla
+        if: matrix.os.runner == 'ubuntu-24.04'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/pycarla
+          key: pycarla-${{ runner.os }}-${{ runner.arch }}-${{ steps.carla.outputs.sha }}-${{ hashFiles('codon/**', 'tools/pycarla.py', 'compat/pycarla/**', 'toolchain/**') }}
       - name: CARLA PythonAPI unit tests (${{ matrix.carla_ref }}, ${{ matrix.os.runner == 'ubuntu-24.04' && 'cpython + codon' || 'codon' }})
         env:
           PYTHONPATH: python
           MODE: ${{ matrix.os.runner == 'ubuntu-24.04' && 'all' || 'codon' }}
+          TSC_PYCARLA_DIR: ${{ runner.temp }}/pycarla
         run: >-
           uv run --no-project --with ./toolchain --with pyyaml
           python -m tools.upstream_tests --mode "$MODE" --suite unit --summary "$GITHUB_STEP_SUMMARY"
+      # A variant the build had to prune (compat/pycarla/pruned.json) is API
+      # that disappeared: it must be reviewed and committed, not slip by.
+      - name: pycarla prunes nothing new
+        if: matrix.os.runner == 'ubuntu-24.04'
+        run: git diff --exit-code compat/pycarla/pruned.json
+      - name: Save the pycarla build
+        if: >-
+          matrix.os.runner == 'ubuntu-24.04' && github.event_name != 'pull_request'
+          && steps.pycarla.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/pycarla
+          key: ${{ steps.pycarla.outputs.cache-primary-key }}
       # A relocatable prefix of the LibCarla just built, which local builds
       # download instead of compiling LibCarla (TSC_CARLA_PREBUILT=auto,
       # tools/fetch_libcarla_prebuilt.py; docs/releasing.md, "LibCarla

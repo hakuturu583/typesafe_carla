@@ -19,7 +19,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "unit/test_client.py": {
    "file_error": null,
@@ -28,7 +30,9 @@
      "error",
      "subprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "unit/test_lidar_smoke_helpers.py": {
    "file_error": null,
@@ -37,7 +41,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "unit/test_numpy_compat.py": {
    "file_error": null,
@@ -54,7 +60,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "unit/test_transform.py": {
    "file_error": null,
@@ -171,7 +179,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "unit/test_vehicle.py": {
    "file_error": null,
@@ -188,7 +198,9 @@
      "error",
      "TypeError: could not find callable method 'WheelPhysicsControl__new' for given arguments [] ['max_steer_angle', 'radius', 'tire_friction']"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_actor_introspection.py": {
    "file_error": null,
@@ -209,7 +221,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_blueprint.py": {
    "file_error": null,
@@ -218,7 +232,9 @@
      "error",
      "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_client.py": {
    "file_error": null,
@@ -227,7 +243,9 @@
      "error",
      "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_collision_determinism.py": {
    "file_error": null,
@@ -248,7 +266,9 @@
      "error",
      "RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_collision_sensor.py": {
    "file_error": null,
@@ -257,7 +277,9 @@
      "error",
      "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_debug_clear.py": {
    "file_error": null,
@@ -274,7 +296,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_determinism.py": {
    "file_error": null,
@@ -283,7 +307,9 @@
      "error",
      "RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_encoding_cameras.py": {
    "file_error": null,
@@ -300,7 +326,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_geoconversion.py": {
    "file_error": null,
@@ -369,7 +397,9 @@
      "error",
      "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_lidar.py": {
    "file_error": null,
@@ -394,7 +424,9 @@
      "error",
      "_queue.Empty"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_map.py": {
    "file_error": null,
@@ -407,7 +439,9 @@
      "error",
      "RuntimeError: tsc_world_get_map: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_props_loading.py": {
    "file_error": null,
@@ -416,7 +450,9 @@
      "error",
      "RuntimeError: tsc_world_get_map: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_recorder.py": {
    "file_error": null,
@@ -429,7 +465,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_replay_no_actor_aliasing.py": {
    "file_error": null,
@@ -438,7 +476,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_sensor_determinism.py": {
    "file_error": null,
@@ -447,7 +487,9 @@
      "error",
      "RuntimeError: tsc_client_reload_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_sensor_tick_time.py": {
    "file_error": null,
@@ -456,7 +498,9 @@
      "error",
      "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_snapshot.py": {
    "file_error": null,
@@ -465,7 +509,9 @@
      "error",
      "RuntimeError: tsc_client_reload_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_spawnpoints.py": {
    "file_error": null,
@@ -474,7 +520,9 @@
      "error",
      "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_streamming.py": {
    "file_error": null,
@@ -483,7 +531,9 @@
      "error",
      "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_sync.py": {
    "file_error": null,
@@ -500,7 +550,9 @@
      "error",
      "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_traffic_manager_large_vehicle.py": {
    "file_error": null,
@@ -509,7 +561,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_traffic_manager_sync_step.py": {
    "file_error": null,
@@ -518,7 +572,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_v2x.py": {
    "file_error": null,
@@ -539,7 +595,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_vehicle_physics.py": {
    "file_error": null,
@@ -584,7 +642,9 @@
      "error",
      "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_vehicle_telemetry.py": {
    "file_error": null,
@@ -593,7 +653,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_walker_bounding_box.py": {
    "file_error": null,
@@ -602,7 +664,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_walker_navigation.py": {
    "file_error": null,
@@ -611,7 +675,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "smoke/test_world.py": {
    "file_error": null,
@@ -620,7 +686,9 @@
      "error",
      "in tearDown: RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/prop_control.py": {
    "file_error": null,
@@ -629,7 +697,9 @@
      "error",
      "exit 1: IndexError: tsc_actor_blueprint_set_attribute: blueprint 'sensor.camera.rgb' has no attribute 'chromatic_aberration_intensity'"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/spawn_actor.py": {
    "file_error": null,
@@ -638,7 +708,9 @@
      "error",
      "exit 2: spawn_actor.py: error: the following arguments are required: -b/--blueprint"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_apply_textures.py": {
    "file_error": null,
@@ -647,7 +719,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_collision.py": {
    "file_error": null,
@@ -656,7 +730,9 @@
      "error",
      "RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_no_rendering_mode.py": {
    "file_error": null,
@@ -665,7 +741,9 @@
      "error",
      "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_semantic_segmentation.py": {
    "file_error": null,
@@ -674,7 +752,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_sensor_recording.py": {
    "file_error": null,
@@ -715,7 +795,9 @@
      "error",
      "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_sensor_recording_fast.py": {
    "file_error": null,
@@ -756,7 +838,9 @@
      "error",
      "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_spawn_vehicles.py": {
    "file_error": null,
@@ -765,7 +849,9 @@
      "error",
      "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_spawn_walkers.py": {
    "file_error": null,
@@ -774,7 +860,9 @@
      "error",
      "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "API/test_sync_mode.py": {
    "file_error": null,
@@ -783,7 +871,9 @@
      "fail",
      "AssertionError: -64.64484405517578 != 75.0"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "test_connection.py": {
    "file_error": null,
@@ -792,7 +882,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "test_ground_truth.py": {
    "file_error": null,
@@ -801,7 +893,9 @@
      "error",
      "exit 1: ModuleNotFoundError: No module named 'cv2'"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "test_raycast_sensor.py": {
    "file_error": null,
@@ -810,7 +904,9 @@
      "skip",
      "an interactive script (a pygame loop; the official module also runs until the time-out)"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "test_vehicle_physics.py": {
    "file_error": null,
@@ -819,7 +915,9 @@
      "error",
      "exit 1: RuntimeError: tsc_client_load_world: std::exception"
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/API/test_collision.py": {
    "file_error": null,
@@ -828,11 +926,15 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_blueprint.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_client.py": {
    "file_error": null,
@@ -841,11 +943,15 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_collision_determinism.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_collision_sensor.py": {
    "file_error": null,
@@ -854,11 +960,15 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_determinism.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_geoconversion.py": {
    "file_error": null,
@@ -932,7 +1042,9 @@
     "TestGeoLocationConversion.test_utm_south_location_to_geo_and_back": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 184, in test_utm_south_location_to_geo_and_back\n    self._assert_location_close(loc, loc2)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 33, in _assert_location_close\n    self.assertAlmostEqual(a.y, b.y, delta=tol)\nAssertionError: 8444444.444444444 != 8444444.0 within 0.1 delta (0.4444444440305233 difference)",
     "TestGeoLocationConversion.test_webmerc_location_to_geo_and_back": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 208, in test_webmerc_location_to_geo_and_back\n    self._assert_location_close(loc, loc2)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 32, in _assert_location_close\n    self.assertAlmostEqual(a.x, b.x, delta=tol)\nAssertionError: -15555555.555555556 != -15555556.0 within 0.1 delta (0.4444444440305233 difference)",
     "TestGeoLocationConversion.test_lcc_location_to_geo_and_back": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 232, in test_lcc_location_to_geo_and_back\n    self._assert_location_close(loc, loc2)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 33, in _assert_location_close\n    self.assertAlmostEqual(a.y, b.y, delta=tol)\nAssertionError: 5333333.333333333 != 5333333.5 within 0.1 delta (0.16666666697710752 difference)"
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_lidar.py": {
    "file_error": null,
@@ -960,7 +1072,9 @@
    },
    "traces": {
     "TestCompareLidars.test_lidar_comparison": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_lidar.py\", line 221, in test_lidar_comparison\n    data = sensor_queue.get(True, 10.0)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/queue.py\", line 179, in get\n    raise Empty\n_queue.Empty"
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_map.py": {
    "file_error": null,
@@ -969,23 +1083,33 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_props_loading.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_sensor_determinism.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_sensor_tick_time.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_snapshot.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_spawnpoints.py": {
    "file_error": null,
@@ -994,11 +1118,15 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_streamming.py": {
    "file_error": null,
-   "tests": {}
+   "tests": {},
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_sync.py": {
    "file_error": null,
@@ -1011,7 +1139,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_vehicle_physics.py": {
    "file_error": null,
@@ -1053,7 +1183,9 @@
     "TestStickyControl.test_default": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
     "TestStickyControl.test_true": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
     "TestStickyControl.test_false": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/smoke/test_world.py": {
    "file_error": null,
@@ -1062,7 +1194,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   },
   "ported/test_vehicle_physics.py": {
    "file_error": null,
@@ -1071,10 +1205,10 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla"
   }
  },
- "ref": "ue5-dev",
- "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
- "backend": "libcarla"
+ "ref": "ue5-dev"
 }

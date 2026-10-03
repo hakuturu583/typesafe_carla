@@ -23,6 +23,7 @@ import enum
 import json
 import os
 import sys
+import traceback
 import types
 from pathlib import Path
 
@@ -98,13 +99,31 @@ def _unwrap(v):
     if isinstance(v, dict):
         return {k: _unwrap(x) for k, x in v.items()}
     if callable(v) and not isinstance(v, type):
-        return lambda *a: _unwrap(v(*(_wrap(x) for x in a)))
+        return _callback(v)
     return v
+
+
+def _callback(fn):
+    """A Python callable as the extension calls it (a sensor's listen, ...).
+    As in CARLA's Python API, an exception in it is printed and the callback
+    returns None: it must not escape into typesafe_carla's dispatch (and out of
+    world.tick())."""
+    def callback(*args):
+        try:
+            return _unwrap(fn(*(_wrap(x) for x in args)))
+        except Exception:
+            traceback.print_exc()
+            return None
+    return callback
+
+
+_RENAMED = _SPEC.get("renamed", {})  # keyword -> the exported parameter's name
 
 
 def _call(fn, args, kwargs):
     try:
-        return _wrap(fn(*(_unwrap(a) for a in args), **{k: _unwrap(x) for k, x in kwargs.items()}))
+        return _wrap(fn(*(_unwrap(a) for a in args),
+                        **{_RENAMED.get(k, k): _unwrap(x) for k, x in kwargs.items()}))
     except BaseException as e:
         # typesafe_carla's errors (CarlaError, TimeoutError, ...) have no
         # CPython type and arrive as plain BaseException; CARLA's Python API
@@ -238,7 +257,9 @@ def _make_class(name: str, spec: dict, bases: tuple) -> type:
             ns[key] = _method(name, key, entry)
     ns.update(spec.get("constants", {}))
     if "__eq__" in ns and "__hash__" not in ns:
-        ns["__hash__"] = None
+        # Python would make the class unhashable; CARLA's (Boost.Python)
+        # classes stay hashable by identity.
+        ns["__hash__"] = object.__hash__
     return type(name, bases, ns)
 
 

@@ -7,7 +7,9 @@
      "error",
      "subprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
     ]
-   }
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
   },
   "unit/test_transform.py": {
    "file_error": null,
@@ -56,7 +58,9 @@
      "pass",
      ""
     ]
-   }
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
   },
   "unit/test_vehicle.py": {
    "file_error": null,
@@ -73,10 +77,10 @@
      "error",
      "TypeError: could not find callable method 'WheelPhysicsControl__new' for given arguments [] ['max_steer_angle', 'radius', 'tire_friction']"
     ]
-   }
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
   }
  },
- "ref": "0.10.0",
- "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
- "backend": "libcarla"
+ "ref": "0.10.0"
 }

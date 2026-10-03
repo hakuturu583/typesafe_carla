@@ -456,6 +456,11 @@ CONTENT_LIMITS = {
 }
 
 
+# Of CONTENT_LIMITS, the tests that hang only sometimes: `skip:` (an xfail
+# would flip between pass and failure from run to run).
+FLAKY = {("smoke/test_streamming.py", "TestStreamming.test_multistream")}
+
+
 # Ported tests the official module cannot run because of its own defects
 # (expectations.yaml `official:`): official runs leave them out, typesafe
 # runs keep them (typesafe_carla is just not compared with it there).
@@ -469,14 +474,18 @@ OFFICIAL_DEFECTS = {
 
 
 def exclude_originals(refs=("ue5-dev",)) -> None:
-    """Marks the ported originals `exclude:` in tests/upstream/expectations.yaml,
-    and the ported tests that need reload_world."""
+    """Writes tests/upstream/expectations.yaml's entries for the port: the
+    ported originals `exclude:` (not run; issue #80). The ported tests that a
+    server limit fails (NEEDS_RELOAD, CONTENT_LIMITS) stay measured: `xfail:`
+    in the typesafe modes (`skip:` where FLAKY), run by official mode, which
+    records the official failure as the evidence."""
     from tools import upstream_tests as up
 
-    reload = ("exclude: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE "
+    reload = ("xfail: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE "
               "parse error; the official module too)")
     ported_excludes = [{rel: {t: reload for t in tests} for rel, tests in NEEDS_RELOAD.items()},
-                       {rel: {t: f"exclude: {why}" for t, why in tests.items()}
+                       {rel: {t: f"{'skip' if (rel, t) in FLAKY else 'xfail'}: {why}"
+                              for t, why in tests.items()}
                         for rel, tests in CONTENT_LIMITS.items()}]
     for mode in up.MODES:
         manifest = up.load_manifest(mode)

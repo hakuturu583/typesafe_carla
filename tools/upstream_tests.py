@@ -137,6 +137,9 @@ def resolve_target() -> Target:
     info = paths.native_info()
     backend = info.get("backend", "")
     override = os.environ.get("TSC_UPSTREAM_REF", "")
+    if override and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", override):
+        # It names result files (results/<mode>/<ref>.json) and git refs.
+        raise SystemExit(f"TSC_UPSTREAM_REF={override!r}: not a ref name (letters, digits, . _ -)")
     if backend == "libcarla":
         built_ref = info.get("carla_git_ref", "")
         commit = info.get("carla_git_commit", "")
@@ -451,12 +454,20 @@ def _last_line(stderr: str) -> str:
 
 def _execute(cmd: list[str], cwd: Path, timeout: float,
              env: dict[str, str] | None = None) -> subprocess.CompletedProcess | None:
-    """Runs one test process; None if it timed out."""
-    try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd,
-                              env=env, errors="replace")
-    except subprocess.TimeoutExpired:
-        return None
+    """Runs one test process; None if it timed out. The process gets its own
+    session, and a time-out kills the whole group (a script's children too)."""
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=cwd,
+                          env=env, errors="replace", start_new_session=True) as proc:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.communicate()
+            return None
+    return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
 
 
 def _timed_out(test_id: str, timeout: float) -> TestResult:
@@ -464,7 +475,10 @@ def _timed_out(test_id: str, timeout: float) -> TestResult:
 
 
 def _signal(returncode: int) -> str:
-    return signal.Signals(-returncode).name
+    try:
+        return signal.Signals(-returncode).name
+    except ValueError:
+        return f"signal {-returncode}"
 
 
 def _build(source: Path, exe: Path) -> subprocess.CompletedProcess:
@@ -534,7 +548,10 @@ def run_file(tests: Path, rel: str, work: Path, skip: set[str] = frozenset(),
     exe = out_dir / Path(rel).stem
     timeout = _timeout(timeout, server)
     if not discovered:
-        return _run_script_codon(result, module, modules, source, exe, out_dir, timeout, compile_only)
+        result = _run_script_codon(result, module, modules, source, exe, out_dir, timeout, compile_only)
+        if server and not compile_only and not result.file_error:
+            _server_cleanup(out_dir, None, _codon_cleanup(work))
+        return result
     # A test that does not compile is dropped from the runner until the rest compiles.
     compile_errors: dict[str, str] = {}
     included = list(ids)
@@ -561,6 +578,8 @@ def run_file(tests: Path, rel: str, work: Path, skip: set[str] = frozenset(),
             result.tests.append(TestResult(test_id, "not-run"))
         else:
             result.tests.append(_run_one(exe, test_id, timeout, out_dir))
+            if server:
+                _server_cleanup(out_dir, None, _codon_cleanup(work))
     return result
 
 
@@ -668,7 +687,7 @@ def last(tb):
     import re
     lines = [l for l in tb.strip().splitlines() if l.strip()]
     for i in range(len(lines) - 1, -1, -1):
-        if re.match(r"^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt|Warning)\b", lines[i]):
+        if re.match(r"%(EXC_LINE)s", lines[i]):
             return lines[i]
     return lines[-1] if lines else ""
 def trace(tb):
@@ -692,7 +711,10 @@ print("TSC-RESULT " + json.dumps(out), flush=True)
 """
 # How much of a failure's traceback the results keep (TestResult.trace).
 TRACE_FRAMES, TRACE_CHARS = 4, 4000
-_DRIVER = _DRIVER.replace("%(FRAMES)d", str(TRACE_FRAMES)).replace("%(CHARS)d", str(TRACE_CHARS))
+# An exception's line in a traceback (the driver's last() and _script_outcome).
+EXC_LINE = r"^[A-Za-z_][\w.]*(?:Error|Exception|Exit|Interrupt|Warning|Empty)\b"
+_DRIVER = (_DRIVER.replace("%(FRAMES)d", str(TRACE_FRAMES)).replace("%(CHARS)d", str(TRACE_CHARS))
+           .replace("%(EXC_LINE)s", EXC_LINE))
 
 
 def _trace(text: str) -> str:
@@ -719,7 +741,11 @@ else:
     carla = importlib.util.module_from_spec(spec); sys.modules["carla"] = carla; spec.loader.exec_module(carla)
     client = carla.Client("127.0.0.1", 2000)  # redirected to the test server
 client.set_timeout(30.0)
-world = client.get_world()
+try:
+    world = client.get_world()
+except Exception as e:
+    print(f"cleanup: server unreachable: {e}", file=sys.stderr)
+    sys.exit(%(UNREACHABLE)d)
 try:
     client.get_trafficmanager().set_synchronous_mode(False)
 except Exception:
@@ -740,12 +766,75 @@ print(f"cleanup: destroyed {gone} actors")
 """
 
 
-def _server_cleanup(tests: Path, env: dict[str, str]) -> None:
+# _CLEANUP's exit status when it cannot reach the server.
+CLEANUP_UNREACHABLE = 3
+_CLEANUP = _CLEANUP.replace("%(UNREACHABLE)d", str(CLEANUP_UNREACHABLE))
+
+# The same clean-up for Codon mode, which has no CPython `carla`: a typesafe
+# program, built once per work directory.
+_CLEANUP_CODON = """\
+import sys
+import typesafe_carla as carla
+client = carla.Client(%(HOST)s, %(PORT)d)
+client.set_timeout(30.0)
+try:
+    w = client.get_world()
+except:
+    print("cleanup: server unreachable", file=sys.stderr)
+    sys.exit(%(UNREACHABLE)d)
+try:
+    client.get_trafficmanager().set_synchronous_mode(False)
+except:
+    pass
+settings = w.get_settings()
+if settings.synchronous_mode:
+    settings.synchronous_mode = False
+    w.apply_settings(settings)
+gone = 0
+for actor in w.get_actors():
+    if actor.type_id.split(".")[0] in ("vehicle", "walker", "sensor", "controller", "static"):
+        try:
+            actor.destroy()
+            gone += 1
+        except:
+            pass
+print("cleanup: destroyed " + str(gone) + " actors")
+"""
+
+
+def _codon_cleanup(work: Path) -> list[str]:
+    """The command of Codon mode's clean-up program (built if it changed)."""
+    source = work / "tsc_cleanup.codon"
+    exe = work / "tsc_cleanup"
+    text = (_CLEANUP_CODON.replace("%(HOST)s", _codon_str(os.environ.get("TSC_CARLA_HOST", "localhost")))
+            .replace("%(PORT)d", str(int(os.environ.get("TSC_CARLA_PORT", "2000"))))
+            .replace("%(UNREACHABLE)d", str(CLEANUP_UNREACHABLE)))
+    if not exe.is_file() or not source.is_file() or source.read_text() != text:
+        work.mkdir(parents=True, exist_ok=True)
+        source.write_text(text)
+        build = _build(source, exe)
+        if build.returncode != 0:
+            raise SystemExit(f"upstream tests: the Codon clean-up program does not build:\n{build.stderr}")
+    return [str(exe)]
+
+
+def _server_cleanup(cwd: Path, env: dict[str, str] | None, cmd: list[str] | None = None) -> None:
+    """Resets the server after a test (actors, synchronous mode): `cmd` runs
+    the clean-up (default: _CLEANUP under the test interpreter). A failure is
+    reported; an unreachable server aborts the run rather than letting every
+    remaining test time out."""
+    cmd = cmd or [_python(), "-c", _CLEANUP]
     try:
-        subprocess.run([_python(), "-c", _CLEANUP], cwd=tests, env=env, capture_output=True,
-                       text=True, timeout=120)
+        proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=120,
+                              errors="replace")
     except subprocess.TimeoutExpired:
-        pass
+        print("  cleanup: timed out after 120 s", flush=True)
+        return
+    if proc.returncode == CLEANUP_UNREACHABLE:
+        raise SystemExit(f"upstream tests: the CARLA server is unreachable ({_first_line(proc.stderr)}); "
+                         "aborting the run")
+    if proc.returncode != 0:
+        print(f"  cleanup failed (exit {proc.returncode}): {_last_line(proc.stderr)}", flush=True)
 
 
 def pycarla_dir(build: bool = True) -> Path | None:
@@ -756,8 +845,7 @@ def pycarla_dir(build: bool = True) -> Path | None:
     explicit = os.environ.get("TSC_PYCARLA_DIR")
     out = Path(explicit).resolve() if explicit else pycarla.default_out()
     so = out / "carla" / f"{pycarla.MODULE}.so"
-    sources = [*pycarla.PACKAGE.glob("*.codon"), Path(pycarla.__file__), pycarla.RUNTIME]
-    if not so.is_file() or so.stat().st_mtime < max(p.stat().st_mtime for p in sources):
+    if not pycarla.is_current(out):  # sources, pruned.json or toolchain changed (pycarla.STAMP)
         if explicit and so.is_file():
             return out
         if not build:
@@ -860,8 +948,9 @@ def _script_outcome(proc: subprocess.CompletedProcess) -> TestResult:
         return TestResult(SCRIPT, "pass")
     if proc.returncode < 0:
         return TestResult(SCRIPT, "crash", _signal(proc.returncode))
+    # The exception line, not other output after it (a WARNING from LibCarla).
     lines = [ln for ln in proc.stderr.strip().splitlines() if ln.strip()]
-    detail = next((ln for ln in reversed(lines) if not ln.startswith(" ")), lines[-1] if lines else "")
+    detail = next((ln for ln in reversed(lines) if re.match(EXC_LINE, ln)), lines[-1] if lines else "")
     return TestResult(SCRIPT, "error", _shorten(f"exit {proc.returncode}: {detail}"), _trace(proc.stderr))
 
 
@@ -901,18 +990,28 @@ def run_manifest(mode: str, path: Path = MANIFEST) -> dict:
 
 
 def parse_expectation(value) -> tuple[str, str]:
-    """('pass' | 'xfail' | 'skip' | 'exclude', reason). `exclude`: not run and
-    not part of the target, e.g. a test ported to tests/upstream/ported."""
+    """('pass' | 'xfail' | 'skip' | 'selfskip' | 'exclude', reason).
+    `skip`: not run (a hang, an interactive script). `selfskip`: run, and
+    expected to skip itself (unittest's skipTest; so it is still checked).
+    `exclude`: not run and not part of the target, e.g. a test ported to
+    tests/upstream/ported."""
     text = str(value).strip()
     kind, _, reason = text.partition(":")
     kind = kind.strip()
-    if kind not in ("pass", "xfail", "skip", "exclude"):
+    if kind not in ("pass", "xfail", "skip", "selfskip", "exclude"):
         raise ValueError(f"bad expectation {value!r}: use pass, 'xfail: <reason>', "
-                         "'skip: <reason>' or 'exclude: <reason>'")
+                         "'skip: <reason>', 'selfskip: <reason>' or 'exclude: <reason>'")
     return kind, reason.strip()
 
 
 NOT_RUN = ("skip", "exclude")  # expectation kinds whose tests are not run
+
+
+def known_suites(manifest: dict, ref: str) -> set[str]:
+    """The suites `manifest` has expectations for at `ref`. A suite without is
+    report-only: its failures are shown, not failed on (e.g. 0.10.0's server
+    suites, recorded in codon mode only)."""
+    return {suite_of(rel) for rel in manifest.get(ref) or {}}
 
 
 def kind_of(value) -> str:
@@ -989,7 +1088,12 @@ def check(result: FileResult | None, entry, ids: list[str] | None = None) -> Che
         elif t.outcome == "not-run":
             pass
         elif t.outcome == "skip":
-            c.problems.append(f"{t.id}: skipped itself ({t.detail}); record it as skip")
+            if kind == "selfskip":
+                c.skipped += 1
+            else:
+                c.problems.append(f"{t.id}: skipped itself ({t.detail}); record it as selfskip")
+        elif kind == "selfskip":
+            c.problems.append(f"{t.id}: unexpected {t.outcome} (expected to skip itself: {reason})")
         elif kind == "pass" and t.outcome == "pass":
             c.passed += 1
         elif kind == "xfail" and t.outcome in FAILURES:
@@ -1026,8 +1130,8 @@ def updated_entry(result: FileResult, entry):
                 new[t.id] = prev
         elif t.outcome == "pass":
             new[t.id] = "pass"
-        elif t.outcome == "skip":
-            new[t.id] = f"skip: {t.detail}"
+        elif t.outcome == "skip":  # still run: it may stop skipping itself
+            new[t.id] = f"selfskip: {t.detail}"
         elif prev_kind == "xfail":
             new[t.id] = prev
         else:
@@ -1044,9 +1148,14 @@ _MANIFEST_HEADER = """\
 #
 #   <mode: cpython | codon>:
 #     <CARLA ref>:
-#       <file>.py: "xfail: <reason>" | "skip: <reason>"     # the whole file
+#       <file>.py: "xfail: <reason>" | "skip: <reason>" | "exclude: <reason>"  # the whole file
 #       <file>.py:
 #         <Class>.<test_method> | <script>: pass | "xfail: <reason>" | "skip: <reason>"
+#             | "selfskip: <reason>" | "exclude: <reason>"
+#
+# skip: not run (a hang, an interactive script). selfskip: run, expected to
+# skip itself. exclude: not run and not part of the target (the ported
+# originals, tests/upstream/ported).
 #
 # cpython: the unmodified tests under CPython, `import carla` = tools/pycarla.
 # codon: the tests converted and compiled with typesafe-codon.
@@ -1092,9 +1201,17 @@ def load_results(mode: str, ref: str) -> dict:
 def record_results(mode: str, target: Target, results: list[FileResult]) -> None:
     """Merges a run's per-test outcomes into tests/upstream/results/<mode>/<ref>.json."""
     data = load_results(mode, target.ref)
-    data.update({"ref": target.ref, "sha": target.sha, "backend": target.backend})
+    # Each file keeps the CARLA commit and backend it ran with: a later run of
+    # other files must not relabel it. (Files recorded before this kept them
+    # only at the top level.)
+    old = {"sha": data.pop("sha", None), "backend": data.pop("backend", None)}
+    for f in data["files"].values():
+        for k, v in old.items():
+            if v is not None:
+                f.setdefault(k, v)
+    data["ref"] = target.ref
     for r in results:
-        data["files"][r.path] = {"file_error": r.file_error,
+        data["files"][r.path] = {"sha": target.sha, "backend": target.backend, "file_error": r.file_error,
                                  "tests": {t.id: [t.outcome, t.detail] for t in r.tests}}
         traces = {t.id: t.trace for t in r.tests if t.trace}
         if traces:  # failures' last frames and full messages, for diagnosis
@@ -1206,7 +1323,8 @@ INTERACTIVE = {
 KNOWN_ISSUES = [
     (r"_f__\w+' for given arguments \['B_(?:Vehicle|Walker|WalkerAIController|Actor|Sensor|TrafficLight|TrafficSign)'", 76),
     (r"unsupported operand type\(s\) for [+-]: '(?:Location|Vector3D)' and '(?:Location|Vector3D)'", 77),
-    (r"raw_data", 78),
+    # raw_data was a method, not the buffer property CARLA's API has.
+    (r"a bytes-like object is required, not 'method'", 78),
     (r"has no attribute 'ApplyVehiclePhysicsControl'", 79),
     (r"'CustomV2XMessage' object is not subscriptable", 85),
     # Sensor callbacks run only at typesafe_carla's dispatch points, so a test
@@ -1308,8 +1426,24 @@ GAP_MODES = MODES + ("official",)
 
 
 def _cause(m: str, rel: str, tid: str, o: str, detail: str, official: dict) -> tuple[str, str]:
-    """The root cause of a failure in mode `m`, given the official module's results."""
+    """The root cause of a failure in mode `m`, given the official module's results.
+
+    The static rules (stale upstream, server limits) and "fails with the
+    official module too" apply only where the official module fails the same
+    way, or has no result. A typesafe failure where official passes, or fails
+    differently (another exception), keeps typesafe's own cause, with the
+    official failure noted.
+    """
     key = f"{rel}::{tid}"
+    off = official.get(rel, {}).get("tests", {}).get(tid) if m != "official" else None
+    if o == "compile":  # Codon-direct: the harness's limit, whatever official does
+        return root_cause(m, o, detail)
+    if off and off[0] not in FAILURES:
+        return root_cause(m, o, detail)  # official passes (or skips): typesafe's own
+    if off and not _same_failure(o, detail, off[0], off[1]):
+        cat, cause = root_cause(m, o, detail)
+        _, off_cause = root_cause("official", off[0], off[1])
+        return cat, f"{cause} (official also fails, differently: {off_cause})"
     if key in UPSTREAM_STALE:
         return "upstream", f"stale upstream test: {UPSTREAM_STALE[key]}"
     if key in SERVER_ALSO_FAILS:
@@ -1318,11 +1452,29 @@ def _cause(m: str, rel: str, tid: str, o: str, detail: str, official: dict) -> t
         return "server", _LOAD_TIMEOUT
     if rel in INTERACTIVE:
         return "infrastructure", INTERACTIVE[rel]
-    off = official.get(rel, {}).get("tests", {}).get(tid)
-    if m != "official" and off and off[0] in FAILURES and o != "compile":
+    if off:
         cat, cause = root_cause("official", off[0], off[1])
         return ("server" if cat == "server" else "upstream"), f"fails with the official module too: {cause}"
     return root_cause(m, o, detail)
+
+
+# typesafe_carla's Codon exceptions, as the Python API names them.
+_PYTHON_EXCEPTION = {"CarlaError": "RuntimeError", "TimeoutError": "RuntimeError"}
+
+
+def _failure_kind(outcome: str, detail: str) -> str:
+    """What a failure is, for comparing two modes: the outcome, and for an
+    error its exception class ('error ?' when the message names none)."""
+    if outcome != "error":
+        return outcome
+    exc = re.search(r"\b(\w+(?:Error|Exception|Exit)|_?queue\.Empty)\b", detail)
+    return f"error {_PYTHON_EXCEPTION.get(exc[1], exc[1]) if exc else '?'}"
+
+
+def _same_failure(o: str, detail: str, off_o: str, off_detail: str) -> bool:
+    mine, theirs = _failure_kind(o, detail), _failure_kind(off_o, off_detail)
+    return mine == theirs or "error ?" in (mine, theirs) and mine.startswith("error") \
+        and theirs.startswith("error")
 
 
 _GAPS_INTRO = """\
@@ -1370,10 +1522,11 @@ def _gaps_summary(refs: list[str], data: dict) -> list[str]:
         for m in GAP_MODES:
             d = data[(m, r)]
             for suite in SUITES:
-                outs = [o for rel, f in d["files"].items() if suite_of(rel) == suite
-                        for o, _ in f["tests"].values()]
+                files = [f for rel, f in d["files"].items() if suite_of(rel) == suite]
+                outs = [o for f in files for o, _ in f["tests"].values()]
+                shas = ", ".join(sorted({(f.get("sha") or d.get("sha") or "?")[:10] for f in files}))
                 if outs:
-                    lines.append(f"| {r} | {m} | {suite} | {d.get('sha', '')[:10]} | {outs.count('pass')} | "
+                    lines.append(f"| {r} | {m} | {suite} | {shas} | {outs.count('pass')} | "
                                  f"{sum(o in FAILURES for o in outs)} | {outs.count('skip')} | "
                                  f"{outs.count('not-run')} |")
     return lines
@@ -1476,27 +1629,32 @@ def write_gaps(primary: str = "ue5-dev") -> Path:
 # Command line (CI)
 # ---------------------------------------------------------------------------
 
-def _summary(mode: str, target: Target, rows: list[tuple[str, Check]], known_ref: bool) -> str:
+def _report_only(rows: list[tuple[str, Check]], known: set[str], ref: str) -> str:
+    unknown = sorted({suite_of(rel) for rel, _ in rows} - known, key=SUITES.index)
+    return f" (no expectations for {ref} in {', '.join(unknown)}: report only)" if unknown else ""
+
+
+def _summary(mode: str, target: Target, rows: list[tuple[str, Check]], known: set[str]) -> str:
     total = Check(sum(c.passed for _, c in rows), sum(c.xfailed for _, c in rows),
-                  sum(c.skipped for _, c in rows),
+                  sum(c.skipped for _, c in rows), sum(c.excluded for _, c in rows),
                   problems=[p for _, c in rows for p in c.problems])
     lines = [f"### CARLA PythonAPI tests vs typesafe_carla ({mode} mode): "
              f"{target.ref} @ {target.sha[:12]} ({target.backend})",
-             "", f"**{total.counts()}**" + ("" if known_ref else f" (no expectations for {target.ref}: report only)"),
-             "", "| file | pass | xfail | skip | unexpected |", "|---|---:|---:|---:|---:|"]
+             "", f"**{total.counts()}**" + _report_only(rows, known, target.ref),
+             "", "| file | pass | xfail | skip | excluded | unexpected |", "|---|---:|---:|---:|---:|---:|"]
     for rel, c in rows:
-        lines.append(f"| {rel} | {c.passed} | {c.xfailed} | {c.skipped} | {len(c.problems)} |")
+        lines.append(f"| {rel} | {c.passed} | {c.xfailed} | {c.skipped} | {c.excluded} | {len(c.problems)} |")
     if total.problems:
         lines += ["", "Unexpected:", ""] + [f"- {p}" for p in total.problems]
     return "\n".join(lines) + "\n"
 
 
-def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> tuple[list, bool]:
-    """Runs `files` in one mode; returns (rows, known_ref)."""
+def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> tuple[list, set[str]]:
+    """Runs `files` in one mode; returns (rows, the suites with expectations)."""
     # Official mode compares with CARLA's own module: no expectations, but the
     # cpython ones decide what is excluded.
     manifest = run_manifest(mode)
-    known_ref = target.ref in manifest and mode != "official"
+    known = known_suites(manifest, target.ref) if mode != "official" else set()
     work = cache_root() / target.sha / "build"
     pydir = pycarla_dir() if mode == "cpython" else None
 
@@ -1507,11 +1665,19 @@ def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> 
             return rel, None, entry, ids
         server = suite_of(rel) in SERVER_SUITES
         if mode in ("cpython", "official"):
-            skip = skipped_ids(entry, NOT_RUN if mode == "cpython" else ("exclude",))
+            # Official mode leaves out what the typesafe modes leave out
+            # (skip: a hang or an interactive script, exclude:).
+            skip = skipped_ids(entry, NOT_RUN)
             return rel, run_file_cpython(tests, rel, pydir, skip, server), entry, ids
         return rel, run_file(tests, rel, work, skipped_ids(entry), server,
                              compile_only=args.compile_only), entry, ids
 
+    if any(suite_of(f) in SERVER_SUITES for f in files) and not args.compile_only:
+        # Fail fast on an unreachable server (and start from a clean one).
+        if mode == "codon":
+            _server_cleanup(tests, None, _codon_cleanup(work))
+        else:
+            _server_cleanup(tests, _cpython_env(pydir, True))
     rows, results = [], []
     # Server tests share one server: one file at a time.
     jobs = 1 if any(suite_of(f) in SERVER_SUITES for f in files) and not args.compile_only else args.jobs
@@ -1540,7 +1706,7 @@ def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> 
             write_manifest(mode, manifest)
         record_results(mode, target, results)
         print(f"updated {MANIFEST.relative_to(ROOT)} and {results_path(mode, target.ref).relative_to(ROOT)}")
-    return rows, known_ref
+    return rows, known
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1575,17 +1741,22 @@ def main(argv: list[str] | None = None) -> int:
 
     target = resolve_target()
     tests = fetch_tests(target.sha)
+    ported = {suite_of(rel) for m in MODES for rel in load_manifest(m).get(target.ref) or {}}
+    if "ported" in suites and "ported" not in ported:
+        print(f"ported: skipped, no ported expectations for {target.ref} (the ports target ue5-dev's maps)")
+        suites = [s for s in suites if s != "ported"]
     files = [rel for s in suites for rel in test_files(tests, s)
              if not args.file or rel in args.file]
     print(f"CARLA {target.ref} @ {target.sha} ({target.backend}): {len(files)} files", flush=True)
     failed = False
     for mode in modes:
-        rows, known_ref = run_mode(mode, target, tests, files, args)
-        text = _summary(mode, target, rows, known_ref)
+        rows, known = run_mode(mode, target, tests, files, args)
+        text = _summary(mode, target, rows, known)
         if args.summary:
             with open(args.summary, "a") as f:
                 f.write(text)
-        failed |= known_ref and not args.update and not args.compile_only and any(c.problems for _, c in rows)
+        failed |= not args.update and not args.compile_only and any(
+            c.problems for rel, c in rows if suite_of(rel) in known)
     if args.update:
         print(write_gaps())
     return 1 if failed else 0
