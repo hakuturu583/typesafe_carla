@@ -732,6 +732,21 @@ SharedPtr<ActorList> World::GetActors() const {
   return std::make_shared<ActorList>(std::move(actors));
 }
 
+// Like LibCarla (Episode::GetActorsById over CachedActorList): in request
+// order, repeated ids repeated, unknown ids left out.
+SharedPtr<ActorList> World::GetActors(const std::vector<rpc::ActorId> &actor_ids) const {
+  std::vector<mock::ActorData> snapshot;
+  {
+    std::lock_guard<std::mutex> lock(_episode->mutex);
+    for (rpc::ActorId id : actor_ids) {
+      if (const mock::ActorData *known = _episode->KnownLocked(id)) snapshot.push_back(*known);
+    }
+  }
+  std::vector<SharedPtr<Actor>> actors;
+  for (const auto &data : snapshot) actors.push_back(mock::MakeActor(_episode, data));
+  return std::make_shared<ActorList>(std::move(actors));
+}
+
 SharedPtr<Actor> World::GetActor(rpc::ActorId id) const {
   mock::ActorData data;
   {

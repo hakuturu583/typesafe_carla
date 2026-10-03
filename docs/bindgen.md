@@ -38,7 +38,11 @@ is such a value.
 `string_list` (output) is a `tsc_string_list_t`, filled by `string_list_assign`
 and freed with `tsc_string_list_free`. Arrays cross with `c_param` as a
 pointer and a count (`location_path`, `road_option_route`: `const T *{name},
-size_t count`); NULL is accepted for a count of 0.
+size_t count`); NULL is accepted for a count of 0. Plain integer arrays use
+`uint32_array` (e.g. actor ids, `World::GetActors(actor_ids)`) and
+`uint64_array` (environment object ids); both convert with the
+`to_vector<T>` template in `internal.hpp`, so another width needs only a
+new entry in `types.yaml`.
 
 Each remaining file binds one LibCarla class:
 
