@@ -26,6 +26,14 @@
 
 #define TSC_MOCK_LIBCARLA 1
 
+// Mock-only test hooks (not in ffi.h; exported by the mock build only, as
+// tsc_* symbols): what the shim last passed to LibCarla where the server has
+// nothing to read it back. Tests declare them themselves.
+#define TSC_MOCK_HOOK extern "C" __attribute__((visibility("default")))
+TSC_MOCK_HOOK size_t tsc_mock_last_worker_threads(void);  // Client(host, port, worker_threads)
+TSC_MOCK_HOOK uint16_t tsc_mock_last_map_layers(void);    // LoadWorld / LoadWorldIfDifferent
+#undef TSC_MOCK_HOOK
+
 namespace carla {
 
 template <typename T>
@@ -346,7 +354,7 @@ using TextureFloatColor = Texture<FloatColor>;
 
 enum class ActorAttributeType : uint8_t { Bool, Int, Float, String, RGBColor, SIZE, INVALID };
 
-enum class AttachmentType { Rigid, SpringArm, SpringArmGhost };
+enum class AttachmentType : uint8_t { Rigid, SpringArm, SpringArmGhost, SIZE, INVALID };
 
 enum class MapLayer : uint16_t { None = 0, All = 0xFFFF };
 
@@ -1287,12 +1295,10 @@ class World {
   SharedPtr<Actor> GetActor(rpc::ActorId id) const;
   SharedPtr<Actor> SpawnActor(const ActorBlueprint &blueprint, const geom::Transform &transform,
                               Actor *parent = nullptr,
-                              rpc::AttachmentType attachment_type = rpc::AttachmentType::Rigid,
-                              const std::string &socket_name = "");
+                              rpc::AttachmentType attachment_type = rpc::AttachmentType::Rigid);
   SharedPtr<Actor> TrySpawnActor(const ActorBlueprint &blueprint,
                                  const geom::Transform &transform, Actor *parent = nullptr,
-                                 rpc::AttachmentType attachment_type = rpc::AttachmentType::Rigid,
-                                 const std::string &socket_name = "") noexcept;
+                                 rpc::AttachmentType attachment_type = rpc::AttachmentType::Rigid) noexcept;
   uint64_t Tick(time_duration timeout);
   SharedPtr<Map> GetMap() const;
   WorldSnapshot GetSnapshot() const;

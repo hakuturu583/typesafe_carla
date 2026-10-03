@@ -406,6 +406,13 @@ try:
     out("actor_parent", str(int(vehicle.parent is None)) + "," +
         str(int(cam.parent.id == vehicle.id)) + "," + str(sorted(cam.semantic_tags)))
     cam.destroy()
+    # Issue #34: attachment_type.
+    arms = [world.spawn_actor(cam_bp, carla.Transform(carla.Location(-5.0, 0.0, 3.0)),
+                              attach_to=vehicle, attachment_type=kind)
+            for kind in [carla.AttachmentType.SpringArm, carla.AttachmentType.SpringArmGhost]]
+    out("attachment_type", ",".join([str(int(unwrap(a.parent).id == vehicle.id)) for a in arms]))
+    for a in arms:
+        a.destroy()
     signs = [a.as_traffic_sign() for a in world.get_actors() if a.is_traffic_sign()]
     plain = sorted(set([a.type_id for a in signs if not a.is_traffic_light()]))
     out("traffic_signs", str(len(signs)) + "," + "|".join(plain))

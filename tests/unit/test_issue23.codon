@@ -209,7 +209,7 @@ assert vel.length() == carla.Vector3D(1.0, 2.0, 3.0).length() and str(vel).start
 assert carla.AngularVelocity(carla.Vector3D(1.0, 0.0, 0.0)).x == 1.0
 assert carla.Acceleration(0.0, 0.0, -9.8).z == -9.8
 vehicle.set_target_velocity(vel)  # a Velocity is a Vector3D
-assert carla.AttachmentType.Rigid == 0 and carla.AttachmentType.SpringArmGhost == 2
+assert int(carla.AttachmentType.Rigid) == 0 and int(carla.AttachmentType.SpringArmGhost) == 2
 assert carla.GBufferTextureID.SceneColor == 0 and carla.GBufferTextureID.CustomStencil == 12
 
 print("OK")

@@ -134,8 +134,8 @@ struct tsc_handle {
 
 struct tsc_client : tsc_handle {
   carla::client::Client client;
-  tsc_client(const std::string &host, uint16_t port)
-      : tsc_handle(TSC_KIND_CLIENT), client(host, port) {}
+  tsc_client(const std::string &host, uint16_t port, size_t worker_threads)
+      : tsc_handle(TSC_KIND_CLIENT), client(host, port, worker_threads) {}
 };
 
 struct tsc_world : tsc_handle {

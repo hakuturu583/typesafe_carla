@@ -76,7 +76,7 @@ int main(void) {
   expect_null_rejected(tsc_client_get_client_version(NULL, (tsc_string_t[1]){0}), "tsc_client_get_client_version");
   expect_null_rejected(tsc_client_get_server_version(NULL, (tsc_string_t[1]){0}), "tsc_client_get_server_version");
   expect_null_rejected(tsc_client_get_world(NULL, (tsc_world_t *[1]){NULL}), "tsc_client_get_world");
-  expect_null_rejected(tsc_client_load_world(NULL, NULL, 1, 0, (tsc_world_t *[1]){NULL}), "tsc_client_load_world");
+  expect_null_rejected(tsc_client_load_world(NULL, NULL, 1, 0, 0, (tsc_world_t *[1]){NULL}), "tsc_client_load_world");
   expect_null_rejected(tsc_client_reload_world(NULL, 0, (tsc_world_t *[1]){NULL}), "tsc_client_reload_world");
   expect_null_rejected(tsc_client_start_recorder(NULL, NULL, 1, 0, (tsc_string_t[1]){0}), "tsc_client_start_recorder");
   expect_null_rejected(tsc_client_stop_recorder(NULL), "tsc_client_stop_recorder");
@@ -223,8 +223,8 @@ int main(void) {
   expect_null_rejected(tsc_world_get_actors(NULL, (tsc_actor_list_t *[1]){NULL}), "tsc_world_get_actors");
   expect_null_rejected(tsc_world_get_actors_by_id(NULL, NULL, 1, (tsc_actor_list_t *[1]){NULL}), "tsc_world_get_actors_by_id");
   expect_null_rejected(tsc_world_get_blueprint_library(NULL, (tsc_blueprint_library_t *[1]){NULL}), "tsc_world_get_blueprint_library");
-  expect_null_rejected(tsc_world_spawn_actor(NULL, NULL, NULL, NULL, (tsc_actor_t *[1]){NULL}), "tsc_world_spawn_actor");
-  expect_null_rejected(tsc_world_try_spawn_actor(NULL, NULL, NULL, NULL, (tsc_actor_t *[1]){NULL}), "tsc_world_try_spawn_actor");
+  expect_null_rejected(tsc_world_spawn_actor(NULL, NULL, NULL, NULL, 99, (tsc_actor_t *[1]){NULL}), "tsc_world_spawn_actor");
+  expect_null_rejected(tsc_world_try_spawn_actor(NULL, NULL, NULL, NULL, 99, (tsc_actor_t *[1]){NULL}), "tsc_world_try_spawn_actor");
   expect_null_rejected(tsc_world_tick(NULL, NAN, (uint64_t[1]){0}), "tsc_world_tick");
   expect_null_rejected(tsc_world_get_snapshot(NULL, (tsc_world_snapshot_t *[1]){NULL}), "tsc_world_get_snapshot");
   expect_null_rejected(tsc_world_wait_for_tick(NULL, NAN, (tsc_world_snapshot_t *[1]){NULL}), "tsc_world_wait_for_tick");
