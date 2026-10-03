@@ -93,7 +93,21 @@ def test_vector2d():
     a /= 2
     assert a is not alias and a.x == 1.5 and alias.x == 3.0
 
+def test_equality():
+    # Results compare with #70's == (float32, as LibCarla), as the official
+    # module's do: each of these is True there.
+    V, L = carla.Vector3D, carla.Location
+    assert V(0.1, 0.2, 0.3) + V(0.7, 0.0, 0.0) == V(0.8, 0.2, 0.3)
+    assert L(1.0, 2.0, 3.0) + V(0.5, 0.5, 0.5) == L(1.5, 2.5, 3.5)
+    assert not ((L(1.0, 2.0, 3.0) - L(1.0, 2.0, 3.0)) != V())
+    assert V(0.1, 0.0, 0.0) * 3 == V(0.3, 0.0, 0.0)
+    assert carla.Vector2D(0.1, 0.2) + carla.Vector2D(0.2, 0.1) == carla.Vector2D(0.3, 0.3)
+    l = L(0.1, 0.0, 0.0)
+    l += V(0.2, 0.0, 0.0)
+    assert l == L(0.3, 0.0, 0.0)
+
 test_binary()
+test_equality()
 test_in_place()
 test_vector2d()
 print("OK")
