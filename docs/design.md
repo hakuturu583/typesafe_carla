@@ -672,9 +672,10 @@ Implemented views (issue #24 added the last four): `Image` (BGRA bytes),
 `_ArrayMeasurement[T]`: `len`, indexing and iteration convert one element at a
 time into the Python API's element class; the `raw_data` property (a
 read-only `RawData` view, as the Python API's memoryview) and
-`raw_data_ptr()` / `raw_size()` expose the bytes. `Image.convert` changes the buffer in place, as in the Python API,
-and so does assigning an element (`image[i] = color`, issue #33): each
-subclass's `_element` converts the Python-API element back into `T`.
+`raw_data_ptr()` / `raw_size()` expose the bytes. `Image.convert` changes the
+buffer in place, as in the Python API, and so does assigning an element
+(`image[i] = color`, issue #33): each subclass's `_element` converts the
+Python-API element back into `T`.
 
 The V2X events of issue #42 (`CAMEvent`, `CustomV2XEvent`, LibCarla ue5-dev
 only) are not views: LibCarla's `CAMData` is a large struct with

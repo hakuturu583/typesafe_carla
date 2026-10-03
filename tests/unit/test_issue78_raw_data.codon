@@ -34,17 +34,11 @@ def next_data(s: carla.Sensor) -> carla.SensorData:
 
 def matches(view: carla.RawData, ptr: Ptr[u8], n: int) -> bool:
     """Every access path of the view agrees with the pointer API."""
-    if len(view) != n or view.nbytes != n or not view.readonly:
-        return False
-    for i in range(n):
-        if view[i] != int(ptr[i]):
-            return False
-    if [b for b in view] != [int(ptr[i]) for i in range(n)] or view.tolist() != [b for b in view]:
-        return False
+    expected = [int(ptr[i]) for i in range(n)]
     copy = view.tobytes()
-    if len(copy) != n or str(view) != copy or not (view == copy) or view != view[:]:
-        return False
-    return all(int(copy.ptr[i]) == int(ptr[i]) for i in range(n))
+    return (len(view) == n and view.nbytes == n and view.readonly and
+            [view[i] for i in range(n)] == expected and view.tolist() == expected and
+            len(copy) == n and view == copy and str(view) == copy and view == view[:])
 
 image = next_data(spawn("sensor.camera.rgb", 4, 3)).as_image()
 assert matches(image.raw_data, image.raw_data_ptr(), 48) and image.raw_size() == 48

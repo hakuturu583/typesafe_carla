@@ -571,22 +571,20 @@ Deliberate differences, all in favour of static checking:
   - `raw_data` is a property, as in the Python API (issue #78), on `Image`,
     `LidarMeasurement`, `SemanticLidarMeasurement`, `RadarMeasurement`,
     `DVSEventArray`, `OpticalFlowImage` and `FakeImage`. It returns a
-    `RawData`, a read-only zero-copy view standing in for the `memoryview`:
-    `len`, indexing (an `int`), slicing with any step (another view),
-    iteration, `in`, `==`, `nbytes`, `readonly`, `tolist()` and `tobytes()`
-    work, and writing through it is a compile error. The view keeps the
-    measurement's buffer alive. Codon has no `bytes`: `bytes(m.raw_data)`
-    becomes `m.raw_data.tobytes()` or `str(m.raw_data)`, a copy in a `str`
-    (so `print(m.raw_data)` prints the raw bytes; `repr` gives
-    `<memory of N bytes>`). Codon's `np.frombuffer` takes only a `str`, so
-    `np.frombuffer(m.raw_data, dtype=np.uint8)` becomes
-    `np.frombuffer(m.raw_data.tobytes(), dtype=np.uint8)` (the array owns its
-    copy). The zero-copy pointer is `raw_data_ptr()` (a `Ptr[u8]`, valid
-    while the measurement is alive), with `raw_size()` in bytes. Reading an
-    element (`image[i]`, `radar[i]`, ...) gives a copy; assigning one
-    (`image[i] = carla.Color(...)`, issue #33) writes into LibCarla's buffer,
-    as in the Python API, so `raw_data` views see it. A field that does not fit LibCarla's
-    element type (a color component outside [0, 255], a DVS `x` beyond
+    `RawData`, a read-only zero-copy view standing in for the `memoryview`
+    (`len`, indexing, slicing with any step, iteration, `in`, `==`, `nbytes`,
+    `readonly`, `tolist()`, `tobytes()`); writing through it is a compile
+    error, and it keeps the measurement's buffer alive. Codon has no
+    `bytes`: `bytes(m.raw_data)` becomes `m.raw_data.tobytes()` or
+    `str(m.raw_data)` (a copy in a `str`), and, as Codon's `np.frombuffer`
+    takes only a `str`, `np.frombuffer(m.raw_data, dtype=np.uint8)` becomes
+    `np.frombuffer(m.raw_data.tobytes(), dtype=np.uint8)`. The zero-copy
+    pointer is `raw_data_ptr()` (a `Ptr[u8]`, valid while the measurement is
+    alive), with `raw_size()` in bytes. Reading an element (`image[i]`,
+    `radar[i]`, ...) gives a copy; assigning one (`image[i] =
+    carla.Color(...)`, issue #33) writes into LibCarla's buffer, as in the
+    Python API, so `raw_data` views see it. A field that does not fit
+    LibCarla's element type (a color component outside [0, 255], a DVS `x` beyond
     uint16, a negative `object_idx`) raises `CarlaError`, where the Python
     API raises `OverflowError` / `TypeError`. Negative indices count from the
     end (the Python API rejects them).

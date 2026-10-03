@@ -161,24 +161,13 @@ class _Measurement:
         return self.data.transform
 
 class RawData:
-    """The read-only bytes of a measurement: what the Python API's
-    `raw_data` property returns (a memoryview there). It is a zero-copy view
-    of LibCarla's buffer and keeps its owner (the measurement's SensorData)
-    alive, so it stays valid after the measurement object is gone.
-
-    len(), indexing (an int in [0, 255]), slicing (another RawData, with any
-    step), iteration, `in` and == work as on a memoryview. Writing is not
-    possible. Codon has no `bytes`: str(view) and view.tobytes() copy the
-    bytes into a str, so the Python API's
-
-        np.frombuffer(image.raw_data, dtype=np.uint8)
-
-    is, with Codon's numpy,
-
-        np.frombuffer(image.raw_data.tobytes(), dtype=np.uint8)
-
-    (the array owns its copy). Views of a measurement see later in-place
-    changes such as Image.convert()."""
+    """The Python API's `raw_data` (a memoryview there): a read-only,
+    zero-copy view of a measurement's bytes that keeps its owner alive.
+    len, indexing, slicing (any step, another view), iteration, `in` and ==
+    work; it sees in-place changes such as Image.convert(). Codon has no
+    `bytes`: tobytes() / str(view) copy into a str, so
+    `np.frombuffer(image.raw_data, ...)` becomes
+    `np.frombuffer(image.raw_data.tobytes(), ...)`."""
     _owner: cobj  # keeps the buffer's owner alive (the GC scans this field)
     _ptr: Ptr[u8]
     _len: int
@@ -205,7 +194,7 @@ class RawData:
         return int(self._ptr[_normalize_index(index, self._len, "raw_data") * self._step])
 
     def __getitem__(self, s: Slice) -> RawData:
-        start, stop, step, n = s.adjust_indices(self._len)
+        start, _, step, n = s.adjust_indices(self._len)
         return RawData(self._owner, self._ptr + start * self._step, n, step * self._step)
 
     def __iter__(self) -> Generator[int]:
@@ -213,6 +202,8 @@ class RawData:
             yield int(self._ptr[i * self._step])
 
     def __contains__(self, value: int) -> bool:
+        if not (0 <= value <= 255):
+            return False
         for b in self:
             if b == value:
                 return True
@@ -228,7 +219,7 @@ class RawData:
 
     def __eq__(self, other: str) -> bool:
         """Compares with bytes in a str (Codon's stand-in for bytes)."""
-        return self == RawData(other.ptr.as_byte(), Ptr[u8](other.ptr.as_byte()), len(other))
+        return self == RawData(other.ptr, Ptr[u8](other.ptr), len(other))
 
     def __ne__(self, other) -> bool:
         return not (self == other)
@@ -244,7 +235,10 @@ class RawData:
         return str(buf.as_byte(), self._len)
 
     def tolist(self) -> List[int]:
-        return [b for b in self]
+        out = List[int](self._len)
+        for b in self:
+            out.append(b)
+        return out
 
     def __str__(self) -> str:
         """The bytes (a copy), as bytes(view) gives in Python."""
@@ -303,8 +297,7 @@ class _ArrayMeasurement[T]:
 
     @property
     def raw_data(self) -> RawData:
-        """The measurement's bytes, read-only, as the Python API's property
-        (a zero-copy view that keeps the measurement's buffer alive)."""
+        """The bytes as a read-only RawData view (the Python API's property)."""
         return RawData(self.data.__raw__(), self.raw_data_ptr(), self.raw_size())
 
     def raw_data_ptr(self) -> Ptr[u8]:
@@ -719,9 +712,8 @@ class FakeImage:
 
     @property
     def raw_data(self) -> RawData:
-        """The bytes, read-only, as the Python API's property. The view keeps
-        its buffer alive; after append / extend / del (which may move the
-        bytes) it keeps showing the old buffer."""
+        """The bytes as a read-only RawData view; after append / extend / del
+        (which may move them) it keeps showing the old buffer."""
         p = self.raw_data_ptr()
         return RawData(p.as_byte(), p, len(self))
 
