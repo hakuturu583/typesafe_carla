@@ -144,7 +144,7 @@ def test_actor_shortcuts_reject_subclasses_and_are_marked():
     _plain_actor_only() see the real static type and reject it.
     """
     shortcuts = actor_shortcuts()
-    assert len(shortcuts) == 61
+    assert len(shortcuts) == 67
     for name, params, first, second in shortcuts:
         assert params.startswith("self: S") and "S: type" in params, name
         assert first.strip().startswith(f'_plain_actor_only(self, "{name}'), name

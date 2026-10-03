@@ -100,6 +100,42 @@ tsc_status_t tsc_sensor_stop(tsc_sensor_t *sensor) {
   });
 }
 
+// --- Issue #33: G-buffer textures --------------------------------------------------
+
+tsc_status_t tsc_sensor_listen_to_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                          size_t queue_capacity) {
+  return TSC_GUARD({
+    auto &h = sensor_handle(sensor);
+    auto &s = server_side_sensor_of(sensor);
+    const uint32_t id = check_gbuffer_id(gbuffer_id);
+    // As tsc_sensor_listen: never leave an orphaned subscription behind.
+    if (s.IsListeningGBuffer(id)) s.StopGBuffer(id);
+    auto queue = std::make_shared<SensorQueue>(queue_capacity);
+    s.ListenToGBuffer(id, [queue](carla::SharedPtr<carla::sensor::SensorData> d) {
+      queue->push(std::move(d));
+    });
+    h.gbuffer_queues[id] = std::move(queue);
+  });
+}
+
+tsc_status_t tsc_sensor_gbuffer_pending_count(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                              size_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out");
+    const auto &queue = sensor_handle(sensor).gbuffer_queues[check_gbuffer_id(gbuffer_id)];
+    *out = queue == nullptr ? 0 : queue->size();
+  });
+}
+
+tsc_status_t tsc_sensor_gbuffer_poll(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                     tsc_sensor_data_t **out) {
+  return new_handle(__func__, out, [&]() -> tsc_sensor_data * {
+    const auto &queue = sensor_handle(sensor).gbuffer_queues[check_gbuffer_id(gbuffer_id)];
+    auto item = queue == nullptr ? nullptr : queue->pop();
+    return item == nullptr ? nullptr : new tsc_sensor_data(std::move(item));
+  });
+}
+
 tsc_status_t tsc_sensor_dropped_count(tsc_sensor_t *sensor, uint64_t *out) {
   return TSC_GUARD({ *require_ptr(out, "out") = queue_of(sensor).dropped(); });
 }

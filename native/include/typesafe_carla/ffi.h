@@ -724,6 +724,34 @@ TSC_API tsc_status_t tsc_sensor_poll(tsc_sensor_t *sensor, tsc_sensor_data_t **o
 TSC_API tsc_status_t tsc_sensor_wait_for_data(tsc_sensor_t *sensor, double timeout_seconds,
                                               tsc_sensor_data_t **out);
 
+/* Issue #33: ServerSideSensor. A client-side sensor (lane invasion) is
+ * TSC_TYPE_ERROR. G-buffer texture ids (GBufferTextureID) are below
+ * TSC_GBUFFER_TEXTURE_COUNT (TSC_INVALID_ARGUMENT otherwise). */
+#define TSC_GBUFFER_TEXTURE_COUNT 13
+/* BEGIN GENERATED sensor_ros from bindings/server_side_sensor.yaml, do not edit */
+TSC_API tsc_status_t tsc_sensor_enable_for_ros(tsc_sensor_t *sensor);
+TSC_API tsc_status_t tsc_sensor_disable_for_ros(tsc_sensor_t *sensor);
+TSC_API tsc_status_t tsc_sensor_is_enabled_for_ros(tsc_sensor_t *sensor, int32_t *out);
+/* END GENERATED sensor_ros */
+/* BEGIN GENERATED sensor_gbuffer from bindings/server_side_sensor.yaml, do not edit */
+TSC_API tsc_status_t tsc_sensor_is_listening_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                                     int32_t *out);
+/* Stops the stream (the queue of tsc_sensor_listen_to_gbuffer stays). */
+TSC_API tsc_status_t tsc_sensor_stop_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id);
+/* END GENERATED sensor_gbuffer */
+/* Starts delivering G-buffer texture gbuffer_id into a queue of this handle
+ * (ServerSideSensor::ListenToGBuffer; LibCarla serves RGB cameras only and
+ * ignores other sensors with a warning). queue_capacity as in
+ * tsc_sensor_listen. Listening again replaces the stream and the queue. */
+TSC_API tsc_status_t tsc_sensor_listen_to_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                                  size_t queue_capacity);
+/* Items queued for gbuffer_id (0 if it was never listened to). */
+TSC_API tsc_status_t tsc_sensor_gbuffer_pending_count(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                                      size_t *out);
+/* *out = NULL (TSC_OK) when that queue is empty or was never created. */
+TSC_API tsc_status_t tsc_sensor_gbuffer_poll(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                             tsc_sensor_data_t **out);
+
 typedef struct {
   uint64_t frame;
   double timestamp;

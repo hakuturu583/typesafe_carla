@@ -607,6 +607,13 @@ carla.dispatch_sensor_callbacks()     # e.g. in an asynchronous main loop
 - **Exclusive modes.** `poll()` / `wait_for_data()` raise `CarlaError` on a
   sensor in callback mode, so the two consumers never compete for the queue.
 
+**G-buffer callbacks** (`Sensor.listen_to_gbuffer`, issue #33) are sensor
+callbacks too: the registry keys sensor streams by (actor id, G-buffer id,
+-1 for the measurements), and each stream has its own native queue in the
+sensor handle (`tsc_sensor_gbuffer_poll` / `_pending_count`). `stop()` and
+`stop_gbuffer(id)` drop one stream, as LibCarla's `Stop` / `StopGBuffer`;
+destroying the sensor drops all of them.
+
 **World tick callbacks** (`World.on_tick`, issue #21) use the same registry
 and dispatcher. LibCarla's `World::OnTick` callback only queues the
 `WorldSnapshot` in a native tick listener (`tsc_world_on_tick`); the Codon

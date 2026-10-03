@@ -367,6 +367,38 @@ class Actor:
         compat_shortcut("Actor.wait_for_data", "[tsc-compat] Actor.wait_for_data() without as_sensor()", "call as_sensor() first")
         return self.as_sensor().wait_for_data(*args, **kwargs)
 
+    # Sensor: ServerSideSensor methods (issue #33)
+
+    def enable_for_ros(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "enable_for_ros()")
+        compat_shortcut("Actor.enable_for_ros", "[tsc-compat] Actor.enable_for_ros() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().enable_for_ros(*args, **kwargs)
+
+    def disable_for_ros(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "disable_for_ros()")
+        compat_shortcut("Actor.disable_for_ros", "[tsc-compat] Actor.disable_for_ros() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().disable_for_ros(*args, **kwargs)
+
+    def is_enabled_for_ros(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "is_enabled_for_ros()")
+        compat_shortcut("Actor.is_enabled_for_ros", "[tsc-compat] Actor.is_enabled_for_ros() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().is_enabled_for_ros(*args, **kwargs)
+
+    def listen_to_gbuffer(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "listen_to_gbuffer()")
+        compat_shortcut("Actor.listen_to_gbuffer", "[tsc-compat] Actor.listen_to_gbuffer() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().listen_to_gbuffer(*args, **kwargs)
+
+    def is_listening_gbuffer(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "is_listening_gbuffer()")
+        compat_shortcut("Actor.is_listening_gbuffer", "[tsc-compat] Actor.is_listening_gbuffer() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().is_listening_gbuffer(*args, **kwargs)
+
+    def stop_gbuffer(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "stop_gbuffer()")
+        compat_shortcut("Actor.stop_gbuffer", "[tsc-compat] Actor.stop_gbuffer() without as_sensor()", "call as_sensor() first")
+        return self.as_sensor().stop_gbuffer(*args, **kwargs)
+
     # Sensor and WalkerAIController
 
     def stop(self: S, S: type):

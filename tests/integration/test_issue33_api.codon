@@ -80,7 +80,42 @@ try:
             assert abs(got.cloudiness - preset.cloudiness) < 0.01
             assert abs(got.sun_altitude_angle - preset.sun_altitude_angle) < 0.01
     world.set_weather(original)
+
+    # ServerSideSensor: ROS2 and G-buffer textures on an RGB camera.
+    camera_bp = lib.find("sensor.camera.rgb")
+    camera_bp.set_attribute("image_size_x", "64")
+    camera_bp.set_attribute("image_size_y", "48")
+    camera = world.spawn_actor(camera_bp, carla.Transform(carla.Location(0.0, 0.0, 2.0)),
+                               attach_to=v).as_sensor()
+    spawned.append(camera)
+    # A server built without ROS2 accepts enable/disable and reports False.
+    ros_before = camera.is_enabled_for_ros()
+    camera.enable_for_ros()
+    world.wait_for_tick(10.0)
+    ros_enabled = camera.is_enabled_for_ros()
+    camera.disable_for_ros()
+    world.wait_for_tick(10.0)
+    ros_after = camera.is_enabled_for_ros()
+    print("ros", ros_before, ros_enabled, ros_after)
+    assert not ros_after
+
+    depth = List[int]()
+    camera.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth,
+                             lambda d: depth.append(d.as_image().width))
+    assert camera.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
+    assert not camera.is_listening_gbuffer(carla.GBufferTextureID.GBufferA)
+    for _ in range(40):
+        if len(depth) >= 2:
+            break
+        world.wait_for_tick(10.0)
+        carla.dispatch_callbacks()
+    # Printed rather than asserted: whether a CARLA 0.10.0 (UE5) server sends
+    # G-buffer textures is what this run shows.
+    print("gbuffer SceneDepth images", len(depth), depth[:2])
+    assert all(w == 64 for w in depth)
+    camera.stop_gbuffer(carla.GBufferTextureID.SceneDepth)
+    assert not camera.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
 finally:
-    for a in spawned:
+    for a in reversed(spawned):
         a.destroy()
 print("OK")

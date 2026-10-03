@@ -57,6 +57,7 @@ struct ActorData {
   bool chrono = false;
   float pose_blend = 0.0f;                         // walkers
   std::map<std::string, geom::Transform> custom_pose;  // walkers: SetBonesTransform
+  bool ros_enabled = false;  // issue #33: ServerSideSensor::EnableForROS
   // Issue #19.
   std::optional<geom::Vector3D> constant_velocity;  // world frame in the mock
 
@@ -109,6 +110,8 @@ struct Episode : std::enable_shared_from_this<Episode> {
     std::optional<geom::Location> lane_previous;
   };
   std::map<rpc::ActorId, Listener> listeners;
+  // Issue #33: G-buffer subscriptions, by (sensor, texture id).
+  std::map<std::pair<rpc::ActorId, uint32_t>, Listener> gbuffer_listeners;
   rpc::WeatherParameters weather = rpc::WeatherParameters::ClearNoon;
   size_t debug_shapes = 0;      // DebugHelper calls (nothing is drawn)
   std::string recording;        // the active recorder file, if any
@@ -173,6 +176,9 @@ struct Episode : std::enable_shared_from_this<Episode> {
   // Every actor removal goes through here so listeners never outlive their sensor.
   bool EraseActorLocked(rpc::ActorId id) {
     listeners.erase(id);
+    for (auto it = gbuffer_listeners.begin(); it != gbuffer_listeners.end();) {
+      it = it->first.first == id ? gbuffer_listeners.erase(it) : std::next(it);
+    }
     auto it = actors.find(id);
     if (it == actors.end()) return false;
     destroyed.insert_or_assign(id, it->second);
@@ -483,7 +489,13 @@ std::vector<ActorBlueprint> DefaultBlueprints() {
 
 SharedPtr<Actor> MakeActor(const std::shared_ptr<Episode> &episode, const ActorData &data) {
   if (data.is_vehicle) return std::make_shared<Vehicle>(episode, data.id);
-  if (data.type_id.rfind("sensor.", 0) == 0) return std::make_shared<Sensor>(episode, data.id);
+  // As LibCarla's ActorFactory: lane invasion is computed on the client.
+  if (data.type_id == "sensor.other.lane_invasion") {
+    return std::make_shared<ClientSideSensor>(episode, data.id);
+  }
+  if (data.type_id.rfind("sensor.", 0) == 0) {
+    return std::make_shared<ServerSideSensor>(episode, data.id);
+  }
   if (data.is_walker()) return std::make_shared<Walker>(episode, data.id);
   if (data.is_walker_ai_controller()) {
     return std::make_shared<WalkerAIController>(episode, data.id);
@@ -1152,17 +1164,79 @@ void Sensor::Listen(CallbackFunctionType callback) {
 
 void Sensor::Stop() {
   std::lock_guard<std::mutex> lock(_episode->mutex);
+  _listening_gbuffer = false;
   auto it = _episode->listeners.find(_id);
   if (it != _episode->listeners.end() && it->second.owner == this) _episode->listeners.erase(it);
 }
 
 bool Sensor::IsListening() const {
   std::lock_guard<std::mutex> lock(_episode->mutex);
+  if (_listening_gbuffer) return true;
   auto it = _episode->listeners.find(_id);
   return it != _episode->listeners.end() && it->second.owner == this;
 }
 
 Sensor::~Sensor() { Stop(); }
+
+// --- Issue #33: ServerSideSensor ---------------------------------------------
+
+namespace {
+
+constexpr uint32_t kGBufferTextureCount = 13;  // as LibCarla's ServerSideSensor.cpp
+
+void CheckGBufferId(uint32_t id) {
+  // LibCarla RELEASE_ASSERTs (aborts); the shim checks before calling.
+  if (id >= kGBufferTextureCount) throw std::logic_error("G-buffer id out of range");
+}
+
+}  // namespace
+
+ServerSideSensor::~ServerSideSensor() {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  auto &all = _episode->gbuffer_listeners;
+  for (auto it = all.begin(); it != all.end();) {
+    it = it->second.owner == this ? all.erase(it) : std::next(it);
+  }
+}
+
+void ServerSideSensor::ListenToGBuffer(uint32_t GBufferId, CallbackFunctionType callback) {
+  CheckGBufferId(GBufferId);
+  // LibCarla logs a warning and does nothing for other sensors.
+  if (GetTypeId() != "sensor.camera.rgb") return;
+  WithData([&](mock::ActorData &) {
+    _episode->gbuffer_listeners[{_id, GBufferId}] = mock::Episode::Listener{this, std::move(callback)};
+    _listening_gbuffer = true;
+    return 0;
+  });
+}
+
+void ServerSideSensor::StopGBuffer(uint32_t GBufferId) {
+  CheckGBufferId(GBufferId);
+  if (GetTypeId() != "sensor.camera.rgb") return;
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  auto it = _episode->gbuffer_listeners.find({_id, GBufferId});
+  if (it != _episode->gbuffer_listeners.end() && it->second.owner == this) {
+    _episode->gbuffer_listeners.erase(it);
+  }
+}
+
+bool ServerSideSensor::IsListeningGBuffer(uint32_t id) const {
+  std::lock_guard<std::mutex> lock(_episode->mutex);
+  auto it = _episode->gbuffer_listeners.find({_id, id});
+  return it != _episode->gbuffer_listeners.end() && it->second.owner == this;
+}
+
+void ServerSideSensor::EnableForROS() {
+  WithData([](mock::ActorData &a) { return a.ros_enabled = true; });
+}
+
+void ServerSideSensor::DisableForROS() {
+  WithData([](mock::ActorData &a) { return a.ros_enabled = false; });
+}
+
+bool ServerSideSensor::IsEnabledForROS() {
+  return WithData([](mock::ActorData &a) { return a.ros_enabled; });
+}
 
 namespace mock {
 
@@ -1403,6 +1477,23 @@ std::vector<Delivery> Episode::SenseLocked() {
       continue;
     }
     out.push_back([cb = std::move(callback), data = std::move(data)]() { cb(data); });
+  }
+  // Issue #33: one G-buffer Image per subscription and tick, every pixel
+  // (id, id, id, 255), the camera's size.
+  for (auto &entry : gbuffer_listeners) {
+    auto it = actors.find(entry.first.first);
+    if (it == actors.end()) continue;
+    const ActorData &a = it->second;
+    const auto w = static_cast<size_t>(AttributeInt(a, "image_size_x", 800));
+    const auto h = static_cast<size_t>(AttributeInt(a, "image_size_y", 600));
+    const auto fov = static_cast<float>(AttributeDouble(a, "fov", 90.0));
+    const auto id = static_cast<uint8_t>(entry.first.second);
+    out.push_back([cb = entry.second.callback, f = frame, timestamp, t = a.transform, w, h, fov,
+                   id]() {
+      auto image = std::make_shared<sensor::data::Image>(f, timestamp, t, w, h, fov);
+      for (size_t i = 0; i < w * h; ++i) image->data()[i] = sensor::data::Color(id, id, id, 255u);
+      cb(std::move(image));
+    });
   }
   return out;
 }

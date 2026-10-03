@@ -766,6 +766,33 @@ tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out) {
   });
 }
 
+// bindings/server_side_sensor.yaml: carla::client::ServerSideSensor
+
+tsc_status_t tsc_sensor_enable_for_ros(tsc_sensor_t *sensor) {
+  return TSC_GUARD({ server_side_sensor_of(sensor).EnableForROS(); });
+}
+
+tsc_status_t tsc_sensor_disable_for_ros(tsc_sensor_t *sensor) {
+  return TSC_GUARD({ server_side_sensor_of(sensor).DisableForROS(); });
+}
+
+tsc_status_t tsc_sensor_is_enabled_for_ros(tsc_sensor_t *sensor, int32_t *out) {
+  return TSC_GUARD({
+    assign_out(out, "out", [&] { return server_side_sensor_of(sensor).IsEnabledForROS() ? 1 : 0; });
+  });
+}
+
+tsc_status_t tsc_sensor_is_listening_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id,
+                                             int32_t *out) {
+  return TSC_GUARD({
+    assign_out(out, "out", [&] { return server_side_sensor_of(sensor).IsListeningGBuffer(check_gbuffer_id(gbuffer_id)) ? 1 : 0; });
+  });
+}
+
+tsc_status_t tsc_sensor_stop_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer_id) {
+  return TSC_GUARD({ server_side_sensor_of(sensor).StopGBuffer(check_gbuffer_id(gbuffer_id)); });
+}
+
 // bindings/traffic_light.yaml: carla::client::TrafficLight
 
 tsc_status_t tsc_traffic_light_set_state(tsc_traffic_light_t *light, int32_t state) {

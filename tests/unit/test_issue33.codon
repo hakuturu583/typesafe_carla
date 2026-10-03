@@ -199,4 +199,52 @@ assert len(fake) == 34  # nothing appended
 assert raises_index_error(lambda: fake.__setitem__(34, 0))
 flow_sensor.destroy()
 
+# ServerSideSensor: ROS2 publishing flag (the mock server records it).
+camera = spawn("sensor.camera.rgb", 4, 2)
+assert not camera.is_enabled_for_ros()
+camera.enable_for_ros()
+assert camera.is_enabled_for_ros()
+camera.disable_for_ros()
+assert not camera.is_enabled_for_ros()
+lane = spawn("sensor.other.lane_invasion")  # computed on the client
+assert raises_type_error(lambda: lane.enable_for_ros())
+assert raises_type_error(lambda: lane.is_listening_gbuffer(0))
+lane.destroy()
+
+# G-buffer textures, delivered at the dispatch points like listen(callback).
+depth_frames = List[int]()
+normals = List[int]()
+camera.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth,
+                         lambda d: depth_frames.append(int(d.as_image()[0].r)))
+assert camera.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
+assert not camera.is_listening_gbuffer(carla.GBufferTextureID.GBufferA)
+assert camera.is_listening  # as LibCarla: a G-buffer sets the listening flag
+assert not camera.has_callback  # the measurements' own callback
+world.tick()
+world.tick()
+assert depth_frames == [1, 1], depth_frames  # texture id 1 in every pixel (mock)
+camera.listen_to_gbuffer(carla.GBufferTextureID.GBufferA, lambda d: normals.append(d.frame))
+camera.stop()  # stops the measurements only, as LibCarla's Stop()
+world.tick()
+assert len(depth_frames) == 3 and len(normals) == 1
+camera.stop_gbuffer(carla.GBufferTextureID.SceneDepth)
+assert not camera.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
+world.tick()
+assert len(depth_frames) == 3 and len(normals) == 2
+assert raises_carla_error(lambda: camera.listen_to_gbuffer(13, lambda d: None))
+assert raises_carla_error(lambda: camera.is_listening_gbuffer(-1))
+# Through a plain Actor (compatibility shortcuts); destroy drops every stream.
+as_actor = world.get_actor(camera.id)
+assert unwrap(as_actor).is_listening_gbuffer(carla.GBufferTextureID.GBufferA) == False  # other object
+camera.destroy()
+world.tick()
+assert len(normals) == 2
+# A non-RGB camera: LibCarla ignores the request (with a warning).
+depth_camera = spawn("sensor.camera.depth", 4, 2)
+depth_camera.listen_to_gbuffer(carla.GBufferTextureID.SceneColor, lambda d: normals.append(0))
+assert not depth_camera.is_listening_gbuffer(carla.GBufferTextureID.SceneColor)
+world.tick()
+assert len(normals) == 2
+depth_camera.destroy()
+
 print("OK")

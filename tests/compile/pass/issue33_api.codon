@@ -70,11 +70,25 @@ def element_writes(data: carla.SensorData):
         total += b
     print(total, 4 in fake)
 
+def server_side_sensor(sensor: carla.ServerSideSensor):
+    sensor.enable_for_ros()
+    enabled: bool = sensor.is_enabled_for_ros()
+    sensor.disable_for_ros()
+    frames = List[int]()
+    sensor.listen_to_gbuffer(carla.GBufferTextureID.SceneDepth, lambda d: frames.append(d.frame))
+    def on_normals(data: carla.SensorData):
+        print(data.as_image().width)
+    sensor.listen_to_gbuffer(carla.GBufferTextureID.GBufferA, on_normals)
+    listening: bool = sensor.is_listening_gbuffer(carla.GBufferTextureID.SceneDepth)
+    sensor.stop_gbuffer(carla.GBufferTextureID.SceneDepth)
+    print(enabled, listening, frames)
+
 world = carla.Client("localhost", 2000).get_world()
 actors = world.get_actors()
 actor_world(actors[0], actors[0].as_vehicle())
 light_state(actors[2].as_traffic_light())
 sensor_class_names(actors[5].as_sensor())
+server_side_sensor(actors[5].as_sensor())
 blueprint_attributes(world.get_blueprint_library().find("vehicle.tesla.model3"))
 weather_presets(world)
 enum_maps()

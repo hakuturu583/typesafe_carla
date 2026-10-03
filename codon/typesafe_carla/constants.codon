@@ -1,4 +1,4 @@
-# Integer enumerations of the Python API that no typesafe_carla call takes yet.
+# Integer enumerations of the Python API that few typesafe_carla calls take.
 # The values are the official module's (CARLA 0.10.0 / ue5-dev).
 
 from ._enum import _IntEnum
@@ -16,7 +16,7 @@ AttachmentType = _AttachmentType()
 
 class _GBufferTextureID(_IntEnum):
     """Unreal G-buffer textures of a camera (carla.GBufferTextureID), for
-    Sensor.listen_to_gbuffer in the Python API (not available here yet)."""
+    Sensor.listen_to_gbuffer / is_listening_gbuffer / stop_gbuffer."""
     SceneColor: int = 0
     SceneDepth: int = 1
     SceneStencil: int = 2

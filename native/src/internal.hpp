@@ -7,6 +7,7 @@
 #include "item_queue.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <initializer_list>
 #include <limits>
@@ -168,6 +169,8 @@ using SensorQueue = ItemQueue<carla::SharedPtr<carla::sensor::SensorData>>;
 // Stop()). The queue is shared with the callback, so late measurements are safe.
 struct tsc_sensor : tsc_actor {
   std::shared_ptr<tsc::SensorQueue> queue;
+  // Issue #33: one queue per G-buffer texture listened to (listen_to_gbuffer).
+  std::array<std::shared_ptr<tsc::SensorQueue>, TSC_GBUFFER_TEXTURE_COUNT> gbuffer_queues;
   explicit tsc_sensor(carla::SharedPtr<carla::client::Sensor> s)
       : tsc_actor(std::move(s), TSC_KIND_SENSOR) {}
 };
@@ -807,6 +810,27 @@ inline tsc_sensor &sensor_handle(tsc_sensor_t *s) {
 
 inline carla::client::Sensor &sensor_of(tsc_sensor_t *s) {
   return static_cast<carla::client::Sensor &>(*sensor_handle(s).actor);
+}
+
+// Issue #33: the ROS2 and G-buffer methods are on ServerSideSensor; a sensor
+// computed on the client (lane invasion) is TSC_TYPE_ERROR.
+inline carla::client::ServerSideSensor &server_side_sensor_of(tsc_sensor_t *s) {
+  auto &sensor = sensor_of(s);
+  auto *server_side = dynamic_cast<carla::client::ServerSideSensor *>(&sensor);
+  if (server_side == nullptr) {
+    fail(TSC_TYPE_ERROR, "sensor '" + sensor.GetTypeId() +
+                             "' is computed on the client, not a server-side sensor");
+  }
+  return *server_side;
+}
+
+// A G-buffer texture id (GBufferTextureID); LibCarla aborts on a larger one.
+inline uint32_t check_gbuffer_id(uint32_t id) {
+  if (id >= TSC_GBUFFER_TEXTURE_COUNT) {
+    fail(TSC_INVALID_ARGUMENT, "G-buffer texture id " + std::to_string(id) + " is not below " +
+                                   std::to_string(TSC_GBUFFER_TEXTURE_COUNT));
+  }
+  return id;
 }
 
 // The geometry behind Transform.get_matrix & co: a tsc_transform_t by value.

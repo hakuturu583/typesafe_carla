@@ -1130,7 +1130,33 @@ class Sensor : public Actor {
   ~Sensor() override;  // stops listening, like LibCarla's ServerSideSensor
   void Listen(CallbackFunctionType callback);
   void Stop();
+  // As LibCarla's ServerSideSensor: also true after ListenToGBuffer, until Stop().
   bool IsListening() const;
+
+ protected:
+  bool _listening_gbuffer = false;  // LibCarla's listening_mask bit 0 set by a G-buffer
+};
+
+// Issue #33: the sensors the server simulates (every "sensor.*" but lane
+// invasion), with LibCarla UE5's ROS2 and G-buffer methods. The mock server
+// publishes to "ROS2" (it records the flag) and sends G-buffer textures of
+// RGB cameras: one Image per tick, every pixel (id, id, id, 255).
+class ServerSideSensor : public Sensor {
+ public:
+  using Sensor::Sensor;
+  ~ServerSideSensor() override;  // stops the G-buffer streams, as LibCarla
+  void ListenToGBuffer(uint32_t GBufferId, CallbackFunctionType callback);
+  void StopGBuffer(uint32_t GBufferId);
+  bool IsListeningGBuffer(uint32_t id) const;
+  void EnableForROS();
+  void DisableForROS();
+  bool IsEnabledForROS();
+};
+
+// Sensors LibCarla computes on the client (lane invasion).
+class ClientSideSensor : public Sensor {
+ public:
+  using Sensor::Sensor;
 };
 
 class ActorList : public std::enable_shared_from_this<ActorList> {

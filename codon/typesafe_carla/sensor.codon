@@ -47,8 +47,12 @@ from .blueprint import Color
 from .actor import Actor, _make_actor
 from .lane_marking import LaneMarking
 from .map import _read_buffer
-from ._callbacks import (_register_callback, _unregister_callback, _find_callback, _pop,
+from ._callbacks import (_register_callback, _unregister_stream, _find_callback, _pop,
                          dispatch_sensor_callbacks)
+from ._ffi import (TSC_GBUFFER_TEXTURE_COUNT, tsc_sensor_enable_for_ros,
+                   tsc_sensor_disable_for_ros, tsc_sensor_is_enabled_for_ros,
+                   tsc_sensor_listen_to_gbuffer, tsc_sensor_is_listening_gbuffer,
+                   tsc_sensor_stop_gbuffer)
 
 class SensorDataType:
     Other: ClassVar[int] = 0
@@ -894,14 +898,14 @@ class Sensor(Actor):
         if queue_size < 0:
             raise CarlaError("queue_size must be 0 (unbounded) or positive",
                              TSC_INVALID_ARGUMENT)
-        _unregister_callback(self.id)
+        _unregister_stream(self.id)
         _check(tsc_sensor_listen(self._h.ptr, queue_size))
 
     def stop(self):
         """Stops the stream. In callback mode, also unregisters the callback
         and discards the measurements it has not received yet."""
         _check(tsc_sensor_stop(self._h.ptr))
-        _unregister_callback(self.id)
+        _unregister_stream(self.id)
 
     def _pop(self) -> Optional[SensorData]:
         p = _pop(self._h)
@@ -951,8 +955,56 @@ class Sensor(Actor):
         _check(tsc_sensor_wait_for_data(self._h.ptr, seconds, out))
         return SensorData(Handle(out[0]))
 
+    # Issue #33: ServerSideSensor methods. On a sensor computed on the client
+    # (lane invasion; carla.ClientSideSensor in the Python API, which lacks
+    # them) they raise ActorTypeError.
+
+    def enable_for_ros(self):
+        """Publishes this sensor's data on the server's ROS2 bridge (the server
+        must be built with ROS2; otherwise the request does nothing)."""
+        _check(tsc_sensor_enable_for_ros(self._h.ptr))
+
+    def disable_for_ros(self):
+        _check(tsc_sensor_disable_for_ros(self._h.ptr))
+
+    def is_enabled_for_ros(self) -> bool:
+        out = Ptr[i32](1)
+        _check(tsc_sensor_is_enabled_for_ros(self._h.ptr, out))
+        return int(out[0]) != 0
+
+    def listen_to_gbuffer(self, gbuffer_id: int, callback):
+        """Delivers one G-buffer texture (a GBufferTextureID) of this camera to
+        callback, like listen(callback): it takes a SensorData (as_image())
+        and runs at the same dispatch points, on the program's thread. As in
+        LibCarla, only RGB cameras serve G-buffers (other sensors log a
+        warning and deliver nothing), and is_listening becomes True. Listening
+        to the same texture again replaces the callback; stop_gbuffer(),
+        destroy() or a batch DestroyActor unregisters it, stop() does not."""
+        cb: Callable[[cobj], None] = _CallbackThunk(callback).run
+        id = _gbuffer_id(gbuffer_id)
+        _unregister_stream(self.id, id)
+        _check(tsc_sensor_listen_to_gbuffer(self._h.ptr, u32(id), 0))
+        _register_callback(self.id, self._h, cb, id)
+
+    def is_listening_gbuffer(self, gbuffer_id: int) -> bool:
+        out = Ptr[i32](1)
+        _check(tsc_sensor_is_listening_gbuffer(self._h.ptr, u32(_gbuffer_id(gbuffer_id)), out))
+        return int(out[0]) != 0
+
+    def stop_gbuffer(self, gbuffer_id: int):
+        """Stops the texture's stream and drops its callback and undelivered data."""
+        id = _gbuffer_id(gbuffer_id)
+        _check(tsc_sensor_stop_gbuffer(self._h.ptr, u32(id)))
+        _unregister_stream(self.id, id)
+
     def __repr__(self) -> str:
         return f"Sensor(id={self.id}, type={self.type_id})"
+
+def _gbuffer_id(gbuffer_id: int) -> int:
+    if gbuffer_id < 0 or gbuffer_id >= TSC_GBUFFER_TEXTURE_COUNT:
+        raise CarlaError(f"G-buffer texture id {gbuffer_id} is not a GBufferTextureID",
+                         TSC_INVALID_ARGUMENT)
+    return gbuffer_id
 
 # The Python API's carla.ServerSideSensor (sensors the server simulates),
 # carla.ClientSideSensor (sensors LibCarla computes on the client) and
