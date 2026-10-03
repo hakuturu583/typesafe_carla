@@ -20,11 +20,6 @@ def root(tmp_path):
     return tmp_path
 
 
-def versions(root):
-    return {rel: bump_version._LINE.search((root / rel).read_text()).group(2)
-            for rel in bump_version.VERSION_FILES}
-
-
 @pytest.mark.parametrize("current, spec, expected", [
     ("0.1.0", "patch", "0.1.1"),
     ("0.1.9", "patch", "0.1.10"),
@@ -36,15 +31,14 @@ def test_next_version(current, spec, expected):
     assert bump_version.next_version(current, spec) == expected
 
 
-@pytest.mark.parametrize("spec", ["v1.0.0", "1.0", "1.0.0rc1", "huge", ""])
-def test_next_version_rejects(spec):
-    with pytest.raises(SystemExit):
-        bump_version.next_version("0.1.0", spec)
-
-
-def test_cannot_bump_a_prerelease():
+@pytest.mark.parametrize("current, spec", [
+    ("0.1.0", "v1.0.0"), ("0.1.0", "1.0"), ("0.1.0", "1.0.0rc1"), ("0.1.0", "huge"),
+    ("0.1.0", ""),
+    ("0.2.0rc1", "patch"),  # a prerelease cannot be bumped, only set
+])
+def test_next_version_rejects(current, spec):
     with pytest.raises(SystemExit, match="X.Y.Z"):
-        bump_version.next_version("0.2.0rc1", "patch")
+        bump_version.next_version(current, spec)
 
 
 def test_current_version_is_the_package_version():
@@ -58,7 +52,6 @@ def test_main_bumps_every_file_and_prints_only_the_version(root, capsys):
     bump_version.main(["minor"], root)
     new = f"{major}.{minor + 1}.0"
     assert capsys.readouterr().out == f"{new}\n"
-    assert set(versions(root).values()) == {new}
     # Only the version line changes.
     for rel in bump_version.VERSION_FILES:
         assert (root / rel).read_text() == (ROOT / rel).read_text().replace(

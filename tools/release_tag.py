@@ -5,8 +5,9 @@
 
 Examples: ``0.1.0-ue5-dev-20260915``, ``0.1.0-0.10.0-20250320``.
 
-- ``<version>`` is everything up to the first ``-`` and must equal
-  ``__version__`` in ``python/typesafe_carla/__init__.py``;
+- ``<version>`` is everything up to the first ``-`` and must equal the
+  package version (``__version__`` in the Python and Codon packages, read by
+  ``tools/bump_version.py``);
 - ``<YYYYMMDD>`` follows the last ``-``: a real calendar date, the (UTC
   committer) date of the CARLA ref's last commit to build;
 - ``<CARLA ref>`` is everything in between (a branch, tag or commit SHA of
@@ -40,12 +41,14 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
+try:  # imported as tools.release_tag (tests) or run as tools/release_tag.py
+    from tools import bump_version
+except ImportError:
+    import bump_version
+
 CARLA_REPO = "carla-simulator/carla"
-ROOT = Path(__file__).resolve().parent.parent
-INIT = ROOT / "python" / "typesafe_carla" / "__init__.py"
 
 # A PEP 440 public version in canonical form (it never contains "-").
 _VERSION = re.compile(r"\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?(\.dev\d+)?")
@@ -83,11 +86,12 @@ class Commit(NamedTuple):
 Fetch = Callable[[str], Any]
 
 
-def package_version(init: Path = INIT) -> str:
-    m = re.search(r'^__version__ = "([^"]+)"', init.read_text(), re.MULTILINE)
-    if not m:
-        raise TagError(f"no __version__ in {init}")
-    return m.group(1)
+def package_version() -> str:
+    """The Python and Codon package version (they must agree)."""
+    try:
+        return bump_version.current_version()
+    except SystemExit as e:
+        raise TagError(str(e.code)) from None
 
 
 def is_ue4_ref(ref: str) -> bool:
@@ -102,7 +106,7 @@ def check_ref(ref: str) -> None:
                        "CARLA UE5 (ue5-dev, 0.10.x and later)")
 
 
-def parse(tag: str, expected_version: str | None = None) -> ReleaseTag:
+def parse(tag: str, expected_version: str) -> ReleaseTag:
     form = "expected <version>-<CARLA ref>-<YYYYMMDD>, e.g. 0.1.0-ue5-dev-20260915"
     version, sep, rest = tag.partition("-")
     ref, sep2, date_s = rest.rpartition("-")
@@ -120,9 +124,8 @@ def parse(tag: str, expected_version: str | None = None) -> ReleaseTag:
         check_ref(ref)
     except TagError as e:
         raise TagError(f"{e} in tag {tag!r}") from None
-    if expected_version is not None and version != expected_version:
-        raise TagError(f"tag version {version} != package version {expected_version} "
-                       f"({INIT.relative_to(ROOT)})")
+    if version != expected_version:
+        raise TagError(f"tag version {version} != package version {expected_version}")
     return ReleaseTag(version, ref, date)
 
 

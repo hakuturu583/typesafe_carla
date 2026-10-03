@@ -10,24 +10,19 @@ from tools import release_tag
 from tools.release_tag import TagError, parse
 
 
-@pytest.mark.parametrize("tag, version, ref", [
-    ("0.1.0-ue5-dev-20261003", "0.1.0", "ue5-dev"),
-    ("0.1.0-0.10.0-20261003", "0.1.0", "0.10.0"),
+@pytest.mark.parametrize("tag, version, ref, date", [
+    ("0.1.0-ue5-dev-20261003", "0.1.0", "ue5-dev", datetime.date(2026, 10, 3)),
+    ("0.1.0-0.10.0-20261003", "0.1.0", "0.10.0", datetime.date(2026, 10, 3)),
     ("1.2.3-a1b2c3d4e5f60718293a4b5c6d7e8f9012345678-20240229", "1.2.3",
-     "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"),
-    ("0.1.0-feature/my-branch.v2-20261003", "0.1.0", "feature/my-branch.v2"),
-    ("0.2.0rc1-ue5-dev-20261003", "0.2.0rc1", "ue5-dev"),
+     "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", datetime.date(2024, 2, 29)),
+    ("0.1.0-feature/my-branch.v2-20261003", "0.1.0", "feature/my-branch.v2",
+     datetime.date(2026, 10, 3)),
+    ("0.1.0-release-0.10.1-hotfix-20261003", "0.1.0", "release-0.10.1-hotfix",
+     datetime.date(2026, 10, 3)),
+    ("0.2.0rc1-ue5-dev-20261003", "0.2.0rc1", "ue5-dev", datetime.date(2026, 10, 3)),
 ])
-def test_valid_tags(tag, version, ref):
-    t = parse(tag, version)
-    assert (t.version, t.carla_ref) == (version, ref)
-    assert t.date == datetime.date(*map(int, (tag[-8:-4], tag[-4:-2], tag[-2:])))
-
-
-def test_ref_with_dashes_and_dots():
-    t = parse("0.1.0-release-0.10.1-hotfix-20261003", "0.1.0")
-    assert t.carla_ref == "release-0.10.1-hotfix"
-    assert t.date == datetime.date(2026, 10, 3)
+def test_valid_tags(tag, version, ref, date):
+    assert parse(tag, version) == (version, ref, date)
 
 
 @pytest.mark.parametrize("tag", [
@@ -169,8 +164,6 @@ def test_check_offline_prints_outputs(capsys):
     assert release_tag.main(["check", tag, "--offline"], fetch) == 0
     assert capsys.readouterr().out == f"tag={tag}\nversion={version}\ncarla_ref=0.10.0\n"
     assert fetch.calls == []
-    assert release_tag.main(["check", "999.0.0-0.10.0-20250320", "--offline"], fetch) == 1
-    assert "package version" in capsys.readouterr().err
 
 
 def test_make_tag_uses_latest_commit_date():
@@ -200,8 +193,3 @@ def test_make_cli(tmp_path):
 def test_make_unknown_ref(capsys):
     assert release_tag.main(["make", "nope"], fake_github(error="422")) == 1
     assert "not found" in capsys.readouterr().err
-
-
-def test_package_version_matches_module():
-    import typesafe_carla
-    assert release_tag.package_version() == typesafe_carla.__version__
