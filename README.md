@@ -575,10 +575,16 @@ Deliberate differences, all in favour of static checking:
   `Rotation(90, 90, 90) == Rotation(-90, -90, -90)`. `Color` ignores alpha.
   `Timestamp` and `WorldSnapshot` compare the frame only. `ActorAttribute`
   compared with another attribute checks type and value, not the id.
-  Compared with a `bool`, `int`, `float`, `str` or `Color`, it reads itself
-  as that type and raises `CarlaError` on a type mismatch (LibCarla's
-  `BadAttributeCast`). Comparing unrelated types does not compile; the Python
-  API answers `False`.
+  Compared with a `str` or `Color`, it reads itself as that type, raising
+  `CarlaError` on a type mismatch (LibCarla's `BadAttributeCast`). Compared
+  with a `float`, an `int` or a `bool`, it reads itself as a **float**, as the
+  Python API does: Boost.Python's float overload accepts any Python int,
+  bools included. So `attr == 4` on an int attribute and `attr == True` on a
+  bool attribute raise in both, and `fov_attr == 90` is `True`. Write
+  `attr.as_int() == 4`, `int(attr) == 4` (Python API only) or
+  `attr.as_bool()` instead. `as_bool()` accepts "true"/"false" in any case
+  and raises on anything else, as LibCarla. Comparing unrelated types does
+  not compile; the Python API answers `False`.
 
 * **Sensor data (issue #24).**
   - `raw_data()` is a method returning a zero-copy `Ptr[u8]` (with

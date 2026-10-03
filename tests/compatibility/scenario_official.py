@@ -513,4 +513,32 @@ out("i33_weather_presets", ";".join(
     for w in (getattr(carla.WeatherParameters, n) for n in PRESETS33)))
 # Issue #70: == / != on the value types (offline values).
 out("i70_equality", equality_bits())
+# ActorAttribute == / != (Boost.Python overloads: an int or a bool reaches
+# the float one). Per case: 1/0, E if it raised, M if the attribute is missing.
+def attr_eq(bp, name, f):
+    if not bp.has_attribute(name):
+        return "M"
+    try:
+        return "1" if f(bp.get_attribute(name)) else "0"
+    except Exception:
+        return "E"
+
+
+veh70 = lib.find("vehicle.lincoln.mkz")
+cam70 = lib.find("sensor.camera.rgb")
+out("i70_attr_equality", "".join([
+    attr_eq(veh70, "number_of_wheels", lambda a: a == a.as_int()),
+    attr_eq(veh70, "number_of_wheels", lambda a: a != 3),
+    attr_eq(veh70, "sticky_control", lambda a: a == True),
+    attr_eq(cam70, "fov", lambda a: a == 90),
+    attr_eq(cam70, "fov", lambda a: a == a.as_float()),
+    attr_eq(cam70, "fov", lambda a: a == 91.5),
+    attr_eq(cam70, "image_size_x", lambda a: a == a.as_int()),
+    attr_eq(veh70, "role_name", lambda a: a == a.as_str()),
+    attr_eq(veh70, "role_name", lambda a: a != "no-such-role"),
+    attr_eq(veh70, "color", lambda a: a == a.as_color()),
+    attr_eq(veh70, "color", lambda a: a == "0,0,0"),
+    attr_eq(veh70, "role_name", lambda a: a == veh70.get_attribute("role_name")),
+    attr_eq(veh70, "role_name", lambda a: a == a.as_int()),
+]))
 sys.stdout.flush()
