@@ -207,7 +207,7 @@ assert carla.Vector2D(0.1, 0.0).make_unit_vector(epsilon=1.0) == carla.Vector2D(
 vel = carla.Velocity(1.0, 2.0, 3.0)
 assert vel.length() == carla.Vector3D(1.0, 2.0, 3.0).length() and str(vel).startswith("Velocity(")
 assert carla.AngularVelocity(carla.Vector3D(1.0, 0.0, 0.0)).x == 1.0
-assert carla.Acceleration(0.0, 0.0, -9.8).z == -9.8
+assert carla.Acceleration(0.0, 0.0, -9.8).z == -9.800000190734863  # float32, issue #81
 vehicle.set_target_velocity(vel)  # a Velocity is a Vector3D
 assert int(carla.AttachmentType.Rigid) == 0 and int(carla.AttachmentType.SpringArmGhost) == 2
 assert carla.GBufferTextureID.SceneColor == 0 and carla.GBufferTextureID.CustomStencil == 12

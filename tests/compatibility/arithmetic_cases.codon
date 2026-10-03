@@ -1,6 +1,7 @@
 # Issue #77: arithmetic between the Vector3D family and Vector2D, as the
 # official module computes it. Mirrors arithmetic_cases.py (see its format).
-# Offline: no server needed. Used by tests/unit/test_issue77_arithmetic.codon.
+# Offline: no server needed. Used by tests/unit/test_issue77_arithmetic.codon
+# and (float32_cases, rounding_cases) tests/unit/test_issue81_float32.codon.
 #
 # A combination the official module rejects (a Vector2D with a Vector3D-family
 # operand) is a compile error here, so it is not written out: it gives "E",
@@ -9,6 +10,7 @@
 # Vector3D) but a compile error here, where a variable keeps its static
 # type: "C".
 import typesafe_carla as carla
+from typesafe_carla._fmt import fmt_g
 
 def _copy(v):
     """A fresh copy of `v`, of the same type (in-place operators mutate it)."""
@@ -95,3 +97,75 @@ def arithmetic_cases() -> str:
     return ";".join([_vectors("+"), _vectors("-"), _vectors("+="), _vectors("-="),
                      _scalars("*"), _scalars("/"), _scalars("*="), _scalars("/="),
                      _scalars("r*"), _scalars("r/")])
+
+# Issue #81, as arithmetic_cases.py's float32_cases / rounding_cases.
+F_LHS = ((-81.2, 0.1, 3.3), (16777217.0, 1e-3, -0.7), (1e30, 2.0 / 3.0, 1e-30),
+         (1e-22, 0.0, 0.0), (0.3, -0.4, 1.2e19))
+F_RHS = ((78.6634, 0.2, 7.1), (1.0, 0.3, 0.7), (1e10, 1e-8, 5.0))
+F_K = (0.1, 3.3, 1e10, 7.0)
+
+def _g(x: float) -> str:
+    """"%.17g": exact for a double (NaN unsigned, as Python prints it)."""
+    return "nan" if x != x else fmt_g(x, 17)
+
+def _gv(v) -> str:
+    if isinstance(v, carla.Vector2D):
+        return "(" + _g(v.x) + "," + _g(v.y) + ")"
+    else:
+        return "(" + _g(v.x) + "," + _g(v.y) + "," + _g(v.z) + ")"
+
+def float32_cases() -> str:
+    V, V2 = carla.Vector3D, carla.Vector2D
+    out = List[str]()
+    for a in F_LHS:
+        for b in F_RHS:
+            va, vb = V(*a), V(*b)
+            out.append("|".join([
+                _gv(va + vb), _gv(va - vb), _gv(va.cross(vb)), _g(va.dot(vb)), _g(va.dot_2d(vb)),
+                _g(va.distance(vb)), _g(va.distance_2d(vb)), _g(va.distance_squared(vb)),
+                _g(va.distance_squared_2d(vb)), _g(va.get_vector_angle(vb))]))
+            c = V(*a)
+            c += vb
+            d = carla.Location(*a)
+            d -= vb
+            out.append(_gv(c) + "|" + _gv(d))
+            wa, wb = V2(a[0], a[1]), V2(b[0], b[1])
+            out.append(_gv(wa + wb) + "|" + _gv(wa - wb))
+        va = V(*a)
+        wa = V2(a[0], a[1])
+        out.append("|".join([_g(va.length()), _g(va.squared_length()), _gv(va.make_unit_vector()),
+                             _gv(abs(V(-a[0], a[1], -a[2]))), _g(wa.length()), _g(wa.squared_length()),
+                             _gv(wa.make_unit_vector())]))
+        for k in F_K:
+            c = carla.Velocity(*a)
+            c *= k
+            w = V2(a[0], a[1])
+            w *= k
+            out.append("|".join([_gv(va * k), _gv(k * va), _gv(va / k), _gv(k / va), _gv(c),
+                                 _gv(wa * k), _gv(wa / k), _gv(w)]))
+    return ";".join(out)
+
+R_VALUES = (0.1, 16777217.0, 1e40, -1e40, float("nan"), 1e-46, -0.0, 3.4028235e38, 2.0 / 3.0)
+
+def rounding_cases() -> str:
+    out = List[str]()
+    for x in R_VALUES:
+        set3 = carla.Location()
+        set3.y = x
+        set2 = carla.Vector2D()
+        set2.y = x
+        rot = carla.Rotation()
+        rot.roll = x
+        q = carla.Quaternion()
+        q.w = x
+        t = carla.Transform()
+        t.location.z = x
+        geo = carla.GeoLocation()
+        geo.altitude = x
+        out.append("|".join([_g(v) for v in (
+            carla.Vector3D(x).x, carla.Location(x).x, carla.Velocity(x).x,
+            carla.AngularVelocity(x).x, carla.Acceleration(x).x, carla.Vector2D(x).x,
+            set3.y, set2.y, carla.Rotation(x).pitch, rot.roll, carla.Quaternion(x).x, q.w,
+            carla.Transform(carla.Location(0.0, 0.0, x)).location.z, t.location.z,
+            carla.GeoLocation(x).latitude, geo.altitude)]))
+    return ";".join(out)

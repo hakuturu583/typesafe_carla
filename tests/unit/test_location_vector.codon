@@ -3,7 +3,8 @@
 import typesafe_carla as carla
 
 def close(a: float, b: float) -> bool:
-    return abs(a - b) < 1e-9
+    """Within float32 precision: the values are float32, as LibCarla's (issue #81)."""
+    return abs(a - b) <= 1e-6 * max(1.0, abs(b))
 
 a = carla.Location(1.0, 2.0, 3.0)
 b = carla.Location(4.0, 6.0, 3.0)
@@ -32,7 +33,7 @@ assert d.length() == 5.0 and d.squared_length() == 25.0
 assert a.dot(v) == 1.0 and v.dot(a) == 1.0 and a.dot(b) == 25.0
 assert carla.Vector3D(1.0, 0.0, 0.0).cross(carla.Location(0.0, 1.0, 0.0)) == carla.Vector3D(0.0, 0.0, 1.0)
 u = d.make_unit_vector()
-assert type(u).__name__ == "Vector3D" and close(u.x, 0.6) and close(u.y, 0.8) and u.z == 0.0
+assert type(u).__name__ == "Vector3D" and u.x == 0.6000000238418579 and u.y == 0.800000011920929 and u.z == 0.0
 assert carla.Vector3D().make_unit_vector() == carla.Vector3D()  # as CARLA 0.10.0
 # Issue #40: epsilon (default 2 * FLT_EPSILON); a vector of length <= epsilon
 # comes back unchanged, as in LibCarla's MakeUnitVector.
