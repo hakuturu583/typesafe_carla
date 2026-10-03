@@ -221,6 +221,7 @@ int main(void) {
   expect_null_rejected(tsc_waypoint_get_landmarks_of_type(NULL, NAN, NULL, 1, 0, (tsc_landmark_list_t *[1]){NULL}), "tsc_waypoint_get_landmarks_of_type");
   expect_null_rejected(tsc_world_get_id(NULL, (uint64_t[1]){0}), "tsc_world_get_id");
   expect_null_rejected(tsc_world_get_actors(NULL, (tsc_actor_list_t *[1]){NULL}), "tsc_world_get_actors");
+  expect_null_rejected(tsc_world_get_actors_by_id(NULL, NULL, 1, (tsc_actor_list_t *[1]){NULL}), "tsc_world_get_actors_by_id");
   expect_null_rejected(tsc_world_get_blueprint_library(NULL, (tsc_blueprint_library_t *[1]){NULL}), "tsc_world_get_blueprint_library");
   expect_null_rejected(tsc_world_spawn_actor(NULL, NULL, NULL, NULL, 99, (tsc_actor_t *[1]){NULL}), "tsc_world_spawn_actor");
   expect_null_rejected(tsc_world_try_spawn_actor(NULL, NULL, NULL, NULL, 99, (tsc_actor_t *[1]){NULL}), "tsc_world_try_spawn_actor");
@@ -276,6 +277,6 @@ int main(void) {
   if (tsc_world_snapshot_size(NULL) != 0) { fputs("tsc_world_snapshot_size(NULL)\n", stderr); ++g_failures; }
   expect_null_rejected(tsc_world_snapshot_get(NULL, 0, (tsc_actor_snapshot_t[1]){0}), "tsc_world_snapshot_get");
   if (g_failures != 0) return 1;
-  printf("test_generated: 255 generated functions reject NULL handles\n");
+  printf("test_generated: 256 generated functions reject NULL handles\n");
   return 0;
 }

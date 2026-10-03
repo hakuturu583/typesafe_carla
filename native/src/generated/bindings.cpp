@@ -1285,6 +1285,13 @@ tsc_status_t tsc_world_get_actors(tsc_world_t *world, tsc_actor_list_t **out_lis
   }, "out_list");
 }
 
+tsc_status_t tsc_world_get_actors_by_id(tsc_world_t *world, const uint32_t *actor_ids, size_t count,
+                                        tsc_actor_list_t **out_list) {
+  return new_handle(__func__, out_list, [&] {
+    return new tsc_actor_list(world_of(world).GetActors(to_vector(actor_ids, count, "actor_ids")));
+  }, "out_list");
+}
+
 tsc_status_t tsc_world_get_blueprint_library(tsc_world_t *world,
                                              tsc_blueprint_library_t **out_library) {
   return new_handle(__func__, out_library, [&] {

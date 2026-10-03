@@ -627,6 +627,7 @@ from C import LIB.tsc_client_reload_world(cobj, i32, Ptr[cobj]) -> i32
 # BEGIN GENERATED world_core from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_id(cobj, Ptr[u64]) -> i32
 from C import LIB.tsc_world_get_actors(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_world_get_actors_by_id(cobj, Ptr[u32], int, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_blueprint_library(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, i32, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_try_spawn_actor(cobj, cobj, Ptr[CTransform], cobj, i32, Ptr[cobj]) -> i32
