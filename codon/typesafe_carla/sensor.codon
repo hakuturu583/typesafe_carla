@@ -8,7 +8,8 @@
 #
 #     camera.listen()                       # polling: bounded queue (64)
 #     image = camera.wait_for_data(2.0).as_image()
-#     pixels: Ptr[u8] = image.raw_data()    # zero copy, BGRA
+#     raw = image.raw_data                  # read-only BGRA bytes (RawData)
+#     pixels: Ptr[u8] = image.raw_data_ptr()  # zero copy, BGRA
 #
 #     camera.listen(lambda data: frames.append(data.frame))   # callback
 #     world.tick()                          # runs the queued callbacks
@@ -159,6 +160,99 @@ class _Measurement:
     def transform(self) -> Transform:
         return self.data.transform
 
+class RawData:
+    """The read-only bytes of a measurement: what the Python API's
+    `raw_data` property returns (a memoryview there). It is a zero-copy view
+    of LibCarla's buffer and keeps its owner (the measurement's SensorData)
+    alive, so it stays valid after the measurement object is gone.
+
+    len(), indexing (an int in [0, 255]), slicing (another RawData, with any
+    step), iteration, `in` and == work as on a memoryview. Writing is not
+    possible. Codon has no `bytes`: str(view) and view.tobytes() copy the
+    bytes into a str, so the Python API's
+
+        np.frombuffer(image.raw_data, dtype=np.uint8)
+
+    is, with Codon's numpy,
+
+        np.frombuffer(image.raw_data.tobytes(), dtype=np.uint8)
+
+    (the array owns its copy). Views of a measurement see later in-place
+    changes such as Image.convert()."""
+    _owner: cobj  # keeps the buffer's owner alive (the GC scans this field)
+    _ptr: Ptr[u8]
+    _len: int
+    _step: int
+
+    def __init__(self, owner: cobj, ptr: Ptr[u8], n: int, step: int = 1):
+        self._owner = owner
+        self._ptr = ptr
+        self._len = n
+        self._step = step
+
+    def __len__(self) -> int:
+        return self._len
+
+    @property
+    def nbytes(self) -> int:
+        return self._len
+
+    @property
+    def readonly(self) -> bool:
+        return True
+
+    def __getitem__(self, index: int) -> int:
+        return int(self._ptr[_normalize_index(index, self._len, "raw_data") * self._step])
+
+    def __getitem__(self, s: Slice) -> RawData:
+        start, stop, step, n = s.adjust_indices(self._len)
+        return RawData(self._owner, self._ptr + start * self._step, n, step * self._step)
+
+    def __iter__(self) -> Generator[int]:
+        for i in range(self._len):
+            yield int(self._ptr[i * self._step])
+
+    def __contains__(self, value: int) -> bool:
+        for b in self:
+            if b == value:
+                return True
+        return False
+
+    def __eq__(self, other: RawData) -> bool:
+        if self._len != other._len:
+            return False
+        for i in range(self._len):
+            if self._ptr[i * self._step] != other._ptr[i * other._step]:
+                return False
+        return True
+
+    def __eq__(self, other: str) -> bool:
+        """Compares with bytes in a str (Codon's stand-in for bytes)."""
+        return self == RawData(other.ptr.as_byte(), Ptr[u8](other.ptr.as_byte()), len(other))
+
+    def __ne__(self, other) -> bool:
+        return not (self == other)
+
+    def tobytes(self) -> str:
+        """A copy of the bytes (a str: Codon's stand-in for bytes)."""
+        buf = Ptr[u8](self._len if self._len > 0 else 1)
+        if self._step == 1:
+            str.memcpy(buf.as_byte(), self._ptr.as_byte(), self._len)
+        else:
+            for i in range(self._len):
+                buf[i] = self._ptr[i * self._step]
+        return str(buf.as_byte(), self._len)
+
+    def tolist(self) -> List[int]:
+        return [b for b in self]
+
+    def __str__(self) -> str:
+        """The bytes (a copy), as bytes(view) gives in Python."""
+        return self.tobytes()
+
+    def __repr__(self) -> str:
+        return f"<memory of {self._len} bytes>"
+
 class _ArrayMeasurement[T]:
     """A measurement that is an array of T in LibCarla's buffer, viewed
     without copying (design section 16): valid while the measurement is
@@ -201,18 +295,24 @@ class _ArrayMeasurement[T]:
 
     def __setitem__(self: S, index: int, value, S: type):
         """Writes one element into LibCarla's buffer, as the Python API does
-        (issue #33): raw_data() views and other handles of this measurement
+        (issue #33): raw_data views and other handles of this measurement
         see the change. The value is the element class (Color for an Image,
         LidarDetection for a LidarMeasurement, ...); fields that do not fit
         LibCarla's element type raise CarlaError."""
         self._items[_normalize_index(index, self._count, S._WHAT)] = self._element(value)
 
-    def raw_data(self) -> Ptr[u8]:
-        """Zero-copy view of the bytes, valid while this measurement is alive."""
+    @property
+    def raw_data(self) -> RawData:
+        """The measurement's bytes, read-only, as the Python API's property
+        (a zero-copy view that keeps the measurement's buffer alive)."""
+        return RawData(self.data.__raw__(), self.raw_data_ptr(), self.raw_size())
+
+    def raw_data_ptr(self) -> Ptr[u8]:
+        """Zero-copy pointer to the bytes, valid while this measurement is alive."""
         return Ptr[u8](self._items.as_byte())
 
     def raw_size(self) -> int:
-        """Size of raw_data() in bytes."""
+        """Size of raw_data in bytes."""
         return self._count * T.__elemsize__
 
 @tuple
@@ -277,7 +377,7 @@ class Image(_ArrayMeasurement[_CBgra]):
 
     def convert(self, color_converter: int):
         """Converts the pixels in place (a ColorConverter value), like the
-        Python API; raw_data() views see the change."""
+        Python API; raw_data views see the change."""
         _check(tsc_image_convert(self.data._h.ptr, i32(color_converter)))
 
     def save_to_disk(self, path: str, color_converter: int = 0) -> str:  # ColorConverter.Raw
@@ -617,7 +717,15 @@ class FakeImage:
         self.fov = fov
         self._bytes = data
 
-    def raw_data(self) -> Ptr[u8]:
+    @property
+    def raw_data(self) -> RawData:
+        """The bytes, read-only, as the Python API's property. The view keeps
+        its buffer alive; after append / extend / del (which may move the
+        bytes) it keeps showing the old buffer."""
+        p = self.raw_data_ptr()
+        return RawData(p.as_byte(), p, len(self))
+
+    def raw_data_ptr(self) -> Ptr[u8]:
         """The bytes; valid until append / extend / del (which may move them)."""
         return self._bytes.arr.ptr
 
@@ -655,7 +763,7 @@ class FakeImage:
     def pixel(self, x: int, y: int) -> Color:
         if 4 * self.width * self.height > len(self._bytes):
             raise IndexError(f"{len(self._bytes)} bytes do not hold {self.width}x{self.height} pixels")
-        return _pixel_at(Ptr[_CBgra](self.raw_data().as_byte()), self.width, self.height, x, y)
+        return _pixel_at(Ptr[_CBgra](self.raw_data_ptr().as_byte()), self.width, self.height, x, y)
 
 def _byte(v: int) -> u8:
     return u8(_checked_uint(v, 8, "byte value"))
