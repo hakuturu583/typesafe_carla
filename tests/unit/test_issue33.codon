@@ -55,7 +55,8 @@ assert len(lib.filter_by_attribute("color", "17,37,103")) == 1
 assert len(lib.find("sensor.other.gnss")) == 0 and [a.id for a in lib.find("sensor.other.gnss")] == List[str]()
 # A blueprint copy keeps its own values; iteration sees set_attribute.
 model3.set_attribute("role_name", "hero")
-assert [str(a) for a in model3 if a.id == "role_name"] == ["hero"]
+assert [a.as_str() for a in model3 if a.id == "role_name"] == ["hero"]
+assert [str(a) for a in model3 if a.id == "role_name"] == ["ActorAttribute(id=role_name,type=str,value=hero)"]
 assert carla.ActorAttribute("x", carla.ActorAttributeType.Int, False, "1").recommended_values == List[str]()
 
 # WeatherParameters presets as class attributes: LibCarla's values (the

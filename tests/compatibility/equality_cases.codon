@@ -1,0 +1,268 @@
+# Issue #70: == / != on the value types, as the official module computes them.
+# Mirrors equality_cases.py. Offline: no server needed. Used by the
+# compatibility scenario (key "i70_equality") and tests/unit/test_issue70_equality.codon.
+from math import pi
+import typesafe_carla as carla
+
+E = 1e-12  # below float32 resolution near the values it is added to
+NAN = float("nan")
+
+class _Bits:
+    """The == and != results of each pair, as "1"/"0" strings."""
+    eq: str
+    ne: str
+
+    def __init__(self):
+        self.eq = ""
+        self.ne = ""
+
+    def add(self, a, b):
+        self.eq += "1" if a == b else "0"
+        self.ne += "1" if a != b else "0"
+
+    def result(self, name: str) -> str:
+        return name + ":" + self.eq + "/" + self.ne
+
+def _wgs84() -> carla.GeoEllipsoid:
+    return carla.GeoEllipsoid(a=6378137.0, f_inv=298.257223563)
+
+def _bbox(yaw: float) -> carla.BoundingBox:
+    b = carla.BoundingBox(carla.Location(), carla.Vector3D(1.0, 1.0, 1.0))
+    b.rotation = carla.Rotation(0.0, yaw, 0.0)
+    return b
+
+def _utm(offset: Optional[carla.GeoOffsetTransform] = None, zone: int = 31) -> carla.GeoProjectionUTM:
+    p = carla.GeoProjectionUTM(zone, True, _wgs84())
+    p.offset = offset
+    return p
+
+def _wheel(radius: float = 30.0) -> carla.WheelPhysicsControl:
+    return carla.WheelPhysicsControl(wheel_radius=radius)
+
+def _physics(mass: float = 1000.0,
+             wheels: Optional[List[carla.WheelPhysicsControl]] = None) -> carla.VehiclePhysicsControl:
+    p = carla.VehiclePhysicsControl(mass=mass)
+    if wheels is not None:
+        p.wheels = wheels
+    return p
+
+def _telemetry(speed: float = 1.0, slip: float = 0.1) -> carla.VehicleTelemetryData:
+    t = carla.VehicleTelemetryData()
+    t.speed = speed
+    t.wheels = [carla.WheelTelemetryData(lat_slip=slip)]
+    return t
+
+def _bone(x: float = 1.0, yaw: float = 0.0, name: str = "b") -> carla.bone_transform_out:
+    b = carla.bone_transform_out()
+    b.name = name
+    b.world = carla.Transform(carla.Location(x, 0.0, 0.0), carla.Rotation(0.0, yaw, 0.0))
+    return b
+
+def equality_bits() -> str:
+    V, L, V2, R, Q = carla.Vector3D, carla.Location, carla.Vector2D, carla.Rotation, carla.Quaternion
+    T, Off = carla.Transform, carla.GeoOffsetTransform
+    out = List[str]()
+
+    b = _Bits()
+    b.add(V(1.0, 2.0, 3.0), V(1.0, 2.0, 3.0))
+    b.add(V(0.1, 0.0, 0.0), V(0.1 + E, 0.0, 0.0))
+    b.add(V(0.1, 0.0, 0.0), V(0.1 + 1e-7, 0.0, 0.0))
+    b.add(V(1.0, 2.0, 3.0), L(1.0, 2.0, 3.0))
+    b.add(V(NAN, 0.0, 0.0), V(NAN, 0.0, 0.0))
+    b.add(V(0.0, 0.0, 0.0), V(-0.0, 0.0, 0.0))
+    b.add(V(1.0, 2.0, 3.0), V(1.0, 2.0, 4.0))
+    out.append(b.result("Vector3D"))
+
+    b = _Bits()
+    b.add(L(1.0, 2.0, 3.0), L(1.0, 2.0, 3.0))
+    b.add(L(0.3, 0.0, 0.0), L(0.3 + E, 0.0, 0.0))
+    b.add(L(1e-30, 0.0, 0.0), L(0.0, 0.0, 0.0))
+    b.add(L(1.0, 2.0, 3.0), V(1.0, 2.0, 3.0))
+    b.add(L(1.0, 2.0, 3.0), L(3.0, 2.0, 1.0))
+    out.append(b.result("Location"))
+
+    b = _Bits()
+    b.add(V2(0.1, 1.0), V2(0.1 + E, 1.0))
+    b.add(V2(1.0, 2.0), V2(2.0, 1.0))
+    b.add(V2(1.0, 2.0), V2(1.0, 2.0))
+    out.append(b.result("Vector2D"))
+
+    b = _Bits()
+    b.add(R(10.0, 20.0, 30.0), R(10.0, 20.0, 30.0))
+    b.add(R(0.1, 0.0, 0.0), R(0.1 + E, 0.0, 0.0))
+    b.add(R(90.0, 90.0, 90.0), R(-90.0, -90.0, -90.0))
+    b.add(R(179.99999, 0.0, 0.0), R(0.00001, 180.0, 180.0))
+    b.add(R(90.5, 90.0, 90.0), R(90.4, 90.0, 90.0))
+    b.add(R(90.5, 0.0, 0.0), R(89.5, 180.0, 180.0))
+    b.add(R(100.0, 0.0, 0.0), R(80.0, 180.0, 180.0))
+    b.add(R(10.0, 20.0, 30.0), R(10.0, 20.0, 31.0))
+    b.add(R(0.0, 0.0, 0.0), R(180.0, 180.0, 180.0))
+    b.add(R(10.0, 0.0, 0.0), R(-10.0, 0.0, 0.0))
+    b.add(R(-170.5, -180.0, 180.0), R(9.5, 0.0, 0.0))
+    b.add(R(-170.5, -180.0, 180.0), R(9.6, 0.0, 0.0))
+    out.append(b.result("Rotation"))
+
+    b = _Bits()
+    b.add(Q(0.1, 0.0, 0.0, 1.0), Q(0.1 + E, 0.0, 0.0, 1.0))
+    b.add(Q(0.0, 0.0, 0.0, 1.0), Q(0.0, 0.0, 0.0, -1.0))
+    b.add(Q(), Q())
+    out.append(b.result("Quaternion"))
+
+    b = _Bits()
+    b.add(T(L(1.0, 2.0, 3.0), R(4.0, 5.0, 6.0)), T(L(1.0, 2.0, 3.0), R(4.0, 5.0, 6.0)))
+    b.add(T(L(1.0, 2.0, 3.0), R(90.0, 90.0, 90.0)), T(L(1.0, 2.0, 3.0), R(-90.0, -90.0, -90.0)))
+    b.add(T(L(1.0, 2.0, 3.0)), T(L(1.0, 2.0, 3.5)))
+    b.add(T(L(0.1, 0.0, 0.0)), T(L(0.1 + E, 0.0, 0.0)))
+    out.append(b.result("Transform"))
+
+    b = _Bits()
+    b.add(carla.BoundingBox(L(1.0, 0.0, 0.0), V(1.0, 2.0, 3.0)),
+          carla.BoundingBox(L(1.0, 0.0, 0.0), V(1.0, 2.0, 3.0)))
+    b.add(carla.BoundingBox(L(1.0, 0.0, 0.0), V(1.0, 2.0, 3.0)),
+          carla.BoundingBox(L(1.0, 0.0, 0.0), V(1.0, 2.0, 4.0)))
+    b.add(_bbox(10.0), _bbox(11.0))
+    b.add(_bbox(10.0), _bbox(10.0))
+    out.append(b.result("BoundingBox"))
+
+    b = _Bits()
+    b.add(carla.Color(1, 2, 3, 4), carla.Color(1, 2, 3, 5))
+    b.add(carla.Color(1, 2, 3), carla.Color(1, 2, 4))
+    b.add(carla.Color(), carla.Color())
+    out.append(b.result("Color"))
+
+    b = _Bits()
+    b.add(carla.FloatColor(0.1, 0.2, 0.3, 0.4), carla.FloatColor(0.1 + E, 0.2, 0.3, 0.4))
+    b.add(carla.FloatColor(0.1, 0.2, 0.3, 0.4), carla.FloatColor(0.1, 0.2, 0.3, 0.5))
+    out.append(b.result("FloatColor"))
+
+    b = _Bits()
+    b.add(carla.OpticalFlowPixel(0.1, 2.0), carla.OpticalFlowPixel(0.1 + E, 2.0))
+    b.add(carla.OpticalFlowPixel(1.0, 2.0), carla.OpticalFlowPixel(1.0, 3.0))
+    out.append(b.result("OpticalFlowPixel"))
+
+    b = _Bits()
+    b.add(carla.GeoLocation(1.0, 2.0, 3.0), carla.GeoLocation(1.0, 2.0, 3.0))
+    b.add(carla.GeoLocation(0.1, 0.0, 0.0), carla.GeoLocation(0.1 + E, 0.0, 0.0))
+    out.append(b.result("GeoLocation"))
+
+    b = _Bits()
+    b.add(carla.GeoEllipsoid(), carla.GeoEllipsoid())
+    b.add(_wgs84(), carla.GeoEllipsoid())
+    b.add(carla.GeoEllipsoid(6378137.0 + 1e-9), carla.GeoEllipsoid())
+    b.add(carla.GeoEllipsoid(1.0, 298.257223563), carla.GeoEllipsoid(1.0, 298.257223563))
+    out.append(b.result("GeoEllipsoid"))
+
+    b = _Bits()
+    b.add(Off(1.0, 2.0, 3.0, pi / 2.0), Off(1.0, 2.0, 3.0, pi / 2.0))
+    b.add(Off(1.0, 2.0, 3.0, pi / 2.0), Off(1.0, 2.0, 3.0, 0.0))
+    b.add(Off(0.1, 0.0, 0.0), Off(0.1 + E, 0.0, 0.0))
+    b.add(Off(), Off())
+    out.append(b.result("GeoOffsetTransform"))
+
+    b = _Bits()
+    b.add(carla.GeoProjectionTM(), carla.GeoProjectionTM())
+    b.add(carla.GeoProjectionTM(k=1.0), carla.GeoProjectionTM(k=0.9996))
+    b.add(carla.GeoProjectionTM(lat_0=1.0, ellps=_wgs84()), carla.GeoProjectionTM(lat_0=1.0, ellps=_wgs84()))
+    b.add(carla.GeoProjectionTM(ellps=_wgs84()), carla.GeoProjectionTM())
+    out.append(b.result("GeoProjectionTM"))
+
+    b = _Bits()
+    b.add(_utm(), _utm())
+    b.add(_utm(zone=32), _utm())
+    b.add(_utm(Off(1.0, 2.0, 3.0, 0.0)), _utm())
+    b.add(_utm(Off(1.0, 2.0, 3.0, 0.0)), _utm(Off(1.0, 2.0, 3.0, 0.0)))
+    b.add(_utm(Off(1.0, 2.0, 3.0, 0.0)), _utm(Off(1.0, 2.0, 3.0, 0.1)))
+    b.add(_utm(Off()), _utm())
+    out.append(b.result("GeoProjectionUTM"))
+
+    b = _Bits()
+    b.add(carla.GeoProjectionWebMerc(), carla.GeoProjectionWebMerc())
+    b.add(carla.GeoProjectionWebMerc(_wgs84()), carla.GeoProjectionWebMerc())
+    out.append(b.result("GeoProjectionWebMerc"))
+
+    b = _Bits()
+    b.add(carla.GeoProjectionLCC2SP(1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
+          carla.GeoProjectionLCC2SP(1.0, 2.0, 3.0, 4.0, 5.0, 6.0))
+    b.add(carla.GeoProjectionLCC2SP(lat_1=1.0), carla.GeoProjectionLCC2SP(lat_1=2.0))
+    out.append(b.result("GeoProjectionLCC2SP"))
+
+    b = _Bits()
+    b.add(carla.Timestamp(1, 2.0, 3.0, 4.0), carla.Timestamp(1, 5.0, 6.0, 7.0))
+    b.add(carla.Timestamp(1), carla.Timestamp(2))
+    out.append(b.result("Timestamp"))
+
+    b = _Bits()
+    b.add(carla.VehicleControl(throttle=0.1), carla.VehicleControl(throttle=0.1 + E))
+    b.add(carla.VehicleControl(gear=1), carla.VehicleControl(gear=2))
+    b.add(carla.VehicleControl(hand_brake=True), carla.VehicleControl())
+    out.append(b.result("VehicleControl"))
+
+    b = _Bits()
+    b.add(carla.VehicleAckermannControl(speed=0.1), carla.VehicleAckermannControl(speed=0.1 + E))
+    b.add(carla.VehicleAckermannControl(jerk=1.0), carla.VehicleAckermannControl())
+    out.append(b.result("VehicleAckermannControl"))
+
+    b = _Bits()
+    b.add(carla.AckermannControllerSettings(0.1), carla.AckermannControllerSettings(0.1 + E))
+    b.add(carla.AckermannControllerSettings(accel_kd=1.0), carla.AckermannControllerSettings())
+    out.append(b.result("AckermannControllerSettings"))
+
+    b = _Bits()
+    b.add(carla.WalkerControl(V(0.1, 0.0, 0.0), 1.0), carla.WalkerControl(V(0.1 + E, 0.0, 0.0), 1.0))
+    b.add(carla.WalkerControl(V(1.0, 0.0, 0.0), 1.0, True), carla.WalkerControl(V(1.0, 0.0, 0.0), 1.0, False))
+    b.add(carla.WalkerControl(speed=1.0), carla.WalkerControl(speed=2.0))
+    out.append(b.result("WalkerControl"))
+
+    b = _Bits()
+    b.add(carla.WheelTelemetryData(0.1, 0.2, 0.3), carla.WheelTelemetryData(0.1 + E, 0.2, 0.3))
+    b.add(carla.WheelTelemetryData(omega=1.0), carla.WheelTelemetryData())
+    out.append(b.result("WheelTelemetryData"))
+
+    b = _Bits()
+    b.add(_telemetry(), _telemetry())
+    b.add(_telemetry(0.1), _telemetry(0.1 + E))
+    b.add(_telemetry(slip=0.1), _telemetry(slip=0.2))
+    b.add(_telemetry(), carla.VehicleTelemetryData())
+    out.append(b.result("VehicleTelemetryData"))
+
+    b = _Bits()
+    b.add(_wheel(), _wheel())
+    b.add(_wheel(0.1), _wheel(0.1 + E))
+    b.add(_wheel(30.0), _wheel(31.0))
+    out.append(b.result("WheelPhysicsControl"))
+
+    b = _Bits()
+    b.add(_physics(), _physics())
+    b.add(_physics(1000.1), _physics(1000.1 + 1e-9))
+    b.add(_physics(wheels=[_wheel()]), _physics(wheels=[_wheel(31.0)]))
+    b.add(_physics(mass=1.0), _physics(mass=2.0))
+    out.append(b.result("VehiclePhysicsControl"))
+
+    W = carla.WeatherParameters
+    b = _Bits()
+    b.add(W(cloudiness=0.1), W(cloudiness=0.1 + E))
+    b.add(W(dust_storm=1.0), W())
+    b.add(W.ClearNoon, W.ClearNoon)
+    b.add(W.ClearNoon, W.WetNoon)
+    out.append(b.result("WeatherParameters"))
+
+    S = carla.WorldSettings
+    b = _Bits()
+    b.add(S(), S())
+    b.add(S(fixed_delta_seconds=0.05), S(fixed_delta_seconds=0.05 + E))
+    b.add(S(fixed_delta_seconds=-1.0), S())
+    b.add(S(fixed_delta_seconds=0.0), S())
+    b.add(S(max_culling_distance=0.1), S(max_culling_distance=0.1 + E))
+    b.add(S(max_substep_delta_time=0.01 + E), S())
+    b.add(S(synchronous_mode=True), S())
+    out.append(b.result("WorldSettings"))
+
+    b = _Bits()
+    b.add(_bone(), _bone())
+    b.add(_bone(0.1), _bone(0.1 + E))
+    b.add(_bone(name="c"), _bone())
+    b.add(_bone(yaw=90.0), _bone(yaw=-90.0))
+    b.add(_bone(yaw=10.0), _bone(yaw=11.0))
+    out.append(b.result("bone_transform_out"))
+
+    return ";".join(out)

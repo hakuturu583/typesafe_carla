@@ -4,6 +4,8 @@ from ._ffi import (CVector2D, CVector3D, CRotation, CTransform, CBoundingBox,
                    tsc_transform_get_matrix, tsc_transform_get_inverse_matrix)
 from ._strict import compat_shortcut
 from .errors import _check
+from ._eq import _f32_eq, _fields_eq
+from ._fmt import fmt_fields
 
 # 2 * FLT_EPSILON: LibCarla's default threshold for a zero-length vector.
 _UNIT_EPSILON = 2.0 * 1.1920928955078125e-07
@@ -122,14 +124,15 @@ class Vector3D:
         return Vector3D(abs(self.x), abs(self.y), abs(self.z))
 
     def __eq__(self, other) -> bool:
+        """Exact in float32, as LibCarla (a Location and a Vector3D compare too)."""
         other = _upcast_vector(other)
-        return self.x == other.x and self.y == other.y and self.z == other.z
+        return _f32_eq(self.x, other.x) and _f32_eq(self.y, other.y) and _f32_eq(self.z, other.z)
 
     def __ne__(self, other) -> bool:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"Vector3D(x={self.x}, y={self.y}, z={self.z})"
+        return fmt_fields("Vector3D", self)
 
     def _to_c(self) -> CVector3D:
         return CVector3D(self.x, self.y, self.z)
@@ -161,13 +164,14 @@ class Vector2D:
         return Vector2D(self.x / n, self.y / n)
 
     def __eq__(self, other: Vector2D) -> bool:
-        return self.x == other.x and self.y == other.y
+        """Exact in float32, as LibCarla."""
+        return _fields_eq(self, other)
 
     def __ne__(self, other: Vector2D) -> bool:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"Vector2D(x={self.x}, y={self.y})"
+        return fmt_fields("Vector2D", self)
 
     def _to_c(self) -> CVector2D:
         return CVector2D(self.x, self.y)
@@ -204,7 +208,7 @@ class Location(Vector3D):
         return Vector3D(self.x, self.y, self.z)
 
     def __repr__(self) -> str:
-        return f"Location(x={self.x}, y={self.y}, z={self.z})"
+        return fmt_fields("Location", self)
 
     @staticmethod
     def _from_c(v: CVector3D) -> Location:
@@ -221,7 +225,7 @@ class Velocity(Vector3D):
         super().__init__(rhs.x, rhs.y, rhs.z)
 
     def __repr__(self) -> str:
-        return f"Velocity(x={self.x}, y={self.y}, z={self.z})"
+        return fmt_fields("Velocity", self)
 
 class AngularVelocity(Vector3D):
     """An angular velocity, as carla.AngularVelocity: a Vector3D."""
@@ -233,7 +237,7 @@ class AngularVelocity(Vector3D):
         super().__init__(rhs.x, rhs.y, rhs.z)
 
     def __repr__(self) -> str:
-        return f"AngularVelocity(x={self.x}, y={self.y}, z={self.z})"
+        return fmt_fields("AngularVelocity", self)
 
 class Acceleration(Vector3D):
     """A linear acceleration in m/s^2, as carla.Acceleration: a Vector3D."""
@@ -245,7 +249,7 @@ class Acceleration(Vector3D):
         super().__init__(rhs.x, rhs.y, rhs.z)
 
     def __repr__(self) -> str:
-        return f"Acceleration(x={self.x}, y={self.y}, z={self.z})"
+        return fmt_fields("Acceleration", self)
 
 def _vector_arg(v, what: Literal[str]) -> Vector3D:
     """An API argument documented as Vector3D: a Vector3D, or a Location.
@@ -349,13 +353,21 @@ class Rotation:
                         _normalize_angle(self.roll))
 
     def __eq__(self, other: Rotation) -> bool:
-        return self.pitch == other.pitch and self.yaw == other.yaw and self.roll == other.roll
+        """As LibCarla's Rotation::operator== (float32): equal angles, or, as
+        Unreal compares normalized rotators, every pair of angles with
+        |a| + |b| == 180 (so Rotation(90, 90, 90) == Rotation(-90, -90, -90))."""
+        p, y, r = float32(self.pitch), float32(self.yaw), float32(self.roll)
+        op, oy, orr = float32(other.pitch), float32(other.yaw), float32(other.roll)
+        if p == op and y == oy and r == orr:
+            return True
+        h = float32(180.0)
+        return abs(p) + abs(op) == h and abs(y) + abs(oy) == h and abs(r) + abs(orr) == h
 
     def __ne__(self, other: Rotation) -> bool:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"Rotation(pitch={self.pitch}, yaw={self.yaw}, roll={self.roll})"
+        return fmt_fields("Rotation", self)
 
     def _to_c(self) -> CRotation:
         return CRotation(self.pitch, self.yaw, self.roll)
@@ -501,7 +513,7 @@ class BoundingBox:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"BoundingBox({self.location}, Extent(x={self.extent.x}, y={self.extent.y}, z={self.extent.z}), {self.rotation})"
+        return f"BoundingBox({self.location}, {fmt_fields('Extent', self.extent)}, {self.rotation})"
 
     def contains(self, world_point, point: Transform) -> bool:
         """Whether `world_point` (a Location) is inside this box placed by the
@@ -637,10 +649,11 @@ class Quaternion:
             self.w * rhs.w - self.x * rhs.x - self.y * rhs.y - self.z * rhs.z)
 
     def __eq__(self, other: Quaternion) -> bool:
-        return self.x == other.x and self.y == other.y and self.z == other.z and self.w == other.w
+        """Exact in float32, as LibCarla."""
+        return _fields_eq(self, other)
 
     def __ne__(self, other: Quaternion) -> bool:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return f"Quaternion(x={self.x}, y={self.y}, z={self.z}, w={self.w})"
+        return fmt_fields("Quaternion", self)

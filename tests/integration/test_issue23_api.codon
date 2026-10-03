@@ -46,14 +46,20 @@ client.set_replayer_ignore_spectator(True)
 
 # --- Blueprints --------------------------------------------------------------
 lib = world.get_blueprint_library()
-four = lib.filter_by_attribute("number_of_wheels", "4")
-two = lib.filter_by_attribute("number_of_wheels", "2")
-# CARLA 0.10.0 ships no two-wheelers (the official API also finds none).
-assert len(four) > 0
-for b in four:
-    assert b.get_attribute("number_of_wheels").as_int() == 4, b.id
-for b in two:
-    assert b.get_attribute("number_of_wheels").as_int() == 2, b.id
+# Every wheel count the server's vehicles declare (ue5-dev's lincoln.mkz says 3)
+# selects exactly the vehicles that declare it.
+vehicles = lib.filter("vehicle.*")
+counts = sorted(set([str(b.get_attribute("number_of_wheels").as_int()) for b in vehicles]))
+print("wheel counts:", counts)
+assert len(counts) > 0
+selected = 0
+for n in counts:
+    matching = lib.filter_by_attribute("number_of_wheels", n)
+    assert len(matching) > 0, n
+    for b in matching:
+        assert str(b.get_attribute("number_of_wheels").as_int()) == n, b.id
+    selected += len(matching)
+assert selected == len(vehicles), (selected, len(vehicles))
 assert len(lib.filter_by_attribute("no_such_attribute", "1")) == 0
 mkz = lib.find("vehicle.lincoln.mkz")
 tags = mkz.tags

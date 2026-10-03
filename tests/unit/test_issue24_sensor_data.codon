@@ -320,7 +320,8 @@ def test_radar():
     except carla.ActorTypeError:
         raised = True
     assert raised
-    assert str(carla.RadarDetection()) == "RadarDetection(velocity=0, azimuth=0, altitude=0, depth=0)"
+    assert str(carla.RadarDetection()) == ("RadarDetection(velocity=0.000000, azimuth=0.000000, "
+                                            "altitude=0.000000, depth=0.000000)")
 
 def test_events():
     lane = spawn("sensor.other.lane_invasion")

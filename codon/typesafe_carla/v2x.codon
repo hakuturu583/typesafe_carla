@@ -36,6 +36,7 @@ from ._ffi import (CItsHeader, CItsValue, CItsReferencePosition, CCamBasicVehicl
 from .errors import _check, CarlaError, _normalize_index, _u8
 from .map import _read_buffer
 from .sensor import SensorData, Sensor, _Measurement
+from ._fmt import fmt_f32
 
 class ItsPduHeader:
     """ITS PDU header (ItsPduHeader). The Python API's "Header" dict."""
@@ -265,7 +266,7 @@ class CAMMessage:
         return self._cam
 
     def __repr__(self) -> str:
-        return (f"CAMData(power={self.power}, stationId={self._cam.header.station_id}, "
+        return (f"CAMData(power={fmt_f32(self.power)}, stationId={self._cam.header.station_id}, "
                 f"messageId={self._cam.header.message_id})")
 
 class _V2XEvent(_Measurement):
@@ -372,8 +373,10 @@ class CustomV2XBytes:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return (f"CustomV2XBytes(max_data_size={TSC_CUSTOM_V2X_MAX_DATA_SIZE}, "
-                f"data_size={self._size}, bytes={self.get_bytes()})")
+        # As the Python API, which names it "CustomV2XData" and prints the bytes in hex.
+        hexes = [hex(b)[2:] for b in self.get_bytes()]
+        return (f"CustomV2XData(max_data_size={TSC_CUSTOM_V2X_MAX_DATA_SIZE}, "
+                f"data_size={self._size}, bytes=[{', '.join(hexes)}])")
 
 class CustomV2XMessage:
     """A custom V2X message (LibITS's CustomV2XM): CustomV2XData.get()."""
@@ -403,7 +406,8 @@ class CustomV2XData:
         return self._message
 
     def __repr__(self) -> str:
-        return (f"CustomV2XData(power={self.power}, stationId={self._message.header.station_id}, "
+        return (f"CustomV2XData(power={fmt_f32(self.power)}, "
+                f"stationId={self._message.header.station_id}, "
                 f"messageId={self._message.header.message_id}, data={self._message.data})")
 
 class CustomV2XEvent(_V2XEvent):

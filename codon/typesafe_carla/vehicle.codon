@@ -24,7 +24,8 @@ from .errors import _check, _i32, CarlaError
 from .map import _read_buffer
 from .geometry import Transform
 from .actor import Vehicle
-from .control import _fields_eq, _fields_repr
+from ._eq import _fields_eq
+from ._fmt import fmt_fields
 from ._enum import _member_names, _member_values, _enum_repr
 
 @tuple
@@ -124,7 +125,7 @@ class VehicleAckermannControl:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return _fields_repr("VehicleAckermannControl", self)
+        return fmt_fields("VehicleAckermannControl", self)
 
     def _to_c(self) -> CVehicleAckermannControl:
         return CVehicleAckermannControl(self.steer, self.steer_speed, self.speed,
@@ -156,7 +157,7 @@ class AckermannControllerSettings:
         return not (self == other)
 
     def __repr__(self) -> str:
-        return _fields_repr("AckermannControllerSettings", self)
+        return fmt_fields("AckermannControllerSettings", self)
 
     def _to_c(self) -> CAckermannControllerSettings:
         return CAckermannControllerSettings(self.speed_kp, self.speed_ki, self.speed_kd,
@@ -178,8 +179,14 @@ class WheelTelemetryData:
         self.long_slip = long_slip
         self.omega = omega
 
+    def __eq__(self, other: WheelTelemetryData) -> bool:
+        return _fields_eq(self, other)
+
+    def __ne__(self, other: WheelTelemetryData) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
-        return _fields_repr("WheelTelemetryData", self)
+        return fmt_fields("WheelTelemetryData", self)
 
 class VehicleTelemetryData:
     """Vehicle.get_telemetry_data(), as carla.VehicleTelemetryData."""
@@ -202,10 +209,14 @@ class VehicleTelemetryData:
         self.gear = gear
         self.wheels = wheels if wheels is not None else List[WheelTelemetryData]()
 
+    def __eq__(self, other: VehicleTelemetryData) -> bool:
+        return _fields_eq(self, other)
+
+    def __ne__(self, other: VehicleTelemetryData) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
-        return (f"VehicleTelemetryData(speed={self.speed}, steer={self.steer}, "
-                f"throttle={self.throttle}, brake={self.brake}, engine_rpm={self.engine_rpm}, "
-                f"gear={self.gear}, wheels={len(self.wheels)})")
+        return fmt_fields("VehicleTelemetryData", self)
 
 @extend
 class Vehicle:

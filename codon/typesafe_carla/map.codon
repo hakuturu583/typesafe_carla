@@ -155,8 +155,7 @@ class Waypoint:
         return _lane_marking(tsc_waypoint_get_right_lane_marking, self._h.ptr)
 
     def __repr__(self) -> str:
-        return (f"Waypoint(id={self.id}, road_id={self.road_id}, lane_id={self.lane_id}, "
-                f"s={self.s}, {self.transform})")
+        return f"Waypoint({self.transform})"
 
 def _get_int(fn, h: cobj) -> int:
     out = Ptr[i32](1)

@@ -64,6 +64,8 @@ jobs:
       # The release's default GCC, never a newer one the runner image adds.
       CC: gcc-${{ matrix.os.gcc }}
       CXX: g++-${{ matrix.os.gcc }}
+      # What the source build and the build from the prebuilt both build.
+      SHIM_TARGETS: typesafe_carla_ffi test_ffi test_generated test_image_converter
     strategy:
       fail-fast: false
       matrix:
@@ -121,7 +123,7 @@ jobs:
           -DTSC_CARLA_REF_NAME=${{ matrix.carla_ref }}
       - name: Build (cache ${{ steps.cache.outputs.cache-hit == 'true' && 'hit' || steps.cache.outputs.cache-hit == 'false' && 'partial hit' || 'miss' }})
         # A bare -j means unlimited jobs; LibCarla/Boost TUs need ~1-2 GB each.
-        run: cmake --build build -j "$(nproc)" --target typesafe_carla_ffi test_ffi test_generated test_image_converter
+        run: cmake --build build -j "$(nproc)" --target ${{ env.SHIM_TARGETS }}
       # Saved as soon as it is built (a failing test still keeps the build),
       # but not from pull requests: their entries are visible to that PR only
       # and would push main's out of the repository's 10 GB.
@@ -150,6 +152,57 @@ jobs:
         run: >-
           uv run --no-project --with ./toolchain --with pyyaml
           python -m tools.upstream_tests --mode all --suite unit --summary "$GITHUB_STEP_SUMMARY"
+      # A relocatable prefix of the LibCarla just built, which local builds
+      # download instead of compiling LibCarla (TSC_CARLA_PREBUILT=auto,
+      # tools/fetch_libcarla_prebuilt.py; docs/releasing.md, "LibCarla
+      # prebuilt"). Published from main only (pushes and the daily run, which
+      # also keeps the 14-day artifacts fresh), after the tests above passed.
+      - name: Assemble the LibCarla prebuilt
+        id: prebuilt
+        if: github.event_name == 'push' || github.event_name == 'schedule'
+        env:
+          SHA: ${{ steps.carla.outputs.sha }}
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/libcarla-prebuilt"
+          cmake --build build --target libcarla_prebuilt
+          mv build/libcarla-prebuilt "$prefix"
+          du -sh "$prefix"
+          # Relocatable: no file names the checkout or the build tree.
+          if grep -rIl -e "$GITHUB_WORKSPACE" "$prefix"; then
+            echo "::error::the prefix refers to $GITHUB_WORKSPACE"; exit 1
+          fi
+          name=$(python3 tools/fetch_libcarla_prebuilt.py --print-name "$SHA")
+          # The name's ABI hash is the one the manifest records.
+          hash=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["abi_hash"])' "$prefix/prebuilt.json")
+          case "$name" in
+            *-"$hash"-"$SHA") ;;
+            *) echo "::error::$name does not carry the manifest's ABI hash $hash"; exit 1 ;;
+          esac
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+      - name: Build the shim from the prebuilt alone
+        if: steps.prebuilt.outcome == 'success'
+        env:
+          SHA: ${{ steps.carla.outputs.sha }}
+          CARLA_REF: ${{ matrix.carla_ref }}
+        run: |
+          set -euo pipefail
+          # Without the build tree, so nothing can come from it.
+          mv build "$RUNNER_TEMP/build-aside"
+          trap 'mv "$RUNNER_TEMP/build-aside" build' EXIT
+          cmake -S . -B "$RUNNER_TEMP/build-prebuilt" -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF="$SHA" \
+            -DTSC_CARLA_REF_NAME="$CARLA_REF" -DTSC_CARLA_PREBUILT_DIR="$RUNNER_TEMP/libcarla-prebuilt"
+          cmake --build "$RUNNER_TEMP/build-prebuilt" -j "$(nproc)" --target ${{ env.SHIM_TARGETS }}
+          ctest --test-dir "$RUNNER_TEMP/build-prebuilt" --output-on-failure
+      - name: Publish the LibCarla prebuilt
+        if: steps.prebuilt.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.prebuilt.outputs.name }}
+          path: ${{ runner.temp }}/libcarla-prebuilt
+          retention-days: 14
+          if-no-files-found: error
+          overwrite: true  # a re-run of the job
       # Slow (minutes): one leg, and only for main and the daily run.
       - name: LibCarla API coverage report
         if: >-

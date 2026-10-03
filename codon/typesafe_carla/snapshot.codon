@@ -5,6 +5,7 @@ from ._ffi import (Handle, CTimestamp, CActorSnapshot, TSC_NOT_FOUND, tsc_world_
                    tsc_world_snapshot_get, tsc_world_snapshot_find)
 from .errors import _check, _is_actor_id, _normalize_index
 from .geometry import Transform, Vector3D
+from ._fmt import fmt_f
 
 class Timestamp:
     frame: int
@@ -28,9 +29,17 @@ class Timestamp:
     def frame_count(self, value: int):
         self.frame = value
 
+    def __eq__(self, other: Timestamp) -> bool:
+        """The frame only, as LibCarla (the times are not compared)."""
+        return self.frame == other.frame
+
+    def __ne__(self, other: Timestamp) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
-        return (f"Timestamp(frame={self.frame}, elapsed_seconds={self.elapsed_seconds}, "
-                f"delta_seconds={self.delta_seconds}, platform_timestamp={self.platform_timestamp})")
+        return (f"Timestamp(frame={self.frame},elapsed_seconds={fmt_f(self.elapsed_seconds)},"
+                f"delta_seconds={fmt_f(self.delta_seconds)},"
+                f"platform_timestamp={fmt_f(self.platform_timestamp)})")
 
 class ActorSnapshot:
     """An actor's state in a WorldSnapshot (a plain value)."""
@@ -60,7 +69,7 @@ class ActorSnapshot:
         return self._acceleration
 
     def __repr__(self) -> str:
-        return f"ActorSnapshot(id={self.id}, {self._transform})"
+        return f"ActorSnapshot(id={self.id})"
 
 class WorldSnapshot:
     _h: Handle
@@ -131,5 +140,13 @@ class WorldSnapshot:
         for i in range(len(self)):
             yield self._get(i)
 
+    def __eq__(self, other: WorldSnapshot) -> bool:
+        """The frame only, as LibCarla (it compares the timestamps; neither the
+        id nor the actors)."""
+        return self.frame == other.frame
+
+    def __ne__(self, other: WorldSnapshot) -> bool:
+        return not (self == other)
+
     def __repr__(self) -> str:
-        return f"WorldSnapshot(id={self.id}, frame={self.frame}, actors={len(self)})"
+        return f"WorldSnapshot(frame={self.frame})"

@@ -39,9 +39,6 @@ class TrafficSign(Actor):
         _check(tsc_traffic_sign_get_trigger_volume(self._h.ptr, out))
         return BoundingBox._from_c(out[0])
 
-    def __repr__(self) -> str:
-        return f"TrafficSign(id={self.id}, type={self.type_id})"
-
 class TrafficLight(Actor):
     def __init__(self, h: Handle):
         super().__init__(h)
@@ -133,9 +130,6 @@ class TrafficLight(Actor):
         # One server call per attempt: guess a size, retry only if too small.
         buf, n = _read_buffer(tsc_traffic_light_get_light_boxes, self._h.ptr, CBoundingBox, 8)
         return [BoundingBox._from_c(buf[i]) for i in range(n)]
-
-    def __repr__(self) -> str:
-        return f"TrafficLight(id={self.id}, state={self.get_state()})"
 
 def _take_traffic_lights(ptr: cobj) -> List[TrafficLight]:
     """The traffic lights of a tsc_traffic_light_list handle, which it releases."""

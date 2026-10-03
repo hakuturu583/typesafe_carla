@@ -347,6 +347,20 @@ TYPESAFE_CARLA_BUILD_DIR=build-carla uv run typesafe-codon run examples/connect.
 If GitHub archive downloads are blocked by your network but git works, add
 `-DPREFER_CLONE=ON`; CARLA then clones its dependencies instead.
 
+To skip compiling LibCarla, add `-DTSC_CARLA_PREBUILT=auto`: CMake then
+downloads the LibCarla that CI built for the same CARLA commit and the same
+compiler (Ubuntu 22.04/GCC 11, 24.04/GCC 13 or 26.04/GCC 15, from a run on
+`main`), and only compiles the shim. This needs an authenticated
+[`gh`](https://cli.github.com/) (`gh auth login`), because GitHub serves
+workflow artifacts only with a token. If there is no matching prebuilt, CMake
+builds LibCarla from source as usual. `-DTSC_CARLA_PREBUILT_DIR=<prefix>` uses
+a prefix you already have, e.g. from `tools/fetch_libcarla_prebuilt.py <ref>`
+or `cmake --build <build dir> --target libcarla_prebuilt`. Downloads are
+cached (about 155 MB each) in `~/.cache/typesafe-carla/libcarla-prebuilt`
+(or under `$TYPESAFE_CARLA_CACHE_DIR`) and removed after 30 days unused;
+`tools/fetch_libcarla_prebuilt.py --prune` empties it. See
+[docs/releasing.md](docs/releasing.md#libcarla-prebuilt).
+
 `typesafe-codon` passes its arguments to `codon` after setting `CODON_PATH`
 (the Codon sources), `TYPESAFE_CARLA_LIB` (the native library) and
 `LD_LIBRARY_PATH`. For `build`, it also gives the executable an RPATH to the
@@ -513,7 +527,10 @@ Deliberate differences, all in favour of static checking:
   so here `distance` accepts `vector=` or `location=` (exactly one) on any
   vector, a superset of the Python API.
 * **Attribute values are typed.** `ActorAttribute.as_int()` raises when the
-  attribute is not an int; `str(attribute)` gives the raw value.
+  attribute is not an int. Read values with `as_int()`, `as_float()`,
+  `as_bool()`, `as_color()` or `as_str()`: `str(attribute)` gives the Python
+  API's text, `ActorAttribute(id=number_of_wheels,type=int,value=4(const))`
+  (since issue #71; it used to give the raw value).
 * **Sensor callbacks run at dispatch points, not on CARLA's threads.**
   `sensor.listen(lambda data: ...)` works, but the callback receives a
   `SensorData` (convert it with `as_image()` etc.; a callback typed
@@ -580,6 +597,28 @@ Deliberate differences, all in favour of static checking:
   LibCarla's `MakeUnitVector` on `Vector2D`, `Vector3D` and `Location`: a
   vector of length <= `epsilon` (default `2.384185791015625e-07`, i.e.
   2 * FLT_EPSILON) is returned unchanged.
+
+* **`==` / `!=` (issue #70)** follow LibCarla's `operator==` on every value
+  type the Python API compares. Float fields compare exactly *in float32*, as
+  LibCarla stores them: `Location(0.1) == Location(0.1 + 1e-12)` is `True`
+  although the doubles kept here differ. Double fields (`GeoLocation`, the geo
+  projections, `GeoEllipsoid`, `GeoOffsetTransform`, and `WorldSettings`'
+  `fixed_delta_seconds` and `max_substep_delta_time`) compare exactly. As in
+  LibCarla, some types compare less than every field. `Rotation`s are also
+  equal when each pair of angles has `|a| + |b| == 180`, so
+  `Rotation(90, 90, 90) == Rotation(-90, -90, -90)`. `Color` ignores alpha.
+  `Timestamp` and `WorldSnapshot` compare the frame only. `ActorAttribute`
+  compared with another attribute checks type and value, not the id.
+  Compared with a `str` or `Color`, it reads itself as that type, raising
+  `CarlaError` on a type mismatch (LibCarla's `BadAttributeCast`). Compared
+  with a `float`, an `int` or a `bool`, it reads itself as a **float**, as the
+  Python API does: Boost.Python's float overload accepts any Python int,
+  bools included. So `attr == 4` on an int attribute and `attr == True` on a
+  bool attribute raise in both, and `fov_attr == 90` is `True`. Write
+  `attr.as_int() == 4`, `int(attr) == 4` (Python API only) or
+  `attr.as_bool()` instead. `as_bool()` accepts "true"/"false" in any case
+  and raises on anything else, as LibCarla. Comparing unrelated types does
+  not compile; the Python API answers `False`.
 
 * **Sensor data (issue #24).**
   - `raw_data()` is a method returning a zero-copy `Ptr[u8]` (with
@@ -726,6 +765,26 @@ differ at run time:
 * For an id outside the uint32 range (e.g. `-1`), `get_actor` and the `find`
   lookups return `None`; the official API raises `OverflowError`.
 
+`str()` gives the official text, field for field (issue #71):
+`Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(...))`,
+`Actor(id=24, type=vehicle.tesla.model3)` for every actor class,
+`ActorAttribute(id=number_of_wheels,type=int,value=4(const))`, ... Floats
+are printed as the binding does, with `std::to_string` (`%f`, after rounding
+`float` fields to float32) or `std::ostream` (`%g`), by a formatter that
+matches glibc exactly (`-0.000000`, `-nan`, half-to-even ties). `repr()` is
+the same text, where Python gives `<carla.Location object at 0x...>`. Three
+cases differ:
+
+* `WorldSettings` with `fixed_delta_seconds` unset prints
+  `fixed_delta_seconds=None`; the official `str()` raises
+  `RuntimeError: bad_optional_access`.
+* `CollisionEvent` and `ObstacleDetectionEvent` print
+  `other_actor=Actor(id=.., type=..)`; the official binding streams the
+  actor's shared pointer, i.e. a memory address.
+* Classes the official module prints with Python's default repr
+  (`SensorData`, `CAMEvent`, `CustomV2XEvent`, `Junction`, `Landmark`, ...)
+  keep a descriptive typesafe_carla repr.
+
 ## Codon limitations found while building this
 
 These affect how the design's guarantees should be read:
@@ -774,7 +833,8 @@ These affect how the design's guarantees should be read:
    modules. The launcher passes the strict-mode setting to the library
    through a generated module (`_tsc_build_config`) instead.
 8. Float format specifiers (`f"{x:.6f}"`) need an installed `en_US` locale in
-   Codon 0.19.3, so `repr`s use plain `str(float)`.
+   Codon 0.19.3, so `str()` formats floats with its own `%f` / `%g`
+   implementation (`typesafe_carla/_fmt.codon`).
 9. **Class hierarchies two levels deep are miscompiled.** With `class B(A)`
    and `class C(B)`, a method `C` inherits from `B` reads `A`'s fields at the
    wrong offset (a `C(3)` reports `x == 0` through `B`'s methods), and

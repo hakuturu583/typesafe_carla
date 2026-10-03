@@ -110,7 +110,25 @@ if(TSC_BACKEND STREQUAL "mock")
   target_link_libraries(typesafe_carla_ffi PRIVATE carla_mock)
 else()
   include(cmake/FetchCarla.cmake)
+  include(cmake/LibCarlaPrebuilt.cmake)
 
+  # CARLA 0.10.0's carla/client/FileTransfer.h uses uint8_t without including
+  # <cstdint>; newer GCC (14, in the manylinux release image) no longer
+  # provides it transitively. Force-include it for CARLA and for the shim
+  # (which includes that header through Client.h). Harmless for other refs.
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(_tsc_include_cstdint "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>")
+    add_compile_options("${_tsc_include_cstdint}")
+    target_compile_options(typesafe_carla_ffi PRIVATE "${_tsc_include_cstdint}")
+  endif()
+endif()
+
+if(TSC_BACKEND STREQUAL "libcarla" AND TSC_CARLA_PREBUILT_PREFIX)
+  # LibCarla and its dependencies from a prebuilt prefix: nothing to fetch or
+  # build (cmake/LibCarlaPrebuilt.cmake).
+  tsc_import_libcarla_prebuilt("${TSC_CARLA_PREBUILT_PREFIX}" "${TSC_CARLA_PREBUILT_SHA}")
+  target_link_libraries(typesafe_carla_ffi PRIVATE carla-client)
+elseif(TSC_BACKEND STREQUAL "libcarla")
   # Client library only: no server, Unreal, Python API, examples or tests.
   # (CARLA sets policy CMP0077, so these normal variables override its options.)
   set(BUILD_CARLA_CLIENT ON)
@@ -168,16 +186,6 @@ else()
     add_library(Boost::python INTERFACE IMPORTED)
   endif()
 
-  # CARLA 0.10.0's carla/client/FileTransfer.h uses uint8_t without including
-  # <cstdint>; newer GCC (14, in the manylinux release image) no longer
-  # provides it transitively. Force-include it for CARLA and for the shim
-  # (which includes that header through Client.h). Harmless for other refs.
-  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    set(_tsc_include_cstdint "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>")
-    add_compile_options("${_tsc_include_cstdint}")
-    target_compile_options(typesafe_carla_ffi PRIVATE "${_tsc_include_cstdint}")
-  endif()
-
   # CMake 4 removed compatibility with cmake_minimum_required < 3.5, which some
   # of CARLA's dependencies (e.g. libpng in 0.10.0) still declare. ue5-dev sets
   # this itself; older refs need it from us.
@@ -203,6 +211,26 @@ else()
     message(FATAL_ERROR "CARLA at ${TSC_CARLA_DIR} did not define the carla-client target")
   endif()
   target_link_libraries(typesafe_carla_ffi PRIVATE carla-client)
+
+  file(STRINGS "${TSC_CARLA_DIR}/CMakeLists.txt" _tsc_carla_v REGEX "set \\(CARLA_VERSION_(MAJOR|MINOR|PATCH) [0-9]+\\)")
+  string(REGEX REPLACE ".*MAJOR ([0-9]+).*MINOR ([0-9]+).*PATCH ([0-9]+).*" "\\1.\\2.\\3"
+         TSC_CARLA_VERSION "${_tsc_carla_v}")
+  set(TSC_CARLA_LICENSE_FILE "${TSC_CARLA_DIR}/LICENSE")
+  # LibCarla (MIT) is linked statically; the wheel ships its license notice,
+  # and the notices of everything else linked in with it (Boost, rpclib,
+  # Recast, libpng, zlib, LibCarla's vendored sources), collected from the
+  # fetched sources. Configuring fails if any expected license text is missing.
+  include(cmake/ThirdPartyNotices.cmake)
+  set(TSC_CARLA_NOTICES_COMPONENTS "${CMAKE_BINARY_DIR}/THIRD_PARTY_NOTICES.components")
+  tsc_collect_third_party_notices("${TSC_CARLA_NOTICES_COMPONENTS}")
+  file(READ "${TSC_CARLA_NOTICES_COMPONENTS}" TSC_CARLA_NOTICES_COMPONENTS_TEXT)
+
+  # `cmake --build <dir> --target libcarla_prebuilt` makes a relocatable
+  # prefix of what was just built, for TSC_CARLA_PREBUILT_DIR (CI publishes
+  # them; docs/releasing.md, "LibCarla prebuilt").
+  set(TSC_CARLA_PREBUILT_OUTPUT "${CMAKE_BINARY_DIR}/libcarla-prebuilt" CACHE PATH
+      "Where the libcarla_prebuilt target assembles the LibCarla prebuilt")
+  tsc_add_libcarla_prebuilt_target("${TSC_CARLA_PREBUILT_OUTPUT}")
 endif()
 
 target_compile_definitions(typesafe_carla_ffi PRIVATE
@@ -264,11 +292,7 @@ install(DIRECTORY codon/typesafe_carla DESTINATION typesafe_carla/_codon
         COMPONENT typesafe_carla FILES_MATCHING PATTERN "*.codon")
 # What this wheel was built from; read by `typesafe-codon info` and
 # typesafe_carla.paths.build_info() without loading the library.
-if(TSC_BACKEND STREQUAL "libcarla")
-  file(STRINGS "${TSC_CARLA_DIR}/CMakeLists.txt" _tsc_carla_v REGEX "set \\(CARLA_VERSION_(MAJOR|MINOR|PATCH) [0-9]+\\)")
-  string(REGEX REPLACE ".*MAJOR ([0-9]+).*MINOR ([0-9]+).*PATCH ([0-9]+).*" "\\1.\\2.\\3"
-         TSC_CARLA_VERSION "${_tsc_carla_v}")
-else()
+if(NOT TSC_BACKEND STREQUAL "libcarla")
   set(TSC_CARLA_VERSION "mock")
 endif()
 file(WRITE "${CMAKE_BINARY_DIR}/BUILD_INFO.json" "{
@@ -284,14 +308,13 @@ install(FILES "${CMAKE_BINARY_DIR}/BUILD_INFO.json" DESTINATION typesafe_carla/_
         COMPONENT typesafe_carla)
 
 if(TSC_BACKEND STREQUAL "libcarla")
-  # LibCarla (MIT) is linked statically; ship its license notice, and the
-  # notices of everything else linked in with it (Boost, rpclib, Recast,
-  # libpng, zlib, LibCarla's vendored sources), collected from the fetched
-  # sources. Configuring fails if any expected license text is missing.
-  install(FILES "${TSC_CARLA_DIR}/LICENSE" DESTINATION typesafe_carla/_native
+  # LibCarla's license and the notices of everything linked with it (see
+  # above; from the prebuilt, which collected them when it was built).
+  install(FILES "${TSC_CARLA_LICENSE_FILE}" DESTINATION typesafe_carla/_native
           RENAME LICENSE.CARLA COMPONENT typesafe_carla)
   include(cmake/ThirdPartyNotices.cmake)
-  tsc_write_third_party_notices("${CMAKE_BINARY_DIR}/THIRD_PARTY_NOTICES")
+  tsc_write_third_party_notices("${CMAKE_BINARY_DIR}/THIRD_PARTY_NOTICES"
+                                "${TSC_CARLA_NOTICES_COMPONENTS_TEXT}")
   install(FILES "${CMAKE_BINARY_DIR}/THIRD_PARTY_NOTICES" DESTINATION typesafe_carla/_native
           COMPONENT typesafe_carla)
 endif()

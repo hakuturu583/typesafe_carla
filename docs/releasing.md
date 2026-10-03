@@ -207,6 +207,123 @@ Copyright holders other than CVC in LibCarla's sources are listed
 automatically; one in a file that does not say MIT also fails. Add the component's notice there
 before releasing that ref.
 
+### LibCarla prebuilt
+
+Local builds can skip compiling LibCarla (minutes) by downloading what CI
+built. CI's `libcarla` job publishes, on pushes to `main` and the daily run
+(not on pull requests), after its tests pass, one **workflow artifact** per
+leg (`actions/cache` entries cannot be downloaded outside a workflow):
+
+    libcarla-prebuilt-<os>-<compiler><major>-<ABI hash>-<CARLA commit SHA>
+    e.g. libcarla-prebuilt-ubuntu-22.04-gcc11-e2d542790b19-ada75f920642e18cace0a9f85ecf9d4077ddb531
+
+kept for 14 days (the daily run republishes an unchanged commit, so a
+commit CI still builds always has one). The name is formed by
+`tools/fetch_libcarla_prebuilt.py --print-name <ref>`, both by CI and by the
+downloader; CI checks that its ABI hash is the manifest's.
+
+**Contents.** The build tree is not relocatable, so `cmake --build <dir>
+--target libcarla_prebuilt` (defined by source builds,
+`cmake/LibCarlaPrebuilt.cmake`) assembles an install prefix instead of
+installing CARLA's own rules:
+
+- `lib/`: `libcarla-client.a` and every static library it links (Boost's
+  compiled libraries, rpclib, Recast/Detour/DetourCrowd, libpng, zlib), found
+  by walking carla-client's link interface;
+- `include/`: the headers of every include directory carla-client passes on
+  (LibCarla, its vendored third-party sources, Boost, rpclib, libpng, zlib),
+  merged into one directory. Merging fails if two of them hold the same header
+  with different contents;
+- `cmake/libcarla-targets.cmake`: imported targets with the same link graph
+  (so the link order is the source build's), and carla-client's transitive
+  compile definitions, options and features;
+- `licenses/`: CARLA's `LICENSE` and the per-component third-party notices
+  collected from the sources when the prefix was built (the configure step of
+  a prebuilt build writes `THIRD_PARTY_NOTICES` from them, with this
+  version's header);
+- `prebuilt.json`: the CARLA repository, ref, commit and version, the ABI
+  fingerprint, and the sha256 of every file.
+
+CI moves the prefix out of the build tree, fails if any of its text files
+names the checkout, moves the build tree aside, builds the shim and the C ABI
+tests from the prefix alone (`TSC_CARLA_PREBUILT_DIR`), runs them, and only
+then uploads it.
+
+**Using it.** `-DTSC_CARLA_PREBUILT=auto` (or the environment variable
+`TSC_CARLA_PREBUILT=auto`) runs `tools/fetch_libcarla_prebuilt.py` at
+configure time, which:
+
+1. resolves `TSC_CARLA_GIT_REF` to its commit (`tools/resolve_carla_ref.sh`);
+2. fingerprints this build's compilers (below) and forms the artifact name;
+3. asks the GitHub API (`gh api`) for that artifact, taking only artifacts of
+   a successful `ci.yml` run on `main` (push or schedule) of this repository
+   itself, the newest first;
+4. downloads it, checks the archive against the digest the API reports
+   (required), the manifest's commit and ABI, and the sha256 of every file,
+   and unpacks it into `<cache>/libcarla-prebuilt/<name>`, where later
+   configures find it without downloading (every file is checked again; a
+   changed prefix is downloaded again). `<cache>` is typesafe_carla's cache
+   root, as for the launcher: `$TYPESAFE_CARLA_CACHE_DIR`, else
+   `${XDG_CACHE_HOME:-~/.cache}/typesafe-carla`.
+
+If any of this does not apply (no `gh`, not logged in — artifacts need a token
+even for a public repository —, no artifact for this commit and compiler, a
+fork's repository, no network), it says why and LibCarla is built from source
+as before. The answer is kept in the CMake cache until the ref, the repository
+or the compiler's ABI fingerprint changes, or `-DTSC_CARLA_REFRESH=ON`. A
+cached prefix that no longer fits (e.g. the compiler was upgraded) is looked
+up again, and LibCarla is built from source if nothing fits: `auto` never
+fails the configure step. A moving `ue5-dev` has a
+prebuilt only once CI has run on its current commit; pinning a commit
+(`-DTSC_CARLA_GIT_REF=<sha> -DTSC_CARLA_REF_NAME=ue5-dev`) uses an older one.
+
+**Cleaning up.** Each prefix is about 155 MB unpacked. The next download
+removes cached prefixes not used for 30 days;
+`tools/fetch_libcarla_prebuilt.py --prune [DAYS]` removes those not used for
+DAYS days (default: all) now, and deleting `<cache>/libcarla-prebuilt` is
+always safe.
+
+**Trust.** The artifact comes over TLS from the GitHub API, authenticated with
+your token, from a successful push or scheduled `ci.yml` run on `main` of this
+repository (not a fork, not a pull request). The digest and per-file hashes
+catch corruption and local changes, not a compromised run: a prebuilt is
+exactly as trustworthy as CI on `main`, which also builds the released wheels.
+
+`-DTSC_CARLA_PREBUILT_DIR=<prefix>` uses a given prefix (from the script, or
+assembled locally). Configuring then fails, rather than linking something
+else, if the prefix's ABI fingerprint is not this build's or its commit is
+not the one `TSC_CARLA_GIT_REF` resolves to (a full SHA is compared directly;
+a branch or tag needs `git ls-remote`, once per ref like a fetch).
+
+**What must match: the ABI fingerprint.** A prefix is only linked by the
+compiler it was built with: mixing compilers was tried for a manylinux
+prebuilt and rejected (it needed `libstdc++_nonshared.a` and changed runtime
+behaviour). The match is on `tools/libcarla_cache_guard.sh --abi` for the
+build's `CC`/`CXX` and flags, e.g.
+
+    target=x86_64-linux-gnu
+    cc=gcc 11.4.0, glibc 2.35, __SIZEOF_POINTER__=8, __SIZEOF_LONG__=8, __SIZEOF_LONG_DOUBLE__=16
+    cxx=gcc 11.4.0, libstdc++ 11 (20230528) cxx11-abi=1, glibc 2.35, __SIZEOF_POINTER__=8, __SIZEOF_LONG__=8, __SIZEOF_LONG_DOUBLE__=16, __GXX_RTTI=1, __EXCEPTIONS=1
+
+(the flags are `CMAKE_<LANG>_FLAGS` and those of the build type), which is
+what static libraries and headers carry into the final link: the target, the
+compilers' upstream versions (their code generation, inline functions and the
+libstdc++ headers they instantiate), libstdc++'s release and dual-ABI mode
+(`std::string` and `std::list` layouts), the glibc headers' version (newer
+ones redirect symbols, e.g. C23 `strtol`), the data model (`-m32`), and
+macros that change layouts or mangling when a flag sets them
+(`_GLIBCXX_DEBUG`, `_FILE_OFFSET_BITS`, `_TIME_BITS`, `-fno-rtti`,
+`-fno-exceptions`). The cache
+key's `--toolchain` is stricter, as a build tree needs, and would never match
+another machine: it includes the command's name (`g++-11` vs `c++`), the
+distribution's package revision (`11.4.0-1ubuntu1~22.04.3`, patches within
+one upstream release), and CMake and Ninja, none of which a prefix depends
+on. The runtime libstdc++ (`libstdc++.so.6`) is not part of it: static
+libraries bind no symbol versions; the shim's final link does that, the same
+as in a source build. So an Ubuntu 22.04 machine with its GCC 11 uses the
+ubuntu-22.04 leg's prefix even if a newer libstdc++ runtime is installed;
+`CXX=g++-13` there, or another distribution, finds none.
+
 ## Cutting a release
 
 `.github/workflows/release.yml` has three entry points:
