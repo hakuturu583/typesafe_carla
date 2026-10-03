@@ -391,9 +391,10 @@ jobs:
   # The two packages are published from separate jobs with separate
   # environments (<index>-toolchain and <index>) on purpose. PyPI's trusted
   # publishers match on (repository, workflow, environment): with identical
-  # claims, the first upload reifies one project's pending publisher and every
-  # later token is scoped to that project, so the other project can never be
-  # created ("Non-user identities cannot create new projects").
+  # claims, which project's pending publisher a token exchange reifies is
+  # arbitrary and the token is scoped to that project only, so a run could
+  # upload one package and fail the other. Separate environments make the
+  # lookup unambiguous.
   publish-toolchain:
     name: publish typesafe-carla-toolchain to ${{ needs.resolve.outputs.index }}
     needs: [resolve, sdist, wheel, toolchain]
@@ -409,15 +410,22 @@ jobs:
     permissions:
       id-token: write  # Trusted Publishing; no token in secrets.
     steps:
+      # Every artifact is checked here, so nothing is uploaded unless all of it
+      # passes; only the toolchain is uploaded from this job.
       - uses: actions/download-artifact@v4
-        with: { name: dist-toolchain, path: dist }
-      - run: ls -l dist
+        with: { name: dist-sdist, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: dist-wheel, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: dist-toolchain, path: dist-toolchain }
+      - run: ls -l dist dist-toolchain
       # PyPI rejects bad metadata only after the OIDC exchange; failing here
       # costs nothing.
-      - run: pipx run twine check --strict dist/*
+      - run: pipx run twine check --strict dist/* dist-toolchain/*
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ needs.resolve.outputs.upload_url }}
+          packages-dir: dist-toolchain/
           # The toolchain version only changes with Codon; most releases skip it.
           skip-existing: true
 
@@ -426,7 +434,9 @@ jobs:
     # After the toolchain, so typesafe-carla's dependency is installable when
     # it appears.
     needs: [resolve, publish-toolchain]
-    if: always() && needs.publish-toolchain.result == 'success'
+    if: >-
+      always() && needs.resolve.outputs.publish == 'true' &&
+      needs.publish-toolchain.result == 'success'
     runs-on: ubuntu-24.04
     environment: ${{ needs.resolve.outputs.index }}
     permissions:
@@ -439,7 +449,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: dist-wheel, path: dist }
       - run: ls -l dist
-      - run: pipx run twine check --strict dist/*
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ needs.resolve.outputs.upload_url }}
