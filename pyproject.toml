@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core>=0.10"]
+requires = ["scikit-build-core>=0.11"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -7,6 +7,8 @@ name = "typesafe-carla"
 dynamic = ["version"]
 description = "A statically typed native CARLA (UE5) client for Codon"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     # The pinned Codon compiler; the launcher finds it automatically.
@@ -74,7 +76,6 @@ install.components = ["typesafe_carla"]
 wheel.packages = ["python/typesafe_carla"]
 # The wheel holds no CPython extension: one wheel serves every Python 3.
 wheel.py-api = "py3"
-wheel.license-files = ["LICENSE*"]
 metadata.version.provider = "scikit_build_core.metadata.regex"
 metadata.version.input = "python/typesafe_carla/__init__.py"
 sdist.exclude = [
