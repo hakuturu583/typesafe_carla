@@ -20,7 +20,13 @@ if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 
 # A branch, or a tag (an annotated tag's "^{}" line is the commit it tags).
-out=$(git ls-remote "$repo" "refs/heads/${ref}" "refs/tags/${ref}" "refs/tags/${ref}^{}")
+# One retry: a transient network error should not fail a CI run.
+lsremote() { git ls-remote "$repo" "refs/heads/${ref}" "refs/tags/${ref}" "refs/tags/${ref}^{}"; }
+if ! out=$(lsremote); then
+  echo "git ls-remote failed; retrying in 10 s" >&2
+  sleep 10
+  out=$(lsremote)
+fi
 # Precedence: the peeled tag, then the branch, then the tag itself.
 sha=$(awk -v r="$ref" '
   $2 == "refs/tags/" r "^{}" { peeled = $1 }

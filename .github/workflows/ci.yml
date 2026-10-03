@@ -51,17 +51,20 @@ jobs:
 
   libcarla:
     # The shim compiled and linked against real LibCarla built from CARLA
-    # sources. Runs the C ABI tests that need no server.
+    # sources. Runs the C ABI tests that need no server. ue5-dev, and 0.10.0
+    # as run by the test server.
     # LibCarla is built from the ref's current commit SHA, and build/ is
     # cached keyed by that SHA and the toolchain (docs/releasing.md,
     # "LibCarla build cache").
+    name: libcarla (${{ matrix.carla_ref }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        carla_ref: ${{ fromJSON(inputs.carla_ref && format('["ue5-dev","{0}"]', inputs.carla_ref) || '["ue5-dev"]') }}
+        carla_ref: ${{ fromJSON(inputs.carla_ref && format('["ue5-dev","0.10.0","{0}"]', inputs.carla_ref) || '["ue5-dev","0.10.0"]') }}
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
       - name: Resolve CARLA ${{ matrix.carla_ref }} to a commit
         id: carla
         env:
@@ -78,7 +81,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
       - name: Restore the LibCarla build
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: build
           # CMake files that configure LibCarla and its dependencies. On a
@@ -87,15 +90,31 @@ jobs:
           key: ${{ steps.carla.outputs.key }}-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
           restore-keys: ${{ steps.carla.outputs.key }}-
       - name: Check the restored build (CARLA commit, toolchain)
-        run: tools/libcarla_cache_guard.sh build "${{ steps.carla.outputs.sha }}"
+        env:
+          SHA: ${{ steps.carla.outputs.sha }}
+          # 'true': exact key; 'false': a restore-key; '': nothing restored.
+          HIT: ${{ steps.cache.outputs.cache-hit }}
+        run: |
+          tools/libcarla_cache_guard.sh build "$SHA"
+          # The CMake files changed: configure afresh, so changed cache
+          # defaults apply (the objects are kept; make decides what is stale).
+          if [ "$HIT" = false ]; then rm -f build/CMakeCache.txt; fi
       - name: Configure (CARLA ${{ matrix.carla_ref }} @ ${{ steps.carla.outputs.sha }})
         run: cmake -S . -B build -DTSC_BACKEND=libcarla -DTSC_CARLA_GIT_REF=${{ steps.carla.outputs.sha }}
       - name: Build (cache ${{ steps.cache.outputs.cache-hit == 'true' && 'hit' || steps.cache.outputs.cache-hit == 'false' && 'partial hit' || 'miss' }})
         # A bare -j means unlimited jobs; LibCarla/Boost TUs need ~1-2 GB each.
         run: cmake --build build -j "$(nproc)" --target typesafe_carla_ffi test_ffi test_generated test_image_converter
+      # Saved as soon as it is built (a failing test still keeps the build),
+      # but not from pull requests: their entries are visible to that PR only
+      # and would push main's out of the repository's 10 GB.
+      - name: Save the LibCarla build
+        if: github.event_name != 'pull_request' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build
+          key: ${{ steps.cache.outputs.cache-primary-key }}
       - name: Native ABI tests
         run: ctest --test-dir build --output-on-failure
-      - uses: astral-sh/setup-uv@v6
       # --no-project: only the generator's dependencies, not a second
       # LibCarla build of the package.
       - name: Binding spec vs LibCarla headers

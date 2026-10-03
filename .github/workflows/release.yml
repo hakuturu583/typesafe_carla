@@ -346,6 +346,10 @@ jobs:
       CARLA_GIT_REF: ${{ needs.resolve.outputs.carla_build_ref }}
       CARLA_COMMIT: ${{ needs.resolve.outputs.carla_commit }}
       CARLA_REF: ${{ needs.resolve.outputs.carla_ref }}
+      # Shared by cibuildwheel and the cache key. cibuildwheel is pinned
+      # exactly (and named in the key) because each release pins its own
+      # manylinux image, i.e. its own compiler.
+      MANYLINUX_IMAGE: manylinux_2_28
     steps:
       - uses: actions/checkout@v4
         with:
@@ -359,13 +363,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/libcarla-build
-          # The image tag is the one cibuildwheel pins (bump with it).
-          key: libcarla-wheel-manylinux_2_28-cibuildwheel-v3.1-${{ needs.resolve.outputs.carla_build_ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'pyproject.toml') }}
-      - uses: pypa/cibuildwheel@v3.1
+          # Keep the cibuildwheel version in step with `uses:` below.
+          key: libcarla-wheel-${{ env.MANYLINUX_IMAGE }}-cibuildwheel-v3.1.4-${{ needs.resolve.outputs.carla_build_ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'pyproject.toml') }}
+      - uses: pypa/cibuildwheel@v3.1.4
         env:
           CIBW_BUILD: cp312-manylinux_x86_64
           CIBW_ARCHS: x86_64
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_X86_64_IMAGE: ${{ env.MANYLINUX_IMAGE }}
           CIBW_ENVIRONMENT_PASS_LINUX: CARLA_GIT_REF
           CIBW_CONTAINER_ENGINE: "docker; create_args: --volume=${{ runner.temp }}/libcarla-build:/libcarla-build"
           CIBW_BEFORE_BUILD: bash {project}/tools/libcarla_cache_guard.sh /libcarla-build/wheel "$CARLA_GIT_REF"

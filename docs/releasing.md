@@ -156,24 +156,39 @@ Both CI's `libcarla` job and the release `wheel` job cache the LibCarla build
 with `actions/cache`, keyed by the resolved CARLA commit SHA:
 
 - CI resolves the ref first (`tools/resolve_carla_ref.sh`, i.e.
-  `git ls-remote`), builds from that SHA, and caches the whole CMake build
-  directory (`build/`: the CARLA sparse checkout, the fetched and built
-  dependencies under `_deps/`, LibCarla under `carla/`, and the shim) under
-  `libcarla-<os>-<arch>-<image>-<toolchain hash>-<CARLA SHA>-<hash of
-  CMakeLists.txt and cmake/>` (the toolchain hash is of
-  `tools/libcarla_cache_guard.sh --toolchain`). A run on an unchanged `ue5-dev` restores it and
-  only the shim is recompiled; a new `ue5-dev` commit misses and builds from
-  scratch.
-- The release `wheel` job keys by the exact SHA it builds and the
-  cibuildwheel/manylinux image, with no fallback key. The cached directory is
-  a host directory bind-mounted into the cibuildwheel container at
-  `/libcarla-build` and used as scikit-build-core's `build-dir`.
+  `git ls-remote`; a tag resolves to the commit it tags), builds from that
+  SHA, and caches the whole CMake build directory (`build/`: the CARLA sparse
+  checkout, the fetched and built dependencies under `_deps/`, LibCarla under
+  `carla/`, and the shim) under `libcarla-<os>-<arch>-<image>-<toolchain
+  hash>-<CARLA SHA>-<hash of CMakeLists.txt and cmake/>`. The toolchain hash
+  is of `tools/libcarla_cache_guard.sh --toolchain`: compilers, CMake and
+  Ninja. A run on an unchanged commit restores it and only the shim is
+  recompiled; a new `ue5-dev` commit misses and builds from scratch. When
+  only our CMake files changed, the newest entry of the same SHA and
+  toolchain is restored without its `CMakeCache.txt`, so the configure starts
+  afresh while make keeps the up-to-date objects. Pull requests restore but
+  never save: their entries would be visible to that pull request only and
+  push `main`'s out.
+- The release `wheel` job keys by the cibuildwheel version (pinned exactly,
+  as each release pins its own manylinux image and compiler), the manylinux
+  image, the exact SHA it builds and the hash of `CMakeLists.txt`, `cmake/`
+  and `pyproject.toml`
+  (`libcarla-wheel-<image>-cibuildwheel-<version>-<CARLA SHA>-<hash>`), with
+  no fallback key. The cached directory is a host directory bind-mounted into
+  the cibuildwheel container at `/libcarla-build` and used as
+  scikit-build-core's `build-dir`. Runs on `main` (auto-release, dry runs)
+  read and save `main`'s entries; a hand-cut tag's run can read `main`'s
+  entries but saves to the tag's own scope, where no later run looks.
 - A CMake build directory is not relocatable, so it is always restored to
   the same absolute path. Before configuring, `tools/libcarla_cache_guard.sh`
   compares the CARLA SHA, compilers and CMake recorded in the directory with
   the current ones and empties it on any difference, so a release never
   reuses objects from another CARLA commit or toolchain. A miss is a clean
   build, the same as without the cache.
+- CARLA fetches rpclib and recastnavigation from branch archives
+  (`archive/refs/heads/<branch>.zip`), not pinned commits, so an entry
+  freezes them as they were when it was built; a fresh build of the same
+  CARLA SHA may get newer ones.
 
 An entry is about 275 MB compressed (1.1 GB unpacked, mostly Boost sources).
 GitHub evicts the least recently used entries beyond 10 GB per repository.

@@ -200,7 +200,7 @@ Notes on Milestone 5:
   prototype and struct size before and after the migration. See [docs/bindgen.md](docs/bindgen.md).
 - **Validated against LibCarla.** `tools.bindgen validate` parses the shim with libclang
   and checks each spec'd method's existence, arity and types. It runs against the mock
-  headers and LibCarla ue5-dev in CI, and was run locally against 0.10.0.
+  headers and against LibCarla ue5-dev and 0.10.0 in CI.
 - **Coverage.** [docs/coverage.md](docs/coverage.md) lists the public methods of the main
   LibCarla client classes and whether the shim calls them (generated, hand-written or not yet).
 
@@ -242,7 +242,7 @@ resolved commit are compiled in: `typesafe-codon info`,
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
-| 0.1.0 | 4.4 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
+| 0.1.0 | 4.4 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev` and `0.10.0`: build, link and pass the C ABI tests in CI |
 
 ### Backends
 

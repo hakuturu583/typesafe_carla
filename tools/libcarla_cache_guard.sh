@@ -10,16 +10,37 @@
 # clean build, as on a cache miss. --toolchain only prints the toolchain part,
 # which CI hashes into its cache key.
 set -euo pipefail
+shopt -s inherit_errexit  # a failing $(...) fails the script
+
+# The first line of `<command> --version`; fails loudly if the command is
+# missing. CC/CXX may carry a launcher or flags ("ccache gcc"): the version is
+# that of what the build actually runs.
+version_of() {
+  local words
+  read -ra words <<<"$1"
+  if ! command -v "${words[0]}" >/dev/null; then
+    echo "libcarla cache: '${words[0]}' not found (from '$1')" >&2
+    return 1
+  fi
+  "${words[@]}" --version 2>&1 | sed -n 1p
+}
 
 toolchain() {
+  local cc cxx cmake ninja=""
+  cc=$(version_of "${CC:-cc}")
+  cxx=$(version_of "${CXX:-c++}")
+  cmake=$(version_of cmake)
+  if command -v ninja >/dev/null; then ninja=$(version_of ninja); fi
   echo "machine=$(uname -m)"
-  echo "cc=$("${CC:-cc}" --version 2>&1 | head -n 1)"
-  echo "cxx=$("${CXX:-c++}" --version 2>&1 | head -n 1)"
-  echo "cmake=$(cmake --version 2>&1 | head -n 1)"
+  echo "cc=${cc}"
+  echo "cxx=${cxx}"
+  echo "cmake=${cmake}"
+  if [ -n "$ninja" ]; then echo "ninja=${ninja}"; fi
 }
 
 if [ "${1:-}" = --toolchain ]; then
-  toolchain
+  tc=$(toolchain)
+  echo "$tc"
   exit 0
 fi
 
@@ -27,7 +48,8 @@ usage="usage: libcarla_cache_guard.sh <build-dir> <CARLA commit SHA> | --toolcha
 dir=${1:?$usage}
 sha=${2:?$usage}
 stamp="$dir/.tsc-libcarla-fingerprint"
-want=$(echo "carla=${sha}"; toolchain)
+tc=$(toolchain)
+want=$(echo "carla=${sha}"; echo "$tc")
 
 mkdir -p "$dir"
 if [ -z "$(ls -A "$dir")" ]; then
