@@ -397,8 +397,13 @@ try:
             carla.Location(rel.location.x, rel.location.y, rel.location.z + 0.1),
             carla.Rotation(rel.rotation.pitch, rel.rotation.yaw + 30.0, rel.rotation.roll)))]))
         walker.show_pose()
-        world.tick()
-        posed = [b for b in walker.get_bones().bone_transforms if b.name == b1.name][0].relative
+        # The server can apply the pose a tick late (issue #73): wait, bounded.
+        posed = rel
+        for _ in range(10):
+            world.tick()
+            posed = [b for b in walker.get_bones().bone_transforms if b.name == b1.name][0].relative
+            if abs(posed.location.z - rel.location.z) > 0.05:
+                break
         out("walker_pose", fmt(posed.location.z - rel.location.z) + "," +
             fmt(posed.rotation.yaw - rel.rotation.yaw))
         walker.hide_pose()
