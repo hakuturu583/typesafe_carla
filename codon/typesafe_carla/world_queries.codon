@@ -26,7 +26,7 @@ from ._ffi import (Handle, CString, CVehicleLightStateList,
                    tsc_world_apply_textures_to_objects, tsc_world_on_tick,
                    tsc_world_get_client_token, tsc_tick_listener_get_id)
 from .errors import _check, _i32, _u8, CarlaError
-from .geometry import Location, Vector3D, Transform, BoundingBox, _loc, _vector_arg
+from .geometry import Location, Vector3D, Transform, BoundingBox, _loc, _vector_ref
 from .actor import Actor
 from .traffic_light import TrafficLight, TrafficSign, _take_traffic_lights
 from .map import Landmark
@@ -94,12 +94,17 @@ class EnvironmentObject:
 
 class LabelledPoint:
     """A point hit by a ray cast or projection, with its semantic label."""
-    location: Location
+    _location: Location
     label: int  # CityObjectLabel
 
     def __init__(self, location: Location, label: int):
-        self.location = location
+        self._location = location
         self.label = label
+
+    @property
+    def location(self) -> Location:
+        """Read-only, as in the Python API (def_readonly: the stored value)."""
+        return self._location
 
     @staticmethod
     def _from_c(p: CLabelledPoint) -> LabelledPoint:
@@ -247,7 +252,7 @@ class World:
                       search_distance: float = 10000.0) -> Optional[LabelledPoint]:
         """The first hit from location along direction (a Vector3D), or None."""
         l = _loc(location, "[tsc-compat] a Vector3D passed as a Location to project_point")
-        d = ref(_vector_arg(
+        d = ref(_vector_ref(
             direction, "[tsc-compat] a Location passed as a Vector3D direction to project_point"
         )._to_c())
         return _optional_point(tsc_world_project_point, self._h.ptr, l, d, search_distance)

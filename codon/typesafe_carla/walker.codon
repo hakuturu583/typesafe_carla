@@ -19,7 +19,7 @@ from ._ffi import (Handle, CVector3D, CWalkerControl, TSC_KIND_WALKER,
                    tsc_bone_list_get)
 from .errors import _check
 from ._eq import _fields_eq
-from .geometry import Location, Transform, _location_arg
+from .geometry import Location, Transform, _location_ref
 from .control import WalkerControl
 from .actor import Actor
 from .world import World
@@ -158,9 +158,13 @@ class Walker(Actor):
         for i in range(n):
             _check(tsc_bone_list_get(bones.ptr, i, b))
             name[0] = b[0].name
-            result.append(bone_transform_out(take_string(name), Transform._from_c(b[0].world),
-                                             Transform._from_c(b[0].component),
-                                             Transform._from_c(b[0].relative)))
+            # Built directly: the transforms are fresh, so they need no copies.
+            bone = bone_transform_out.__new__()
+            bone.name = take_string(name)
+            bone._world = Transform._from_c(b[0].world)
+            bone._component = Transform._from_c(b[0].component)
+            bone._relative = Transform._from_c(b[0].relative)
+            result.append(bone)
         bones.release()
         return WalkerBoneControlOut(result)
 
@@ -204,7 +208,7 @@ class WalkerAIController(Actor):
     def go_to_location(self, destination):
         """destination: Location (a Vector3D is accepted as in the Python API)."""
         p = Ptr[CVector3D](1)
-        p[0] = _location_arg(
+        p[0] = _location_ref(
             destination,
             "[tsc-compat] a Vector3D passed as a Location to WalkerAIController.go_to_location")._to_c()
         _check(tsc_walker_ai_controller_go_to_location(self._h.ptr, p))

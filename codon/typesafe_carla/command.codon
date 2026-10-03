@@ -16,7 +16,7 @@
 from ._ffi import CCommand, CCommandResponse, CString, take_string, TSC_INVALID_ARGUMENT
 from .errors import (CarlaError, _check_light_state, _check_port, _check_traffic_light_state,
                      _actor_id)
-from .geometry import Location, Transform, Vector3D, _vector_arg, _location_arg
+from .geometry import Location, Transform, Vector3D, _vector_arg, _location_ref
 from .control import VehicleControl, WalkerControl
 from .vehicle import VehicleAckermannControl
 from .blueprint import ActorBlueprint
@@ -278,7 +278,7 @@ def SetVehicleLightState(actor_id = _MISSING, light_state: int = _MISSING,
 def ApplyLocation(actor_id = _MISSING, location = _MISSING, actor = _MISSING) -> Command:
     """location: Location (a Vector3D is accepted as in the Python API)."""
     c = Command(_APPLY_LOCATION, _actor_arg(actor_id, actor))
-    c._transform = Transform(_location_arg(
+    c._transform = Transform(_location_ref(
         location, "[tsc-compat] a Vector3D passed as a Location to command.ApplyLocation"))
     return c
 

@@ -142,14 +142,15 @@ warning-free:
 carla.Transform(carla.Location(spawn.location + offset), spawn.rotation)
 ```
 
-Assignments do not convert. Once `loc` is a `Location` variable,
-`loc = loc + offset` (in a loop, or in one branch of an `if`) is a compile
-error (`'Vector3D' does not match expected type 'Location'`), and so are
-`t.location = loc + offset` and `loc /= k` (which rebinds `loc` to a
-`Vector3D` in the Python API). `loc += offset`, `loc -= offset` and
-`loc *= k` update `loc` in place and keep it a `Location`, as in the Python
-API. Otherwise write `loc = carla.Location(loc + offset)`, or keep a vector
-and convert at the end:
+Field setters convert as the API parameters do, with the same warning:
+`t.location = loc + offset` and `t.location /= k` store a `Location`, as in
+the Python API. A variable cannot convert: once `loc` is a `Location`
+variable, `loc = loc + offset` (in a loop, or in one branch of an `if`) is a
+compile error (`'Vector3D' does not match expected type 'Location'`), and
+so is `loc /= k` (which rebinds `loc` to a `Vector3D` in the Python API).
+`loc += offset`, `loc -= offset` and `loc *= k` update `loc` in place and
+keep it a `Location`, as in the Python API. Otherwise write
+`loc = carla.Location(loc + offset)`, or keep a vector and convert at the end:
 
 ```python
 pos = actor.get_location().as_vector()

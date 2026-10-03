@@ -1,0 +1,11 @@
+# Issue #77: `t.location /= k` assigns the Vector3D `t.location / k` back to
+# a Location field. As in the Python API, the setter converts it (a
+# compatibility warning); in strict mode that is an error. Write
+# `t.location *= 1.0 / k` (in place).
+# expect-error: strict mode: convert with carla.Location(v) (Vector3D as Location is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def halve(t: carla.Transform):
+    t.location /= 2
+
+halve(carla.Transform())

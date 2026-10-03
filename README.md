@@ -474,25 +474,24 @@ Deliberate differences, all in favour of static checking:
   method is a compile error in every mode (`vehicle.listen()`: "Vehicle has
   no method listen()"), as in the Python API, where `carla.Vehicle` has no
   `listen`.
-* **A `Vector3D` does not become a `Location` on assignment.** As in CARLA
-  0.10.0, `Location` arithmetic gives a `Vector3D`, and the Python API
-  converts it back implicitly. API parameters do the same here (with a
-  warning; see docs/usage.md). Assignments cannot convert, because Codon has
-  no hook for it and a variable keeps one static type. These do not compile,
-  each with `'Vector3D' does not match expected type 'Location'`:
-  - a field: `t.location = loc + offset`, or `t.location /= k` (the Python
-    API converts the `Vector3D` `t.location / k` back);
-  - a rebound local: `loc = actor.get_location()` followed by
-    `loc = loc + offset` in a loop, or a conditional `loc = loc + offset`.
-
-  Write `loc += offset` (in place: `loc` stays a `Location`, as in Python)
-  or `loc = carla.Location(loc + offset)`.
+* **A `Vector3D` does not become a `Location` on assignment to a variable.**
+  As in CARLA 0.10.0, `Location` arithmetic gives a `Vector3D`, and the
+  Python API converts it back implicitly. API parameters and field setters
+  do the same here, with a warning (see docs/usage.md): `t.location = loc +
+  offset` and `t.location /= k` store a `Location`, as in Python. A
+  variable cannot convert, because Codon has no hook for it and a variable
+  keeps one static type: a rebound local (`loc = actor.get_location()`
+  followed by `loc = loc + offset` in a loop, or a conditional
+  `loc = loc + offset`) does not compile (`'Vector3D' does not match
+  expected type 'Location'`). Write `loc += offset` (in place: `loc` stays a
+  `Location`, as in Python) or `loc = carla.Location(loc + offset)`.
 * **No `/=` on a `Location`.** The Python API has no in-place `/=`, so
   `loc /= k` rebinds `loc` to the `Vector3D` `loc / k`. A variable keeps one
   static type here, so on a `Location`, `Velocity`, `AngularVelocity` or
   `Acceleration` variable it is a compile error (`'Vector3D' does not match
   expected type 'Location'`); write `loc *= 1.0 / k` (in place) or
-  `v = loc / k`. On a `Vector3D` or `Vector2D` it works as in Python.
+  `v = loc / k`. On a `Vector3D` or `Vector2D` it works as in Python, and on
+  a field (`t.location /= k`) the setter converts, as above.
 * **Vector arithmetic otherwise matches the Python API.** Arithmetic across `Vector3D`, `Location`, `Velocity`,
   `AngularVelocity`, `Acceleration` and `Vector2D` matches the Python API
   (`tests/compatibility/arithmetic_cases.py`): `+` and `-` mix any of the
@@ -506,7 +505,8 @@ Deliberate differences, all in favour of static checking:
 * **Value semantics.** The Python API's vectors and transforms are C++
   values, and typesafe_carla copies where it does: constructors and field
   setters store copies (`t.location = loc`, then `loc += v`, leaves `t`
-  alone), and getter methods and read-only properties return copies
+  alone; a setter accepts the other vector type with a warning, as the
+  constructor does), and getter methods and read-only properties return copies
   (`ActorSnapshot.get_velocity()`, `Light.location`, `Landmark.transform`,
   `IMUMeasurement.accelerometer`, ...). Field getters return the stored value,
   as the Python API's do, so `t.location.x = 1` and `t.location += v` change
