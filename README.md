@@ -196,6 +196,10 @@ latest `ue5-dev`; any branch, tag or commit SHA can be selected:
 | local checkout | `CARLA_SOURCE_DIR=~/carla` or `-DTSC_CARLA_SOURCE_DIR=...` |
 | other repository (fork) | `-DTSC_CARLA_GIT_REPOSITORY=https://github.com/<you>/carla.git` |
 
+Released wheels name their CARLA ref in the release tag,
+`<version>-<CARLA ref>-<YYYYMMDD>` (e.g. `0.1.0-ue5-dev-20260915`: `ue5-dev`
+as of its last commit on that day); see [docs/releasing.md](docs/releasing.md).
+
 Only `CMakeLists.txt`, `CMake/` and `LibCarla/` are fetched, as a shallow,
 blob-filtered, sparse checkout (a few MB, not the multi-GB repository). A
 moving branch is re-fetched only on `-DTSC_CARLA_REFRESH=ON`. The ref and the
@@ -310,6 +314,8 @@ native/mock/               in-memory LibCarla stand-in (mock backend)
 python/typesafe_carla/     typesafe-codon launcher, path and toolchain discovery
 toolchain/                 typesafe-carla-toolchain: pinned Codon as a wheel
 tools/check_wheel.py       release checks on a built wheel
+tools/release_tag.py       release tags <version>-<CARLA ref>-<YYYYMMDD>
+tools/bump_version.py      bumps the package version (Python and Codon)
 tools/bindgen/             binding generator, libclang spec validation, coverage
 bindings/                  binding spec (YAML) for the generated C ABI functions
 native/src/generated/      generated C++ shim (do not edit)
