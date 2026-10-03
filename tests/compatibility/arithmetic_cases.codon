@@ -1,7 +1,7 @@
 # Issue #77: arithmetic between the Vector3D family and Vector2D, as the
 # official module computes it. Mirrors arithmetic_cases.py (see its format).
 # Offline: no server needed. Used by tests/unit/test_issue77_arithmetic.codon
-# and (float32_cases, rounding_cases) tests/unit/test_issue81_float32.codon.
+# and (float32_cases, quaternion_cases, rounding_cases) tests/unit/test_issue81_float32.codon.
 #
 # A combination the official module rejects (a Vector2D with a Vector3D-family
 # operand) is a compile error here, so it is not written out: it gives "E",
@@ -153,6 +153,22 @@ def float32_cases() -> str:
             w *= k
             out.append("|".join([_gv(va * k), _gv(k * va), _gv(va / k), _gv(k / va), _gv(c),
                                  _gv(wa * k), _gv(wa / k), _gv(w)]))
+    return ";".join(out)
+
+Q_VALUES = ((0.1, 0.2, 0.3, 0.9), (1.0, 2.0, 3.0, 4.0), (-0.7, 0.01, 0.33, 0.62),
+            (1e-3, -2.5, 7.1, 1e-2), (0.0, 0.0, 0.0, 0.0), (1e20, 3.3, -1e-20, 0.5))
+
+def _gq(q: carla.Quaternion) -> str:
+    return "(" + _g(q.x) + "," + _g(q.y) + "," + _g(q.z) + "," + _g(q.w) + ")"
+
+def quaternion_cases() -> str:
+    out = List[str]()
+    for a in Q_VALUES:
+        qa = carla.Quaternion(*a)
+        out.append("|".join([_g(qa.length()), _gq(qa.inverse()), _gq(qa.unit_quaternion()),
+                             _gq(qa.conjugate()), _gv(qa.get_forward_vector()),
+                             _gv(qa.get_right_vector()), _gv(qa.get_up_vector())]))
+        out.append("|".join([_gq(qa * carla.Quaternion(*b)) for b in Q_VALUES]))
     return ";".join(out)
 
 R_VALUES = (0.1, 16777217.0, 1e40, -1e40, float("nan"), 1e-46, -0.0, 3.4028235e38, 2.0 / 3.0)

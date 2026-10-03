@@ -198,20 +198,24 @@ class Vector3D:
 
     @staticmethod
     def _from_c(v: CVector3D) -> Vector3D:
-        return _raw_vector(Vector3D, v)
+        return _raw_vector(Vector3D, v.x, v.y, v.z)
 
-def _raw_vector(T: type, v: CVector3D) -> T:
+def _raw_vector(T: type, x: float, y: float, z: float) -> T:
     """A T of the Vector3D family from LibCarla data, stored as is: the C ABI
     carries LibCarla's float32 values (widened), so no rounding is needed."""
     r = T.__new__()
-    r._x = v.x
-    r._y = v.y
-    r._z = v.z
+    r._x = x
+    r._y = y
+    r._z = z
     return r
 
 def _dot2(ax: float, ay: float, bx: float, by: float) -> float:
     """ax*bx + ay*by in float32, as LibCarla evaluates it (left to right)."""
     return _f32(_f32(ax * bx) + _f32(ay * by))
+
+def _sum4(a: float, b: float, c: float, d: float) -> float:
+    """((a + b) + c) + d in float32 (a..d float32 values)."""
+    return _f32(_f32(_f32(a + b) + c) + d)
 
 def _dot3(ax: float, ay: float, az: float, bx: float, by: float, bz: float) -> float:
     return _f32(_dot2(ax, ay, bx, by) + _f32(az * bz))
@@ -359,7 +363,7 @@ class Location(Vector3D):
 
     @staticmethod
     def _from_c(v: CVector3D) -> Location:
-        return _raw_vector(Location, v)
+        return _raw_vector(Location, v.x, v.y, v.z)
 
 class Velocity(Vector3D):
     """A linear velocity in m/s, as carla.Velocity: a Vector3D (its arithmetic
@@ -981,14 +985,23 @@ class Quaternion:
         yaw = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
         return Rotation(degrees(pitch), degrees(-yaw), degrees(-roll))
 
+    # The methods below follow LibCarla ue5-dev's Quaternion.h formula by
+    # formula, in float32 (each step rounded with _f32, left to right).
+
     def _rotated(self, vx: float, vy: float, vz: float) -> Vector3D:
         # CARLA's left-handed vector -> right-handed (negate y), rotate by
-        # q v q* (Rodrigues form), and back.
-        q = Vector3D(self.x, self.y, self.z)
-        v = Vector3D(vx, -vy, vz)
-        t = 2.0 * q.cross(v)
-        r = v + self.w * t + q.cross(t)
-        return Vector3D(r.x, -r.y, r.z)
+        # q v q* (Rodrigues form, Quaternion::RotatedVector), and back.
+        x, y, z, w = self._x, self._y, self._z, self._w
+        vy = -vy
+        tx = 2.0 * _f32(_f32(y * vz) - _f32(z * vy))  # 2 * f: exact
+        ty = 2.0 * _f32(_f32(z * vx) - _f32(x * vz))
+        tz = 2.0 * _f32(_f32(x * vy) - _f32(y * vx))
+        cx = _f32(_f32(y * tz) - _f32(z * ty))
+        cy = _f32(_f32(z * tx) - _f32(x * tz))
+        cz = _f32(_f32(x * ty) - _f32(y * tx))
+        return Vector3D(_f32(vx + _f32(w * tx)) + cx,
+                        -_f32(_f32(vy + _f32(w * ty)) + cy),
+                        _f32(vz + _f32(w * tz)) + cz)
 
     def get_forward_vector(self) -> Vector3D:
         return self._rotated(1.0, 0.0, 0.0)
@@ -1000,34 +1013,42 @@ class Quaternion:
         return self._rotated(0.0, 0.0, 1.0)
 
     def conjugate(self) -> Quaternion:
-        return Quaternion(-self.x, -self.y, -self.z, self.w)
+        return Quaternion(-self._x, -self._y, -self._z, self._w)
+
+    def _norm2(self) -> float:
+        """x*x + y*y + z*z + w*w in float32."""
+        x, y, z, w = self._x, self._y, self._z, self._w
+        return _sum4(_f32(x * x), _f32(y * y), _f32(z * z), _f32(w * w))
 
     def inverse(self) -> Quaternion:
         """The inverse; the identity for a zero quaternion (as LibCarla)."""
-        n2 = self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w
+        n2 = self._norm2()
         if n2 <= 0.0:
             return Quaternion()
-        k = 1.0 / n2
-        return Quaternion(-self.x * k, -self.y * k, -self.z * k, self.w * k)
+        k = _f32(1.0 / n2)
+        return Quaternion(-self._x * k, -self._y * k, -self._z * k, self._w * k)
 
     def length(self) -> float:
-        return (self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w) ** 0.5
+        return _f32(sqrt(self._norm2()))
 
     def unit_quaternion(self) -> Quaternion:
         """This quaternion scaled to length 1; the identity for a zero quaternion."""
         n = self.length()
         if n <= 0.0:
             return Quaternion()
-        k = 1.0 / n
-        return Quaternion(self.x * k, self.y * k, self.z * k, self.w * k)
+        k = _f32(1.0 / n)
+        return Quaternion(self._x * k, self._y * k, self._z * k, self._w * k)
 
     def __mul__(self, rhs: Quaternion) -> Quaternion:
         """The Hamilton product self * rhs."""
+        x, y, z, w = self._x, self._y, self._z, self._w
+        rx, ry, rz, rw = rhs._x, rhs._y, rhs._z, rhs._w
+        # A subtracted product is added negated (exact).
         return Quaternion(
-            self.w * rhs.x + self.x * rhs.w + self.y * rhs.z - self.z * rhs.y,
-            self.w * rhs.y - self.x * rhs.z + self.y * rhs.w + self.z * rhs.x,
-            self.w * rhs.z + self.x * rhs.y - self.y * rhs.x + self.z * rhs.w,
-            self.w * rhs.w - self.x * rhs.x - self.y * rhs.y - self.z * rhs.z)
+            _sum4(_f32(w * rx), _f32(x * rw), _f32(y * rz), -_f32(z * ry)),
+            _sum4(_f32(w * ry), -_f32(x * rz), _f32(y * rw), _f32(z * rx)),
+            _sum4(_f32(w * rz), _f32(x * ry), -_f32(y * rx), _f32(z * rw)),
+            _sum4(_f32(w * rw), -_f32(x * rx), -_f32(y * ry), -_f32(z * rz)))
 
     def __eq__(self, other: Quaternion) -> bool:
         """Exact in float32, as LibCarla."""

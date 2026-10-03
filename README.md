@@ -584,11 +584,15 @@ Deliberate differences, all in favour of static checking:
   costs nothing and the C ABI is unchanged. `+ - * /` (the scalar rounded to
   float32 first, as LibCarla's `float` parameter), `length`,
   `squared_length`, `dot`, `cross`, `distance*`, `make_unit_vector` and
-  `get_vector_angle` compute step by step in float32, as LibCarla, and give
-  the Python API's results bit for bit (tests/compatibility/arithmetic_cases).
-  `Quaternion`'s methods, `Rotation.get_normalized` and `Transform.transform`
-  compute in double and round the result, so they can differ from LibCarla
-  in the last float32 bit. Double fields stay double, as in LibCarla:
+  `get_vector_angle`, and `Quaternion`'s `length`, `inverse`,
+  `unit_quaternion`, `*` and basis vectors, compute step by step in float32,
+  as LibCarla, and give the Python API's results bit for bit
+  (tests/compatibility/arithmetic_cases). `Quaternion(rotation)`,
+  `Quaternion.rotator`, `Rotation.get_normalized`, `Transform.transform` and
+  `transform_vector` use other formulas or double intermediates and round
+  only the result, so they can differ from the Python API in the low bits,
+  more for components near zero (issue #90). Double fields stay double, as
+  in LibCarla:
   `GeoLocation`, the geo projections, `GeoEllipsoid`, `GeoOffsetTransform`
   and `WorldSettings`' time steps. Other value types with `float` fields in
   LibCarla (the controls, the physics controls, `WeatherParameters`, ...)
@@ -601,8 +605,9 @@ Deliberate differences, all in favour of static checking:
   LibCarla stores them: `Location(0.1) == Location(0.1 + 1e-12)` is `True`
   (both store the same float32), as is `VehicleControl(throttle=0.1) ==
   VehicleControl(throttle=0.1 + 1e-12)` although the doubles kept there
-  differ. Double fields (`GeoLocation`, the geo projections, `GeoEllipsoid`, `GeoOffsetTransform`, and `WorldSettings`'
-  `fixed_delta_seconds` and `max_substep_delta_time`) compare exactly. As in
+  differ. Double fields (`GeoLocation`, the geo projections, `GeoEllipsoid`,
+  `GeoOffsetTransform`, and `WorldSettings`' `fixed_delta_seconds` and
+  `max_substep_delta_time`) compare exactly. As in
   LibCarla, some types compare less than every field. `Rotation`s are also
   equal when each pair of angles has `|a| + |b| == 180`, so
   `Rotation(90, 90, 90) == Rotation(-90, -90, -90)`. `Color` ignores alpha.

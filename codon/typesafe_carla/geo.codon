@@ -85,7 +85,7 @@ class GeoOffsetTransform:
         ty = -loc.y + self.offset_y
         x = tx * self.offset_cos_h - ty * self.offset_sin_h
         y = tx * self.offset_sin_h + ty * self.offset_cos_h
-        return Location(float(float32(x)), float(float32(y)), float(float32(loc.z + self.offset_z)))
+        return Location(x, y, loc.z + self.offset_z)  # rounded to float32 by Location
 
     def __eq__(self, other: GeoOffsetTransform) -> bool:
         return _fields_eq_exact(self, other)

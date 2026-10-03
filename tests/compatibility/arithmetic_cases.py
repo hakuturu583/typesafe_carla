@@ -2,7 +2,7 @@
 official module. Mirrors arithmetic_cases.codon; tests/unit/test_issue77_arithmetic.codon
 embeds this module's result. Offline: no server needed.
 
-Issue #81: float32_cases() and rounding_cases() (embedded by
+Issue #81: float32_cases(), quaternion_cases() and rounding_cases() (embedded by
 tests/unit/test_issue81_float32.codon) check float32 storage and arithmetic
 on non-dyadic values, printing every float as "%.17g" (exact for a double).
 
@@ -94,6 +94,23 @@ def float32_cases():
                                  gv(wa * k), gv(wa / k), gv(w))))
     return ";".join(out)
 
+# Quaternion's methods, float32 step by step as LibCarla ue5-dev's Quaternion.h.
+Q_VALUES = ((0.1, 0.2, 0.3, 0.9), (1.0, 2.0, 3.0, 4.0), (-0.7, 0.01, 0.33, 0.62),
+            (1e-3, -2.5, 7.1, 1e-2), (0.0, 0.0, 0.0, 0.0), (1e20, 3.3, -1e-20, 0.5))
+
+def gq(q):
+    return "(" + ",".join(g(c) for c in (q.x, q.y, q.z, q.w)) + ")"
+
+def quaternion_cases():
+    out = []
+    for a in Q_VALUES:
+        qa = carla.Quaternion(*a)
+        out.append("|".join((g(qa.length()), gq(qa.inverse()), gq(qa.unit_quaternion()),
+                             gq(qa.conjugate()), gv(qa.get_forward_vector()),
+                             gv(qa.get_right_vector()), gv(qa.get_up_vector()))))
+        out.append("|".join(gq(qa * carla.Quaternion(*b)) for b in Q_VALUES))
+    return ";".join(out)
+
 # Values stored by a constructor or a field assignment: rounded to float32
 # (out of range gives inf, 1e-46 underflows to 0), except GeoLocation's doubles.
 R_VALUES = (0.1, 16777217.0, 1e40, -1e40, float("nan"), 1e-46, -0.0, 3.4028235e38, 2.0 / 3.0)
@@ -126,6 +143,8 @@ if __name__ == "__main__":
     import sys
     if sys.argv[1:] == ["float32"]:
         print(float32_cases())
+    elif sys.argv[1:] == ["quaternion"]:
+        print(quaternion_cases())
     elif sys.argv[1:] == ["rounding"]:
         print(rounding_cases())
     else:
