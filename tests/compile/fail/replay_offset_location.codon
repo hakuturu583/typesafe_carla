@@ -1,0 +1,8 @@
+# replay_file's offset is a Transform, not a Location.
+# expect-error: 'Optional[Location]' does not match expected type 'Optional[Transform]'
+import typesafe_carla as carla
+
+def replay(client: carla.Client):
+    client.replay_file("run.log", offset=carla.Location(1.0, 0.0, 0.0))
+
+replay(carla.Client("localhost", 2000))

@@ -951,6 +951,25 @@ static void test_mock_milestone4(void) {
   CHECK(strstr(text.data, "Frames: 5") != NULL);
   tsc_string_free(&text);
   CHECK(tsc_client_show_recorder_file_info(client, "nope", 4, 0, &text) == TSC_ERROR);
+  /* The ue5-dev overloads (#36), which the mock mirrors. */
+  CHECK_OK(tsc_client_start_recorder_ex(client, "rec2.log", 8, 0, 0, &text));
+  CHECK(strstr(text.data, "(replayer kept)") != NULL);
+  tsc_string_free(&text);
+  CHECK_OK(tsc_client_stop_recorder(client));
+  tsc_transform_t offset = {{1.0, 2.0, 3.0}, {0.0, 0.0, 0.0}};
+  CHECK_OK(tsc_client_replay_file_ex(client, "rec.log", 7, 0.0, 0.0, 0, 0, 1, &offset, "Town10HD", 8,
+                                     &text));
+  CHECK(strstr(text.data, "5 frames of rec.log with weather offset by (1.0") != NULL);
+  CHECK(strstr(text.data, " on Town10HD") != NULL);
+  tsc_string_free(&text);
+  CHECK_OK(tsc_client_stop_replayer(client, 0));
+  /* A NULL offset or output fails before the replay. */
+  CHECK(tsc_client_replay_file_ex(client, "rec.log", 7, 0.0, 0.0, 0, 0, 0, NULL, "", 0, &text) ==
+        TSC_INVALID_ARGUMENT);
+  CHECK(tsc_client_replay_file_ex(client, "rec.log", 7, 0.0, 0.0, 0, 0, 0, &offset, "", 0, NULL) ==
+        TSC_INVALID_ARGUMENT);
+  CHECK(tsc_client_replay_file_ex(client, "nope", 4, 0.0, 0.0, 0, 0, 0, &offset, "", 0, &text) ==
+        TSC_ERROR);
 
   /* Map queries */
   tsc_map_t *map = NULL;

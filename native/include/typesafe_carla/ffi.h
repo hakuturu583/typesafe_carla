@@ -53,9 +53,10 @@ extern "C" {
  * 4.0: tsc_world_spawn_actor / try_spawn_actor take a tsc_attachment_type_t (#34).
  * 4.1: tsc_client_create worker_threads; map_layers on load_world and
  *      load_world_if_different (#35).
- * 4.2: tsc_map_new_from_opendrive, a client-side Map from an OpenDRIVE string (#39). */
+ * 4.2: tsc_map_new_from_opendrive, a client-side Map from an OpenDRIVE string (#39).
+ * 4.3: tsc_client_replay_file_ex, tsc_client_start_recorder_ex (#36). */
 #define TSC_ABI_VERSION_MAJOR 4
-#define TSC_ABI_VERSION_MINOR 2
+#define TSC_ABI_VERSION_MINOR 3
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -1089,6 +1090,17 @@ TSC_API tsc_status_t tsc_client_replay_file(tsc_client_t *client, const char *na
                                             double start, double duration, uint32_t follow_id,
                                             int32_t replay_sensors, tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_stop_replayer(tsc_client_t *client, int32_t keep_actors);
+TSC_API tsc_status_t tsc_client_start_recorder_ex(tsc_client_t *client,
+                                                  const char *name, size_t name_len,
+                                                  int32_t additional_data, int32_t stop_replayer,
+                                                  tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_replay_file_ex(tsc_client_t *client,
+                                               const char *name, size_t name_len, double start,
+                                               double duration, uint32_t follow_id,
+                                               int32_t replay_sensors, int32_t replay_weather,
+                                               const tsc_transform_t *offset,
+                                               const char *map_override, size_t map_override_len,
+                                               tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_set_replayer_time_factor(tsc_client_t *client, double factor);
 /* END GENERATED client_recorder */
 

@@ -1,0 +1,8 @@
+# replay_weather is a bool, not a string.
+# expect-error: 'str' does not match expected type 'bool'
+import typesafe_carla as carla
+
+def replay(client: carla.Client):
+    client.replay_file("run.log", replay_weather="yes")
+
+replay(carla.Client("localhost", 2000))

@@ -415,6 +415,25 @@ tsc_status_t tsc_client_stop_replayer(tsc_client_t *client, int32_t keep_actors)
   return TSC_GUARD({ client_of(client).StopReplayer(keep_actors != 0); });
 }
 
+tsc_status_t tsc_client_start_recorder_ex(tsc_client_t *client, const char *name, size_t name_len,
+                                          int32_t additional_data, int32_t stop_replayer,
+                                          tsc_string_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { string_assign(out, r_); }), self_, StartRecorder, "Client.start_recorder(stop_replayer=False)", to_string(name, name_len, "name"), additional_data != 0, stop_replayer != 0); }(client_of(client));
+  });
+}
+
+tsc_status_t tsc_client_replay_file_ex(tsc_client_t *client, const char *name, size_t name_len,
+                                       double start, double duration, uint32_t follow_id,
+                                       int32_t replay_sensors, int32_t replay_weather,
+                                       const tsc_transform_t *offset,
+                                       const char *map_override, size_t map_override_len,
+                                       tsc_string_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { string_assign(out, r_); }), self_, ReplayFile, "Client.replay_file(replay_weather, offset, map_override)", to_string(name, name_len, "name"), start, duration, follow_id, replay_sensors != 0, replay_weather != 0, to_carla(*require_ptr(offset, "offset")), to_string(map_override, map_override_len, "map_override")); }(client_of(client));
+  });
+}
+
 tsc_status_t tsc_client_set_replayer_time_factor(tsc_client_t *client, double factor) {
   return TSC_GUARD({ client_of(client).SetReplayerTimeFactor(check_positive(factor, "factor")); });
 }
@@ -927,7 +946,7 @@ tsc_status_t tsc_traffic_manager_shut_down(tsc_traffic_manager_t *tm) {
 tsc_status_t tsc_traffic_manager_set_global_large_vehicle_wide_turn(tsc_traffic_manager_t *tm,
                                                                     int32_t enabled) {
   return TSC_GUARD({
-    TSC_CALL_OPTIONAL(tm_of(tm), SetGlobalLargeVehicleWideTurn, "TrafficManager.global_large_vehicle_wide_turn", enabled != 0);
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetGlobalLargeVehicleWideTurn, "TrafficManager.global_large_vehicle_wide_turn", enabled != 0); }(tm_of(tm));
   });
 }
 
@@ -935,7 +954,7 @@ tsc_status_t tsc_traffic_manager_set_large_vehicle_wide_turn(tsc_traffic_manager
                                                              tsc_vehicle_t *vehicle,
                                                              int32_t enabled) {
   return TSC_GUARD({
-    TSC_CALL_OPTIONAL(tm_of(tm), SetLargeVehicleWideTurn, "TrafficManager.vehicle_large_vehicle_wide_turn", vehicle_ptr(vehicle, "vehicle"), enabled != 0);
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetLargeVehicleWideTurn, "TrafficManager.vehicle_large_vehicle_wide_turn", vehicle_ptr(vehicle, "vehicle"), enabled != 0); }(tm_of(tm));
   });
 }
 

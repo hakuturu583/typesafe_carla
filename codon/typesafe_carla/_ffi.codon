@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 4
-TSC_ABI_VERSION_MINOR = 2
+TSC_ABI_VERSION_MINOR = 3
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -843,6 +843,8 @@ from C import LIB.tsc_client_show_recorder_collisions(cobj, cobj, int, byte, byt
 from C import LIB.tsc_client_show_recorder_actors_blocked(cobj, cobj, int, float, float, Ptr[CString]) -> i32
 from C import LIB.tsc_client_replay_file(cobj, cobj, int, float, float, u32, i32, Ptr[CString]) -> i32
 from C import LIB.tsc_client_stop_replayer(cobj, i32) -> i32
+from C import LIB.tsc_client_start_recorder_ex(cobj, cobj, int, i32, i32, Ptr[CString]) -> i32
+from C import LIB.tsc_client_replay_file_ex(cobj, cobj, int, float, float, u32, i32, i32, Ptr[CTransform], cobj, int, Ptr[CString]) -> i32
 from C import LIB.tsc_client_set_replayer_time_factor(cobj, float) -> i32
 # END GENERATED client_recorder
 # BEGIN GENERATED client_opendrive from bindings/client.yaml, do not edit
