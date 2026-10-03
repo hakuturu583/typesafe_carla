@@ -121,7 +121,7 @@ class CommandResponse:
 def SpawnActor(blueprint: ActorBlueprint, transform: Transform, parent_id: int = 0) -> Command:
     c = Command(_SPAWN_ACTOR)
     c._blueprint = blueprint
-    c._transform = transform
+    c._transform = transform._copy()  # a copy, as the Python API stores one
     c._parent_id = int(_actor_id(parent_id))
     return c
 
@@ -135,7 +135,7 @@ def ApplyVehicleControl(actor_id: int, control: VehicleControl) -> Command:
 
 def ApplyTransform(actor_id: int, transform: Transform) -> Command:
     c = Command(_APPLY_TRANSFORM, actor_id)
-    c._transform = transform
+    c._transform = transform._copy()
     return c
 
 def ApplyTargetVelocity(actor_id: int, velocity) -> Command:
@@ -160,7 +160,7 @@ def SetSimulatePhysics(actor_id: int, enabled: bool) -> Command:
 
 def ApplyWalkerControl(actor_id: int, control: WalkerControl) -> Command:
     c = Command(_APPLY_WALKER_CONTROL, actor_id)
-    c._vector = control.direction
+    c._vector = Vector3D(control.direction)
     c._scalar = control.speed
     c._flag = int(control.jump)
     return c

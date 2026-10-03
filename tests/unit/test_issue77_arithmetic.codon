@@ -28,8 +28,9 @@ if got != expected:
 assert got == expected
 
 def test_equality():
-    # Results compare with #70's == (float32, as LibCarla), as the official
-    # module's do: each of these is True there.
+    # #70's == on arithmetic results: these cases are True in the official
+    # module too. Not in general: the arithmetic runs in double here and in
+    # float32 there, so the low bits can differ (README, "Float precision").
     V, L = carla.Vector3D, carla.Location
     assert V(0.1, 0.2, 0.3) + V(0.7, 0.0, 0.0) == V(0.8, 0.2, 0.3)
     assert L(1.0, 2.0, 3.0) + V(0.5, 0.5, 0.5) == L(1.5, 2.5, 3.5)
@@ -40,5 +41,105 @@ def test_equality():
     l += V(0.2, 0.0, 0.0)
     assert l == L(0.3, 0.0, 0.0)
 
+def test_value_semantics():
+    """Copies where the official module (C++ values) copies; each expected
+    value checked with the official module."""
+    V, L, R, T = carla.Vector3D, carla.Location, carla.Rotation, carla.Transform
+    loc = L(1.0, 2.0, 3.0)
+    t = T(loc)
+    loc += V(1.0, 1.0, 1.0)                       # the constructor copied
+    assert t.location == L(1.0, 2.0, 3.0)
+    rot = R(1.0, 2.0, 3.0)
+    t = T(L(), rot)
+    rot.yaw = 50.0
+    assert t.rotation == R(1.0, 2.0, 3.0)
+    l2 = L(1.0, 2.0, 3.0)
+    t.location = l2                               # the setter copies
+    l2 += V(1.0, 1.0, 1.0)
+    assert t.location == L(1.0, 2.0, 3.0)
+    t.location += V(10.0, 0.0, 0.0)               # the getter does not
+    t.location.x = 7.0
+    g = t.location
+    g += V(1.0, 1.0, 1.0)
+    assert t.location == L(8.0, 3.0, 4.0)
+    t.location -= V(1.0, 1.0, 1.0)
+    t.location *= 2
+    assert t.location == L(14.0, 4.0, 6.0) and isinstance(t.location, carla.Location)
+
+    e = V(1.0, 1.0, 1.0)
+    b = carla.BoundingBox(L(), e)
+    e *= 5
+    b.extent *= 2
+    assert b.extent == V(2.0, 2.0, 2.0)
+
+    # A common loop: each Transform keeps its own location.
+    pts = List[carla.Transform]()
+    p = L()
+    for i in range(3):
+        pts.append(T(p, R()))
+        p += V(1.0, 0.0, 0.0)
+    assert [q.location.x for q in pts] == [0.0, 1.0, 2.0]
+
+    d = V(1.0, 0.0, 0.0)
+    w = carla.WalkerControl(d)
+    d *= 3
+    assert w.direction == V(1.0, 0.0, 0.0)
+    d2 = V(0.0, 1.0, 0.0)
+    w.direction = d2
+    d2 *= 3
+    w.direction *= 2
+    assert w.direction == V(0.0, 2.0, 0.0)
+    assert str(w) == "WalkerControl(direction=Vector3D(x=0.000000, y=2.000000, z=0.000000), speed=0.000000, jump=False)", str(w)
+
+    c = L(1.0, 1.0, 1.0)
+    pc = carla.VehiclePhysicsControl(center_of_mass=c)
+    c *= 2
+    assert pc.center_of_mass == L(1.0, 1.0, 1.0)
+    wheel = carla.WheelPhysicsControl()
+    o = V(1.0, 1.0, 1.0)
+    wheel.offset = o
+    o *= 3
+    gl = wheel.location
+    gl += V(1.0, 0.0, 0.0)
+    assert wheel.offset == V(1.0, 1.0, 1.0) and wheel.location == L(1.0, 0.0, 0.0)
+
+    tb = T(L(1.0, 0.0, 0.0))
+    bt = carla.bone_transform_out()
+    bt.world = tb
+    tb.location += V(1.0, 0.0, 0.0)
+    assert bt.world.location == L(1.0, 0.0, 0.0)
+    bt.world.location += V(5.0, 0.0, 0.0)
+    assert bt.world.location == L(6.0, 0.0, 0.0)
+
+    det = carla.LidarDetection()
+    pt = L(1.0, 1.0, 1.0)
+    det.point = pt
+    pt += V(1.0, 0.0, 0.0)
+    assert det.point == L(1.0, 1.0, 1.0)
+
+def test_snapshot_getters():
+    # ActorSnapshot's getters return copies (the official ones return values).
+    client = carla.Client("localhost", 2000)
+    world = client.get_world()
+    bp = world.get_blueprint_library().find("vehicle.audi.tt")
+    actor = world.spawn_actor(bp, carla.Transform(carla.Location(1.0, 2.0, 3.0)))
+    snap = world.get_snapshot().find(actor.id)
+    assert snap is not None
+    s = unwrap(snap)
+    v = s.get_velocity()
+    v += carla.Vector3D(10.0, 0.0, 0.0)
+    v *= 10
+    tr = s.get_transform()
+    tr.location += carla.Vector3D(100.0, 0.0, 0.0)
+    assert s.get_velocity() != v and s.get_transform().location != tr.location
+    av = s.get_angular_velocity()
+    av += carla.Vector3D(1.0, 1.0, 1.0)
+    acc = s.get_acceleration()
+    acc += carla.Vector3D(1.0, 1.0, 1.0)
+    assert s.get_angular_velocity() != av and s.get_acceleration() != acc
+    actor.destroy()
+
 test_equality()
+test_value_semantics()
+test_snapshot_getters()
 print("OK")

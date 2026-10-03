@@ -56,17 +56,18 @@ class ActorSnapshot:
         self._angular_velocity = Vector3D._from_c(c.angular_velocity)
         self._acceleration = Vector3D._from_c(c.acceleration)
 
+    # Copies, as the Python API's getters return values.
     def get_transform(self) -> Transform:
-        return self._transform
+        return self._transform._copy()
 
     def get_velocity(self) -> Vector3D:
-        return self._velocity
+        return Vector3D(self._velocity)
 
     def get_angular_velocity(self) -> Vector3D:
-        return self._angular_velocity
+        return Vector3D(self._angular_velocity)
 
     def get_acceleration(self) -> Vector3D:
-        return self._acceleration
+        return Vector3D(self._acceleration)
 
     def __repr__(self) -> str:
         return f"ActorSnapshot(id={self.id})"

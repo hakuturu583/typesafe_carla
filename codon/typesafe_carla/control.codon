@@ -72,7 +72,7 @@ class WheelPhysicsControl:
     external_torque_combine_method, sweep_shape, sweep_type) must be in [0, 255].
     """
     axle_type: int
-    offset: Vector3D
+    _offset: Vector3D
     wheel_radius: float  # cm
     wheel_width: float  # cm
     wheel_mass: float  # kg
@@ -91,8 +91,8 @@ class WheelPhysicsControl:
     max_wheelspin_rotation: float
     external_torque_combine_method: int
     lateral_slip_graph: List[Vector2D]
-    suspension_axis: Vector3D
-    suspension_force_offset: Vector3D
+    _suspension_axis: Vector3D
+    _suspension_force_offset: Vector3D
     suspension_max_raise: float
     suspension_max_drop: float
     suspension_damping_ratio: float
@@ -106,9 +106,9 @@ class WheelPhysicsControl:
     max_brake_torque: float  # Nm
     max_hand_brake_torque: float  # Nm
     wheel_index: int
-    location: Location
-    old_location: Location
-    velocity: Vector3D
+    _location: Location
+    _old_location: Location
+    _velocity: Vector3D
 
     def __init__(self,
                  axle_type: int = 0,
@@ -152,7 +152,7 @@ class WheelPhysicsControl:
         self.axle_type = axle_type
         # Vector and position parameters accept the other type, as in the Python API
         # (geometry._vector_or / _location_or): a compat warning, or a strict error.
-        self.offset = _vector_or(offset, Vector3D(), "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(offset=...)")
+        self._offset = _vector_or(offset, Vector3D(), "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(offset=...)")
         self.wheel_radius = wheel_radius
         self.wheel_width = wheel_width
         self.wheel_mass = wheel_mass
@@ -172,10 +172,10 @@ class WheelPhysicsControl:
         self.external_torque_combine_method = external_torque_combine_method
         self.lateral_slip_graph = (lateral_slip_graph if lateral_slip_graph is not None
                                    else List[Vector2D]())
-        self.suspension_axis = _vector_or(
+        self._suspension_axis = _vector_or(
             suspension_axis, Vector3D(0.0, 0.0, -1.0),
             "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(suspension_axis=...)")
-        self.suspension_force_offset = _vector_or(
+        self._suspension_force_offset = _vector_or(
             suspension_force_offset, Vector3D(),
             "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(suspension_force_offset=...)")
         self.suspension_max_raise = suspension_max_raise
@@ -191,10 +191,58 @@ class WheelPhysicsControl:
         self.max_brake_torque = max_brake_torque
         self.max_hand_brake_torque = max_hand_brake_torque
         self.wheel_index = wheel_index
-        self.location = _location_or(location, "[tsc-compat] a Vector3D passed as a Location to WheelPhysicsControl(location=...)")
-        self.old_location = _location_or(
+        self._location = _location_or(location, "[tsc-compat] a Vector3D passed as a Location to WheelPhysicsControl(location=...)")
+        self._old_location = _location_or(
             old_location, "[tsc-compat] a Vector3D passed as a Location to WheelPhysicsControl(old_location=...)")
-        self.velocity = _vector_or(velocity, Vector3D(), "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(velocity=...)")
+        self._velocity = _vector_or(velocity, Vector3D(), "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(velocity=...)")
+
+    @property
+    def offset(self) -> Vector3D:
+        return self._offset
+
+    @offset.setter
+    def offset(self, v: Vector3D):
+        self._offset = Vector3D(v)
+
+    @property
+    def suspension_axis(self) -> Vector3D:
+        return self._suspension_axis
+
+    @suspension_axis.setter
+    def suspension_axis(self, v: Vector3D):
+        self._suspension_axis = Vector3D(v)
+
+    @property
+    def suspension_force_offset(self) -> Vector3D:
+        return self._suspension_force_offset
+
+    @suspension_force_offset.setter
+    def suspension_force_offset(self, v: Vector3D):
+        self._suspension_force_offset = Vector3D(v)
+
+    @property
+    def location(self) -> Location:
+        return self._location
+
+    @location.setter
+    def location(self, v: Location):
+        self._location = Location(v)
+
+    @property
+    def old_location(self) -> Location:
+        return self._old_location
+
+    @old_location.setter
+    def old_location(self, v: Location):
+        self._old_location = Location(v)
+
+    @property
+    def velocity(self) -> Vector3D:
+        return self._velocity
+
+    @velocity.setter
+    def velocity(self, v: Vector3D):
+        self._velocity = Vector3D(v)
 
     def __eq__(self, other: WheelPhysicsControl) -> bool:
         return _fields_eq(self, other)
@@ -331,12 +379,12 @@ class VehiclePhysicsControl:
     transmission_efficiency: float
     mass: float  # kg
     drag_coefficient: float
-    center_of_mass: Location  # m, vehicle frame
+    _center_of_mass: Location  # m, vehicle frame
     chassis_width: float
     chassis_height: float
     downforce_coefficient: float
     drag_area: float
-    inertia_tensor_scale: Vector3D
+    _inertia_tensor_scale: Vector3D
     sleep_threshold: float
     sleep_slope_limit: float
     steering_curve: List[Vector2D]  # (speed, steer factor)
@@ -397,13 +445,13 @@ class VehiclePhysicsControl:
         self.mass = mass
         self.drag_coefficient = drag_coefficient
         # Vector and position parameters accept the other type, as in the Python API.
-        self.center_of_mass = _location_or(
+        self._center_of_mass = _location_or(
             center_of_mass, "[tsc-compat] a Vector3D passed as a Location to VehiclePhysicsControl(center_of_mass=...)")
         self.chassis_width = chassis_width
         self.chassis_height = chassis_height
         self.downforce_coefficient = downforce_coefficient
         self.drag_area = drag_area
-        self.inertia_tensor_scale = _vector_or(
+        self._inertia_tensor_scale = _vector_or(
             inertia_tensor_scale, Vector3D(1.0, 1.0, 1.0),
             "[tsc-compat] a Location passed as a Vector3D to VehiclePhysicsControl(inertia_tensor_scale=...)")
         self.sleep_threshold = sleep_threshold
@@ -412,6 +460,22 @@ class VehiclePhysicsControl:
                                else [Vector2D(0.0, 1.0), Vector2D(10.0, 0.5)])
         self.wheels = wheels if wheels is not None else List[WheelPhysicsControl]()
         self.use_sweep_wheel_collision = use_sweep_wheel_collision
+
+    @property
+    def center_of_mass(self) -> Location:
+        return self._center_of_mass
+
+    @center_of_mass.setter
+    def center_of_mass(self, v: Location):
+        self._center_of_mass = Location(v)
+
+    @property
+    def inertia_tensor_scale(self) -> Vector3D:
+        return self._inertia_tensor_scale
+
+    @inertia_tensor_scale.setter
+    def inertia_tensor_scale(self, v: Vector3D):
+        self._inertia_tensor_scale = Vector3D(v)
 
     def __eq__(self, other: VehiclePhysicsControl) -> bool:
         return _fields_eq(self, other)
@@ -524,17 +588,25 @@ class VehiclePhysicsControl:
             use_sweep_wheel_collision=int(c.use_sweep_wheel_collision) != 0)
 
 class WalkerControl:
-    direction: Vector3D  # world-space direction (normalized by CARLA)
+    _direction: Vector3D  # world-space direction (normalized by CARLA)
     speed: float  # m/s
     jump: bool
 
     def __init__(self, direction = None, speed: float = 0.0, jump: bool = False):
         """direction: Optional[Vector3D] (a Location is accepted as in the Python API)."""
-        self.direction = _vector_or(
+        self._direction = _vector_or(
             direction, Vector3D(1.0, 0.0, 0.0),
             "[tsc-compat] a Location passed as a Vector3D to WalkerControl(direction=...)")
         self.speed = speed
         self.jump = jump
+
+    @property
+    def direction(self) -> Vector3D:
+        return self._direction
+
+    @direction.setter
+    def direction(self, v: Vector3D):
+        self._direction = Vector3D(v)
 
     def __eq__(self, other: WalkerControl) -> bool:
         return _fields_eq(self, other)

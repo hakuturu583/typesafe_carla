@@ -28,11 +28,19 @@ class bone_transform:
     """One bone of a custom pose, as carla.bone_transform: a bone name and its
     transform relative to the parent bone."""
     name: str
-    transform: Transform
+    _transform: Transform
 
     def __init__(self, name: str = "", transform: Optional[Transform] = None):
         self.name = name
-        self.transform = transform if transform is not None else Transform()
+        self._transform = transform._copy() if transform is not None else Transform()
+
+    @property
+    def transform(self) -> Transform:
+        return self._transform
+
+    @transform.setter
+    def transform(self, v: Transform):
+        self._transform = v._copy()
 
     def __repr__(self) -> str:
         # The Python API prints the underlying std::pair: "(name,Transform(...))".
@@ -41,16 +49,40 @@ class bone_transform:
 class bone_transform_out:
     """One bone of Walker.get_bones(), as carla.bone_transform_out."""
     name: str
-    world: Transform
-    component: Transform
-    relative: Transform
+    _world: Transform
+    _component: Transform
+    _relative: Transform
 
     def __init__(self, name: str = "", world: Optional[Transform] = None,
                  component: Optional[Transform] = None, relative: Optional[Transform] = None):
         self.name = name
-        self.world = world if world is not None else Transform()
-        self.component = component if component is not None else Transform()
-        self.relative = relative if relative is not None else Transform()
+        self._world = world._copy() if world is not None else Transform()
+        self._component = component._copy() if component is not None else Transform()
+        self._relative = relative._copy() if relative is not None else Transform()
+
+    @property
+    def world(self) -> Transform:
+        return self._world
+
+    @world.setter
+    def world(self, v: Transform):
+        self._world = v._copy()
+
+    @property
+    def component(self) -> Transform:
+        return self._component
+
+    @component.setter
+    def component(self, v: Transform):
+        self._component = v._copy()
+
+    @property
+    def relative(self) -> Transform:
+        return self._relative
+
+    @relative.setter
+    def relative(self, v: Transform):
+        self._relative = v._copy()
 
     def __eq__(self, other: bone_transform_out) -> bool:
         """The name and the three transforms, as LibCarla."""
@@ -74,7 +106,8 @@ class WalkerBoneControlIn:
         self.bone_transforms = List[bone_transform]()
 
     def __init__(self, bone_transforms: List[bone_transform]):
-        self.bone_transforms = bone_transforms
+        # Copies, as the Python API converts the list to a std::vector.
+        self.bone_transforms = [bone_transform(b.name, b.transform) for b in bone_transforms]
 
     def __init__(self, bone_transforms: List[Tuple[str, Transform]]):
         self.bone_transforms = [bone_transform(name, t) for name, t in bone_transforms]

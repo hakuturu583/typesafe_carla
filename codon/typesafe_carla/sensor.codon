@@ -293,14 +293,22 @@ class Image(_ArrayMeasurement[_CBgra]):
         return _head("Image", self) + f", size={self.width}x{self.height})"
 
 class LidarDetection:
-    point: Location
+    _point: Location
     intensity: float
 
     def __init__(self, point = Location(), intensity: float = 0.0):
         """point: Location (a Vector3D is accepted as in the Python API)."""
-        self.point = _location_arg(
+        self._point = _location_arg(
             point, "[tsc-compat] a Vector3D passed as a Location to LidarDetection(point)")
         self.intensity = intensity
+
+    @property
+    def point(self) -> Location:
+        return self._point
+
+    @point.setter
+    def point(self, v: Location):
+        self._point = Location(v)
 
     def __repr__(self) -> str:
         return (f"LidarDetection(x={fmt_f32(self.point.x)}, y={fmt_f32(self.point.y)}, "
@@ -357,7 +365,7 @@ class LidarMeasurement(_ArrayMeasurement[CLidarPoint]):
         return _head("LidarMeasurement", self) + f", number_of_points={len(self)})"
 
 class SemanticLidarDetection:
-    point: Location
+    _point: Location
     cos_inc_angle: float
     object_idx: int  # id of the actor hit (0 for the static scene)
     object_tag: int  # semantic tag of the object hit
@@ -365,11 +373,19 @@ class SemanticLidarDetection:
     def __init__(self, point = Location(), cos_inc_angle: float = 0.0, object_idx: int = 0,
                  object_tag: int = 0):
         """point: Location (a Vector3D is accepted as in the Python API)."""
-        self.point = _location_arg(
+        self._point = _location_arg(
             point, "[tsc-compat] a Vector3D passed as a Location to SemanticLidarDetection(point)")
         self.cos_inc_angle = cos_inc_angle
         self.object_idx = object_idx
         self.object_tag = object_tag
+
+    @property
+    def point(self) -> Location:
+        return self._point
+
+    @point.setter
+    def point(self, v: Location):
+        self._point = Location(v)
 
     def __repr__(self) -> str:
         return (f"SemanticLidarDetection(x={fmt_f32(self.point.x)}, y={fmt_f32(self.point.y)}, "
@@ -724,15 +740,24 @@ class GnssMeasurement(_Measurement):
                 f"lon={fmt_f(self.longitude)}, alt={fmt_f(self.altitude)})")
 
 class IMUMeasurement(_Measurement):
-    accelerometer: Vector3D  # m/s^2
-    gyroscope: Vector3D  # rad/s
+    _accelerometer: Vector3D  # m/s^2
+    _gyroscope: Vector3D  # rad/s
     compass: float  # radians from north
 
     def __init__(self, data: SensorData, c: CImu):
         self.data = data
-        self.accelerometer = Vector3D._from_c(c.accelerometer)
-        self.gyroscope = Vector3D._from_c(c.gyroscope)
+        self._accelerometer = Vector3D._from_c(c.accelerometer)
+        self._gyroscope = Vector3D._from_c(c.gyroscope)
         self.compass = c.compass
+
+    # Copies, as the Python API's getters return values.
+    @property
+    def accelerometer(self) -> Vector3D:
+        return Vector3D(self._accelerometer)
+
+    @property
+    def gyroscope(self) -> Vector3D:
+        return Vector3D(self._gyroscope)
 
     def __repr__(self) -> str:
         return (_head("IMUMeasurement", self) + f", accelerometer={self.accelerometer}, "
@@ -741,13 +766,18 @@ class IMUMeasurement(_Measurement):
 class CollisionEvent(_Measurement):
     actor_id: int  # the actor the sensor is attached to
     other_actor_id: int  # 0 when the other side is not an actor (e.g. static geometry)
-    normal_impulse: Vector3D
+    _normal_impulse: Vector3D
 
     def __init__(self, data: SensorData, c: CCollision):
         self.data = data
         self.actor_id = int(c.actor_id)
         self.other_actor_id = int(c.other_actor_id)
-        self.normal_impulse = Vector3D._from_c(c.normal_impulse)
+        self._normal_impulse = Vector3D._from_c(c.normal_impulse)
+
+    @property
+    def normal_impulse(self) -> Vector3D:
+        """A copy, as the Python API's getter returns a value."""
+        return Vector3D(self._normal_impulse)
 
     @property
     def actor(self) -> Optional[Actor]:

@@ -57,17 +57,35 @@ class EnvironmentObject:
     """A static object of the level (a plain value)."""
     id: int  # LibCarla's uint64 id, bit-for-bit (large ids read as negative ints)
     name: str
-    transform: Transform
-    bounding_box: BoundingBox
+    _transform: Transform
+    _bounding_box: BoundingBox
     type: int  # CityObjectLabel
 
     def __init__(self, id: int, name: str, transform: Transform, bounding_box: BoundingBox,
                  type: int):
         self.id = id
         self.name = name
-        self.transform = transform
-        self.bounding_box = bounding_box
+        # Stored as given (fresh from LibCarla): `bounding_box._copy()` here
+        # fails to compile in Codon 0.19 ("int takes 0 generics").
+        self._transform = transform
+        self._bounding_box = bounding_box
         self.type = type
+
+    @property
+    def transform(self) -> Transform:
+        return self._transform
+
+    @transform.setter
+    def transform(self, v: Transform):
+        self._transform = v._copy()
+
+    @property
+    def bounding_box(self) -> BoundingBox:
+        return self._bounding_box
+
+    @bounding_box.setter
+    def bounding_box(self, v: BoundingBox):
+        self._bounding_box = v._copy()
 
     def __repr__(self) -> str:
         # As the Python API's str(), which prints "Mesh(...)"; id is LibCarla's uint64.

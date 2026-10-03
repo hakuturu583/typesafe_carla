@@ -79,7 +79,8 @@ class Light:
 
     @property
     def location(self) -> Location:
-        return self._location
+        """A copy, as the Python API's getter returns a value."""
+        return Location(self._location)
 
     @property
     def light_state(self) -> LightState:

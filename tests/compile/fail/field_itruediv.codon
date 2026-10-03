@@ -1,0 +1,10 @@
+# Issue #77: `t.location /= k` assigns the Vector3D `t.location / k` to a
+# Location field. The official module converts it; a field has one static
+# type here: a compile error. Write `t.location *= 1.0 / k` (in place).
+# expect-error: 'Vector3D' does not match expected type 'Location'
+import typesafe_carla as carla
+
+def halve(t: carla.Transform):
+    t.location /= 2
+
+halve(carla.Transform())

@@ -161,10 +161,12 @@ def fmt_fields(name: str, obj) -> str:
     str(). The Python API's format for its plain-field value types."""
     parts = List[str]()
     for k, v in static.vars(obj):
+        # A field behind a property (`_direction` for `direction`) by its public name.
+        key = k[1:] if k.startswith("_") else k
         if isinstance(v, bool):
-            parts.append(k + "=" + fmt_bool(v))
+            parts.append(key + "=" + fmt_bool(v))
         elif isinstance(v, float):
-            parts.append(k + "=" + fmt_f32(v))
+            parts.append(key + "=" + fmt_f32(v))
         else:
-            parts.append(k + "=" + str(v))
+            parts.append(key + "=" + str(v))
     return name + "(" + ", ".join(parts) + ")"
