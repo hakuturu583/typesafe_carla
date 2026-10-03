@@ -19,12 +19,17 @@ print("current map:", map_name)
 assert client.load_world_if_different(map_name, map_layers=carla.MapLayer.NONE) is None
 assert client.get_world().id == world.id
 
-reduced = client.load_world(short_name, reset_settings=False,
-                            map_layers=carla.MapLayer.Buildings | carla.MapLayer.Ground)
-assert reduced.id != world.id
-assert reduced.get_map().name == map_name, reduced.get_map().name
-
-restored = client.load_world(short_name, reset_settings=False, map_layers=carla.MapLayer.All)
-assert restored.id != reduced.id
-assert restored.get_map().name == map_name
+# The map is restored with every layer even when a check fails.
+reduced_id = -1
+try:
+    reduced = client.load_world(short_name, reset_settings=False,
+                                map_layers=carla.MapLayer.Buildings | carla.MapLayer.Ground)
+    reduced_id = reduced.id
+    assert reduced.id != world.id
+    assert reduced.get_map().name == map_name, reduced.get_map().name
+finally:
+    restored = client.load_world(short_name, reset_settings=False, map_layers=carla.MapLayer.All)
+    print("restored", restored.get_map().name)
+    assert restored.get_map().name == map_name, restored.get_map().name
+assert restored.id != reduced_id
 print("OK")

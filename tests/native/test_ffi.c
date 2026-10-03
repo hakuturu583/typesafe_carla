@@ -31,6 +31,11 @@ static int g_failures = 0;
 
 #define H(p) ((tsc_handle_t *)(p))
 
+/* Mock-only test hooks (native/mock/include/carla/mock/Mock.h): what the shim
+ * last passed to LibCarla. Weak, so the libcarla build links without them. */
+extern size_t tsc_mock_last_worker_threads(void) __attribute__((weak));
+extern uint16_t tsc_mock_last_map_layers(void) __attribute__((weak));
+
 static const char *kHost = "localhost";
 
 static void test_versions(void) {
@@ -153,6 +158,27 @@ static void test_issue23_offline(void) {
   CHECK(tsc_traffic_manager_get_next_action(NULL, NULL, &option, &waypoint) == TSC_INVALID_ARGUMENT);
   CHECK(tsc_debug_clear_shapes(NULL) == TSC_INVALID_ARGUMENT);
   CHECK(tsc_world_get_settings_ext(NULL, NULL, NULL) == TSC_INVALID_ARGUMENT);
+}
+
+/* Issue #35: worker_threads and map_layers reach LibCarla (the mock). */
+static void test_mock_issue35(void) {
+  CHECK(tsc_mock_last_worker_threads != NULL && tsc_mock_last_map_layers != NULL);
+  if (tsc_mock_last_worker_threads == NULL || tsc_mock_last_map_layers == NULL) return;
+  tsc_client_t *client = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2035, 3, &client));
+  CHECK(tsc_mock_last_worker_threads() == 3);
+  tsc_world_t *world = NULL;
+  CHECK_OK(tsc_client_load_world(client, "Town01", 6, 1, 0x1 | 0x100, &world));
+  CHECK(tsc_mock_last_map_layers() == (0x1 | 0x100));
+  tsc_handle_release(H(world));
+  world = NULL;
+  CHECK_OK(tsc_client_load_world_if_different(client, "Town02", 6, 1, 0, &world));
+  CHECK(world != NULL && tsc_mock_last_map_layers() == 0);
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2035, 0, &client));
+  CHECK(tsc_mock_last_worker_threads() == 0);
+  tsc_handle_release(H(client));
 }
 
 /* Issue #23 against the mock server. */
@@ -1511,6 +1537,7 @@ int main(void) {
   test_issue23_offline();
   if (strcmp(tsc_backend_name(), "mock") == 0) {
     test_mock_issue23();
+    test_mock_issue35();
     test_mock_session();
     test_mock_milestone1();
     test_mock_sensors();

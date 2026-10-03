@@ -4,6 +4,7 @@
 #include "carla/FileSystem.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -830,8 +831,15 @@ uint64_t World::ApplySettings(const rpc::EpisodeSettings &settings, time_duratio
 
 // ---------------------------------------------------------------------------
 
-Client::Client(const std::string &host, uint16_t port, size_t)
-    : _endpoint(host + ":" + std::to_string(port)) {}
+namespace {
+std::atomic<size_t> g_last_worker_threads{0};
+std::atomic<uint16_t> g_last_map_layers{static_cast<uint16_t>(rpc::MapLayer::All)};
+}  // namespace
+
+Client::Client(const std::string &host, uint16_t port, size_t worker_threads)
+    : _endpoint(host + ":" + std::to_string(port)) {
+  g_last_worker_threads = worker_threads;
+}
 
 std::string Client::GetServerVersion() const {
   mock::Connect(_endpoint, _timeout);
@@ -849,7 +857,9 @@ World Client::ReloadWorld(bool reset_settings) const {
   return World(episode);
 }
 
-World Client::LoadWorld(std::string map_name, bool reset_settings, rpc::MapLayer) const {
+World Client::LoadWorld(std::string map_name, bool reset_settings,
+                        rpc::MapLayer map_layers) const {
+  g_last_map_layers = static_cast<uint16_t>(map_layers);
   if (map_name.empty()) throw std::invalid_argument("map name must not be empty");
   if (map_name.rfind("Town", 0) != 0 && map_name.rfind("/Game/", 0) != 0) {
     throw std::runtime_error("map '" + map_name + "' not found");
@@ -1936,6 +1946,7 @@ void Client::RequestFile(const std::string &name) const {
 // the "Carla/Maps/" prefix.
 void Client::LoadWorldIfDifferent(std::string map_name, bool reset_settings,
                                   rpc::MapLayer map_layers) const {
+  g_last_map_layers = static_cast<uint16_t>(map_layers);
   const std::string current = GetWorld().GetMap()->GetName();
   if (map_name != current && "Carla/Maps/" + map_name != current) {
     LoadWorld(std::move(map_name), reset_settings, map_layers);
@@ -2242,3 +2253,8 @@ Location GeoProjection::GeoLocationToTransform(const GeoLocation &geolocation) c
 }  // namespace geom
 
 }  // namespace carla
+
+extern "C" size_t tsc_mock_last_worker_threads(void) {
+  return carla::client::g_last_worker_threads;
+}
+extern "C" uint16_t tsc_mock_last_map_layers(void) { return carla::client::g_last_map_layers; }

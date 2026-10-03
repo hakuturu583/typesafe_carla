@@ -1,6 +1,15 @@
 # Issue #35 on the mock backend: Client defaults and worker_threads, and
 # map_layers on load_world / load_world_if_different.
 import typesafe_carla as carla
+from typesafe_carla._ffi import LIB
+
+# Mock-only hooks (native/mock/include/carla/mock/Mock.h): what the shim last
+# passed to LibCarla.
+from C import LIB.tsc_mock_last_worker_threads() -> int
+from C import LIB.tsc_mock_last_map_layers() -> u16
+
+def last_layers() -> int:
+    return int(tsc_mock_last_map_layers())
 
 def raises_carla_error(fn) -> bool:
     try:
@@ -11,26 +20,39 @@ def raises_carla_error(fn) -> bool:
 
 # Defaults: host='127.0.0.1', port=2000, worker_threads=0.
 client = carla.Client()
+assert tsc_mock_last_worker_threads() == 0
 assert client.get_server_version() == client.get_client_version()
 assert carla.Client(worker_threads=2).get_world().id == client.get_world().id
+assert tsc_mock_last_worker_threads() == 2
 assert carla.Client("localhost", 2000, 1).get_world().get_map().name != ""
+assert tsc_mock_last_worker_threads() == 1
 assert raises_carla_error(lambda: carla.Client(worker_threads=-1))
+assert tsc_mock_last_worker_threads() == 1  # rejected before reaching LibCarla
 
 # load_world with a reduced layer set, then with every layer.
 before = client.get_world().id
 world = client.load_world("Town01", map_layers=carla.MapLayer.Buildings | carla.MapLayer.Walls)
 assert world.id != before
+assert last_layers() == carla.MapLayer.Buildings | carla.MapLayer.Walls
 world = client.load_world("Town01", False, carla.MapLayer.NONE)
-world = client.load_world("Town01", reset_settings=True, map_layers=carla.MapLayer.All)
+assert last_layers() == carla.MapLayer.NONE
+world = client.load_world("Town01")
+assert last_layers() == carla.MapLayer.All
+world = client.load_world("Town01", reset_settings=True, map_layers=carla.MapLayer.Props)
+assert last_layers() == carla.MapLayer.Props
 assert client.get_world().id == world.id
 assert raises_carla_error(lambda: client.load_world("Town01", map_layers=-1))
 assert raises_carla_error(lambda: client.load_world("Town01", map_layers=0x10000))
 assert client.get_world().id == world.id  # rejected before reaching the server
+assert last_layers() == carla.MapLayer.Props
 
 # load_world_if_different takes the same map_layers.
 current = client.get_world().get_map().name
 assert client.load_world_if_different(current, map_layers=carla.MapLayer.NONE) is None
+assert last_layers() == carla.MapLayer.NONE
 assert raises_carla_error(lambda: client.load_world_if_different("Town02", True, 0x10000))
 loaded = client.load_world_if_different("Town02", True, carla.MapLayer.Props)
-assert loaded is not None
+assert loaded is not None and last_layers() == carla.MapLayer.Props
+assert client.load_world_if_different("Town03") is not None
+assert last_layers() == carla.MapLayer.All
 print("OK")
