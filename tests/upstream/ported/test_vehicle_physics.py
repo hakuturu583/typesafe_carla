@@ -3,7 +3,8 @@
 # (Town03 / Town05 / Town01) that no ue5-dev package ships. Do not edit by hand:
 # change the rules there and regenerate. Changes:
 #   - loads a shipped large map (Town15, else Mine_01 or Town10HD_Opt) instead of Town05, before switching to synchronous mode rather than after (loading in synchronous mode waits for ticks that never come)
-#   - the scenarios' start transforms and the stop conditions on location and yaw, written for Town05 (x = 32, heading +y), go through a MapFrame
+#   - the scenarios' start transforms and the stop conditions on location and yaw, written for Town05, go through a MapFrame anchored at each scenario's own start (scenario_start), so every scenario starts on the lane heading along it (the u-turn and high-speed-turn starts lie off Town05's road at x = 32)
+#   - run_scenario spawns through MapFrame.spawn: a blocked spawn is retried 1 m higher, then further along the lane
 #
 #!/usr/bin/env python
 
@@ -62,13 +63,45 @@ class MapFrame:
     upstream assertions on `.x`, `.y` and yaw still hold.
     """
 
-    def __init__(self, world, origin, heading, length, side=None):
+    def __init__(self, world, origin, heading, length, side=None, _lane=None):
         self.origin = origin
-        wp, self.run = self._straight(world.get_map(), length, side)
+        wp, self.run = _lane or self._straight(world.get_map(), length, side)
+        self._lane = (wp, self.run)
         transform = wp.transform
         self.base = transform.location
+        self.lane_yaw = transform.rotation.yaw
         self.dyaw = transform.rotation.yaw - heading
         self.theta = _math.radians(self.dyaw)
+
+    def at(self, world, origin, heading):
+        """Another upstream point and direction on this frame's lane (no new
+        search): a scenario that starts elsewhere on the upstream map starts
+        at the lane's start too."""
+        return MapFrame(world, origin, heading, self.run, _lane=self._lane)
+
+    def spawn(self, world, blueprint, transform, move=True, tries=8, step=5.0):
+        """world.spawn_actor, robust to the loaded map: the upstream z values
+        assume flat UE4 ground, so a blocked spawn is retried 1 m higher, then
+        (with `move`) 5 m further along the lane, moving the whole frame with
+        it so later transforms and readings keep their relation. The last
+        attempt raises the server's own error."""
+        for i in range(tries):
+            for dz in (0.0, 1.0):
+                t = carla.Transform(carla.Location(transform.location.x, transform.location.y,
+                                                   transform.location.z + dz), transform.rotation)
+                if i == tries - 1 and dz:
+                    return world.spawn_actor(blueprint, t)
+                actor = world.try_spawn_actor(blueprint, t)
+                if actor is not None:
+                    return actor
+            if not move:
+                return world.spawn_actor(blueprint, transform)
+            dx = step * _math.cos(_math.radians(self.lane_yaw))
+            dy = step * _math.sin(_math.radians(self.lane_yaw))
+            self.base = carla.Location(self.base.x + dx, self.base.y + dy, self.base.z)
+            transform = carla.Transform(carla.Location(transform.location.x + dx,
+                                                       transform.location.y + dy,
+                                                       transform.location.z), transform.rotation)
 
     @staticmethod
     def _beside(wp, side):
@@ -131,7 +164,17 @@ class MapFrame:
         return (yaw - self.dyaw + 180.0) % 360.0 - 180.0
 # ---- end of ported helpers --------------------------------------------------
 
-FRAME = None
+FRAME = BASE_FRAME = None
+
+
+def scenario_start(world, x, y, z=0.0, yaw=0.0, pitch=0.0, roll=0.0):
+    """port: a scenario's Town05 start as a transform. The scenarios start at
+    different places of Town05 (the u-turn 17 m beside the road), so each one
+    gets FRAME anchored at its own start, on the lane's start, heading along it;
+    its stop conditions read locations through FRAME."""
+    global FRAME
+    FRAME = BASE_FRAME.at(world, (x, y), yaw)
+    return FRAME.transform(x, y, z, yaw=yaw, pitch=pitch, roll=roll)
 
 class VehicleControlStop:
     def __init__(self, x_min = -100000, x_max = +100000, y_min = -100000, y_max = +100000,
@@ -297,7 +340,7 @@ def run_scenario(world, bp_veh, init_loc, init_speed = 0.0, init_frames=10,
 
     veh_transf = init_loc
 
-    vehicle = world.spawn_actor(bp_veh, veh_transf)
+    vehicle = FRAME.spawn(world, bp_veh, veh_transf)
     wait(world, 10)
 
     data = TelemetryData(world.get_snapshot().elapsed_seconds, vehicle)
@@ -339,7 +382,7 @@ def brake_scenario(world, bp_veh, speed):
     except:
         print("No spectator")
 
-    init_loc = FRAME.transform(32, -180, 0.5, yaw=90)
+    init_loc = scenario_start(world, 32, -180, 0.5, yaw=90)
 
     controls = [
         (1000, carla.VehicleControl(brake=1.0), VehicleControlStop(speed_min=0.1))]
@@ -359,7 +402,7 @@ def accel_scenario(world, bp_veh, max_vel):
     except:
         print("No spectator")
 
-    init_loc = FRAME.transform(32, -180, 0.5, yaw=90)
+    init_loc = scenario_start(world, 32, -180, 0.5, yaw=90)
 
     controls = [
         (1000, carla.VehicleControl(throttle=1.0), VehicleControlStop(speed_max=max_vel/3.6))]
@@ -379,7 +422,7 @@ def uturn_scenario(world, bp_veh):
     except:
         pass
 
-    init_pos = FRAME.transform(15, -190, 0.2, yaw=0)
+    init_pos = scenario_start(world, 15, -190, 0.2, yaw=0)
     controls = [
         (1000, carla.VehicleControl(throttle=1.0), VehicleControlStop(x_max=19)),
         (1000, carla.VehicleControl(throttle=0.25, steer=-0.4), VehicleControlStop(yaw_min=-170)),
@@ -398,7 +441,7 @@ def highspeed_turn_scenario(world, bp_veh, steer):
     except:
         pass
 
-    init_pos = FRAME.transform(50, -204, 0.2, yaw=0)
+    init_pos = scenario_start(world, 50, -204, 0.2, yaw=0)
     init_frames = 2
     init_speed = 100 / 3.6
     controls = [(100, carla.VehicleControl(throttle=0.5), VehicleControlStop(x_max=100)),
@@ -419,8 +462,8 @@ def main(arg):
         if world.get_map().name.split("/")[-1] != shipped_map(client, LARGE_MAPS):
             client.load_world(shipped_map(client, LARGE_MAPS), False)
         world = client.get_world()
-        global FRAME
-        FRAME = MapFrame(world, (32, -180), 90.0, 250.0)
+        global FRAME, BASE_FRAME
+        FRAME = BASE_FRAME = MapFrame(world, (32, -180), 90.0, 250.0)
         # Setting the world and the spawn properties
         original_settings = world.get_settings()
         settings = world.get_settings()
@@ -439,7 +482,7 @@ def main(arg):
                 try:
                     veh_transf = carla.Transform()
                     veh_transf.location.z = 100
-                    vehicle = world.spawn_actor(bp_veh, veh_transf)
+                    vehicle = FRAME.spawn(world, bp_veh, veh_transf)
                     print()
                     print(vehicle.get_physics_control())
                     vehicle.destroy()

@@ -3,7 +3,7 @@
 # (Town03 / Town05 / Town01) that no ue5-dev package ships. Do not edit by hand:
 # change the rules there and regenerate. Changes:
 #   - tearDown loads a shipped map (Town10HD_Opt) instead of Town03
-#   - the large-vehicle exclusion list (UE4 ids only, so stale on ue5-dev) also names the UE5 large vehicles, vehicle.firetruck.actors and vehicle.fuso.mitsubishi
+#   - the large-vehicle exclusion list (UE4 ids only, so stale on ue5-dev) also names ue5-dev's trucks and buses (base_type truck / bus in Docs/catalogue_vehicles.md at the same commit): vehicle.carlacola.actors, vehicle.firetruck.actors, vehicle.fuso.mitsubishi and vehicle.miningtruck.miningtruck
 #   - adds shipped_map() and MapFrame for the ported tests
 #
 # Copyright (c) 2026 Computer Vision Center (CVC) at the Universitat Autonoma de
@@ -30,7 +30,9 @@ import time
 
 TESTING_ADDRESS = ('localhost', 3654)
 VEHICLE_VEHICLES_EXCLUDE_FROM_OLD_TOWNS = ['vehicle.mitsubishi.fusorosa', 'vehicle.carlamotors.european_hgv', 'vehicle.carlamotors.firetruck',
-    'vehicle.firetruck.actors', 'vehicle.fuso.mitsubishi']  # their UE5 ids (port)
+    # port: ue5-dev's trucks and buses (Docs/catalogue_vehicles.md base types)
+    'vehicle.carlacola.actors', 'vehicle.firetruck.actors', 'vehicle.fuso.mitsubishi',
+    'vehicle.miningtruck.miningtruck']
 
 class SmokeTest(unittest.TestCase):
     def setUp(self):
@@ -108,13 +110,45 @@ class MapFrame:
     upstream assertions on `.x`, `.y` and yaw still hold.
     """
 
-    def __init__(self, world, origin, heading, length, side=None):
+    def __init__(self, world, origin, heading, length, side=None, _lane=None):
         self.origin = origin
-        wp, self.run = self._straight(world.get_map(), length, side)
+        wp, self.run = _lane or self._straight(world.get_map(), length, side)
+        self._lane = (wp, self.run)
         transform = wp.transform
         self.base = transform.location
+        self.lane_yaw = transform.rotation.yaw
         self.dyaw = transform.rotation.yaw - heading
         self.theta = _math.radians(self.dyaw)
+
+    def at(self, world, origin, heading):
+        """Another upstream point and direction on this frame's lane (no new
+        search): a scenario that starts elsewhere on the upstream map starts
+        at the lane's start too."""
+        return MapFrame(world, origin, heading, self.run, _lane=self._lane)
+
+    def spawn(self, world, blueprint, transform, move=True, tries=8, step=5.0):
+        """world.spawn_actor, robust to the loaded map: the upstream z values
+        assume flat UE4 ground, so a blocked spawn is retried 1 m higher, then
+        (with `move`) 5 m further along the lane, moving the whole frame with
+        it so later transforms and readings keep their relation. The last
+        attempt raises the server's own error."""
+        for i in range(tries):
+            for dz in (0.0, 1.0):
+                t = carla.Transform(carla.Location(transform.location.x, transform.location.y,
+                                                   transform.location.z + dz), transform.rotation)
+                if i == tries - 1 and dz:
+                    return world.spawn_actor(blueprint, t)
+                actor = world.try_spawn_actor(blueprint, t)
+                if actor is not None:
+                    return actor
+            if not move:
+                return world.spawn_actor(blueprint, transform)
+            dx = step * _math.cos(_math.radians(self.lane_yaw))
+            dy = step * _math.sin(_math.radians(self.lane_yaw))
+            self.base = carla.Location(self.base.x + dx, self.base.y + dy, self.base.z)
+            transform = carla.Transform(carla.Location(transform.location.x + dx,
+                                                       transform.location.y + dy,
+                                                       transform.location.z), transform.rotation)
 
     @staticmethod
     def _beside(wp, side):

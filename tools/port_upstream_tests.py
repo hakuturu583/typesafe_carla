@@ -73,13 +73,45 @@ class MapFrame:
     upstream assertions on `.x`, `.y` and yaw still hold.
     """
 
-    def __init__(self, world, origin, heading, length, side=None):
+    def __init__(self, world, origin, heading, length, side=None, _lane=None):
         self.origin = origin
-        wp, self.run = self._straight(world.get_map(), length, side)
+        wp, self.run = _lane or self._straight(world.get_map(), length, side)
+        self._lane = (wp, self.run)
         transform = wp.transform
         self.base = transform.location
+        self.lane_yaw = transform.rotation.yaw
         self.dyaw = transform.rotation.yaw - heading
         self.theta = _math.radians(self.dyaw)
+
+    def at(self, world, origin, heading):
+        """Another upstream point and direction on this frame's lane (no new
+        search): a scenario that starts elsewhere on the upstream map starts
+        at the lane's start too."""
+        return MapFrame(world, origin, heading, self.run, _lane=self._lane)
+
+    def spawn(self, world, blueprint, transform, move=True, tries=8, step=5.0):
+        """world.spawn_actor, robust to the loaded map: the upstream z values
+        assume flat UE4 ground, so a blocked spawn is retried 1 m higher, then
+        (with `move`) 5 m further along the lane, moving the whole frame with
+        it so later transforms and readings keep their relation. The last
+        attempt raises the server's own error."""
+        for i in range(tries):
+            for dz in (0.0, 1.0):
+                t = carla.Transform(carla.Location(transform.location.x, transform.location.y,
+                                                   transform.location.z + dz), transform.rotation)
+                if i == tries - 1 and dz:
+                    return world.spawn_actor(blueprint, t)
+                actor = world.try_spawn_actor(blueprint, t)
+                if actor is not None:
+                    return actor
+            if not move:
+                return world.spawn_actor(blueprint, transform)
+            dx = step * _math.cos(_math.radians(self.lane_yaw))
+            dy = step * _math.sin(_math.radians(self.lane_yaw))
+            self.base = carla.Location(self.base.x + dx, self.base.y + dy, self.base.z)
+            transform = carla.Transform(carla.Location(transform.location.x + dx,
+                                                       transform.location.y + dy,
+                                                       transform.location.z), transform.rotation)
 
     @staticmethod
     def _beside(wp, side):
@@ -171,11 +203,15 @@ def _smoke_init(t: str):
     t = replace(t, 'self.client.load_world("Town03")', "self.client.load_world(shipped_map(self.client))")
     t = replace(t, "'vehicle.carlamotors.firetruck']",
                 "'vehicle.carlamotors.firetruck',\n"
-                "    'vehicle.firetruck.actors', 'vehicle.fuso.mitsubishi']  # their UE5 ids (port)")
+                "    # port: ue5-dev's trucks and buses (Docs/catalogue_vehicles.md base types)\n"
+                "    'vehicle.carlacola.actors', 'vehicle.firetruck.actors', 'vehicle.fuso.mitsubishi',\n"
+                "    'vehicle.miningtruck.miningtruck']")
     return t + HELPERS, ["tearDown loads a shipped map (Town10HD_Opt) instead of Town03",
                          "the large-vehicle exclusion list (UE4 ids only, so stale on ue5-dev) also "
-                         "names the UE5 large vehicles, vehicle.firetruck.actors and "
-                         "vehicle.fuso.mitsubishi",
+                         "names ue5-dev's trucks and buses (base_type truck / bus in "
+                         "Docs/catalogue_vehicles.md at the same commit): vehicle.carlacola.actors, "
+                         "vehicle.firetruck.actors, vehicle.fuso.mitsubishi and "
+                         "vehicle.miningtruck.miningtruck",
                          "adds shipped_map() and MapFrame for the ported tests"]
 
 
@@ -276,15 +312,18 @@ def _api_collision(t: str):
                 "client.set_timeout(60.0)  # port: Town10HD_Opt takes ~8 s to load\n"
                 "        world = client.load_world(shipped_map(client))\n"
                 "        frame = MapFrame(world, (177.7, 198.8), 0.0, 40.0)")
-    t = re.sub(r"(walker = world\.spawn_actor\(bp, )carla\.Transform\(carla\.Location\(([^()]*)\), carla\.Rotation\(\)\)\)",
-               r"\1frame.transform(\2))", t)
-    t = re.sub(r"(vehicle = world\.spawn_actor\(bp, )carla\.Transform\(carla\.Location\(([^()]*)\), carla\.Rotation\(\)\)\)",
-               r"\1frame.transform(\2))", t)
+    t = re.sub(r"walker = world\.spawn_actor\(bp, carla\.Transform\(carla\.Location\(([^()]*)\), carla\.Rotation\(\)\)\)",
+               r"walker = frame.spawn(world, bp, frame.transform(\1))", t)
+    t = re.sub(r"vehicle = world\.spawn_actor\(bp, carla\.Transform\(carla\.Location\(([^()]*)\), carla\.Rotation\(\)\)\)",
+               r"vehicle = frame.spawn(world, bp, frame.transform(\1), move=False)", t)
     t = replace(t, "import carla\n", "import carla\n" + HELPERS, 1)
     return t, ["loads a shipped map instead of Town01, with a 60 s client timeout (the default "
                "5 s was enough for Town01 on UE4; Town10HD_Opt takes ~8 s)",
                "the walker and the vehicle behind it, on Town01's road at y = 199 heading +x, go "
-               "through a MapFrame onto a straight road of the loaded map"]
+               "through a MapFrame onto a straight road of the loaded map",
+               "they spawn through MapFrame.spawn: a blocked spawn (UE4's flat-ground z) is "
+               "retried 1 m higher, and the walker's further along the lane, the frame moving "
+               "with it so the vehicle still starts 23 m behind it"]
 
 
 def _top_vehicle_physics(t: str):
@@ -297,22 +336,40 @@ def _top_vehicle_physics(t: str):
         original_settings = world.get_settings()''', '''        if world.get_map().name.split("/")[-1] != shipped_map(client, LARGE_MAPS):
             client.load_world(shipped_map(client, LARGE_MAPS), False)
         world = client.get_world()
-        global FRAME
-        FRAME = MapFrame(world, (32, -180), 90.0, 250.0)
+        global FRAME, BASE_FRAME
+        FRAME = BASE_FRAME = MapFrame(world, (32, -180), 90.0, 250.0)
         # Setting the world and the spawn properties
         original_settings = world.get_settings()''')
     # Spawn points and stop conditions in Town05 coordinates.
     t = re.sub(r"(init_(?:loc|pos) = )carla\.Transform\(carla\.Location\(([^()]*)\), carla\.Rotation\(([^()]*)\)\)",
-               r"\1FRAME.transform(\2, \3)", t)
+               r"\1scenario_start(world, \2, \3)", t)
+    t = replace(t, "    vehicle = world.spawn_actor(bp_veh, veh_transf)\n",
+                "    vehicle = FRAME.spawn(world, bp_veh, veh_transf)\n")
     t = replace(t, "        loc = vehicle.get_location()\n", "        loc = FRAME.up_location(vehicle.get_location())\n")
     t = replace(t, "        rot = vehicle.get_transform().rotation\n",
                 "        rot = vehicle.get_transform().rotation\n        rot.yaw = FRAME.up_yaw(rot.yaw)\n")
-    t = replace(t, "import carla\n", "import carla\n" + HELPERS + "\nFRAME = None\n", 1)
+    t = replace(t, "import carla\n", "import carla\n" + HELPERS + '''
+FRAME = BASE_FRAME = None
+
+
+def scenario_start(world, x, y, z=0.0, yaw=0.0, pitch=0.0, roll=0.0):
+    """port: a scenario's Town05 start as a transform. The scenarios start at
+    different places of Town05 (the u-turn 17 m beside the road), so each one
+    gets FRAME anchored at its own start, on the lane's start, heading along it;
+    its stop conditions read locations through FRAME."""
+    global FRAME
+    FRAME = BASE_FRAME.at(world, (x, y), yaw)
+    return FRAME.transform(x, y, z, yaw=yaw, pitch=pitch, roll=roll)
+''', 1)
     return t, ["loads a shipped large map (Town15, else Mine_01 or Town10HD_Opt) instead of Town05, "
                "before switching to synchronous mode rather than after (loading in synchronous "
                "mode waits for ticks that never come)",
                "the scenarios' start transforms and the stop conditions on location and yaw, "
-               "written for Town05 (x = 32, heading +y), go through a MapFrame"]
+               "written for Town05, go through a MapFrame anchored at each scenario's own start "
+               "(scenario_start), so every scenario starts on the lane heading along it (the "
+               "u-turn and high-speed-turn starts lie off Town05's road at x = 32)",
+               "run_scenario spawns through MapFrame.spawn: a blocked spawn is retried 1 m higher, "
+               "then further along the lane"]
 
 
 # Smoke tests that fail only through SmokeTest.tearDown (Town03).

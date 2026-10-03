@@ -56,7 +56,7 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 
 - **fails with the official module too: RuntimeError: std::exception**: 1 tests: `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`
 - **fails with the official module too: a script that needs command-line arguments (API/Tests.md documents them)**: 1 tests: `API/spawn_actor.py::<script>`
-- **fails with the official module too: assertion: AssertionError: True is not false**: 1 tests: `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points`
+- **fails with the official module too: assertion: AssertionError: True is not false : vehicle.carlacola.actors on Town10HD_Opt: [(17.091217041015625, 28.104215621948242, 'Spawn failed becaus**: 1 tests: `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points`
 - **fails with the official module too: error: exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu)**: 1 tests: `API/prop_control.py::<script>`
 - **fails with the official module too: test dependency `cv2` not installed in the test interpreter**: 1 tests: `test_ground_truth.py::<script>`
 - **fails with the official module too: the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
@@ -98,7 +98,7 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 ### behaviour differs (assertions, errors, crashes) (3 causes, 23 tests)
 
 - **RuntimeError: std::exception**: 21 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +13 more
-- **assertion: AssertionError: True is not false**: 1 tests: `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points`
+- **assertion: AssertionError: True is not false : vehicle.carlacola.actors on Town10HD_Opt: [(17.091217041015625, 28.104215621948242, 'Spawn failed becaus**: 1 tests: `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points`
 - **error: exit 1: WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 14052 (sensor.other.imu)**: 1 tests: `API/prop_control.py::<script>`
 
 ### the test server's content (maps, blueprints), not typesafe_carla (2 causes, 3 tests)
@@ -376,7 +376,7 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `ported/smoke/test_lidar.py::TestASyncLidar.test_semlidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
 | `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | error | compile | pass | sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads (#86) |
 | `ported/smoke/test_map.py::TestMap.test_load_all_maps` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | fail | compile | fail | fails with the official module too: assertion: AssertionError: True is not false |
+| `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | fail | compile | fail | fails with the official module too: assertion: AssertionError: True is not false : vehicle.carlacola.actors on Town10HD_Opt: [(17.091217041015625, 28.104215621948242, 'Spawn failed becaus |
 | `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode` | pass | compile | pass | does not compile: no module named 'queue' |
 | `ported/smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync` | pass | compile | pass | does not compile: no module named 'queue' |
 | `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control` | error | compile | not run | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |

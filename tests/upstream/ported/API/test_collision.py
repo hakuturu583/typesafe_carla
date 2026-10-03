@@ -4,6 +4,7 @@
 # change the rules there and regenerate. Changes:
 #   - loads a shipped map instead of Town01, with a 60 s client timeout (the default 5 s was enough for Town01 on UE4; Town10HD_Opt takes ~8 s)
 #   - the walker and the vehicle behind it, on Town01's road at y = 199 heading +x, go through a MapFrame onto a straight road of the loaded map
+#   - they spawn through MapFrame.spawn: a blocked spawn (UE4's flat-ground z) is retried 1 m higher, and the walker's further along the lane, the frame moving with it so the vehicle still starts 23 m behind it
 #
 
 from __future__ import print_function
@@ -63,13 +64,45 @@ class MapFrame:
     upstream assertions on `.x`, `.y` and yaw still hold.
     """
 
-    def __init__(self, world, origin, heading, length, side=None):
+    def __init__(self, world, origin, heading, length, side=None, _lane=None):
         self.origin = origin
-        wp, self.run = self._straight(world.get_map(), length, side)
+        wp, self.run = _lane or self._straight(world.get_map(), length, side)
+        self._lane = (wp, self.run)
         transform = wp.transform
         self.base = transform.location
+        self.lane_yaw = transform.rotation.yaw
         self.dyaw = transform.rotation.yaw - heading
         self.theta = _math.radians(self.dyaw)
+
+    def at(self, world, origin, heading):
+        """Another upstream point and direction on this frame's lane (no new
+        search): a scenario that starts elsewhere on the upstream map starts
+        at the lane's start too."""
+        return MapFrame(world, origin, heading, self.run, _lane=self._lane)
+
+    def spawn(self, world, blueprint, transform, move=True, tries=8, step=5.0):
+        """world.spawn_actor, robust to the loaded map: the upstream z values
+        assume flat UE4 ground, so a blocked spawn is retried 1 m higher, then
+        (with `move`) 5 m further along the lane, moving the whole frame with
+        it so later transforms and readings keep their relation. The last
+        attempt raises the server's own error."""
+        for i in range(tries):
+            for dz in (0.0, 1.0):
+                t = carla.Transform(carla.Location(transform.location.x, transform.location.y,
+                                                   transform.location.z + dz), transform.rotation)
+                if i == tries - 1 and dz:
+                    return world.spawn_actor(blueprint, t)
+                actor = world.try_spawn_actor(blueprint, t)
+                if actor is not None:
+                    return actor
+            if not move:
+                return world.spawn_actor(blueprint, transform)
+            dx = step * _math.cos(_math.radians(self.lane_yaw))
+            dy = step * _math.sin(_math.radians(self.lane_yaw))
+            self.base = carla.Location(self.base.x + dx, self.base.y + dy, self.base.z)
+            transform = carla.Transform(carla.Location(transform.location.x + dx,
+                                                       transform.location.y + dy,
+                                                       transform.location.z), transform.rotation)
 
     @staticmethod
     def _beside(wp, side):
@@ -154,10 +187,10 @@ class TestCollision(unittest.TestCase):
         # Spawn the actor
         bp = bp_lib.filter("*walker*")[0]
         # bp.set_attribute('is_invincible', 'false')
-        walker = world.spawn_actor(bp, frame.transform(200.7, 199.3, 0.2))
+        walker = frame.spawn(world, bp, frame.transform(200.7, 199.3, 0.2))
 
         bp = bp_lib.filter("*mkz_2020*")[0]
-        vehicle = world.spawn_actor(bp, frame.transform(177.7, 198.8, 0.2))
+        vehicle = frame.spawn(world, bp, frame.transform(177.7, 198.8, 0.2), move=False)
         spectator.set_transform(carla.Transform(carla.Location(205.9, 193.2, 3.9), carla.Rotation(pitch=-29, yaw=135)))
 
         collision_bp = bp_lib.find('sensor.other.collision')

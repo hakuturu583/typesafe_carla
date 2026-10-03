@@ -521,6 +521,9 @@
      "error",
      "RuntimeError: std::exception"
     ]
+   },
+   "traces": {
+    "TestCollision.test_collision_against_side_of_car": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/API/test_collision.py\", line 157, in test_collision_against_side_of_car\n    walker = world.spawn_actor(bp, frame.transform(200.7, 199.3, 0.2))\nRuntimeError: std::exception"
    }
   },
   "ported/smoke/test_blueprint.py": {
@@ -677,8 +680,11 @@
    "tests": {
     "TestSpawnpoints.test_spawn_points": [
      "fail",
-     "AssertionError: True is not false"
+     "AssertionError: True is not false : vehicle.carlacola.actors on Town10HD_Opt: [(17.091217041015625, 28.104215621948242, 'Spawn failed because of collision at spawn position')]"
     ]
+   },
+   "traces": {
+    "TestSpawnpoints.test_spawn_points": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_spawnpoints.py\", line 59, in test_spawn_points\n    self.assertFalse(any(x.error for x in response), \"%s on %s: %s\" % (  # port: say which\nAssertionError: True is not false : vehicle.carlacola.actors on Town10HD_Opt: [(17.091217041015625, 28.104215621948242, 'Spawn failed because of collision at spawn position')]"
    }
   },
   "ported/smoke/test_streamming.py": {
@@ -701,18 +707,6 @@
   "ported/smoke/test_vehicle_physics.py": {
    "file_error": null,
    "tests": {
-    "TestApplyVehiclePhysics.test_single_physics_control": [
-     "error",
-     "TypeError: No to_python (by-value) converter found for C++ type: std::__1::vector<float, std::__1::allocator<float>>"
-    ],
-    "TestApplyVehiclePhysics.test_multiple_physics_control": [
-     "error",
-     "TypeError: No to_python (by-value) converter found for C++ type: std::__1::vector<float, std::__1::allocator<float>>"
-    ],
-    "TestVehicleFriction.test_vehicle_zero_friction": [
-     "fail",
-     "AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]"
-    ],
     "TestVehicleFriction.test_vehicle_friction_volume": [
      "pass",
      ""
@@ -720,14 +714,6 @@
     "TestVehicleFriction.test_vehicle_friction_values": [
      "pass",
      ""
-    ],
-    "TestVehicleTireConfig.test_vehicle_wheel_collision": [
-     "fail",
-     "AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]"
-    ],
-    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": [
-     "fail",
-     "AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]"
     ],
     "TestStickyControl.test_default": [
      "pass",
@@ -759,6 +745,9 @@
      "error",
      "exit 1: RuntimeError: std::exception"
     ]
+   },
+   "traces": {
+    "<script>": "  File \"test_vehicle_physics.py\", line 544, in <module>\n    main(args)\n  File \"test_vehicle_physics.py\", line 461, in main\n    uturn_scenario(world, bp_veh)\n  File \"test_vehicle_physics.py\", line 389, in uturn_scenario\n    data = run_scenario(world, bp_veh, init_loc=init_pos, controls=controls)\n  File \"test_vehicle_physics.py\", line 300, in run_scenario\n    vehicle = world.spawn_actor(bp_veh, veh_transf)\nRuntimeError: std::exception"
    }
   }
  },
