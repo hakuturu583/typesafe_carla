@@ -4,6 +4,7 @@
 #include "carla/FileSystem.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -782,7 +783,7 @@ SharedPtr<Actor> World::GetActor(rpc::ActorId id) const {
 
 SharedPtr<Actor> World::SpawnActor(const ActorBlueprint &blueprint,
                                    const geom::Transform &transform, Actor *parent,
-                                   rpc::AttachmentType, const std::string &) {
+                                   rpc::AttachmentType) {
   mock::ActorData data;
   {
     std::lock_guard<std::mutex> lock(_episode->mutex);
@@ -796,10 +797,9 @@ SharedPtr<Actor> World::SpawnActor(const ActorBlueprint &blueprint,
 
 SharedPtr<Actor> World::TrySpawnActor(const ActorBlueprint &blueprint,
                                       const geom::Transform &transform, Actor *parent,
-                                      rpc::AttachmentType attachment_type,
-                                      const std::string &socket_name) noexcept {
+                                      rpc::AttachmentType attachment_type) noexcept {
   try {
-    return SpawnActor(blueprint, transform, parent, attachment_type, socket_name);
+    return SpawnActor(blueprint, transform, parent, attachment_type);
   } catch (const std::exception &) {
     return nullptr;
   }
@@ -852,8 +852,15 @@ uint64_t World::ApplySettings(const rpc::EpisodeSettings &settings, time_duratio
 
 // ---------------------------------------------------------------------------
 
-Client::Client(const std::string &host, uint16_t port, size_t)
-    : _endpoint(host + ":" + std::to_string(port)) {}
+namespace {
+std::atomic<size_t> g_last_worker_threads{0};
+std::atomic<uint16_t> g_last_map_layers{static_cast<uint16_t>(rpc::MapLayer::All)};
+}  // namespace
+
+Client::Client(const std::string &host, uint16_t port, size_t worker_threads)
+    : _endpoint(host + ":" + std::to_string(port)) {
+  g_last_worker_threads = worker_threads;
+}
 
 std::string Client::GetServerVersion() const {
   mock::Connect(_endpoint, _timeout);
@@ -874,7 +881,9 @@ World Client::ReloadWorld(bool reset_settings) const {
   return World(episode);
 }
 
-World Client::LoadWorld(std::string map_name, bool reset_settings, rpc::MapLayer) const {
+World Client::LoadWorld(std::string map_name, bool reset_settings,
+                        rpc::MapLayer map_layers) const {
+  g_last_map_layers = static_cast<uint16_t>(map_layers);
   if (map_name.empty()) throw std::invalid_argument("map name must not be empty");
   if (map_name.rfind("Town", 0) != 0 && map_name.rfind("/Game/", 0) != 0) {
     throw std::runtime_error("map '" + map_name + "' not found");
@@ -960,6 +969,27 @@ Map::Map() : _name("Carla/Maps/MockTown") {
           geom::Location(static_cast<float>(x), static_cast<float>(LaneY(lane)), 0.6f));
     }
   }
+}
+
+// LibCarla parses the document client-side and, when the XML does not parse,
+// throws a plain std::exception (throw_exception slices its "failed to
+// generate map" runtime_error); the mock throws the same. It has no XML
+// parser: it accepts a
+// document with a closed <OpenDRIVE> element (<OpenDRIVE .../> or
+// <OpenDRIVE>...</OpenDRIVE>) and models it as its own two-lane road, under
+// the given name and with the given OpenDRIVE text. As in LibCarla, such a
+// map has no recommended spawn points (they come from the server).
+Map::Map(std::string name, std::string xodr_content) : Map() {
+  const auto open = xodr_content.find("<OpenDRIVE");
+  const auto tag_end = open == std::string::npos ? open : xodr_content.find('>', open);
+  if (tag_end == std::string::npos ||
+      (xodr_content[tag_end - 1] != '/' &&
+       xodr_content.find("</OpenDRIVE>", tag_end) == std::string::npos)) {
+    throw std::exception();
+  }
+  _name = std::move(name);
+  _xodr = std::move(xodr_content);
+  _spawn_points.clear();
 }
 
 SharedPtr<Waypoint> Map::GetWaypoint(const geom::Location &location, bool project_to_road,
@@ -1971,12 +2001,12 @@ traffic_manager::TrafficManager Client::GetInstanceTM(uint16_t port) const {
   return traffic_manager::TrafficManager(mock::Connect(_endpoint, _timeout), port);
 }
 
-std::string Client::StartRecorder(std::string name, bool) {
+std::string Client::StartRecorder(std::string name, bool, bool stop_replayer) {
   auto e = mock::Connect(_endpoint, _timeout);
   std::lock_guard<std::mutex> lock(e->mutex);
   e->recording = name;
   e->recordings[name] = e->frame;
-  return "Recording on file: " + name;
+  return "Recording on file: " + name + (stop_replayer ? "" : " (replayer kept)");
 }
 
 void Client::StopRecorder() {
@@ -2009,9 +2039,24 @@ std::string Client::ShowRecorderActorsBlocked(std::string name, double, double) 
   return "Blocked actors in " + name + ": 0\n";
 }
 
-std::string Client::ReplayFile(std::string name, double, double, uint32_t, bool) {
-  return "Replaying " + std::to_string(RecordedFrames(mock::Connect(_endpoint, _timeout), name)) +
-         " frames of " + name;
+std::string Client::ReplayFile(std::string name, double, double, uint32_t, bool,
+                               bool replay_weather, const geom::Transform &offset,
+                               std::string map_override) {
+  // The text echoes the ue5-dev arguments, so tests can see them arrive.
+  std::string text = "Replaying " +
+                     std::to_string(RecordedFrames(mock::Connect(_endpoint, _timeout), name)) +
+                     " frames of " + name;
+  if (replay_weather) text += " with weather";
+  const auto &l = offset.location;
+  const auto &r = offset.rotation;
+  if (l.x != 0.0f || l.y != 0.0f || l.z != 0.0f || r.pitch != 0.0f || r.yaw != 0.0f ||
+      r.roll != 0.0f) {
+    text += " offset by (" + std::to_string(l.x) + ", " + std::to_string(l.y) + ", " +
+            std::to_string(l.z) + ") rotated (" + std::to_string(r.pitch) + ", " +
+            std::to_string(r.yaw) + ", " + std::to_string(r.roll) + ")";
+  }
+  if (!map_override.empty()) text += " on " + map_override;
+  return text;
 }
 
 void Client::StopReplayer(bool) {}
@@ -2048,6 +2093,7 @@ void Client::RequestFile(const std::string &name) const {
 // the "Carla/Maps/" prefix.
 void Client::LoadWorldIfDifferent(std::string map_name, bool reset_settings,
                                   rpc::MapLayer map_layers) const {
+  g_last_map_layers = static_cast<uint16_t>(map_layers);
   const std::string current = GetWorld().GetMap()->GetName();
   if (map_name != current && "Carla/Maps/" + map_name != current) {
     LoadWorld(std::move(map_name), reset_settings, map_layers);
@@ -2354,3 +2400,8 @@ Location GeoProjection::GeoLocationToTransform(const GeoLocation &geolocation) c
 }  // namespace geom
 
 }  // namespace carla
+
+extern "C" size_t tsc_mock_last_worker_threads(void) {
+  return carla::client::g_last_worker_threads;
+}
+extern "C" uint16_t tsc_mock_last_map_layers(void) { return carla::client::g_last_map_layers; }

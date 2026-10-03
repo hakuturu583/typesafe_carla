@@ -68,6 +68,17 @@ out("batch_error", r[0].error)
 
 # Milestone 4: map queries, traffic lights, weather.
 out("topology", str(len(m.get_topology())))
+# Issue #39: carla.Map(name, xodr_content) from the server map's OpenDRIVE.
+xm = carla.Map("copy", m.to_opendrive())
+xwp = unwrap(xm.get_waypoint(p0.location))
+xbad = 0
+try:
+    carla.Map("bad", "")
+except carla.CarlaError:
+    xbad = 1
+out("map_from_xodr", xm.name + "," + str(len(xm.get_spawn_points())) + "," +
+    str(len(xm.get_topology())) + "," + str(len(xm.generate_waypoints(2.0))) + "," +
+    str(xwp.road_id) + "," + str(xwp.lane_id) + "," + fmt(xwp.s) + "," + str(xbad))
 out("crosswalk_points", str(len(m.get_crosswalks())))
 lms = m.get_all_landmarks()
 out("landmarks", str(len(lms)))
@@ -406,6 +417,13 @@ try:
     out("actor_parent", str(int(vehicle.parent is None)) + "," +
         str(int(cam.parent.id == vehicle.id)) + "," + str(sorted(cam.semantic_tags)))
     cam.destroy()
+    # Issue #34: attachment_type.
+    arms = [world.spawn_actor(cam_bp, carla.Transform(carla.Location(-5.0, 0.0, 3.0)),
+                              attach_to=vehicle, attachment_type=kind)
+            for kind in [carla.AttachmentType.SpringArm, carla.AttachmentType.SpringArmGhost]]
+    out("attachment_type", ",".join([str(int(unwrap(a.parent).id == vehicle.id)) for a in arms]))
+    for a in arms:
+        a.destroy()
     signs = [a.as_traffic_sign() for a in world.get_actors() if a.is_traffic_sign()]
     plain = sorted(set([a.type_id for a in signs if not a.is_traffic_light()]))
     out("traffic_signs", str(len(signs)) + "," + "|".join(plain))

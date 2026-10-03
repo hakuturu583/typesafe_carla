@@ -36,7 +36,24 @@ g: {call: G, args: {flag: bool}, optional: {name: Thing.g, missing_in: ["0.10.0"
                             "int32_t n", "tsc_string_list_t *out"]
     assert f.codon_params() == ["cobj", "cobj, int", "i32", "Ptr[CStringList]"]
     assert g.optional == "Thing.g" and g.missing_in == ("0.10.0",)
-    assert g.body().startswith("TSC_CALL_OPTIONAL(thing_of(thing), G, \"Thing.g\"")
+    # The handle is checked before the arguments, as for `via`.
+    assert g.body() == ('[&](auto &self_) { TSC_CALL_OPTIONAL(self_, G, "Thing.g", flag != 0); }'
+                        '(thing_of(thing));')
+
+
+def test_optional_with_output(tmp_path):
+    """An `optional` method with an `assign` output (issue #36): the output is
+    checked before the call, and written only where the method exists."""
+    s = _load(tmp_path, """
+r: {call: R, optional: {name: Thing.r, missing_in: ["0.10.0"]}, out: string}
+q: {call: Q, optional: {name: Thing.q, missing_in: ["0.10.0"]}, args: {flag: bool}, out: string}
+""")
+    r, q = s.functions
+    assert r.body() == ('require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { '
+                        'string_assign(out, r_); }), thing_of(thing), R, "Thing.r");')
+    assert q.body() == ('require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(('
+                        '[&](auto &&r_) { string_assign(out, r_); }), self_, Q, "Thing.q", '
+                        'flag != 0); }(thing_of(thing));')
 
 
 
@@ -57,7 +74,9 @@ g: {call: G, via: g_compat, out: string_list}
 
 @pytest.mark.parametrize("entry, message", [
     ("f: {call: F, out: bool, optional: {name: Thing.f, missing_in: [\"0.10.0\"]}}",
-     "an optional method has no output"),
+     "an optional method's output needs a type with `assign`"),
+    ("f: {call: F, out: world_handle, optional: {name: Thing.f, missing_in: [\"0.10.0\"]}}",
+     "an optional method's output needs a type with `assign`"),
     ("f: {call: F, optional: Thing.f}", "optional must be"),
     ("f: {call: F, optional: {name: Thing.f, missing_in: []}}", "optional must be"),
     ("f: {call: F, optional: {name: Thing.f}}", "optional must be"),
@@ -72,11 +91,44 @@ g: {call: G, via: g_compat, out: string_list}
      "duplicate C parameter(s) ['count']"),
     ("f: {call: F, args: {thing: bool}}", "duplicate C parameter(s) ['thing']"),
     ("f: {call: F, args: {name: string_in, name_len: bool}}", "duplicate C parameter(s) ['name_len']"),
+    ("f: {args: {flag: bool}}", "missing key 'call'"),
+    ("f: {new: \"yes\", out: thing_handle}", "new must be true or false"),
+    ("f: {new: true, call: F, out: thing_handle}", "a constructor (new: true) has no call"),
+    ("f: {new: true, args: {flag: bool}}", "a constructor needs a handle output"),
+    ("f: {new: true, out: string}", "a constructor needs a handle output"),
+    ("f: {new: true, args: {name: string_in}, out: map_handle}",
+     "the output map_handle is not a handle of carla::client::Thing"),
+    ("f: {new: true, args: {flag: bool}, out: thing_handle}",
+     "a constructor needs an argument that can be invalid"),
+    ("f: {new: true, out: thing_handle}", "a constructor needs an argument that can be invalid"),
 ])
 def test_spec_errors(tmp_path, entry, message):
     with pytest.raises(spec.SpecError) as e:
-        _load(tmp_path, entry)
+        _load(tmp_path, entry, THING_HANDLE)
     assert message in str(e.value)
+
+
+THING_HANDLE = ("thing_handle:\n  c: tsc_thing_t\n  handle: true\n"
+                "  cpp: [\"std::shared_ptr<carla::client::Thing>\"]\n")
+
+
+def test_constructor(tmp_path):
+    """`new: true` (issue #39): a constructor has no self parameter; it makes
+    the class's object from the arguments and returns a new handle. `call` is
+    the class's own name, which is how validate finds the constructors."""
+    s = _load(tmp_path, """
+new: {new: true, args: {name: string_in, flag: bool}, out: thing_handle}
+new_checked: {new: true, via: make_thing, args: {name: string_in}, out: thing_handle}
+""", THING_HANDLE)
+    f, g = s.functions
+    assert f.constructor and f.call == "Thing" and f.name == "tsc_thing_new"
+    assert f.c_params() == ["const char *name, size_t name_len", "int32_t flag", "tsc_thing_t **out"]
+    assert f.codon_params() == ["cobj, int", "i32", "Ptr[cobj]"]
+    assert f.body() == ("return new tsc_thing(std::make_shared<carla::client::Thing>("
+                        'to_string(name, name_len, "name"), flag != 0));')
+    # `via`: a helper makes the object (e.g. to translate LibCarla's errors).
+    assert g.call == "Thing" and g.body() == ('return new tsc_thing(make_thing('
+                                              'to_string(name, name_len, "name")));')
 
 
 def test_self_by_value(tmp_path):
@@ -120,6 +172,27 @@ def test_missing_method_rule():
         assert _missing_allowed(via, "mock", "unknown") is not None
     plain = next(f for f in s.functions if not f.via and not f.optional)
     assert _missing_allowed(plain, "libcarla", "0.10.0") == "no such method"
+
+
+def test_missing_overload_rule():
+    """An `optional` call may also find the method with another arity (issue
+    #36: 0.10.0's ReplayFile lacks the ue5-dev parameters): validate accepts
+    that only where the method may be missing."""
+    pytest.importorskip("clang.cindex")
+    from tools.bindgen.clang import Method, _check
+
+    s = spec.load()
+    replay = next(f for f in s.functions if f.name == "tsc_client_replay_file_ex")
+    old = Method("carla::client::Client", "ReplayFile",
+                 ["std::basic_string<char>", "double", "double", "unsigned int", "bool"],
+                 "std::basic_string<char>", 5, False)
+    assert _check(replay, [old], "libcarla", "0.10.0") is None
+    assert "takes 5..5 arguments" in _check(replay, [old], "libcarla", "ue5-dev")
+    assert "takes 5..5 arguments" in _check(replay, [old], "mock", "unknown")
+    # An overload taking as many arguments, but of other types, is still an error.
+    wrong = Method("carla::client::Client", "ReplayFile", ["int"] * 8, "std::basic_string<char>",
+                   8, False)
+    assert "vs int" in _check(replay, [old, wrong], "libcarla", "0.10.0")
 
 
 def test_list_accessors():
@@ -191,3 +264,56 @@ def test_list_spec_errors(tmp_path, lists, message):
     with pytest.raises(spec.SpecError) as e:
         _load(tmp_path, "get: {call: G, out: bool}")
     assert message in str(e.value)
+
+
+_COVERAGE_FIXTURE = """
+namespace carla { namespace client {
+struct Base { int size() const; };
+struct List : Base { int at(int i) const; int Find(int id) const; int Other() const; };
+struct Lights { int size() const; int at(int i) const; int Count() const; };
+}}
+template <typename Items>
+int helper(const Items &items, int i) { return items.size() + items.at(i); }
+template <typename Items>
+int count(const Items *items) { return items->Count(); }
+"""
+
+
+def test_coverage_counts_template_helpers(tmp_path, monkeypatch):
+    """coverage attributes a LibCarla call to the generated code when the
+    generated code makes it, directly or through a shim function template
+    it instantiates (list_at's `items.at(index)`: issue #45), and to the
+    hand-written code otherwise. libclang leaves the template's dependent
+    calls unresolved, so they are resolved on each specialization's parameter
+    types: one template used with two classes counts for both, and a
+    hand-written call of the same template does not make it generated."""
+    cindex = pytest.importorskip("clang.cindex")
+    from tools.bindgen import clang
+
+    src = tmp_path / "src"
+    (src / "generated").mkdir(parents=True)
+    (src / "helper.hpp").write_text(_COVERAGE_FIXTURE)
+    (src / "generated" / "bindings.cpp").write_text(
+        '#include "../helper.hpp"\n'
+        "int gen(const carla::client::List &l) { return helper(l, 0); }\n"
+        "int gen2(const carla::client::Lights &l) { return helper(l, 0) + count(&l); }\n")
+    (src / "hand.cpp").write_text(
+        '#include "helper.hpp"\n'
+        "int hand(const carla::client::List &l) { return l.Find(1) + l.size(); }\n"
+        "int hand2(const carla::client::List &l) { return helper(l, 0); }\n")
+    monkeypatch.setattr(clang, "SHIM_SOURCES", src)
+    monkeypatch.setattr(clang, "GENERATED_SOURCES", (src / "generated").resolve())
+    monkeypatch.setattr(clang, "COMPAT_HEADER", (src / "carla_compat.hpp").resolve())
+    classes = {"carla::client::Base", "carla::client::List", "carla::client::Lights"}
+
+    def calls(path):
+        tu = cindex.Index.create().parse(str(path), args=["-x", "c++", "-std=c++17"])
+        return clang._calls(tu, classes)
+
+    assert calls(src / "generated" / "bindings.cpp") == {
+        ("carla::client::List::at", True), ("carla::client::Base::size", True),
+        ("carla::client::Lights::at", True), ("carla::client::Lights::size", True),
+        ("carla::client::Lights::Count", True)}
+    assert calls(src / "hand.cpp") == {
+        ("carla::client::List::Find", False), ("carla::client::Base::size", False),
+        ("carla::client::List::at", False)}

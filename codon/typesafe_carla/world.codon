@@ -8,7 +8,8 @@ from ._ffi import (Handle, CTransform, CWorldSettings, tsc_world_get_id, tsc_wor
                    tsc_world_get_snapshot, tsc_world_wait_for_tick)
 from ._ffi import CWorldSettingsExt, tsc_world_get_settings_ext, tsc_world_apply_settings_ext
 from ._ffi import tsc_actor_get_world
-from .errors import _check, _is_actor_id, _actor_id
+from .errors import _check, _is_actor_id, _actor_id, _i32
+from .constants import AttachmentType
 from .geometry import Transform
 from .actor import Actor, ActorList, _make_actor
 from .blueprint import ActorBlueprint, BlueprintLibrary
@@ -145,23 +146,33 @@ class World:
         return BlueprintLibrary(Handle(out[0]))
 
     def spawn_actor(self, blueprint: ActorBlueprint, transform: Transform,
-                    attach_to = None) -> Actor:
-        """Raises CarlaError if the actor cannot be spawned (e.g. collision)."""
+                    attach_to = None,
+                    attachment_type: AttachmentType = AttachmentType.Rigid) -> Actor:
+        """Raises CarlaError if the actor cannot be spawned (e.g. collision).
+
+        attachment_type only matters with attach_to (as in the Python API).
+        """
         t = Ptr[CTransform](1)
         t[0] = transform._to_c()
         parent = _parent_ptr(attach_to)
         out = Ptr[cobj](1)
-        _check(tsc_world_spawn_actor(self._h.ptr, blueprint._h.ptr, t, parent, out))
+        _check(tsc_world_spawn_actor(
+            self._h.ptr, blueprint._h.ptr, t, parent,
+            _i32(attachment_type.value, "attachment_type"), out))
         return _make_actor(out[0])
 
     def try_spawn_actor(self, blueprint: ActorBlueprint, transform: Transform,
-                        attach_to = None) -> Optional[Actor]:
-        """Returns None if the actor cannot be spawned."""
+                        attach_to = None,
+                        attachment_type: AttachmentType = AttachmentType.Rigid) -> Optional[Actor]:
+        """Returns None if the actor cannot be spawned. An invalid attachment_type
+        (e.g. AttachmentType(7)) still raises CarlaError."""
         t = Ptr[CTransform](1)
         t[0] = transform._to_c()
         parent = _parent_ptr(attach_to)
         out = Ptr[cobj](1)
-        _check(tsc_world_try_spawn_actor(self._h.ptr, blueprint._h.ptr, t, parent, out))
+        _check(tsc_world_try_spawn_actor(
+            self._h.ptr, blueprint._h.ptr, t, parent,
+            _i32(attachment_type.value, "attachment_type"), out))
         if out[0] == cobj():
             return None
         return _make_actor(out[0])

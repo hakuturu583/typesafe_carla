@@ -1,0 +1,8 @@
+# map_layers takes MapLayer flags (an int), not a layer name.
+# expect-error: 'str' does not match expected type 'int'
+import typesafe_carla as carla
+
+def load(client: carla.Client):
+    client.load_world("Town01", map_layers="Buildings")
+
+load(carla.Client())

@@ -25,15 +25,7 @@ from .map import _read_buffer
 from .geometry import Transform
 from .actor import Vehicle
 from .control import _fields_eq, _fields_repr
-from ._enum import _member_names, _member_values
-
-def _enum_repr(name: str, members: List[Tuple[str, T]], value: int, T: type) -> str:
-    """The first member's name with this value, as the Python API prints it
-    (an alias prints as the member it repeats), else name(value)."""
-    for member_name, member in members:
-        if int(member) == value:
-            return member_name
-    return f"{name}({value})"
+from ._enum import _member_names, _member_values, _enum_repr
 
 @tuple
 class VehicleDoor:
