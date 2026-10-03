@@ -1,0 +1,183 @@
+# Expected results of CARLA's own PythonAPI tests (PythonAPI/test) against
+# typesafe_carla, per CARLA ref. See tests/upstream/README.md.
+#
+#   refs:
+#     <CARLA ref>:
+#       <suite>/<file>.py: "xfail: <reason>" | "skip: <reason>"   # the whole file
+#       <suite>/<file>.py:
+#         <Class>.<test_method>: pass | "xfail: <reason>" | "skip: <reason>"
+#
+# A test not listed is expected to pass. pytest (tests/test_upstream.py) and
+# CI fail on an unexpected failure AND on an unexpected pass, so this list only
+# shrinks. `python -m tools.upstream_tests --suite <suite> --update` rewrites
+# the current ref's entries from a run (existing reasons are kept).
+
+refs:
+  0.10.0:
+    unit/test_client.py: 'xfail: compile: unit/test_client.py:12: no module named ''subprocess'''
+    unit/test_transform.py:
+      TestLocation.test_default_values: pass
+      TestLocation.test_named_args: pass
+      TestRotation.test_default_values: pass
+      TestRotation.test_named_args: pass
+      TestTransform.test_values: pass
+      TestTransform.test_print: 'xfail: fail: Transform(Location(x=1, y=2, z=3), Rotation(pitch=4, yaw=5, roll=6)) != Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pitch=4.000000, yaw=5.000000, roll=6.000000))'
+      TestTransform.test_translation: pass
+      TestTransform.test_rotation: pass
+      TestTransform.test_rotation_and_translation: pass
+      TestTransform.test_list_rotation_and_translation_location: pass
+      TestTransform.test_list_rotation_and_translation_vector3d: pass
+    unit/test_vehicle.py:
+      TestVehicleControl.test_default_values: pass
+      TestVehicleControl.test_named_args: pass
+      TestVehiclePhysicsControl.test_named_args: 'xfail: compile: unit/test_vehicle.py:44: ''List[float]'' does not match expected type ''List[int]'''
+    smoke/test_blueprint.py:
+      TestBlueprintLibrary.test_blueprint_ids: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_client.py:
+      TestClient.test_version: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_collision_determinism.py: 'xfail: compile: smoke/test_collision_determinism.py:12: no module named ''filecmp'''
+    smoke/test_collision_sensor.py:
+      TestCollisionSensor.test_single_car: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_determinism.py: 'xfail: compile: smoke/test_determinism.py:7: cannot import name ''random'' from ''numpy.__init__'''
+    smoke/test_lidar.py: 'xfail: compile: smoke/test_lidar.py:14: no module named ''enum'''
+    smoke/test_map.py:
+      TestMap.test_reload_world: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestMap.test_load_all_maps: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_props_loading.py:
+      TestPropsLoading.test_spawn_loaded_props: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_sensor_determinism.py: 'xfail: compile: smoke/test_sensor_determinism.py:12: no module named ''filecmp'''
+    smoke/test_sensor_tick_time.py:
+      TestSensorTickTime.test_sensor_tick_time: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_snapshot.py:
+      TestSnapshot.test_spawn_points: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_spawnpoints.py:
+      TestSpawnpoints.test_spawn_points: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_streamming.py:
+      TestStreamming.test_multistream: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_sync.py: 'xfail: compile: smoke/test_sync.py:14: no module named ''queue'''
+    smoke/test_vehicle_physics.py: 'xfail: compile: smoke/test_vehicle_physics.py:14: no module named ''enum'''
+    smoke/test_world.py:
+      TestWorld.test_fixed_delta_seconds: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    API/test_apply_textures.py: 'xfail: compile: API/test_apply_textures.py:14: no module named ''argparse'''
+    API/test_collision.py: 'xfail: compile: API/test_collision.py:5: no module named ''argparse'''
+    API/test_no_rendering_mode.py: 'xfail: compile: API/test_no_rendering_mode.py:9: no module named ''glob'''
+    API/test_semantic_segmentation.py: 'xfail: compile: API/test_semantic_segmentation.py:14: no module named ''argparse'''
+    API/test_sensor_recording.py: 'xfail: compile: API/test_sensor_recording.py:9: no module named ''glob'''
+    API/test_sensor_recording_fast.py: 'xfail: compile: API/test_sensor_recording_fast.py:9: no module named ''glob'''
+    API/test_spawn_vehicles.py: {}
+    API/test_spawn_walkers.py: {}
+    API/test_sync_mode.py: {}
+  ue5-dev:
+    unit/test_boost_version.py: 'xfail: compile: unit/test_boost_version.py:23: cannot import name ''abspath'' from ''os.path'''
+    unit/test_client.py: 'xfail: compile: unit/test_client.py:12: no module named ''subprocess'''
+    unit/test_lidar_smoke_helpers.py: 'xfail: compile: unit/test_lidar_smoke_helpers.py:7: no module named ''ast'''
+    unit/test_numpy_compat.py: 'xfail: compile: unit/test_numpy_compat.py:19: cannot import name ''abspath'' from ''os.path'''
+    unit/test_transform.py:
+      TestLocation.test_default_values: pass
+      TestLocation.test_named_args: pass
+      TestRotation.test_default_values: pass
+      TestRotation.test_named_args: pass
+      TestVector.test_make_unit_vector_3d_no_argument: pass
+      TestVector.test_make_unit_vector_3d_epsilon_keyword: pass
+      TestVector.test_make_unit_vector_3d_zero_length: pass
+      TestVector.test_make_unit_vector_2d_no_argument: pass
+      TestVector.test_make_unit_vector_2d_epsilon_keyword: pass
+      TestTransform.test_values: pass
+      TestTransform.test_print: 'xfail: fail: Transform(Location(x=1, y=2, z=3), Rotation(pitch=4, yaw=5, roll=6)) != Transform(Location(x=1.000000, y=2.000000, z=3.000000), Rotation(pitch=4.000000, yaw=5.000000, roll=6.000000))'
+      TestTransform.test_translation: pass
+      TestTransform.test_rotation: pass
+      TestTransform.test_rotation_and_translation: pass
+      TestTransform.test_list_rotation_and_translation_location: pass
+      TestTransform.test_list_rotation_and_translation_vector3d: pass
+      TestTransform.test_geo_offset_transform: pass
+      TestTransform.test_geo_offset_transform_translation: pass
+      TestTransform.test_geo_offset_transform_rotation: pass
+      TestTransform.test_geo_offset_transform_and_rotation: pass
+      TestTransform.test_geo_offset_transform_equality: 'xfail: compile: unit/test_transform.py:295: unsupported operand type(s) for ==: ''GeoOffsetTransform'' and ''GeoOffsetTransform'''
+      TestTransform.test_geo_projection_utm: pass
+      TestTransform.test_geo_projection_utm_offset_none: pass
+      TestTransform.test_geo_projection_utm_with_offset: 'xfail: compile: unit/test_transform.py:326: unsupported operand type(s) for ==: ''GeoOffsetTransform'' and ''GeoOffsetTransform'' [optional.codon:68]'
+      TestTransform.test_geo_projection_utm_offset_setter: 'xfail: compile: unit/test_transform.py:334: unsupported operand type(s) for ==: ''GeoOffsetTransform'' and ''GeoOffsetTransform'' [optional.codon:68]'
+      TestTransform.test_geo_projection_utm_equality: 'xfail: compile: unit/test_transform.py:354: unsupported operand type(s) for ==: ''GeoProjectionUTM'' and ''GeoProjectionUTM'''
+      TestTransform.test_geo_projection_utm_constructor_3_args: 'xfail: compile: unit/test_transform.py:361: unsupported operand type(s) for ==: ''GeoEllipsoid'' and ''GeoEllipsoid'' [tsc_unittest.codon:52]'
+      TestTransform.test_geo_projection_utm_constructor_3_args_positional: 'xfail: compile: unit/test_transform.py:369: unsupported operand type(s) for ==: ''GeoEllipsoid'' and ''GeoEllipsoid'' [tsc_unittest.codon:52]'
+    unit/test_vehicle.py:
+      TestVehicleControl.test_default_values: pass
+      TestVehicleControl.test_named_args: pass
+      TestVehiclePhysicsControl.test_named_args: 'xfail: compile: unit/test_vehicle.py:44: ''List[float]'' does not match expected type ''List[int]'''
+    smoke/test_actor_introspection.py:
+      TestActorIntrospection.test_vehicle_components: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestActorIntrospection.test_vehicle_sockets_consistent: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestActorIntrospection.test_walker_bones: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestActorIntrospection.test_component_not_found_raises: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_blueprint.py:
+      TestBlueprintLibrary.test_blueprint_ids: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_client.py:
+      TestClient.test_version: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_collision_determinism.py: 'xfail: compile: smoke/test_collision_determinism.py:12: no module named ''filecmp'''
+    smoke/test_collision_sensor.py:
+      TestCollisionSensor.test_single_car: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_debug_clear.py:
+      TestDebugClear.test_clear_debug_shape: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestDebugClear.test_clear_debug_string: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestDebugClear.test_clear_when_nothing_drawn: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_determinism.py: 'xfail: compile: smoke/test_determinism.py:7: cannot import name ''random'' from ''numpy.__init__'''
+    smoke/test_encoding_cameras.py: 'xfail: compile: smoke/test_encoding_cameras.py:27: no module named ''queue'''
+    smoke/test_geoconversion.py:
+      TestGeoLocationConversion.test_geo_reference: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_geo_projection: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_location_to_geo_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_geo_to_location_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_zero_conversion: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_relative_offset_preserved: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_tm_location_to_geo_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_tm_geo_to_location_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_utm_north_location_to_geo_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_utm_north_geo_to_location_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_utm_south_location_to_geo_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_utm_south_geo_to_location_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_webmerc_location_to_geo_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_webmerc_geo_to_location_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_lcc_location_to_geo_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestGeoLocationConversion.test_lcc_geo_to_location_and_back: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_lidar.py: 'xfail: compile: smoke/test_lidar.py:14: no module named ''enum'''
+    smoke/test_map.py:
+      TestMap.test_reload_world: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+      TestMap.test_load_all_maps: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_props_loading.py:
+      TestPropsLoading.test_spawn_loaded_props: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_recorder.py: 'xfail: compile: smoke/test_recorder.py:28: no module named ''tempfile'''
+    smoke/test_replay_no_actor_aliasing.py: 'xfail: compile: smoke/test_replay_no_actor_aliasing.py:21: no module named ''tempfile'''
+    smoke/test_sensor_determinism.py: 'xfail: compile: smoke/test_sensor_determinism.py:12: no module named ''filecmp'''
+    smoke/test_sensor_tick_time.py:
+      TestSensorTickTime.test_sensor_tick_time: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_snapshot.py:
+      TestSnapshot.test_spawn_points: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_spawnpoints.py:
+      TestSpawnpoints.test_spawn_points: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_streamming.py:
+      TestStreamming.test_multistream: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_sync.py: 'xfail: compile: smoke/test_sync.py:14: no module named ''queue'''
+    smoke/test_traffic_manager_large_vehicle.py:
+      TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_traffic_manager_sync_step.py:
+      TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_v2x.py: 'xfail: compile: smoke/test_v2x.py:9: no module named ''array'''
+    smoke/test_vehicle_physics.py: 'xfail: compile: smoke/test_vehicle_physics.py:14: no module named ''enum'''
+    smoke/test_vehicle_telemetry.py:
+      TestVehicleTelemetry.test_get_telemetry_data_shape_and_values: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_walker_bounding_box.py:
+      TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_walker_navigation.py:
+      TestWalkerNavigation.test_walker_ai_controller_routes_without_crash: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    smoke/test_world.py:
+      TestWorld.test_fixed_delta_seconds: 'xfail: compile: smoke/__init__.py:28: ''SmokeTest'' object has no attribute ''testing_address'''
+    API/test_apply_textures.py: 'xfail: compile: API/test_apply_textures.py:14: no module named ''argparse'''
+    API/test_collision.py: 'xfail: compile: API/test_collision.py:5: no module named ''argparse'''
+    API/test_no_rendering_mode.py: 'xfail: compile: API/test_no_rendering_mode.py:9: no module named ''glob'''
+    API/test_semantic_segmentation.py: 'xfail: compile: API/test_semantic_segmentation.py:14: no module named ''argparse'''
+    API/test_sensor_recording.py: 'xfail: compile: API/test_sensor_recording.py:9: no module named ''glob'''
+    API/test_sensor_recording_fast.py: 'xfail: compile: API/test_sensor_recording_fast.py:9: no module named ''glob'''
+    API/test_spawn_vehicles.py: {}
+    API/test_spawn_walkers.py: {}
+    API/test_sync_mode.py: {}

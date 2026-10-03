@@ -1,0 +1,151 @@
+# A minimal `unittest` for CARLA's own PythonAPI tests compiled by Codon
+# (tools/upstream_tests.py rewrites their `import unittest` to this module).
+#
+# Codon 0.19's bundled `unittest` only prints failed assertions and has no
+# setUp/tearDown, skipTest or discovery. Here assertions raise AssertionError,
+# so a test stops at its first failure as in CPython, skipTest raises SkipTest,
+# and the runner the harness appends to each module discovers nothing at run
+# time: it calls each TestCase test_* method by name.
+
+class SkipTest(Static[Exception]):
+    def __init__(self, message: str = ""):
+        super().__init__("SkipTest", message)
+
+class _SubTest:
+    def __enter__(self):
+        pass
+
+    def __exit__(self):
+        pass
+
+class TestCase:
+    def __init__(self, methodName: str = "runTest"):
+        pass
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    def skipTest(self, reason: str = ""):
+        raise SkipTest(reason)
+
+    def subTest(self, msg: str = "", **params):
+        return _SubTest()
+
+    def fail(self, msg: str = ""):
+        raise AssertionError(msg)
+
+    def _fail(self, standard: str, msg: str):
+        raise AssertionError(f"{standard} : {msg}" if msg else standard)
+
+    def assertTrue(self, expr, msg: str = ""):
+        if not bool(expr):
+            self._fail(f"{expr} is not true", msg)
+
+    def assertFalse(self, expr, msg: str = ""):
+        if bool(expr):
+            self._fail(f"{expr} is not false", msg)
+
+    def assertEqual(self, first, second, msg: str = ""):
+        if not (first == second):
+            self._fail(f"{first} != {second}", msg)
+
+    def assertNotEqual(self, first, second, msg: str = ""):
+        if not (first != second):
+            self._fail(f"{first} == {second}", msg)
+
+    def assertListEqual(self, first, second, msg: str = ""):
+        self.assertEqual(first, second, msg)
+
+    def assertTupleEqual(self, first, second, msg: str = ""):
+        self.assertEqual(first, second, msg)
+
+    def assertSequenceEqual(self, first, second, msg: str = ""):
+        self.assertEqual(len(first), len(second), msg)
+        for i in range(len(first)):
+            self.assertEqual(first[i], second[i], msg)
+
+    def assertAlmostEqual(self, first, second, places: int = 7, msg: str = "",
+                          delta: Optional[float] = None):
+        if first == second:
+            return
+        diff = abs(first - second)
+        if delta is not None:
+            if diff <= delta:
+                return
+            self._fail(f"{first} != {second} within {delta} delta ({diff} difference)", msg)
+        elif round(float(diff), places) == 0:
+            return
+        self._fail(f"{first} != {second} within {places} places ({diff} difference)", msg)
+
+    def assertNotAlmostEqual(self, first, second, places: int = 7, msg: str = "",
+                             delta: Optional[float] = None):
+        diff = abs(first - second)
+        if delta is not None:
+            if diff > delta:
+                return
+        elif round(float(diff), places) != 0:
+            return
+        self._fail(f"{first} == {second} within tolerance", msg)
+
+    def assertGreater(self, a, b, msg: str = ""):
+        if not (a > b):
+            self._fail(f"{a} not greater than {b}", msg)
+
+    def assertGreaterEqual(self, a, b, msg: str = ""):
+        if not (a >= b):
+            self._fail(f"{a} not greater than or equal to {b}", msg)
+
+    def assertLess(self, a, b, msg: str = ""):
+        if not (a < b):
+            self._fail(f"{a} not less than {b}", msg)
+
+    def assertLessEqual(self, a, b, msg: str = ""):
+        if not (a <= b):
+            self._fail(f"{a} not less than or equal to {b}", msg)
+
+    def assertIn(self, member, container, msg: str = ""):
+        if member not in container:
+            self._fail(f"{member} not found in {container}", msg)
+
+    def assertNotIn(self, member, container, msg: str = ""):
+        if member in container:
+            self._fail(f"{member} unexpectedly found in {container}", msg)
+
+    def assertIs(self, a, b, msg: str = ""):
+        if a is not b:
+            self._fail("objects are not identical", msg)
+
+    def assertIsNot(self, a, b, msg: str = ""):
+        if a is b:
+            self._fail("objects are identical", msg)
+
+    def assertIsNone(self, obj, msg: str = ""):
+        if obj is not None:
+            self._fail(f"{obj} is not None", msg)
+
+    def assertIsNotNone(self, obj, msg: str = ""):
+        if obj is None:
+            self._fail("unexpectedly None", msg)
+
+    def assertIsInstance(self, obj, cls: type, msg: str = ""):
+        if not isinstance(obj, cls):
+            self._fail(f"{obj} is not an instance of the class", msg)
+
+    def assertNotIsInstance(self, obj, cls: type, msg: str = ""):
+        if isinstance(obj, cls):
+            self._fail(f"{obj} is an instance of the class", msg)
+
+    def assertRaises(self, exception: type, function, *args, **kwargs):
+        try:
+            function(*args, **kwargs)
+        except exception:
+            return
+        self._fail("exception not raised", "")
+
+def main():
+    # `if __name__ == '__main__': unittest.main()` in upstream modules: the
+    # harness's runner, appended to the module, runs the tests instead.
+    pass

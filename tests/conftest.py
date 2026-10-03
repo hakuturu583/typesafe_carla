@@ -52,3 +52,13 @@ def backend() -> str:
     if _SKIP_REASON:
         pytest.skip(_SKIP_REASON)
     return paths.native_info()["backend"]
+
+
+def pytest_terminal_summary(terminalreporter):
+    """Per-file pass / xfail / skip counts of CARLA's own tests (test_upstream.py)."""
+    lines = [value for reports in terminalreporter.stats.values() for r in reports
+             for key, value in getattr(r, "user_properties", ()) if key == "upstream_counts"]
+    if lines:
+        terminalreporter.section("CARLA PythonAPI tests (tests/upstream)")
+        for line in sorted(set(lines)):
+            terminalreporter.write_line(line)

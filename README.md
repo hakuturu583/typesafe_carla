@@ -295,6 +295,25 @@ uv run pytest tests/test_integration.py -s
 CARLA_PYTHON=/path/to/venv-with-carla/bin/python uv run python tests/compatibility/compare.py
 ```
 
+### CARLA's own PythonAPI tests
+
+CARLA's test suite (`PythonAPI/test/{unit,smoke,API}` of carla-simulator/carla)
+runs against typesafe_carla, from the CARLA commit the native library was
+built from. Each module is converted mechanically (`import carla` becomes
+`import typesafe_carla as carla`, the compatibility path), compiled with
+`typesafe-codon build` and run test by test; [tests/upstream/expectations.yaml](tests/upstream/expectations.yaml)
+records, per CARLA ref, which tests pass and why the others do not. pytest and
+CI fail on an unexpected failure and on an unexpected pass, so that list only
+shrinks. `unit` needs no server and runs in pytest and on every `libcarla` CI
+leg; `smoke` and `API` run only with `TSC_CARLA_PORT` set. See
+[tests/upstream/README.md](tests/upstream/README.md).
+
+```sh
+uv run python -m tools.upstream_tests --suite unit -v
+TSC_CARLA_HOST=127.0.0.1 TSC_CARLA_PORT=2000 TYPESAFE_CARLA_BUILD_DIR=build-carla \
+  uv run python -m tools.upstream_tests --suite smoke --suite API -v
+```
+
 ## Quick start (development)
 
 Requirements: Linux x86_64, a C++20 compiler (GCC ≥ 11; CI builds with the default GCC of
@@ -362,6 +381,8 @@ tests/native/              C ABI tests (ctest)
 tests/compile/pass|fail/   programs that must / must not compile
 tests/compile/strict_fail/ programs that compile only outside strict mode
 tests/unit/                Codon runtime tests against the mock backend
+tests/upstream/            CARLA's own PythonAPI tests: expectations, unittest shim
+tools/upstream_tests.py    fetches, converts, compiles and runs those tests
 examples/                  example programs
 ```
 
