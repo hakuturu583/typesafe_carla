@@ -1,6 +1,6 @@
 # Issue #85: the dict keys are resolved at compile time, so a computed key is
 # a compile error that points to the typed attributes.
-# expect-error: CustomV2XBytes[key] needs a literal string key, resolved at compile time
+# expect-error: CustomV2XBytes[key] needs a literal string key, resolved at compile time (as in x["Key"])
 import typesafe_carla as carla
 
 def field(sensor: carla.Sensor, key: str) -> int:

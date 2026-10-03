@@ -671,9 +671,10 @@ Deliberate differences, all in favour of static checking:
     display strings ("Passenger Car", "CAM"). This is the whole CAM that
     LibCarla carries; there is no further ITS tree (DENM etc.) to bind.
     The power is `CAMMessage.power`, not part of `get()`. An empty path
-    history is `[]` (the Python API gives `None`). `get()` returns the
-    stored object each time, where the Python API builds a new dict per
-    call. `CustomV2XData.get()` likewise returns a `CustomV2XMessage`
+    history is `[]` (the Python API gives `None`). As the Python API builds
+    a new dict per call, `get()` returns a new snapshot each time: changing
+    one result (or `power`) afterwards does not affect earlier or later
+    `get()` results. `CustomV2XData.get()` likewise returns a `CustomV2XMessage`
     (`header`, `data`: `CustomV2XBytes`).
   - **The Python API's dict keys work on the typed results** (issue #85), so
     `event[0].get()["Message"]["Message"]["DataSize"]` (upstream
@@ -694,9 +695,12 @@ Deliberate differences, all in favour of static checking:
     `payload["Bytes"] == b"hello v2x"` compiles and holds). An unknown key
     (`"Altitude"`, which the dict lacks) is a compile error listing the
     dict's keys, and so is a computed (non-literal) key: use the typed
-    attributes for those. The levels share the typed objects (no copy);
-    this is statically checked, so it is not a compatibility path and does
-    not warn.
+    attributes for those. Check a `None`-valued key with `is None` before
+    indexing into it: `hf["Steering Wheel Angle"]["Value"]` compiles (Codon
+    unwraps the `Optional` implicitly) but fails at run time when the value
+    is absent. The levels are views of one `get()` snapshot (no copy). This
+    is statically checked, so it is not a compatibility path and does not
+    warn.
   - `CustomV2XBytes.get_bytes()` / `set_bytes()` use `List[int]` (Codon has
     no `bytes`); `set_bytes` rejects values outside [0, 255] with
     `CarlaError`. `data_size` can be set within [0, 100] only (the Python

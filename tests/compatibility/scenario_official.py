@@ -464,8 +464,9 @@ try:
     vehicle.disable_constant_velocity()
     # Issue #85: the custom V2X message's get() dict paths, as upstream's
     # smoke/test_v2x.py reads them. Needs a ue5-dev server and module.
+    # (A server without V2X, e.g. CARLA 0.10.0, has no sensor.other.v2x_custom.)
     if ("i85_v2x_dict" in os.environ.get("TSC_SKIP_KEYS", "").split(",")
-            or not hasattr(carla, "CustomV2XBytes") or not lib.filter("sensor.other.v2x_custom")):
+            or not lib.filter("sensor.other.v2x_custom")):
         out("i85_v2x_dict", "skip")
     else:
         out("i85_v2x_dict", v2x_dict_paths(world, lib))

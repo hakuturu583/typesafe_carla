@@ -48,13 +48,16 @@ def v2x_dict_paths(world: carla.World, lib: carla.BlueprintLibrary) -> str:
         return "nospawn"
     second = unwrap(found)
     radio = lib.find("sensor.other.v2x_custom")
-    sender = world.spawn_actor(radio, carla.Transform(), attach_to=first).as_sensor()
-    receiver = world.spawn_actor(radio, carla.Transform(), attach_to=second).as_sensor()
     received = List[carla.CustomV2XData]()
     def keep(data: carla.SensorData):
         for m in data.as_custom_v2x_event():
             received.append(m)
+    actors = [first, second]  # destroyed whatever fails below
     try:
+        actors.append(world.spawn_actor(radio, carla.Transform(), attach_to=first))
+        sender = actors[-1].as_sensor()
+        actors.append(world.spawn_actor(radio, carla.Transform(), attach_to=second))
+        receiver = actors[-1].as_sensor()
         receiver.listen(keep)
         for _ in range(5):
             world.tick()
@@ -67,10 +70,8 @@ def v2x_dict_paths(world: carla.World, lib: carla.BlueprintLibrary) -> str:
             world.tick()
         receiver.stop()
     finally:
-        sender.destroy()
-        receiver.destroy()
-        first.destroy()
-        second.destroy()
+        for a in reversed(actors):
+            a.destroy()
     if len(received) == 0:
         return "none"
     d = received[0].get()

@@ -53,9 +53,18 @@ def test_custom():
     assert q["Bytes"] == "\x00\x01\xff" and q["DataSize"] == 3 and len(q["Bytes"]) == 3
     # CustomV2XBytes.get(): the same dict as the payload's.
     assert payload.get()["DataSize"] == 3 and payload.get()["Bytes"] == "\x00\x01\xff"
-    # get()["Power"] follows the power, as the dict built on each call.
+    # Each get() is a snapshot, as the Python API's new dict: later changes to
+    # the power or to another get()'s payload do not reach it.
+    d1 = first.get()
     first.power = 3.0
-    assert first.get()["Power"] == 3.0
+    d2 = first.get()
+    assert d1["Power"] == 21.5 and d2["Power"] == 3.0
+    d2.data.set_string("changed")
+    d2.header.station_id = -1
+    assert d1["Message"]["Message"]["Bytes"] == b"hello v2x"
+    assert first.get()["Message"]["Message"]["Bytes"] == b"hello v2x"
+    assert first.get()["Message"]["Header"]["Station ID"] == vehicle.id
+    assert d1 is not d2
     sender.destroy()
     receiver.destroy()
 
@@ -69,6 +78,16 @@ def test_cam():
     message = rx.wait_for_data(1.0).as_cam_event()[0]
     cam = message.get()
     d = message.get()
+    # Snapshots: changing one get() result (or the power) leaves the others.
+    cam.header.station_id = -1
+    cam.reference_position.latitude = 123
+    unwrap(cam.basic_vehicle_container_high_frequency).speed.value = 999
+    message.power = 1.0
+    assert d["Power"] == 21.5 and message.get()["Power"] == 1.0
+    assert d["Message"]["Header"]["Station ID"] == vehicle.id
+    assert message.get().reference_position.latitude == 0
+    message.power = 21.5
+    cam = message.get()
     assert d["Power"] == message.power
     assert d["Message"]["Header"]["Message ID"] == "CAM"
     assert d["Message"]["Header"]["Station ID"] == cam.header.station_id == vehicle.id

@@ -224,10 +224,12 @@ class CAM:
     basic_vehicle_container_high_frequency: Optional[BasicVehicleContainerHighFrequency]
     protected_communication_zones_rsu: Optional[List[ProtectedCommunicationZone]]
     basic_vehicle_container_low_frequency: Optional[BasicVehicleContainerLowFrequency]
-    _power: float  # the receive power, for get()["Power"] (set by CAMMessage)
+    _power: float  # the receive power: get()["Power"]
 
-    def __init__(self, data: SensorData, index: int, c: CCamMessage):
-        self._power = 0.0
+    def __init__(self, c: CCamMessage, zones: List[CItsProtectedZone],
+                 points: List[CItsPathPoint], power: float):
+        """A new CAM from LibCarla's values (each CAMMessage.get() builds one)."""
+        self._power = power
         self.header = ItsPduHeader._from_c(c.header)
         self.generation_delta_time = c.generation_delta_time
         self.station_type = c.station_type
@@ -240,13 +242,9 @@ class CAM:
             self.basic_vehicle_container_high_frequency = BasicVehicleContainerHighFrequency(
                 c.basic_vehicle)
         elif hf == TSC_CAM_HF_RSU:
-            zones = _its_list(tsc_cam_event_get_protected_zones, data, index,
-                              TSC_CAM_MAX_PROTECTED_ZONES, CItsProtectedZone)
             self.protected_communication_zones_rsu = [ProtectedCommunicationZone(z)
                                                       for z in zones]
         if int(c.has_low_frequency) != 0:
-            points = _its_list(tsc_cam_event_get_path_history, data, index,
-                               TSC_CAM_MAX_PATH_POINTS, CItsPathPoint)
             self.basic_vehicle_container_low_frequency = BasicVehicleContainerLowFrequency(
                 c.vehicle_role, c.exterior_lights, [PathPoint(p) for p in points])
 
@@ -257,22 +255,26 @@ class CAM:
 class CAMMessage:
     """One received CAM (LibCarla's CAMData) and its receive power."""
     power: float  # dBm
-    _cam: CAM
+    _c: CCamMessage  # LibCarla's values, copied out of the measurement
+    _zones: List[CItsProtectedZone]
+    _points: List[CItsPathPoint]
 
-    def __init__(self, power: float, cam: CAM):
+    def __init__(self, power: float, c: CCamMessage, zones: List[CItsProtectedZone],
+                 points: List[CItsPathPoint]):
         self.power = power
-        self._cam = cam
+        self._c = c
+        self._zones = zones
+        self._points = points
 
     def get(self) -> CAM:
-        """The message. The Python API builds a new dict (that also holds the
-        power) on each call; this returns the same stored CAM object, so
-        changes to it are seen by later get() calls."""
-        self._cam._power = self.power  # get()["Power"], as the Python API's dict
-        return self._cam
+        """The message, with the current power: a new CAM on each call, as the
+        Python API builds a new dict, so changing one does not affect the
+        message or other get() results."""
+        return CAM(self._c, self._zones, self._points, self.power)
 
     def __repr__(self) -> str:
-        return (f"CAMData(power={fmt_f32(self.power)}, stationId={self._cam.header.station_id}, "
-                f"messageId={self._cam.header.message_id})")
+        return (f"CAMData(power={fmt_f32(self.power)}, stationId={self._c.header.station_id}, "
+                f"messageId={self._c.header.message_id})")
 
 class _V2XEvent(_Measurement):
     """The messages a V2X sensor received in one tick. Indexing reads
@@ -310,7 +312,16 @@ class CAMEvent(_V2XEvent):
     def _message(self, i: int) -> CAMMessage:
         out = Ptr[CCamMessage](1)
         _check(tsc_cam_event_get_message(self.data._h.ptr, i, out))
-        return CAMMessage(float(out[0].power), CAM(self.data, i, out[0]))
+        c = out[0]
+        zones = List[CItsProtectedZone]()
+        if int(c.high_frequency_present) == TSC_CAM_HF_RSU:
+            zones = _its_list(tsc_cam_event_get_protected_zones, self.data, i,
+                              TSC_CAM_MAX_PROTECTED_ZONES, CItsProtectedZone)
+        points = List[CItsPathPoint]()
+        if int(c.has_low_frequency) != 0:
+            points = _its_list(tsc_cam_event_get_path_history, self.data, i,
+                               TSC_CAM_MAX_PATH_POINTS, CItsPathPoint)
+        return CAMMessage(float(c.power), c, zones, points)
 
 class CustomV2XBytes:
     """LibCarla's rpc::CustomV2XBytes: up to max_data_size() (100) bytes, the
@@ -342,6 +353,12 @@ class CustomV2XBytes:
 
     def max_data_size(self) -> int:
         return TSC_CUSTOM_V2X_MAX_DATA_SIZE
+
+    def _copy(self) -> CustomV2XBytes:
+        other = CustomV2XBytes()
+        str.memcpy(other._bytes, self._bytes, TSC_CUSTOM_V2X_MAX_DATA_SIZE)
+        other._size = self._size
+        return other
 
     def _assign(self, n: int):
         self._size = n
@@ -387,7 +404,7 @@ class CustomV2XMessage:
     """A custom V2X message (LibITS's CustomV2XM): CustomV2XData.get()."""
     header: ItsPduHeader
     data: CustomV2XBytes
-    _power: float  # the receive power, for get()["Power"] (set by CustomV2XData)
+    _power: float  # the receive power: get()["Power"] (set by CustomV2XData.get())
 
     def __init__(self, header: ItsPduHeader, data: CustomV2XBytes):
         self.header = header
@@ -401,22 +418,27 @@ class CustomV2XData:
     """One received custom V2X message (LibCarla's CustomV2XData) and its
     receive power."""
     power: float  # dBm
-    _message: CustomV2XMessage
+    _header: CItsHeader
+    _payload: CustomV2XBytes  # never handed out: get() copies it
 
-    def __init__(self, power: float, message: CustomV2XMessage):
+    def __init__(self, power: float, header: CItsHeader, payload: CustomV2XBytes):
         self.power = power
-        self._message = message
+        self._header = header
+        self._payload = payload
 
     def get(self) -> CustomV2XMessage:
-        """The message. The Python API builds a new dict (that also holds the
-        power) on each call; this returns the same stored object."""
-        self._message._power = self.power  # get()["Power"], as the Python API's dict
-        return self._message
+        """The message, with the current power: a new CustomV2XMessage (with
+        its own copy of the payload) on each call, as the Python API builds a
+        new dict, so changing one does not affect the message or other get()
+        results."""
+        message = CustomV2XMessage(ItsPduHeader._from_c(self._header), self._payload._copy())
+        message._power = self.power
+        return message
 
     def __repr__(self) -> str:
         return (f"CustomV2XData(power={fmt_f32(self.power)}, "
-                f"stationId={self._message.header.station_id}, "
-                f"messageId={self._message.header.message_id}, data={self._message.data})")
+                f"stationId={self._header.station_id}, "
+                f"messageId={self._header.message_id}, data={self._payload})")
 
 class CustomV2XEvent(_V2XEvent):
     """The custom messages a sensor.other.v2x_custom received in one tick."""
@@ -428,8 +450,7 @@ class CustomV2XEvent(_V2XEvent):
         _check(tsc_custom_v2x_event_get_message(self.data._h.ptr, i, out, payload._bytes,
                                                 TSC_CUSTOM_V2X_MAX_DATA_SIZE))
         payload._size = int(out[0].data_size)
-        return CustomV2XData(float(out[0].power),
-                             CustomV2XMessage(ItsPduHeader._from_c(out[0].header), payload))
+        return CustomV2XData(float(out[0].power), out[0].header, payload)
 
 @extend
 class SensorData:
@@ -481,14 +502,15 @@ class Sensor:
 # None (an Optional) for a value the dict holds as None, and KeyError for a key
 # the dict leaves out (a container that is not present). "Bytes" is a str of
 # the raw bytes (Codon's b"..." literal is a str too). The levels without a
-# typed counterpart are the views below; they share the typed objects. Keys
+# typed counterpart are the views below; they share the typed objects (each
+# get() returns a new snapshot, as the Python API's new dict). Keys
 # the dict lacks (the altitude, for instance) are compile errors: use the
 # typed attributes for those.
 
 def _literal_key_only(where: Static[str]):
+    # (No braces in these messages: Codon formats compile errors with fmt.)
     compile_error(where + "[key] needs a literal string key, resolved at compile time (as in "
-                  "get()[\"Message\"][\"Message\"][\"DataSize\"]); for a computed key, use the "
-                  "typed attributes instead")
+                  "x[\"Key\"]); for a computed key, use the typed attributes instead")
 
 def _unknown_key(where: Static[str], key: Static[str], keys: Static[str]):
     compile_error(where + " has no key \"" + key + "\" (the Python API's dict has " + keys + ")")
@@ -532,12 +554,12 @@ _VEHICLE_ROLES = {1: "Public Transport", 2: "Special Transport", 3: "Dangerous G
 
 @tuple
 class _ValueConfidenceDict:
-    """A {"Value", "Confidence"} dict: the confidence as its display string."""
+    """A "Value"/"Confidence" dict: the confidence as its display string."""
     value: int
     confidence: str
 
     def __getitem__(self, key: str):
-        _literal_key_only("a {\"Value\", \"Confidence\"} dict")
+        _literal_key_only("the \"Value\"/\"Confidence\" dict")
 
     def __getitem__(self, key: Static[str]):
         if key == "Value":
@@ -545,7 +567,7 @@ class _ValueConfidenceDict:
         elif key == "Confidence":
             return self.confidence
         else:
-            _unknown_key("a {\"Value\", \"Confidence\"} dict", key, "\"Value\", \"Confidence\"")
+            _unknown_key("the \"Value\"/\"Confidence\" dict", key, "\"Value\", \"Confidence\"")
 
 def _confidence(v: ValueConfidence, names: Dict[int, str]) -> _ValueConfidenceDict:
     return _ValueConfidenceDict(v.value, names.get(v.confidence, "Unavailable"))
