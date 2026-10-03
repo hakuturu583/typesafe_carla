@@ -1,0 +1,10 @@
+# Issue #78: raw_data is a read-only view, as the Python API's memoryview.
+# expect-error: 'RawData' object has no attribute '__setitem__'
+import typesafe_carla as carla
+
+def scribble(image: carla.Image):
+    image.raw_data[0] = 255
+
+# Compile-only: Codon type-checks a function only when it is called.
+scribble(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()
+         .wait_for_data(1.0).as_image())

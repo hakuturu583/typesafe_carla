@@ -8,7 +8,8 @@
 #
 #     camera.listen()                       # polling: bounded queue (64)
 #     image = camera.wait_for_data(2.0).as_image()
-#     pixels: Ptr[u8] = image.raw_data()    # zero copy, BGRA
+#     raw = image.raw_data                  # read-only BGRA bytes (RawData)
+#     pixels: Ptr[u8] = image.raw_data_ptr()  # zero copy, BGRA
 #
 #     camera.listen(lambda data: frames.append(data.frame))   # callback
 #     world.tick()                          # runs the queued callbacks
@@ -160,6 +161,100 @@ class _Measurement:
     def transform(self) -> Transform:
         return self.data.transform
 
+class RawData:
+    """The Python API's `raw_data` (a memoryview there): a read-only,
+    zero-copy view of a measurement's bytes that keeps its owner alive.
+    len, indexing, slicing (any step, another view), iteration, `in` and ==
+    work; it sees in-place changes such as Image.convert(). Codon has no
+    `bytes`: tobytes() copies into a str, so
+    `np.frombuffer(image.raw_data, ...)` becomes
+    `np.frombuffer(image.raw_data.tobytes(), ...)`.
+
+    Views come from the `raw_data` properties; constructing one directly is
+    internal (the constructor does not check its pointer or length)."""
+    _owner: cobj  # keeps the buffer's owner alive (the GC scans this field)
+    _ptr: Ptr[u8]
+    _len: int
+    _step: int
+
+    def __init__(self, owner: cobj, ptr: Ptr[u8], n: int, step: int = 1):
+        self._owner = owner
+        self._ptr = ptr
+        self._len = n
+        self._step = step
+
+    def __len__(self) -> int:
+        return self._len
+
+    @property
+    def nbytes(self) -> int:
+        return self._len
+
+    @property
+    def readonly(self) -> bool:
+        return True
+
+    def __getitem__(self, index: int) -> int:
+        return int(self._ptr[_normalize_index(index, self._len, "raw_data") * self._step])
+
+    def __getitem__(self, s: Slice) -> RawData:
+        start, _, step, n = s.adjust_indices(self._len)
+        return RawData(self._owner, self._ptr + start * self._step, n, step * self._step)
+
+    def __iter__(self) -> Generator[int]:
+        for i in range(self._len):
+            yield int(self._ptr[i * self._step])
+
+    def __contains__(self, value: int) -> bool:
+        if not (0 <= value <= 255):
+            return False
+        for b in self:
+            if b == value:
+                return True
+        return False
+
+    def __eq__(self, other: RawData) -> bool:
+        if self._len != other._len:
+            return False
+        for i in range(self._len):
+            if self._ptr[i * self._step] != other._ptr[i * other._step]:
+                return False
+        return True
+
+    def __eq__(self, other: str) -> bool:
+        """Compares with bytes in a str (Codon's stand-in for bytes)."""
+        return self == RawData(other.ptr, Ptr[u8](other.ptr), len(other))
+
+    def __ne__(self, other) -> bool:
+        return not (self == other)
+
+    def tobytes(self) -> str:
+        """A copy of the bytes (a str: Codon's stand-in for bytes)."""
+        buf = Ptr[u8](self._len if self._len > 0 else 1)
+        if self._step == 1:
+            str.memcpy(buf.as_byte(), self._ptr.as_byte(), self._len)
+        else:
+            for i in range(self._len):
+                buf[i] = self._ptr[i * self._step]
+        return str(buf.as_byte(), self._len)
+
+    def tolist(self) -> List[int]:
+        out = List[int](self._len)
+        for b in self:
+            out.append(b)
+        return out
+
+    def __hash__(self) -> int:
+        """As a read-only memoryview of bytes: the hash of its bytes."""
+        return hash(self.tobytes())
+
+    def __repr__(self) -> str:
+        return f"<memory of {self._len} bytes>"
+
+    def __str__(self) -> str:
+        """As in Python, the repr (use tobytes() for the bytes)."""
+        return self.__repr__()
+
 class _ArrayMeasurement[T]:
     """A measurement that is an array of T in LibCarla's buffer, viewed
     without copying (design section 16): valid while the measurement is
@@ -202,18 +297,23 @@ class _ArrayMeasurement[T]:
 
     def __setitem__(self: S, index: int, value, S: type):
         """Writes one element into LibCarla's buffer, as the Python API does
-        (issue #33): raw_data() views and other handles of this measurement
+        (issue #33): raw_data views and other handles of this measurement
         see the change. The value is the element class (Color for an Image,
         LidarDetection for a LidarMeasurement, ...); fields that do not fit
         LibCarla's element type raise CarlaError."""
         self._items[_normalize_index(index, self._count, S._WHAT)] = self._element(value)
 
-    def raw_data(self) -> Ptr[u8]:
-        """Zero-copy view of the bytes, valid while this measurement is alive."""
+    @property
+    def raw_data(self) -> RawData:
+        """The bytes as a read-only RawData view (the Python API's property)."""
+        return RawData(self.data.__raw__(), self.raw_data_ptr(), self.raw_size())
+
+    def raw_data_ptr(self) -> Ptr[u8]:
+        """Zero-copy pointer to the bytes, valid while this measurement is alive."""
         return Ptr[u8](self._items.as_byte())
 
     def raw_size(self) -> int:
-        """Size of raw_data() in bytes."""
+        """Size of raw_data in bytes."""
         return self._count * T.__elemsize__
 
 @tuple
@@ -278,7 +378,7 @@ class Image(_ArrayMeasurement[_CBgra]):
 
     def convert(self, color_converter: int):
         """Converts the pixels in place (a ColorConverter value), like the
-        Python API; raw_data() views see the change."""
+        Python API; raw_data views see the change."""
         _check(tsc_image_convert(self.data._h.ptr, i32(color_converter)))
 
     def save_to_disk(self, path: str, color_converter: int = 0) -> str:  # ColorConverter.Raw
@@ -620,12 +720,24 @@ class FakeImage:
     _bytes: List[u8]
 
     def __init__(self, width: int, height: int, fov: float, data: List[u8]):
+        """Copies data: the image owns its bytes, so changing or growing the
+        caller's list neither changes the image nor frees the bytes under a
+        raw_data view (List growth frees the old block)."""
         self.width = width
         self.height = height
         self.fov = fov
-        self._bytes = data
+        self._bytes = List[u8](data)
 
-    def raw_data(self) -> Ptr[u8]:
+    @property
+    def raw_data(self) -> RawData:
+        """The bytes as a read-only RawData view, which keeps its buffer
+        alive. append / extend move the bytes to a new buffer (see _grow), so
+        an earlier view keeps showing the bytes it was taken of; del shifts
+        them in place, and an earlier view sees the shifted bytes."""
+        p = self.raw_data_ptr()
+        return RawData(p.as_byte(), p, len(self))
+
+    def raw_data_ptr(self) -> Ptr[u8]:
         """The bytes; valid until append / extend / del (which may move them)."""
         return self._bytes.arr.ptr
 
@@ -652,18 +764,36 @@ class FakeImage:
     def __contains__(self, value: int) -> bool:
         return 0 <= value <= 255 and u8(value) in self._bytes
 
+    def _grow(self, extra: int):
+        """Makes room for extra more bytes. Never grows the buffer in place:
+        List growth goes through GC_realloc, which frees the old block even
+        while a raw_data view still points into it. A full buffer is copied
+        into a new one instead (with spare capacity, so appends stay
+        amortized O(1)), and the old one stays alive as long as a view does."""
+        n = len(self._bytes)
+        if n + extra <= self._bytes.arr.len:
+            return
+        b = List[u8](max(2 * n, n + extra))
+        str.memcpy(b.arr.ptr.as_byte(), self._bytes.arr.ptr.as_byte(), n)
+        b.len = n
+        self._bytes = b
+
     def append(self, value: int):
-        self._bytes.append(_byte(value))
+        v = _byte(value)
+        self._grow(1)
+        self._bytes.append(v)
 
     def extend(self, values):
         """Appends every byte of an iterable of ints (e.g. a list or another FakeImage)."""
         new = [_byte(v) for v in values]  # all checked before any is added
-        self._bytes.extend(new)
+        self._grow(len(new))
+        for v in new:
+            self._bytes.append(v)
 
     def pixel(self, x: int, y: int) -> Color:
         if 4 * self.width * self.height > len(self._bytes):
             raise IndexError(f"{len(self._bytes)} bytes do not hold {self.width}x{self.height} pixels")
-        return _pixel_at(Ptr[_CBgra](self.raw_data().as_byte()), self.width, self.height, x, y)
+        return _pixel_at(Ptr[_CBgra](self.raw_data_ptr().as_byte()), self.width, self.height, x, y)
 
 def _byte(v: int) -> u8:
     return u8(_checked_uint(v, 8, "byte value"))
