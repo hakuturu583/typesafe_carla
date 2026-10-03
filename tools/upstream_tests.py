@@ -1058,6 +1058,11 @@ def record_results(mode: str, target: Target, results: list[FileResult]) -> None
 # Root cause of a failure, from its outcome and message: (category, cause).
 _CAUSES = [
     (r"^harness: (.*)", "pycarla", lambda m: f"harness: {m[1]}"),
+    # Geo-projection round trips: typesafe_carla keeps doubles where LibCarla
+    # rounds to float32, so large coordinates differ by up to ~0.5.
+    (r"-?\d+\.\d{4,} != -?\d+\.\d{1,3} within [\d.]+ delta", "behaviour",
+     lambda m: "geo round trip keeps double precision where the official module rounds to float32 "
+               "(differs by up to ~0.5 at millions of metres)"),
     # The test server's content (a local package), not typesafe_carla: the
     # official module fails the same way there.
     (r"tsc_client_load_world: std::exception \[carla\.Client\.load_world\('(?:Town10HD_Opt|Town15|Mine_01|"
@@ -1152,6 +1157,7 @@ KNOWN_ISSUES = [
     (r"_f__\w+' for given arguments \['B_(?:Vehicle|Walker|WalkerAIController|Actor|Sensor|TrafficLight|TrafficSign)'", 76),
     (r"unsupported operand type\(s\) for [+-]: '(?:Location|Vector3D)' and '(?:Location|Vector3D)'", 77),
     (r"raw_data", 78),
+    (r"-?\d+\.\d{4,} != -?\d+\.\d{1,3} within [\d.]+ delta", 81),
 ]
 
 
@@ -1416,7 +1422,9 @@ def run_mode(mode: str, target: Target, tests: Path, files: list[str], args) -> 
     jobs = 1 if any(suite_of(f) in SERVER_SUITES for f in files) and not args.compile_only else args.jobs
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
         for rel, result, entry, ids in pool.map(one, files):
-            c = check(result, entry if mode != "official" else None, ids)
+            # Official mode has no expectations of its own, but files the
+            # cpython manifest does not run (result None) keep their entry.
+            c = check(result, entry if mode != "official" or result is None else None, ids)
             rows.append((rel, c))
             print(f"[{mode}] {rel}: {c.counts()}", flush=True)
             if result and (args.verbose or c.problems):

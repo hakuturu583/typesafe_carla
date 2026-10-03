@@ -18,11 +18,14 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 | ue5-dev | cpython | smoke | 0a5ce0d5b4 | 16 | 6 | 0 | 0 |
 | ue5-dev | cpython | API | 0a5ce0d5b4 | 0 | 26 | 0 | 0 |
 | ue5-dev | cpython | top | 0a5ce0d5b4 | 1 | 1 | 1 | 0 |
+| ue5-dev | cpython | ported | 0a5ce0d5b4 | 19 | 21 | 0 | 0 |
 | ue5-dev | codon | unit | 0a5ce0d5b4 | 30 | 10 | 0 | 0 |
 | ue5-dev | codon | smoke | 0a5ce0d5b4 | 0 | 22 | 0 | 0 |
 | ue5-dev | codon | API | 0a5ce0d5b4 | 0 | 26 | 0 | 0 |
 | ue5-dev | codon | top | 0a5ce0d5b4 | 0 | 3 | 0 | 0 |
+| ue5-dev | codon | ported | 0a5ce0d5b4 | 0 | 40 | 0 | 0 |
 | ue5-dev | official | unit | 0a5ce0d5b4 | 38 | 2 | 0 | 0 |
+| ue5-dev | official | ported | 0a5ce0d5b4 | 26 | 14 | 0 | 0 |
 | 0.10.0 | cpython | unit | ada75f9206 | 13 | 2 | 0 | 0 |
 | 0.10.0 | codon | unit | ada75f9206 | 13 | 2 | 0 | 0 |
 | 0.10.0 | codon | smoke | ada75f9206 | 0 | 35 | 0 | 0 |
@@ -31,14 +34,18 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 
 ## Root causes: ue5-dev, cpython mode
 
-### typesafe_carla lacks this (missing API) (1 causes, 3 tests)
+### typesafe_carla lacks this (missing API) (2 causes, 5 tests)
 
 - **missing `carla.Image.raw_data` (#78)**: 3 tests: `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids`
+- **missing `carla.command.ApplyVehiclePhysicsControl`**: 2 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume`, `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values`
 
-### behaviour differs (assertions, errors, crashes) (2 causes, 3 tests)
+### behaviour differs (assertions, errors, crashes) (5 causes, 9 tests)
 
+- **geo round trip keeps double precision where the official module rounds to float32 (differs by up to ~0.5 at millions of metres) (#81)**: 3 tests: `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_location_to_geo_and_back`, `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_location_to_geo_and_back`, `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back`
 - **RuntimeError: 'Image' object has no attribute 'frame'**: 2 tests: `API/test_apply_textures.py::TestApplyTextures.test_apply_textures`, `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation`
+- **RuntimeError: a bytes-like object is required, not 'method' [carla.World.tick()]**: 2 tests: `ported/smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count`, `ported/smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count`
 - **RuntimeError: CustomVNXBytes.set_bytes must be in [N, N], got N**: 1 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length`
+- **sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads**: 1 tests: `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison`
 
 ### the test server's content (maps, blueprints), not typesafe_carla (3 causes, 23 tests)
 
@@ -51,8 +58,13 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 - **pycarla cannot wrap `CAMEvent.get_message_count` (self-typed generic method (Codon exporter))**: 1 tests: `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation`
 - **pycarla cannot wrap `CustomV2XEvent.get_message_count` (self-typed generic method (Codon exporter))**: 1 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive`
 
-### the upstream test itself (fails with the official module too) (2 causes, 2 tests)
+### the upstream test itself (fails with the official module too) (7 causes, 15 tests)
 
+- **fails with the official module too: missing `carla.libcarla`**: 7 tests: `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`, `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`, `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false`
+- **fails with the official module too: RuntimeError: std::exception**: 3 tests: `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`, `ported/smoke/test_map.py::TestMap.test_load_all_maps`, `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode`
+- **fails with the official module too: assertion: AssertionError: The collision sensor have failed for the cars: vehicle.firetruck.actors vehicle.fuso.mitsubishi**: 1 tests: `ported/smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car`
+- **fails with the official module too: assertion: AssertionError: True is not false**: 1 tests: `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points`
+- **fails with the official module too: assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff`
 - **fails with the official module too: the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
 - **stale upstream test: uses UE4-era fields (tire_friction, radius, moi, use_gear_autobox); the official constructors ignore unknown keywords, then reading pc.wheels[i].tire_friction raises AttributeError**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
 
@@ -69,14 +81,15 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 - **load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way)**: 2 tests: `API/test_spawn_vehicles.py::TestVehiclesSpawnTest.test_vehicle_spawn`, `API/test_spawn_walkers.py::TestWalkersSpawn.test_walker_spawn`
 - **the prop does not move after set_transform + tick in synchronous mode; the official module fails the same way on this server**: 1 tests: `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform`
 
-### Codon-direct mode: does not compile (10 causes, 56 tests)
+### Codon-direct mode: does not compile (11 causes, 96 tests)
 
+- **does not compile: 'SmokeTest' object has no attribute 'testing_address'**: 33 tests: `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_components`, `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_sockets_consistent`, `smoke/test_actor_introspection.py::TestActorIntrospection.test_walker_bones`, `smoke/test_actor_introspection.py::TestActorIntrospection.test_component_not_found_raises`, `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_shape`, `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_string`, `smoke/test_debug_clear.py::TestDebugClear.test_clear_when_nothing_drawn`, `smoke/test_traffic_manager_large_vehicle.py::TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans`, +25 more
 - **does not compile: no module named 'glob'**: 19 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +11 more
-- **does not compile: 'SmokeTest' object has no attribute 'testing_address'**: 12 tests: `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_components`, `smoke/test_actor_introspection.py::TestActorIntrospection.test_vehicle_sockets_consistent`, `smoke/test_actor_introspection.py::TestActorIntrospection.test_walker_bones`, `smoke/test_actor_introspection.py::TestActorIntrospection.test_component_not_found_raises`, `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_shape`, `smoke/test_debug_clear.py::TestDebugClear.test_clear_debug_string`, `smoke/test_debug_clear.py::TestDebugClear.test_clear_when_nothing_drawn`, `smoke/test_traffic_manager_large_vehicle.py::TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans`, +4 more
+- **does not compile: no module named 'enum'**: 15 tests: `ported/smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count`, `ported/smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count`, `ported/smoke/test_lidar.py::TestASyncLidar.test_lidar_point_count`, `ported/smoke/test_lidar.py::TestASyncLidar.test_semlidar_point_count`, `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison`, `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`, `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`, +7 more
 - **does not compile: cannot import name 'abspath' from 'os.path'**: 7 tests: `unit/test_boost_version.py::TestBoostInstallVersion.test_cmake_options_pins_correct_version`, `unit/test_boost_version.py::TestBoostInstallVersion.test_no_stale_boost_version_in_options`, `unit/test_boost_version.py::TestNumpyRequirementsCeiling.test_no_numpy_2_ceiling_in_requirements`, `unit/test_boost_version.py::TestCarlaImports.test_carla_imports`, `unit/test_numpy_compat.py::TestPropControlDvsDtype.test_uses_bool_underscore`, `unit/test_numpy_compat.py::TestPropControlDvsDtype.test_no_bare_np_bool`, `unit/test_numpy_compat.py::TestPropControlDvsDtype.test_no_np_matrix`
-- **does not compile: no module named 'argparse'**: 5 tests: `API/prop_control.py::<script>`, `API/spawn_actor.py::<script>`, `API/test_apply_textures.py::TestApplyTextures.test_apply_textures`, `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation`, `test_connection.py::<script>`
+- **does not compile: no module named 'argparse'**: 7 tests: `API/prop_control.py::<script>`, `API/spawn_actor.py::<script>`, `API/test_apply_textures.py::TestApplyTextures.test_apply_textures`, `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation`, `test_connection.py::<script>`, `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`, `ported/test_vehicle_physics.py::<script>`
+- **does not compile: no module named 'queue'**: 5 tests: `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids`, `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode`, `ported/smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync`
 - **does not compile: no module named 'array'**: 4 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive`, `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length`, `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation`, `smoke/test_v2x.py::TestV2X.test_v2i_infrastructure_sensor_without_owner`
-- **does not compile: no module named 'queue'**: 3 tests: `smoke/test_encoding_cameras.py::TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_semantic_segmentation_emits_valid_labels`, `smoke/test_encoding_cameras.py::TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids`
 - **does not compile: no module named 'tempfile'**: 3 tests: `smoke/test_recorder.py::TestRecorder.test_record_replay_blueprint_id_round_trips`, `smoke/test_recorder.py::TestRecorder.test_record_survives_same_tick_actor_destroy`, `smoke/test_replay_no_actor_aliasing.py::TestReplayNoActorAliasing.test_replayed_actors_have_clean_state`
 - **does not compile: no module named 'ast'**: 1 tests: `unit/test_lidar_smoke_helpers.py::TestLidarSmokeHelpers.test_get_current_detection_points_is_instance_method`
 - **does not compile: no module named 'cv2'**: 1 tests: `test_ground_truth.py::<script>`
@@ -92,6 +105,17 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 
 
 ## Root causes: ue5-dev, official mode
+
+### typesafe_carla lacks this (missing API) (1 causes, 7 tests)
+
+- **missing `carla.libcarla`**: 7 tests: `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`, `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`, `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false`
+
+### behaviour differs (assertions, errors, crashes) (4 causes, 7 tests)
+
+- **RuntimeError: std::exception**: 4 tests: `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car`, `ported/smoke/test_map.py::TestMap.test_load_all_maps`, `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode`, `ported/test_vehicle_physics.py::<script>`
+- **assertion: AssertionError: The collision sensor have failed for the cars: vehicle.firetruck.actors vehicle.fuso.mitsubishi**: 1 tests: `ported/smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car`
+- **assertion: AssertionError: True is not false**: 1 tests: `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points`
+- **assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff`
 
 ### the upstream test itself (fails with the official module too) (1 causes, 1 tests)
 
@@ -160,14 +184,18 @@ Not run, and not counted as failures (expectations.yaml `exclude:`).
 | ue5-dev | `smoke/test_world.py` | (all its tests) | map Town03 not shipped in ue5-dev packages; ported to tests/upstream/ported/smoke/test_world.py |
 | ue5-dev | `API/test_collision.py` | (all its tests) | map Town01 not shipped in ue5-dev packages; ported to tests/upstream/ported/API/test_collision.py |
 | ue5-dev | `test_vehicle_physics.py` | (all its tests) | map Town05 not shipped in ue5-dev packages; ported to tests/upstream/ported/test_vehicle_physics.py |
+| ue5-dev | `ported/smoke/test_blueprint.py` | TestBlueprintLibrary.test_blueprint_ids | ue5-dev ships blueprint id blueprint.trafficlightexample, which has two dot-separated parts, not the three the test expects (the official module fails the same way) |
 | ue5-dev | `ported/smoke/test_collision_determinism.py` | TestCollisionDeterminism.test_two_cars | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
 | ue5-dev | `ported/smoke/test_collision_determinism.py` | TestCollisionDeterminism.test_three_cars | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
 | ue5-dev | `ported/smoke/test_collision_determinism.py` | TestCollisionDeterminism.test_car_bike | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
 | ue5-dev | `ported/smoke/test_collision_determinism.py` | TestCollisionDeterminism.test_car_walker | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
 | ue5-dev | `ported/smoke/test_determinism.py` | TestDeterminism.test_determ | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
 | ue5-dev | `ported/smoke/test_map.py` | TestMap.test_reload_world | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_props_loading.py` | TestPropsLoading.test_spawn_loaded_props | a static prop fails to spawn on ue5-dev ('Unknown error'; the official module fails the same way) |
 | ue5-dev | `ported/smoke/test_sensor_determinism.py` | TestSensorDeterminism.test_all_sensors | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_sensor_tick_time.py` | TestSensorTickTime.test_sensor_tick_time | sensors with sensor_tick deliver no data on this server (the official module fails the same way) |
 | ue5-dev | `ported/smoke/test_snapshot.py` | TestSnapshot.test_spawn_points | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
+| ue5-dev | `ported/smoke/test_streamming.py` | TestStreamming.test_multistream | extra clients with wait_for_tick intermittently hang on this server (the official module timed out; a typesafe run passed) |
 | ue5-dev | `ported/smoke/test_sync.py` | TestSynchronousMode.test_reloading_map | needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too) |
 
 ## Codon `--pyext` limitations (harness, not typesafe_carla gaps)
@@ -317,6 +345,46 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `test_connection.py::<script>` | pass | compile | not run | does not compile: no module named 'argparse' |
 | `test_ground_truth.py::<script>` | error | compile | not run | test dependency `cv2` not installed in the test interpreter |
 | `test_raycast_sensor.py::<script>` | skip | compile | not run | an interactive script (a pygame loop; the official module also runs until the time-out) |
+| `ported/API/test_collision.py::TestCollision.test_collision_against_side_of_car` | error | compile | error | fails with the official module too: RuntimeError: std::exception |
+| `ported/smoke/test_client.py::TestClient.test_version` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_collision_sensor.py::TestCollisionSensor.test_single_car` | fail | compile | fail | fails with the official module too: assertion: AssertionError: The collision sensor have failed for the cars: vehicle.firetruck.actors vehicle.fuso.mitsubishi |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_reference` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_projection` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_location_to_geo_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_zero_conversion` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_relative_offset_preserved` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_location_to_geo_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_location_to_geo_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_location_to_geo_and_back` | fail | compile | pass | geo round trip keeps double precision where the official module rounds to float32 (differs by up to ~0.5 at millions of metres) (#81) |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_location_to_geo_and_back` | fail | compile | pass | geo round trip keeps double precision where the official module rounds to float32 (differs by up to ~0.5 at millions of metres) (#81) |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back` | fail | compile | pass | geo round trip keeps double precision where the official module rounds to float32 (differs by up to ~0.5 at millions of metres) (#81) |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count` | error | compile | pass | RuntimeError: a bytes-like object is required, not 'method' [carla.World.tick()] |
+| `ported/smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count` | error | compile | pass | RuntimeError: a bytes-like object is required, not 'method' [carla.World.tick()] |
+| `ported/smoke/test_lidar.py::TestASyncLidar.test_lidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
+| `ported/smoke/test_lidar.py::TestASyncLidar.test_semlidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
+| `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | error | compile | pass | sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads |
+| `ported/smoke/test_map.py::TestMap.test_load_all_maps` | error | compile | error | fails with the official module too: RuntimeError: std::exception |
+| `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | fail | compile | fail | fails with the official module too: assertion: AssertionError: True is not false |
+| `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode` | error | compile | error | fails with the official module too: RuntimeError: std::exception |
+| `ported/smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync` | pass | compile | pass | does not compile: no module named 'queue' |
+| `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
+| `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff` | error | compile | fail | fails with the official module too: assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944] |
+| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
+| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
+| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false` | error | compile | error | fails with the official module too: missing `carla.libcarla` |
+| `ported/smoke/test_world.py::TestWorld.test_fixed_delta_seconds` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
+| `ported/test_vehicle_physics.py::<script>` | pass | compile | error | does not compile: no module named 'argparse' |
 
 ## Every test: 0.10.0
 

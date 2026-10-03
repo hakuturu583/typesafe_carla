@@ -2,7 +2,8 @@
 # by tools/port_upstream_tests.py (typesafe_carla issue #80): the original needs a map
 # (Town03 / Town05 / Town01) that no ue5-dev package ships. Do not edit by hand:
 # change the rules there and regenerate. Changes:
-#   - none: copied so that `from . import SmokeTest` uses the ported base, whose tearDown loads a shipped map instead of Town03
+#   - blueprint vehicle.ford.mustang is vehicle.ue4.ford.mustang on ue5-dev (renamed; the old id is not in the library)
+#   - otherwise copied so that `from . import SmokeTest` uses the ported base
 #
 # Copyright (c) 2026 Computer Vision Center (CVC) at the Universitat Autonoma de
 # Barcelona (UAB).
@@ -74,7 +75,7 @@ class TestSynchronousMode(SyncSmokeTest):
         spawn_points = self.world.get_map().get_spawn_points()
         self.assertNotEqual(len(spawn_points), 0)
 
-        car_bp = bp_lib.find('vehicle.ford.mustang')
+        car_bp = bp_lib.find('vehicle.ue4.ford.mustang')
         car = self.world.spawn_actor(car_bp, spawn_points[0])
         # List of sensors that are not events, these are retrieved every frame
         sensor_ids = [

@@ -3,7 +3,8 @@
 # (Town03 / Town05 / Town01) that no ue5-dev package ships. Do not edit by hand:
 # change the rules there and regenerate. Changes:
 #   - loads a shipped large map (Town15, else Mine_01 or Town10HD_Opt) instead of Town05_Opt
-#   - spawn transforms, target velocities and the friction volume, written for Town05's straight road along +y (x = 31 and x = 235), go through a MapFrame onto the longest straight road of the loaded map; readings of .y go back through it, so the assertions are unchanged
+#   - spawn transforms, target velocities and the friction volume, written for Town05's straight road along +y (x = 31 and x = 235), go through a MapFrame onto the longest straight road of the loaded map that has a same-direction lane beside it (the second vehicle drives 4-5 m to the side); readings of .y go back through it, so the assertions are unchanged
+#   - `carla.libcarla.Vector3D` (UE4 package layout, absent from ue5-dev's official module too) is `carla.Vector3D`
 #
 # Copyright (c) 2026 Computer Vision Center (CVC) at the Universitat Autonoma de
 # Barcelona (UAB).
@@ -35,7 +36,7 @@ def equal_tol(obj_a, obj_b, tol = 1e-5):
     if isinstance(obj_a, list):
         return obj_a == obj_b
 
-    if isinstance(obj_a, carla.libcarla.Vector3D):
+    if isinstance(obj_a, carla.Vector3D):
         diff = abs(obj_a - obj_b)
         return diff.x < tol and diff.y < tol and diff.z < tol
 
@@ -213,7 +214,7 @@ class TestVehicleFriction(SyncSmokeTest):
         # workaround: give time to UE4 to clean memory after loading (old assets)
         time.sleep(5)
         self.world = self.client.get_world()
-        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0)
+        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0, side="left")
 
         bp_vehicles = self.world.get_blueprint_library().filter("vehicle.*")
         bp_vehicles = self.filter_vehicles_for_old_towns(bp_vehicles)
@@ -284,7 +285,7 @@ class TestVehicleFriction(SyncSmokeTest):
         # workaround: give time to UE4 to clean memory after loading (old assets)
         time.sleep(5)
         self.world = self.client.get_world()
-        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0)
+        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0, side="left")
 
         bp_vehicles = self.world.get_blueprint_library().filter("*charger_2020")
 
@@ -400,7 +401,7 @@ class TestVehicleFriction(SyncSmokeTest):
         # workaround: give time to UE4 to clean memory after loading (old assets)
         time.sleep(5)
         self.world = self.client.get_world()
-        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0)
+        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0, side="left")
 
         bp_vehicles = self.world.get_blueprint_library().filter("vehicle.*")
 
@@ -476,7 +477,7 @@ class TestVehicleTireConfig(SyncSmokeTest):
         # workaround: give time to UE4 to clean memory after loading (old assets)
         time.sleep(5)
         self.world = self.client.get_world()
-        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0)
+        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0, side="left")
 
         bp_vehicles = self.world.get_blueprint_library().filter("vehicle.*")
         bp_vehicles = [x for x in bp_vehicles if int(x.get_attribute('number_of_wheels')) == 4]
@@ -538,7 +539,7 @@ class TestVehicleTireConfig(SyncSmokeTest):
         # workaround: give time to UE4 to clean memory after loading (old assets)
         time.sleep(5)
         self.world = self.client.get_world()
-        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0)
+        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0, side="left")
 
         bp_vehicles = self.world.get_blueprint_library().filter("vehicle.*")
         bp_vehicles = [x for x in bp_vehicles if int(x.get_attribute('number_of_wheels')) == 4]

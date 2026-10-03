@@ -820,6 +820,273 @@
      "test_vehicle_physics.py:18: no module named 'argparse'"
     ]
    }
+  },
+  "ported/API/test_collision.py": {
+   "file_error": "ported/API/test_collision.py:12: no module named 'argparse'",
+   "tests": {
+    "TestCollision.test_collision_against_side_of_car": [
+     "compile",
+     "ported/API/test_collision.py:12: no module named 'argparse'"
+    ]
+   }
+  },
+  "ported/smoke/test_blueprint.py": {
+   "file_error": null,
+   "tests": {
+    "TestBlueprintLibrary.test_blueprint_ids": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   }
+  },
+  "ported/smoke/test_client.py": {
+   "file_error": null,
+   "tests": {
+    "TestClient.test_version": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   }
+  },
+  "ported/smoke/test_collision_determinism.py": {
+   "file_error": "ported/smoke/test_collision_determinism.py:19: no module named 'filecmp'",
+   "tests": {}
+  },
+  "ported/smoke/test_collision_sensor.py": {
+   "file_error": null,
+   "tests": {
+    "TestCollisionSensor.test_single_car": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   }
+  },
+  "ported/smoke/test_determinism.py": {
+   "file_error": "ported/smoke/test_determinism.py:13: cannot import name 'random' from 'numpy.__init__'",
+   "tests": {}
+  },
+  "ported/smoke/test_geoconversion.py": {
+   "file_error": null,
+   "tests": {
+    "TestGeoLocationConversion.test_geo_reference": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_geo_projection": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_location_to_geo_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_geo_to_location_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_zero_conversion": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_relative_offset_preserved": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_tm_location_to_geo_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_tm_geo_to_location_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_utm_north_location_to_geo_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_utm_north_geo_to_location_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_utm_south_location_to_geo_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_utm_south_geo_to_location_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_webmerc_location_to_geo_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_webmerc_geo_to_location_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_lcc_location_to_geo_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestGeoLocationConversion.test_lcc_geo_to_location_and_back": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   }
+  },
+  "ported/smoke/test_lidar.py": {
+   "file_error": "ported/smoke/test_lidar.py:20: no module named 'enum'",
+   "tests": {
+    "TestSyncLidar.test_lidar_point_count": [
+     "compile",
+     "ported/smoke/test_lidar.py:20: no module named 'enum'"
+    ],
+    "TestSyncLidar.test_semlidar_point_count": [
+     "compile",
+     "ported/smoke/test_lidar.py:20: no module named 'enum'"
+    ],
+    "TestASyncLidar.test_lidar_point_count": [
+     "compile",
+     "ported/smoke/test_lidar.py:20: no module named 'enum'"
+    ],
+    "TestASyncLidar.test_semlidar_point_count": [
+     "compile",
+     "ported/smoke/test_lidar.py:20: no module named 'enum'"
+    ],
+    "TestCompareLidars.test_lidar_comparison": [
+     "compile",
+     "ported/smoke/test_lidar.py:20: no module named 'enum'"
+    ]
+   }
+  },
+  "ported/smoke/test_map.py": {
+   "file_error": null,
+   "tests": {
+    "TestMap.test_load_all_maps": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   }
+  },
+  "ported/smoke/test_props_loading.py": {
+   "file_error": null,
+   "tests": {
+    "TestPropsLoading.test_spawn_loaded_props": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   }
+  },
+  "ported/smoke/test_sensor_determinism.py": {
+   "file_error": "ported/smoke/test_sensor_determinism.py:18: no module named 'filecmp'",
+   "tests": {}
+  },
+  "ported/smoke/test_sensor_tick_time.py": {
+   "file_error": null,
+   "tests": {
+    "TestSensorTickTime.test_sensor_tick_time": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   }
+  },
+  "ported/smoke/test_snapshot.py": {
+   "file_error": null,
+   "tests": {}
+  },
+  "ported/smoke/test_spawnpoints.py": {
+   "file_error": null,
+   "tests": {
+    "TestSpawnpoints.test_spawn_points": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   }
+  },
+  "ported/smoke/test_streamming.py": {
+   "file_error": null,
+   "tests": {
+    "TestStreamming.test_multistream": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   }
+  },
+  "ported/smoke/test_sync.py": {
+   "file_error": "ported/smoke/test_sync.py:20: no module named 'queue'",
+   "tests": {
+    "TestSynchronousMode.test_sensor_transform_on_synchronous_mode": [
+     "compile",
+     "ported/smoke/test_sync.py:20: no module named 'queue'"
+    ],
+    "TestSynchronousMode.test_apply_batch_sync": [
+     "compile",
+     "ported/smoke/test_sync.py:20: no module named 'queue'"
+    ]
+   }
+  },
+  "ported/smoke/test_vehicle_physics.py": {
+   "file_error": "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'",
+   "tests": {
+    "TestApplyVehiclePhysics.test_single_physics_control": [
+     "compile",
+     "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'"
+    ],
+    "TestApplyVehiclePhysics.test_multiple_physics_control": [
+     "compile",
+     "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'"
+    ],
+    "TestVehicleFriction.test_vehicle_zero_friction": [
+     "compile",
+     "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'"
+    ],
+    "TestVehicleFriction.test_vehicle_friction_volume": [
+     "compile",
+     "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'"
+    ],
+    "TestVehicleFriction.test_vehicle_friction_values": [
+     "compile",
+     "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'"
+    ],
+    "TestVehicleTireConfig.test_vehicle_wheel_collision": [
+     "compile",
+     "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'"
+    ],
+    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": [
+     "compile",
+     "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'"
+    ],
+    "TestStickyControl.test_default": [
+     "compile",
+     "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'"
+    ],
+    "TestStickyControl.test_true": [
+     "compile",
+     "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'"
+    ],
+    "TestStickyControl.test_false": [
+     "compile",
+     "ported/smoke/test_vehicle_physics.py:21: no module named 'enum'"
+    ]
+   }
+  },
+  "ported/smoke/test_world.py": {
+   "file_error": null,
+   "tests": {
+    "TestWorld.test_fixed_delta_seconds": [
+     "compile",
+     "ported/smoke/__init__.py:35: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   }
+  },
+  "ported/test_vehicle_physics.py": {
+   "file_error": "ported/test_vehicle_physics.py:25: no module named 'argparse'",
+   "tests": {
+    "<script>": [
+     "compile",
+     "ported/test_vehicle_physics.py:25: no module named 'argparse'"
+    ]
+   }
   }
  },
  "ref": "ue5-dev",

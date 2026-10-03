@@ -70,19 +70,28 @@ class MapFrame:
     upstream assertions on `.x`, `.y` and yaw still hold.
     """
 
-    def __init__(self, world, origin, heading, length):
+    def __init__(self, world, origin, heading, length, side=None):
         self.origin = origin
-        wp, self.run = self._straight(world.get_map(), length)
+        wp, self.run = self._straight(world.get_map(), length, side)
         transform = wp.transform
         self.base = transform.location
         self.dyaw = transform.rotation.yaw - heading
         self.theta = _math.radians(self.dyaw)
 
     @staticmethod
-    def _straight(m, length, step=5.0):
+    def _beside(wp, side):
+        """A same-direction driving lane on `side` ("left"/"right") of wp."""
+        other = wp.get_left_lane() if side == "left" else wp.get_right_lane()
+        return (other is not None and other.lane_type == carla.LaneType.Driving
+                and (other.lane_id > 0) == (wp.lane_id > 0))
+
+    @staticmethod
+    def _straight(m, length, side=None, step=5.0):
         best = None
         for wp in m.generate_waypoints(step):
             if wp.is_junction or wp.lane_type != carla.LaneType.Driving:
+                continue
+            if side and not MapFrame._beside(wp, side):
                 continue
             yaw0 = wp.transform.rotation.yaw
             run, cur = 0.0, wp
@@ -98,6 +107,8 @@ class MapFrame:
                 best = (wp, run)
             if run >= length:
                 break
+        if best is None and side:  # no such lane anywhere: any straight road
+            return MapFrame._straight(m, length, None, step)
         return best
 
     def _rot(self, dx, dy, sign=1.0):
@@ -155,13 +166,41 @@ def replace(text: str, old: str, new: str, count: int = -1) -> str:
 
 def _smoke_init(t: str):
     t = replace(t, 'self.client.load_world("Town03")', "self.client.load_world(shipped_map(self.client))")
+    t = replace(t, "'vehicle.carlamotors.firetruck']",
+                "'vehicle.carlamotors.firetruck',\n"
+                "    'vehicle.firetruck.actors', 'vehicle.fuso.mitsubishi']  # their UE5 ids (port)")
     return t + HELPERS, ["tearDown loads a shipped map (Town10HD_Opt) instead of Town03",
+                         "the large-vehicle exclusion list (UE4 ids only, so stale on ue5-dev) also "
+                         "names the UE5 large vehicles, vehicle.firetruck.actors and "
+                         "vehicle.fuso.mitsubishi",
                          "adds shipped_map() and MapFrame for the ported tests"]
 
 
 def _copy(t: str):
     return t, ["none: copied so that `from . import SmokeTest` uses the ported base, whose "
                "tearDown loads a shipped map instead of Town03"]
+
+
+def _map(t: str):
+    t = replace(t, "and map_name != '/Game/Carla/Maps/Town12/Town12':",
+                "and map_name != '/Game/Carla/Maps/Town12/Town12' \\\n"
+                "                    and map_name.split('/')[-1] not in UNLOADABLE_MAPS:")
+    t = replace(t, "import time\n",
+                "import time\n\n"
+                "# port: maps the ue5-dev server lists but cannot load, with the official\n"
+                "# module too (RoadgenCross: \"unable to parse the OpenDRIVE XML string\").\n"
+                "UNLOADABLE_MAPS = {'RoadgenCross'}\n", 1)
+    return t, ["test_load_all_maps also skips the maps in UNLOADABLE_MAPS (RoadgenCross), which "
+               "the ue5-dev server lists but cannot load, with the official module too: its "
+               "OpenDRIVE does not parse",
+               "otherwise copied so that `from . import SmokeTest` uses the ported base"]
+
+
+def _sync(t: str):
+    t = replace(t, "bp_lib.find('vehicle.ford.mustang')", "bp_lib.find('vehicle.ue4.ford.mustang')")
+    return t, ["blueprint vehicle.ford.mustang is vehicle.ue4.ford.mustang on ue5-dev (renamed; "
+               "the old id is not in the library)",
+               "otherwise copied so that `from . import SmokeTest` uses the ported base"]
 
 
 def _determinism(t: str):
@@ -189,6 +228,7 @@ def _collision_determinism(t: str):
 
 def _vehicle_physics(t: str):
     t = replace(t, "from . import SyncSmokeTest", "from . import SyncSmokeTest, MapFrame, shipped_map, LARGE_MAPS")
+    t = replace(t, "carla.libcarla.Vector3D", "carla.Vector3D")
     # Town05_Opt: a straight road along +y at x = 31, from y = -200.
     t = replace(t, '''        self.client.load_world("Town05_Opt", False)
         # workaround: give time to UE4 to clean memory after loading (old assets)
@@ -197,7 +237,7 @@ def _vehicle_physics(t: str):
         # workaround: give time to UE4 to clean memory after loading (old assets)
         time.sleep(5)
         self.world = self.client.get_world()
-        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0)
+        self.frame = MapFrame(self.world, (31, -200), 90.0, 250.0, side="left")
 ''')
     head, sep, rest = t.partition("class TestVehicleFriction(SyncSmokeTest):")
     rest = framed(rest, "self.frame")
@@ -210,20 +250,25 @@ def _vehicle_physics(t: str):
         "loads a shipped large map (Town15, else Mine_01 or Town10HD_Opt) instead of Town05_Opt",
         "spawn transforms, target velocities and the friction volume, written for Town05's "
         "straight road along +y (x = 31 and x = 235), go through a MapFrame onto the longest "
-        "straight road of the loaded map; readings of .y go back through it, so the "
-        "assertions are unchanged"]
+        "straight road of the loaded map that has a same-direction lane beside it (the "
+        "second vehicle drives 4-5 m to the side); readings of .y go back through it, so the "
+        "assertions are unchanged",
+        "`carla.libcarla.Vector3D` (UE4 package layout, absent from ue5-dev's official module "
+        "too) is `carla.Vector3D`"]
 
 
 def _api_collision(t: str):
     t = replace(t, "world = client.load_world('Town01')",
-                "world = client.load_world(shipped_map(client))\n"
+                "client.set_timeout(60.0)  # port: Town10HD_Opt takes ~8 s to load\n"
+                "        world = client.load_world(shipped_map(client))\n"
                 "        frame = MapFrame(world, (177.7, 198.8), 0.0, 40.0)")
     t = re.sub(r"(walker = world\.spawn_actor\(bp, )carla\.Transform\(carla\.Location\(([^()]*)\), carla\.Rotation\(\)\)\)",
                r"\1frame.transform(\2))", t)
     t = re.sub(r"(vehicle = world\.spawn_actor\(bp, )carla\.Transform\(carla\.Location\(([^()]*)\), carla\.Rotation\(\)\)\)",
                r"\1frame.transform(\2))", t)
     t = replace(t, "import carla\n", "import carla\n" + HELPERS, 1)
-    return t, ["loads a shipped map instead of Town01",
+    return t, ["loads a shipped map instead of Town01, with a 60 s client timeout (the default "
+               "5 s was enough for Town01 on UE4; Town10HD_Opt takes ~8 s)",
                "the walker and the vehicle behind it, on Town01's road at y = 199 heading +x, go "
                "through a MapFrame onto a straight road of the loaded map"]
 
@@ -231,12 +276,17 @@ def _api_collision(t: str):
 def _top_vehicle_physics(t: str):
     t = replace(t, '''        if world.get_map().name != "Town05":
             client.load_world("Town05", False)
-''', '''        if world.get_map().name.split("/")[-1] != shipped_map(client, LARGE_MAPS):
+''', "")
+    # Load the map before switching to synchronous mode: loading in it waits
+    # for ticks that never come.
+    t = replace(t, '''        # Setting the world and the spawn properties
+        original_settings = world.get_settings()''', '''        if world.get_map().name.split("/")[-1] != shipped_map(client, LARGE_MAPS):
             client.load_world(shipped_map(client, LARGE_MAPS), False)
         world = client.get_world()
         global FRAME
         FRAME = MapFrame(world, (32, -180), 90.0, 250.0)
-''')
+        # Setting the world and the spawn properties
+        original_settings = world.get_settings()''')
     # Spawn points and stop conditions in Town05 coordinates.
     t = re.sub(r"(init_(?:loc|pos) = )carla\.Transform\(carla\.Location\(([^()]*)\), carla\.Rotation\(([^()]*)\)\)",
                r"\1FRAME.transform(\2, \3)", t)
@@ -244,20 +294,24 @@ def _top_vehicle_physics(t: str):
     t = replace(t, "        rot = vehicle.get_transform().rotation\n",
                 "        rot = vehicle.get_transform().rotation\n        rot.yaw = FRAME.up_yaw(rot.yaw)\n")
     t = replace(t, "import carla\n", "import carla\n" + HELPERS + "\nFRAME = None\n", 1)
-    return t, ["loads a shipped large map (Town15, else Mine_01 or Town10HD_Opt) instead of Town05",
+    return t, ["loads a shipped large map (Town15, else Mine_01 or Town10HD_Opt) instead of Town05, "
+               "before switching to synchronous mode rather than after (loading in synchronous "
+               "mode waits for ticks that never come)",
                "the scenarios' start transforms and the stop conditions on location and yaw, "
                "written for Town05 (x = 32, heading +y), go through a MapFrame"]
 
 
 # Smoke tests that fail only through SmokeTest.tearDown (Town03).
 BASE_ONLY = ["test_blueprint", "test_client", "test_collision_sensor", "test_geoconversion",
-             "test_lidar", "test_map", "test_props_loading", "test_sensor_determinism",
+             "test_lidar", "test_props_loading", "test_sensor_determinism",
              "test_sensor_tick_time", "test_snapshot", "test_spawnpoints", "test_streamming",
-             "test_sync", "test_world"]
+             "test_world"]
 
 RULES = {
     "smoke/__init__.py": _smoke_init,
     **{f"smoke/{n}.py": _copy for n in BASE_ONLY},
+    "smoke/test_map.py": _map,
+    "smoke/test_sync.py": _sync,
     "smoke/test_determinism.py": _determinism,
     "smoke/test_collision_determinism.py": _collision_determinism,
     "smoke/test_vehicle_physics.py": _vehicle_physics,
@@ -268,7 +322,7 @@ RULES = {
 
 # The map each original needs (for its `exclude:` entry).
 NEEDED_MAP = {
-    **{f"smoke/{n}.py": "Town03" for n in BASE_ONLY},
+    **{f"smoke/{n}.py": "Town03" for n in BASE_ONLY + ["test_map", "test_sync"]},
     "smoke/test_determinism.py": "Town03",
     "smoke/test_collision_determinism.py": "Town03",
     "smoke/test_vehicle_physics.py": "Town05_Opt",
@@ -292,6 +346,24 @@ NEEDS_RELOAD = {
 }
 
 
+# Ported tests that fail with the official module on ue5-dev for reasons a
+# map cannot fix (content or server limits; checked with --mode official).
+CONTENT_LIMITS = {
+    "smoke/test_blueprint.py": {"TestBlueprintLibrary.test_blueprint_ids":
+        "ue5-dev ships blueprint id blueprint.trafficlightexample, which has two dot-separated "
+        "parts, not the three the test expects (the official module fails the same way)"},
+    "smoke/test_props_loading.py": {"TestPropsLoading.test_spawn_loaded_props":
+        "a static prop fails to spawn on ue5-dev ('Unknown error'; the official module fails "
+        "the same way)"},
+    "smoke/test_sensor_tick_time.py": {"TestSensorTickTime.test_sensor_tick_time":
+        "sensors with sensor_tick deliver no data on this server (the official module fails "
+        "the same way)"},
+    "smoke/test_streamming.py": {"TestStreamming.test_multistream":
+        "extra clients with wait_for_tick intermittently hang on this server (the official "
+        "module timed out; a typesafe run passed)"},
+}
+
+
 def exclude_originals(refs=("ue5-dev",)) -> None:
     """Marks the ported originals `exclude:` in tests/upstream/expectations.yaml,
     and the ported tests that need reload_world."""
@@ -310,6 +382,12 @@ def exclude_originals(refs=("ue5-dev",)) -> None:
                 for tid in tests:
                     ported[tid] = ("exclude: needs reload_world, which fails on the ue5-dev server "
                                    "build (OpenDRIVE parse error; the official module too)")
+                entries[f"ported/{rel}"] = ported
+            for rel, tests in CONTENT_LIMITS.items():
+                ported = entries.get(f"ported/{rel}")
+                ported = ported if isinstance(ported, dict) else {}
+                for tid, why in tests.items():
+                    ported[tid] = f"exclude: {why}"
                 entries[f"ported/{rel}"] = ported
         up.write_manifest(mode, manifest)
 

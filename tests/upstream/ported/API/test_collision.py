@@ -2,7 +2,7 @@
 # by tools/port_upstream_tests.py (typesafe_carla issue #80): the original needs a map
 # (Town03 / Town05 / Town01) that no ue5-dev package ships. Do not edit by hand:
 # change the rules there and regenerate. Changes:
-#   - loads a shipped map instead of Town01
+#   - loads a shipped map instead of Town01, with a 60 s client timeout (the default 5 s was enough for Town01 on UE4; Town10HD_Opt takes ~8 s)
 #   - the walker and the vehicle behind it, on Town01's road at y = 199 heading +x, go through a MapFrame onto a straight road of the loaded map
 #
 
@@ -60,19 +60,28 @@ class MapFrame:
     upstream assertions on `.x`, `.y` and yaw still hold.
     """
 
-    def __init__(self, world, origin, heading, length):
+    def __init__(self, world, origin, heading, length, side=None):
         self.origin = origin
-        wp, self.run = self._straight(world.get_map(), length)
+        wp, self.run = self._straight(world.get_map(), length, side)
         transform = wp.transform
         self.base = transform.location
         self.dyaw = transform.rotation.yaw - heading
         self.theta = _math.radians(self.dyaw)
 
     @staticmethod
-    def _straight(m, length, step=5.0):
+    def _beside(wp, side):
+        """A same-direction driving lane on `side` ("left"/"right") of wp."""
+        other = wp.get_left_lane() if side == "left" else wp.get_right_lane()
+        return (other is not None and other.lane_type == carla.LaneType.Driving
+                and (other.lane_id > 0) == (wp.lane_id > 0))
+
+    @staticmethod
+    def _straight(m, length, side=None, step=5.0):
         best = None
         for wp in m.generate_waypoints(step):
             if wp.is_junction or wp.lane_type != carla.LaneType.Driving:
+                continue
+            if side and not MapFrame._beside(wp, side):
                 continue
             yaw0 = wp.transform.rotation.yaw
             run, cur = 0.0, wp
@@ -88,6 +97,8 @@ class MapFrame:
                 best = (wp, run)
             if run >= length:
                 break
+        if best is None and side:  # no such lane anywhere: any straight road
+            return MapFrame._straight(m, length, None, step)
         return best
 
     def _rot(self, dx, dy, sign=1.0):
@@ -131,6 +142,7 @@ class TestCollision(unittest.TestCase):
 
     def test_collision_against_side_of_car(self):
         client = carla.Client()
+        client.set_timeout(60.0)  # port: Town10HD_Opt takes ~8 s to load
         world = client.load_world(shipped_map(client))
         frame = MapFrame(world, (177.7, 198.8), 0.0, 40.0)
         bp_lib = world.get_blueprint_library()

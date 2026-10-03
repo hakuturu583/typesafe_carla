@@ -2,7 +2,8 @@
 # by tools/port_upstream_tests.py (typesafe_carla issue #80): the original needs a map
 # (Town03 / Town05 / Town01) that no ue5-dev package ships. Do not edit by hand:
 # change the rules there and regenerate. Changes:
-#   - none: copied so that `from . import SmokeTest` uses the ported base, whose tearDown loads a shipped map instead of Town03
+#   - test_load_all_maps also skips the maps in UNLOADABLE_MAPS (RoadgenCross), which the ue5-dev server lists but cannot load, with the official module too: its OpenDRIVE does not parse
+#   - otherwise copied so that `from . import SmokeTest` uses the ported base
 #
 # Copyright (c) 2026 Computer Vision Center (CVC) at the Universitat Autonoma de
 # Barcelona (UAB).
@@ -15,6 +16,10 @@ import random
 
 from . import SmokeTest
 import time
+
+# port: maps the ue5-dev server lists but cannot load, with the official
+# module too (RoadgenCross: "unable to parse the OpenDRIVE XML string").
+UNLOADABLE_MAPS = {'RoadgenCross'}
 
 class TestMap(SmokeTest):
     def test_reload_world(self):
@@ -29,7 +34,8 @@ class TestMap(SmokeTest):
         random.shuffle(map_names)
         for map_name in map_names:
             # ignore empty or large maps by now
-            if map_name != '/Game/Carla/Maps/BaseMap/BaseMap' and map_name != '/Game/Carla/Maps/Town11/Town11' and map_name != '/Game/Carla/Maps/Town12/Town12':
+            if map_name != '/Game/Carla/Maps/BaseMap/BaseMap' and map_name != '/Game/Carla/Maps/Town11/Town11' and map_name != '/Game/Carla/Maps/Town12/Town12' \
+                    and map_name.split('/')[-1] not in UNLOADABLE_MAPS:
                 world = self.client.load_world(map_name)
                 # workaround: give time to UE4 to clean memory after loading (old assets)
                 time.sleep(5)

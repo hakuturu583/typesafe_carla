@@ -820,6 +820,273 @@
      "exit 1: RuntimeError: tsc_client_load_world: std::exception"
     ]
    }
+  },
+  "ported/API/test_collision.py": {
+   "file_error": null,
+   "tests": {
+    "TestCollision.test_collision_against_side_of_car": [
+     "error",
+     "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
+    ]
+   }
+  },
+  "ported/smoke/test_blueprint.py": {
+   "file_error": null,
+   "tests": {
+    "TestBlueprintLibrary.test_blueprint_ids": [
+     "fail",
+     "AssertionError: None is not true"
+    ]
+   }
+  },
+  "ported/smoke/test_client.py": {
+   "file_error": null,
+   "tests": {
+    "TestClient.test_version": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/smoke/test_collision_determinism.py": {
+   "file_error": null,
+   "tests": {}
+  },
+  "ported/smoke/test_collision_sensor.py": {
+   "file_error": null,
+   "tests": {
+    "TestCollisionSensor.test_single_car": [
+     "fail",
+     "AssertionError: The collision sensor have failed for the cars: vehicle.firetruck.actors vehicle.fuso.mitsubishi"
+    ]
+   }
+  },
+  "ported/smoke/test_determinism.py": {
+   "file_error": null,
+   "tests": {}
+  },
+  "ported/smoke/test_geoconversion.py": {
+   "file_error": null,
+   "tests": {
+    "TestGeoLocationConversion.test_geo_reference": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_geo_projection": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_location_to_geo_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_geo_to_location_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_zero_conversion": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_relative_offset_preserved": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_tm_location_to_geo_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_tm_geo_to_location_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_utm_north_location_to_geo_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_utm_north_geo_to_location_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_utm_south_location_to_geo_and_back": [
+     "fail",
+     "AssertionError: 8444444.444444444 != 8444444.0 within 0.1 delta (0.4444444440305233 difference)"
+    ],
+    "TestGeoLocationConversion.test_utm_south_geo_to_location_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_webmerc_location_to_geo_and_back": [
+     "fail",
+     "AssertionError: -15555555.555555556 != -15555556.0 within 0.1 delta (0.4444444440305233 difference)"
+    ],
+    "TestGeoLocationConversion.test_webmerc_geo_to_location_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_lcc_location_to_geo_and_back": [
+     "fail",
+     "AssertionError: 5333333.333333333 != 5333333.5 within 0.1 delta (0.16666666697710752 difference)"
+    ],
+    "TestGeoLocationConversion.test_lcc_geo_to_location_and_back": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/smoke/test_lidar.py": {
+   "file_error": null,
+   "tests": {
+    "TestSyncLidar.test_lidar_point_count": [
+     "error",
+     "RuntimeError: a bytes-like object is required, not 'method' [carla.World.tick()]"
+    ],
+    "TestSyncLidar.test_semlidar_point_count": [
+     "error",
+     "RuntimeError: a bytes-like object is required, not 'method' [carla.World.tick()]"
+    ],
+    "TestASyncLidar.test_lidar_point_count": [
+     "pass",
+     ""
+    ],
+    "TestASyncLidar.test_semlidar_point_count": [
+     "pass",
+     ""
+    ],
+    "TestCompareLidars.test_lidar_comparison": [
+     "error",
+     "_queue.Empty"
+    ]
+   }
+  },
+  "ported/smoke/test_map.py": {
+   "file_error": null,
+   "tests": {
+    "TestMap.test_load_all_maps": [
+     "error",
+     "RuntimeError: tsc_world_get_map: std::exception [carla.World.get_map()]"
+    ]
+   }
+  },
+  "ported/smoke/test_props_loading.py": {
+   "file_error": null,
+   "tests": {
+    "TestPropsLoading.test_spawn_loaded_props": [
+     "fail",
+     "AssertionError: 'Unknown error while trying to spawn actor' is not false"
+    ]
+   }
+  },
+  "ported/smoke/test_sensor_determinism.py": {
+   "file_error": null,
+   "tests": {}
+  },
+  "ported/smoke/test_sensor_tick_time.py": {
+   "file_error": null,
+   "tests": {
+    "TestSensorTickTime.test_sensor_tick_time": [
+     "fail",
+     "AssertionError: 0 != 3 :"
+    ]
+   }
+  },
+  "ported/smoke/test_snapshot.py": {
+   "file_error": null,
+   "tests": {}
+  },
+  "ported/smoke/test_spawnpoints.py": {
+   "file_error": null,
+   "tests": {
+    "TestSpawnpoints.test_spawn_points": [
+     "fail",
+     "AssertionError: True is not false"
+    ]
+   }
+  },
+  "ported/smoke/test_streamming.py": {
+   "file_error": null,
+   "tests": {
+    "TestStreamming.test_multistream": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/smoke/test_sync.py": {
+   "file_error": null,
+   "tests": {
+    "TestSynchronousMode.test_sensor_transform_on_synchronous_mode": [
+     "error",
+     "IndexError: tsc_blueprint_library_find: no blueprint with id 'vehicle.ford.mustang'"
+    ],
+    "TestSynchronousMode.test_apply_batch_sync": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/smoke/test_vehicle_physics.py": {
+   "file_error": null,
+   "tests": {
+    "TestApplyVehiclePhysics.test_single_physics_control": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestApplyVehiclePhysics.test_multiple_physics_control": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestVehicleFriction.test_vehicle_zero_friction": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestVehicleFriction.test_vehicle_friction_volume": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestVehicleFriction.test_vehicle_friction_values": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestVehicleTireConfig.test_vehicle_wheel_collision": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestStickyControl.test_default": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestStickyControl.test_true": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestStickyControl.test_false": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ]
+   }
+  },
+  "ported/smoke/test_world.py": {
+   "file_error": null,
+   "tests": {
+    "TestWorld.test_fixed_delta_seconds": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/test_vehicle_physics.py": {
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "pass",
+     ""
+    ]
+   }
   }
  },
  "ref": "ue5-dev",

@@ -2,7 +2,7 @@
 # by tools/port_upstream_tests.py (typesafe_carla issue #80): the original needs a map
 # (Town03 / Town05 / Town01) that no ue5-dev package ships. Do not edit by hand:
 # change the rules there and regenerate. Changes:
-#   - loads a shipped large map (Town15, else Mine_01 or Town10HD_Opt) instead of Town05
+#   - loads a shipped large map (Town15, else Mine_01 or Town10HD_Opt) instead of Town05, before switching to synchronous mode rather than after (loading in synchronous mode waits for ticks that never come)
 #   - the scenarios' start transforms and the stop conditions on location and yaw, written for Town05 (x = 32, heading +y), go through a MapFrame
 #
 #!/usr/bin/env python
@@ -59,19 +59,28 @@ class MapFrame:
     upstream assertions on `.x`, `.y` and yaw still hold.
     """
 
-    def __init__(self, world, origin, heading, length):
+    def __init__(self, world, origin, heading, length, side=None):
         self.origin = origin
-        wp, self.run = self._straight(world.get_map(), length)
+        wp, self.run = self._straight(world.get_map(), length, side)
         transform = wp.transform
         self.base = transform.location
         self.dyaw = transform.rotation.yaw - heading
         self.theta = _math.radians(self.dyaw)
 
     @staticmethod
-    def _straight(m, length, step=5.0):
+    def _beside(wp, side):
+        """A same-direction driving lane on `side` ("left"/"right") of wp."""
+        other = wp.get_left_lane() if side == "left" else wp.get_right_lane()
+        return (other is not None and other.lane_type == carla.LaneType.Driving
+                and (other.lane_id > 0) == (wp.lane_id > 0))
+
+    @staticmethod
+    def _straight(m, length, side=None, step=5.0):
         best = None
         for wp in m.generate_waypoints(step):
             if wp.is_junction or wp.lane_type != carla.LaneType.Driving:
+                continue
+            if side and not MapFrame._beside(wp, side):
                 continue
             yaw0 = wp.transform.rotation.yaw
             run, cur = 0.0, wp
@@ -87,6 +96,8 @@ class MapFrame:
                 best = (wp, run)
             if run >= length:
                 break
+        if best is None and side:  # no such lane anywhere: any straight road
+            return MapFrame._straight(m, length, None, step)
         return best
 
     def _rot(self, dx, dy, sign=1.0):
@@ -402,6 +413,11 @@ def main(arg):
     world = client.get_world()
 
     try:
+        if world.get_map().name.split("/")[-1] != shipped_map(client, LARGE_MAPS):
+            client.load_world(shipped_map(client, LARGE_MAPS), False)
+        world = client.get_world()
+        global FRAME
+        FRAME = MapFrame(world, (32, -180), 90.0, 250.0)
         # Setting the world and the spawn properties
         original_settings = world.get_settings()
         settings = world.get_settings()
@@ -411,11 +427,6 @@ def main(arg):
         settings.synchronous_mode = True
         world.apply_settings(settings)
 
-        if world.get_map().name.split("/")[-1] != shipped_map(client, LARGE_MAPS):
-            client.load_world(shipped_map(client, LARGE_MAPS), False)
-        world = client.get_world()
-        global FRAME
-        FRAME = MapFrame(world, (32, -180), 90.0, 250.0)
 
         for bp_veh in world.get_blueprint_library().filter(args.filter):
             print("-------------------------------------------")
