@@ -31,7 +31,7 @@ from .sensor import (Sensor, SensorData, SensorDataType, Image, LidarMeasurement
                      SemanticLidarDetection, LaneInvasionEvent, LaneInvasionSensor,
                      ServerSideSensor, ClientSideSensor,
                      ObstacleDetectionEvent, DVSEventArray, DVSEvent, OpticalFlowImage,
-                     OpticalFlowPixel, FakeImage)
+                     OpticalFlowPixel, FakeImage, RawData)
 from .v2x import (CAMEvent, CAMMessage, CAM, ItsPduHeader, ValueConfidence, ReferencePosition,
                   BasicVehicleContainerHighFrequency, BasicVehicleContainerLowFrequency,
                   CenDsrcTollingZone, ProtectedCommunicationZone, PathPoint, CustomV2XEvent,

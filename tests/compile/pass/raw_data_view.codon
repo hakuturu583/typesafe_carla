@@ -1,0 +1,39 @@
+# Issue #78: raw_data is the Python API's read-only buffer property on every
+# measurement that has one; raw_data_ptr() keeps the zero-copy pointer.
+import numpy as np
+import typesafe_carla as carla
+
+def total(view: carla.RawData) -> int:
+    n: int = len(view)
+    first: int = view[0]
+    tail: carla.RawData = view[-4:]
+    reds: carla.RawData = view[2::4]
+    copied: str = view.tobytes()
+    as_str: str = str(view)  # the repr, as in Python
+    h: int = hash(view)
+    values: List[int] = view.tolist()
+    s = 0
+    for b in reds:
+        s += b
+    return (n + first + len(tail) + s + len(copied) + len(as_str) + h + len(values) + view.nbytes +
+            int(view.readonly) + int(7 in view) + int(view == copied) + int(view != tail))
+
+def measure(data: carla.SensorData) -> int:
+    image = data.as_image()
+    pixels = np.frombuffer(image.raw_data.tobytes(), dtype=np.uint8).reshape(
+        (image.height, image.width, 4))
+    ptr: Ptr[u8] = image.raw_data_ptr()
+    n = total(image.raw_data) + int(pixels[0, 0, 2]) + int(ptr[0])
+    n += total(data.as_lidar().raw_data) + int(data.as_lidar().raw_data_ptr()[0])
+    n += total(data.as_semantic_lidar().raw_data) + total(data.as_radar().raw_data)
+    n += total(data.as_dvs().raw_data)
+    flow = data.as_optical_flow()
+    n += total(flow.raw_data)
+    fake: carla.FakeImage = flow.get_color_coded_flow()
+    n += total(fake.raw_data) + int(fake.raw_data_ptr()[0])
+    xy = np.frombuffer(flow.raw_data.tobytes(), dtype=np.float32)
+    return n + int(xy[0])
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(measure(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()
+              .wait_for_data(1.0)))

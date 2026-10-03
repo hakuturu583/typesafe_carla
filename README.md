@@ -48,7 +48,7 @@ Milestones (design section 43):
 | Waypoint | `id`, `transform`, `road_id`, `section_id`, `lane_id`, `s`, `is_junction`, `is_intersection`, `junction_id`, `lane_width`, `lane_type`, `lane_change` (`LaneChange`), `left_lane_marking` / `right_lane_marking` (→ `Optional[LaneMarking]`: `LaneMarkingType`, `LaneMarkingColor`), `is_rht`, `next`, `previous`, `next_until_lane_end`, `previous_until_lane_start`, `get_left_lane` / `get_right_lane` / `get_junction` (→ `Optional`), `get_landmarks`, `get_landmarks_of_type` |
 | Landmark | every field of the Python API (`id`, `name`, `type`, `road_id`, `s`, `t`, `distance`, `orientation` (`LandmarkOrientation`), `h_offset`, `pitch`, `roll`, `is_dynamic`, ...), `waypoint` (→ `Optional[Waypoint]`), `get_lane_validities`; `LandmarkType` |
 | Snapshots | `WorldSnapshot` (`id`, `frame` / `frame_count`, `timestamp`, `elapsed_seconds`, `delta_seconds`, `platform_timestamp`, `find` → `Optional`, `has_actor`, indexing, iteration), `ActorSnapshot`, `Timestamp` (`frame` / `frame_count`) |
-| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`, `enable_for_ros` / `disable_for_ros` / `is_enabled_for_ros`, `listen_to_gbuffer` / `is_listening_gbuffer` / `stop_gbuffer` (`GBufferTextureID`; issue #33); `SensorData` (`frame`, `frame_number`, `timestamp`, `transform`) with checked `as_image()` / `as_lidar()` / `as_semantic_lidar()` / `as_radar()` / `as_gnss()` / `as_imu()` / `as_collision()` / `as_obstacle()` / `as_lane_invasion()` / `as_dvs()` / `as_optical_flow()`; `Image` (zero-copy `raw_data()`, indexing and iteration → `Color`, `pixel`, `convert(ColorConverter)`, `save_to_disk(path, ColorConverter)` as PNG), `ColorConverter` (`Raw`, `Depth`, `LogarithmicDepth`, `CityScapesPalette`), `LidarMeasurement` (zero-copy `raw_data()` / `raw_points()`, iteration, `get_point_count`, `save_to_disk` as PLY), `SemanticLidarMeasurement` / `SemanticLidarDetection`, `RadarMeasurement` / `RadarDetection`, `DVSEventArray` / `DVSEvent` (`to_image`, `to_array`, `to_array_x/y/t/pol`), `OpticalFlowImage` / `OpticalFlowPixel` (`get_color_coded_flow` → `FakeImage`) — all zero-copy views of LibCarla's buffers; `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` / `ObstacleDetectionEvent` (`actor`, `other_actor` → `Optional[Actor]`, `distance`), `LaneInvasionEvent` (`crossed_lane_markings` → `List[LaneMarking]`, `actor`), `LaneInvasionSensor`, `ServerSideSensor`, `ClientSideSensor`, `LaneMarking` / `LaneMarkingType` / `LaneMarkingColor` / `LaneChange`; V2X (issue #42, LibCarla ue5-dev only): `Sensor.send(CustomV2XBytes)` / `send(str)`, `as_cam_event()` → `CAMEvent` (`get_message_count`, indexing, iteration → `CAMMessage`: `power`, `get()` → typed `CAM`), `as_custom_v2x_event()` → `CustomV2XEvent` (→ `CustomV2XData`: `power`, `get()` → `CustomV2XMessage`), `CustomV2XBytes` (`get_string` / `set_string` / `get_bytes` / `set_bytes` / `data_size` / `max_data_size`) |
+| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`, `enable_for_ros` / `disable_for_ros` / `is_enabled_for_ros`, `listen_to_gbuffer` / `is_listening_gbuffer` / `stop_gbuffer` (`GBufferTextureID`; issue #33); `SensorData` (`frame`, `frame_number`, `timestamp`, `transform`) with checked `as_image()` / `as_lidar()` / `as_semantic_lidar()` / `as_radar()` / `as_gnss()` / `as_imu()` / `as_collision()` / `as_obstacle()` / `as_lane_invasion()` / `as_dvs()` / `as_optical_flow()`; `Image` (`raw_data` → read-only `RawData` view, zero-copy `raw_data_ptr()`, indexing and iteration → `Color`, `pixel`, `convert(ColorConverter)`, `save_to_disk(path, ColorConverter)` as PNG), `ColorConverter` (`Raw`, `Depth`, `LogarithmicDepth`, `CityScapesPalette`), `LidarMeasurement` (`raw_data`, zero-copy `raw_data_ptr()` / `raw_points()`, iteration, `get_point_count`, `save_to_disk` as PLY), `SemanticLidarMeasurement` / `SemanticLidarDetection`, `RadarMeasurement` / `RadarDetection`, `DVSEventArray` / `DVSEvent` (`to_image`, `to_array`, `to_array_x/y/t/pol`), `OpticalFlowImage` / `OpticalFlowPixel` (`get_color_coded_flow` → `FakeImage`) — all zero-copy views of LibCarla's buffers; `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` / `ObstacleDetectionEvent` (`actor`, `other_actor` → `Optional[Actor]`, `distance`), `LaneInvasionEvent` (`crossed_lane_markings` → `List[LaneMarking]`, `actor`), `LaneInvasionSensor`, `ServerSideSensor`, `ClientSideSensor`, `LaneMarking` / `LaneMarkingType` / `LaneMarkingColor` / `LaneChange`; V2X (issue #42, LibCarla ue5-dev only): `Sensor.send(CustomV2XBytes)` / `send(str)`, `as_cam_event()` → `CAMEvent` (`get_message_count`, indexing, iteration → `CAMMessage`: `power`, `get()` → typed `CAM`), `as_custom_v2x_event()` → `CustomV2XEvent` (→ `CustomV2XData`: `power`, `get()` → `CustomV2XMessage`), `CustomV2XBytes` (`get_string` / `set_string` / `get_bytes` / `set_bytes` / `data_size` / `max_data_size`) |
 | Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyWalkerControl`, `ApplyTransform`, `ApplyLocation`, `ApplyTargetVelocity`, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, `SetAutopilot`, `SetSimulatePhysics`, `SetEnableGravity`, `SetVehicleLightState`, `SetTrafficLightState`, `ApplyVehicleAckermannControl`, `ShowDebugTelemetry`; `CommandResponse` |
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, `filter_by_attribute`, indexing, iteration), `ActorBlueprint` (`id`, `tags`, `has_tag`, `match_tags`, `has_attribute`, `get_attribute`, `set_attribute`, `len()` and iteration over its attributes), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`, `recommended_values`) |
 | Values | `TextureColor`, `TextureFloatColor`, `FloatColor`, `MaterialParameter`, `CityObjectLabel`, `ActorState` (issue #19), `MapLayer`, `EnvironmentObject`, `LabelledPoint` (issue #21), `Location`, `Rotation` (`get_forward_vector` / `get_right_vector` / `get_up_vector`, `get_normalized`), `Transform` (`get_forward_vector` / `get_right_vector` / `get_up_vector`, `get_matrix`, `get_inverse_matrix`, `transform` (a point or a list of points, in place), `transform_vector`), `Vector2D` (`length`, `squared_length`, `make_unit_vector`), `Vector3D`, `Velocity`, `AngularVelocity`, `Acceleration`, `Quaternion`, `BoundingBox` (`contains`, `get_local_vertices`, `get_world_vertices`), `VehicleControl`, `VehiclePhysicsControl` and `WheelPhysicsControl` (all fields: curves, gear ratios, wheels), `WorldSettings` (every LibCarla field, including `max_culling_distance`, `deterministic_ragdolls`, `tile_stream_distance`, `actor_active_distance`, `spectator_as_ego`), `Color`, `VehicleAckermannControl`, `AckermannControllerSettings`, `VehicleTelemetryData`, `WheelTelemetryData`, `WalkerBoneControlIn` / `WalkerBoneControlOut`, `bone_transform` / `bone_transform_out`; enumerations `VehicleDoor`, `VehicleWheelLocation`, `VehicleFailureState`, `AttachmentType`; constants `GBufferTextureID` |
@@ -206,7 +206,7 @@ Notes on Milestone 5:
 
 Notes on Milestone 2:
 - **No callbacks on LibCarla threads (design §15).** LibCarla's threads only fill a per-sensor queue. `listen(callback)` runs the callback on the program's own thread, at `World.tick()`, `World.wait_for_tick()`, `Client.apply_batch(_sync)(do_tick=True)` and `carla.dispatch_sensor_callbacks()`; its queue is unbounded by default. `stop()`, `destroy()` (through any handle) and batch `DestroyActor` unregister it. `listen()` / `listen(queue_size)` is polling mode: the program reads a bounded queue (64 by default) with `poll()` / `wait_for_data()`, and the oldest measurement is dropped when it is full (`dropped_count`). `queue_size=0` means unbounded in both modes. Call `stop()` (or destroy the sensor) when done.
-- **Zero copy (design §16).** `Image.raw_data()` (BGRA) and `LidarMeasurement.raw_points()` point into LibCarla's buffer and stay valid while the measurement object is alive.
+- **Zero copy (design §16).** `Image.raw_data_ptr()` (BGRA) and `LidarMeasurement.raw_points()` point into LibCarla's buffer and stay valid while the measurement object is alive. The `raw_data` property (issue #78) is a read-only view of the same bytes that keeps the measurement alive itself.
 - `World.spawn_actor(..., attach_to=...)` accepts any actor subclass (e.g. a `Vehicle`) or an `Optional` of one, and rejects non-actors at compile time.
 
 Notes on Milestone 1:
@@ -590,12 +590,30 @@ Deliberate differences, all in favour of static checking:
   not compile; the Python API answers `False`.
 
 * **Sensor data (issue #24).**
-  - `raw_data()` is a method returning a zero-copy `Ptr[u8]` (with
-    `raw_size()` in bytes), not a `memoryview`. Reading an element
-    (`image[i]`, `radar[i]`, ...) gives a copy; assigning one (`image[i] =
+  - `raw_data` is a property, as in the Python API (issue #78), on `Image`,
+    `LidarMeasurement`, `SemanticLidarMeasurement`, `RadarMeasurement`,
+    `DVSEventArray`, `OpticalFlowImage` and `FakeImage`. It returns a
+    `RawData`, a read-only zero-copy view standing in for the `memoryview`
+    (`len`, indexing, slicing with any step, iteration, `in`, `==`, `hash`,
+    `nbytes`, `readonly`, `tolist()`, `tobytes()`); writing through it is a
+    compile error, and it keeps the measurement's buffer alive. `repr` /
+    `str` give `<memory of N bytes>` where a `memoryview` gives
+    `<memory at 0x...>`. For a `FakeImage`, `append` / `extend` move the
+    bytes to a new buffer, so an earlier view keeps showing the bytes it was
+    taken of (a Python `memoryview` would block the resize instead); `del`
+    shifts them in place, and an earlier view sees the shifted bytes.
+    `FakeImage(width, height, fov, data)` copies `data`: changing the
+    caller's list afterwards does not change the image. Codon
+    has no `bytes`: `bytes(m.raw_data)` becomes `m.raw_data.tobytes()` (a
+    copy in a `str`), and, as Codon's `np.frombuffer`
+    takes only a `str`, `np.frombuffer(m.raw_data, dtype=np.uint8)` becomes
+    `np.frombuffer(m.raw_data.tobytes(), dtype=np.uint8)`. The zero-copy
+    pointer is `raw_data_ptr()` (a `Ptr[u8]`, valid while the measurement is
+    alive), with `raw_size()` in bytes. Reading an element (`image[i]`,
+    `radar[i]`, ...) gives a copy; assigning one (`image[i] =
     carla.Color(...)`, issue #33) writes into LibCarla's buffer, as in the
-    Python API, so `raw_data()` sees it. A field that does not fit LibCarla's
-    element type (a color component outside [0, 255], a DVS `x` beyond
+    Python API, so `raw_data` views see it. A field that does not fit
+    LibCarla's element type (a color component outside [0, 255], a DVS `x` beyond
     uint16, a negative `object_idx`) raises `CarlaError`, where the Python
     API raises `OverflowError` / `TypeError`. Negative indices count from the
     end (the Python API rejects them).
@@ -623,7 +641,7 @@ Deliberate differences, all in favour of static checking:
   - `LaneInvasionSensor`, `ServerSideSensor` and `ClientSideSensor` are the
     same type as `Sensor` (issue #33). In the Python API they are subclasses.
   - `OpticalFlowImage.get_color_coded_flow()` returns a `FakeImage` (the
-    Python API's name) with `raw_data()`, `pixel(x, y)` and, as the Python
+    Python API's name) with `raw_data`, `pixel(x, y)` and, as the Python
     API's byte vector, indexing, assignment, `del`, iteration, `in`, `append`
     and `extend` on single bytes (issue #33; slices are not supported).
   - DVS events are packed 13-byte records in LibCarla; `DVSEventArray` reads

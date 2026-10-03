@@ -13,7 +13,7 @@ def perceive(world: carla.World, vehicle: carla.Vehicle) -> float:
     camera.listen(8)
     lidar.listen()
     image: carla.Image = camera.wait_for_data(1.0).as_image()
-    pixels: Ptr[u8] = image.raw_data()
+    pixels: Ptr[u8] = image.raw_data_ptr()
     sweep: carla.LidarMeasurement = lidar.wait_for_data(1.0).as_lidar()
     nearest = 1e9
     for p in sweep:

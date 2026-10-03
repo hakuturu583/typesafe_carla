@@ -23,7 +23,7 @@ def perceive(world: carla.World, vehicle: carla.Vehicle) -> float:
 
     sweep: carla.LidarMeasurement = sensors[1].wait_for_data(1.0).as_lidar()
     ply: str = sweep.save_to_disk("out/sweep.ply")
-    raw: Ptr[u8] = sweep.raw_data()
+    raw: Ptr[u8] = sweep.raw_data_ptr()
     total += float(len(ply) + int(raw[0]))
 
     radar: carla.RadarMeasurement = sensors[2].wait_for_data(1.0).as_radar()
