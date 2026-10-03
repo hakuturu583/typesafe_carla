@@ -62,6 +62,24 @@ try:
                     assert any(b.id == bp.id for b in matching)
     print("attributes with recommended values", with_values)
     assert with_values > 0
+
+    # WeatherParameters presets applied with set_weather. CARLA 0.10.0 can
+    # run without weather (is_weather_enabled() False): set_weather is then
+    # ignored, as with the Python API.
+    original = world.get_weather()
+    enabled = world.is_weather_enabled()
+    print("weather enabled", enabled)
+    for preset in [carla.WeatherParameters.HardRainNoon, carla.WeatherParameters.ClearSunset,
+                   carla.WeatherParameters.WetCloudyNight]:
+        world.set_weather(preset)
+        world.wait_for_tick(10.0)
+        got = world.get_weather()
+        print("weather", got)
+        if enabled:
+            assert abs(got.precipitation - preset.precipitation) < 0.01
+            assert abs(got.cloudiness - preset.cloudiness) < 0.01
+            assert abs(got.sun_altitude_angle - preset.sun_altitude_angle) < 0.01
+    world.set_weather(original)
 finally:
     for a in spawned:
         a.destroy()

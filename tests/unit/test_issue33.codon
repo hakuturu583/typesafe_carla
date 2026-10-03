@@ -55,4 +55,34 @@ model3.set_attribute("role_name", "hero")
 assert [str(a) for a in model3 if a.id == "role_name"] == ["hero"]
 assert carla.ActorAttribute("x", carla.ActorAttributeType.Int, False, "1").recommended_values == List[str]()
 
+# WeatherParameters presets as class attributes: LibCarla's values (the
+# same as preset(name)), one shared object each, as in the Python API.
+presets = [
+    ("ClearNight", carla.WeatherParameters.ClearNight), ("ClearNoon", carla.WeatherParameters.ClearNoon),
+    ("ClearSunset", carla.WeatherParameters.ClearSunset), ("CloudyNight", carla.WeatherParameters.CloudyNight),
+    ("CloudyNoon", carla.WeatherParameters.CloudyNoon), ("CloudySunset", carla.WeatherParameters.CloudySunset),
+    ("Default", carla.WeatherParameters.Default), ("DustStorm", carla.WeatherParameters.DustStorm),
+    ("HardRainNight", carla.WeatherParameters.HardRainNight), ("HardRainNoon", carla.WeatherParameters.HardRainNoon),
+    ("HardRainSunset", carla.WeatherParameters.HardRainSunset), ("MidRainSunset", carla.WeatherParameters.MidRainSunset),
+    ("MidRainyNight", carla.WeatherParameters.MidRainyNight), ("MidRainyNoon", carla.WeatherParameters.MidRainyNoon),
+    ("SoftRainNight", carla.WeatherParameters.SoftRainNight), ("SoftRainNoon", carla.WeatherParameters.SoftRainNoon),
+    ("SoftRainSunset", carla.WeatherParameters.SoftRainSunset), ("WetCloudyNight", carla.WeatherParameters.WetCloudyNight),
+    ("WetCloudyNoon", carla.WeatherParameters.WetCloudyNoon), ("WetCloudySunset", carla.WeatherParameters.WetCloudySunset),
+    ("WetNight", carla.WeatherParameters.WetNight), ("WetNoon", carla.WeatherParameters.WetNoon),
+    ("WetSunset", carla.WeatherParameters.WetSunset)
+]
+assert len(presets) == 23
+for name, weather in presets:
+    assert weather == carla.WeatherParameters.preset(name), name
+assert carla.WeatherParameters.HardRainNoon.precipitation == 100.0
+assert carla.WeatherParameters.DustStorm.dust_storm == 100.0
+assert carla.WeatherParameters.ClearNight.sun_altitude_angle == -90.0
+world.set_weather(carla.WeatherParameters.WetCloudySunset)
+assert world.get_weather() == carla.WeatherParameters.WetCloudySunset
+shared = carla.WeatherParameters.SoftRainNoon
+shared.cloudiness = 42.0
+assert carla.WeatherParameters.SoftRainNoon.cloudiness == 42.0
+assert carla.WeatherParameters.preset("SoftRainNoon").cloudiness == 20.0
+shared.cloudiness = 20.0
+
 print("OK")

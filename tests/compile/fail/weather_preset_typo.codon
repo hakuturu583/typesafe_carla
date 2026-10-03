@@ -1,0 +1,9 @@
+# The weather presets are class attributes: a misspelt one does not compile
+# (the Python API raises AttributeError at run time).
+# expect-error: 'WeatherParameters' object has no attribute 'ClearMidday'
+import typesafe_carla as carla
+
+def sunny(world: carla.World):
+    world.set_weather(carla.WeatherParameters.ClearMidday)
+
+sunny(carla.Client("localhost", 2000).get_world())

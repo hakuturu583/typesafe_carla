@@ -25,9 +25,16 @@ def blueprint_attributes(bp: carla.ActorBlueprint):
     color: List[str] = bp.get_attribute("color").recommended_values
     print(count, ids, color)
 
+def weather_presets(world: carla.World):
+    noon: carla.WeatherParameters = carla.WeatherParameters.ClearNoon
+    world.set_weather(carla.WeatherParameters.HardRainSunset)
+    storm = carla.WeatherParameters.DustStorm
+    print(noon.cloudiness, storm.dust_storm, carla.WeatherParameters.Default == noon)
+
 world = carla.Client("localhost", 2000).get_world()
 actors = world.get_actors()
 actor_world(actors[0], actors[0].as_vehicle())
 light_state(actors[2].as_traffic_light())
 sensor_class_names(actors[5].as_sensor())
 blueprint_attributes(world.get_blueprint_library().find("vehicle.tesla.model3"))
+weather_presets(world)

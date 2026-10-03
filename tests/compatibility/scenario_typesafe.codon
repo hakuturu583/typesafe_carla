@@ -515,3 +515,18 @@ out("i33_world", str(int(world.get_spectator().get_world().id == world.id)) + ",
 bp33 = lib.find("vehicle.lincoln.mkz")
 attrs33 = sorted([(a.id, "|".join(a.recommended_values)) for a in bp33])
 out("i33_blueprint", str(len(bp33)) + ";" + ";".join([k + ":" + v for k, v in attrs33]))
+presets33 = [
+    carla.WeatherParameters.ClearNight, carla.WeatherParameters.ClearNoon, carla.WeatherParameters.ClearSunset,
+    carla.WeatherParameters.CloudyNight, carla.WeatherParameters.CloudyNoon, carla.WeatherParameters.CloudySunset,
+    carla.WeatherParameters.Default, carla.WeatherParameters.DustStorm, carla.WeatherParameters.HardRainNight,
+    carla.WeatherParameters.HardRainNoon, carla.WeatherParameters.HardRainSunset, carla.WeatherParameters.MidRainSunset,
+    carla.WeatherParameters.MidRainyNight, carla.WeatherParameters.MidRainyNoon, carla.WeatherParameters.SoftRainNight,
+    carla.WeatherParameters.SoftRainNoon, carla.WeatherParameters.SoftRainSunset, carla.WeatherParameters.WetCloudyNight,
+    carla.WeatherParameters.WetCloudyNoon, carla.WeatherParameters.WetCloudySunset, carla.WeatherParameters.WetNight,
+    carla.WeatherParameters.WetNoon, carla.WeatherParameters.WetSunset
+]
+out("i33_weather_presets", ";".join([",".join([fmt(x) for x in (
+    w.cloudiness, w.precipitation, w.precipitation_deposits, w.wind_intensity, w.sun_azimuth_angle,
+    w.sun_altitude_angle, w.fog_density, w.fog_distance, w.fog_falloff, w.wetness,
+    w.scattering_intensity, w.mie_scattering_scale, w.rayleigh_scattering_scale, w.dust_storm)])
+    for w in presets33]))
