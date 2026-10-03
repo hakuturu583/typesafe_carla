@@ -31,6 +31,15 @@ extern "C" {
 #define TSC_API
 #endif
 
+/* Marks an anonymous union (a C11 / C++ feature) so that strict C99
+ * (-std=c99 -pedantic-errors) accepts it too; GCC and Clang support it there
+ * as an extension. */
+#if defined(__GNUC__) && !defined(__cplusplus)
+#define TSC_ANONYMOUS_UNION __extension__
+#else
+#define TSC_ANONYMOUS_UNION
+#endif
+
 /* ABI version. Bump MAJOR on any incompatible change to this header.
  * 2.0: tsc_command_t gained `scalar` (and new command types), Milestone 4.
  * 2.1: tsc_sensor_pending_count; tsc_sensor_listen queue_capacity 0 = unbounded.
@@ -58,8 +67,10 @@ extern "C" {
  * 4.4: actor world, blueprint attribute ids and recommended values, sensor ROS
  *      and G-buffer streams (#33).
  * 4.5: V2X: tsc_sensor_send, CAM and custom V2X events (#42).
+ * 4.6: batch commands APPLY_VEHICLE_PHYSICS_CONTROL and APPLY_WALKER_STATE;
+ *      tsc_command_t.physics_control shares storage with blueprint (#79).
  * 4.7: tsc_queue_signal_count / _wait / _notify, for a background callback
- *      dispatcher (#86). (4.6 is reserved for #88, developed in parallel.) */
+ *      dispatcher (#86). */
 #define TSC_ABI_VERSION_MAJOR 4
 #define TSC_ABI_VERSION_MINOR 7
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
@@ -658,7 +669,10 @@ typedef enum {
   TSC_COMMAND_APPLY_VEHICLE_ACKERMANN_CONTROL = 18, /* vector: (steer, steer_speed, speed),
                                                        transform.location: (acceleration,
                                                        jerk, unused) */
-  TSC_COMMAND_SHOW_DEBUG_TELEMETRY = 19        /* flag */
+  TSC_COMMAND_SHOW_DEBUG_TELEMETRY = 19,       /* flag */
+  /* ABI 4.6 (#79) */
+  TSC_COMMAND_APPLY_VEHICLE_PHYSICS_CONTROL = 20, /* physics_control */
+  TSC_COMMAND_APPLY_WALKER_STATE = 21          /* transform, scalar: speed */
 } tsc_command_type_t;
 
 /* Flat tagged record; only the fields the type uses are read.
@@ -671,14 +685,23 @@ typedef struct {
   int32_t then_of;
   uint32_t actor_id;
   uint32_t parent_id; /* SPAWN_ACTOR: 0 = no parent */
-  const tsc_actor_blueprint_t *blueprint; /* SPAWN_ACTOR */
-  tsc_transform_t transform;              /* SPAWN_ACTOR, APPLY_TRANSFORM */
+  /* An anonymous union: its members are accessed directly (cmd.blueprint,
+   * cmd.physics_control) and share one pointer slot (ABI 4.6). */
+  TSC_ANONYMOUS_UNION union {
+    const tsc_actor_blueprint_t *blueprint; /* SPAWN_ACTOR */
+    /* APPLY_VEHICLE_PHYSICS_CONTROL (ABI 4.6). Read during the call only; the
+     * whole control is sent (no read-modify-write as in
+     * tsc_vehicle_apply_physics_control), so wheel_count should equal the
+     * vehicle's. mass must be positive, values finite (TSC_INVALID_ARGUMENT). */
+    const tsc_vehicle_physics_control_t *physics_control;
+  };
+  tsc_transform_t transform;              /* SPAWN_ACTOR, APPLY_TRANSFORM, APPLY_WALKER_STATE */
   tsc_vehicle_control_t control;          /* APPLY_VEHICLE_CONTROL */
   tsc_vector3d_t vector;                  /* APPLY_TARGET_VELOCITY */
   int32_t flag;                           /* SET_AUTOPILOT, SET_SIMULATE_PHYSICS, ... */
   uint16_t tm_port;                       /* SET_AUTOPILOT */
   uint16_t reserved0;
-  double scalar;                          /* APPLY_WALKER_CONTROL: speed (ABI 2.0) */
+  double scalar;                          /* APPLY_WALKER_CONTROL, APPLY_WALKER_STATE: speed */
 } tsc_command_t;
 
 typedef struct {

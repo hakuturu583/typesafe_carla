@@ -698,6 +698,25 @@ static void test_mock_milestone1(void) {
   CHECK_OK(tsc_world_get_actor(world, responses[0].actor_id, &actor));
   CHECK_OK(tsc_actor_as_vehicle(actor, &vehicle));
   check_physics_control(vehicle);
+
+  /* Batch physics control (ABI 4.6): the union pointer is required, and the
+   * vehicle's current control applies back unchanged. */
+  tsc_command_t pcmd;
+  memset(&pcmd, 0, sizeof pcmd);
+  pcmd.type = TSC_COMMAND_APPLY_VEHICLE_PHYSICS_CONTROL;
+  pcmd.then_of = -1;
+  pcmd.actor_id = responses[0].actor_id;
+  CHECK(tsc_client_apply_batch(client, &pcmd, 1, 0) == TSC_INVALID_ARGUMENT);
+  tsc_physics_control_t *snapshot = NULL;
+  tsc_vehicle_physics_control_t view;
+  CHECK_OK(tsc_vehicle_get_physics_control(vehicle, &snapshot));
+  CHECK_OK(tsc_physics_control_view(snapshot, &view));
+  pcmd.physics_control = &view;
+  CHECK_OK(tsc_client_apply_batch_sync(client, &pcmd, 1, 0, responses + 1, 1, &count));
+  CHECK(count == 1 && !responses[1].has_error);
+  tsc_string_free(&responses[1].error);
+  tsc_handle_release(H(snapshot));
+
   tsc_bounding_box_t box;
   CHECK_OK(tsc_actor_get_bounding_box(actor, &box));
   CHECK(box.extent.x > 1.0);

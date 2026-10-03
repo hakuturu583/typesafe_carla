@@ -44,7 +44,7 @@ from ._ffi import (Handle, CString, CSensorDataInfo, CImage, CLidar, CLidarPoint
                    tsc_sensor_data_as_optical_flow, tsc_optical_flow_color_coded, take_string,
                    TSC_DVS_EVENT_SIZE, TSC_INVALID_ARGUMENT, TSC_ERROR)
 from .errors import _check, CarlaError, _normalize_index
-from .geometry import Location, Transform, Vector3D, _location_arg
+from .geometry import Location, Transform, Vector3D, _location_arg, _Owned
 from ._fmt import fmt_f, fmt_f32, fmt_b01, fmt_fields
 from .blueprint import Color
 from .actor import Actor, _make_actor
@@ -394,14 +394,23 @@ class Image(_ArrayMeasurement[_CBgra]):
         return _head("Image", self) + f", size={self.width}x{self.height})"
 
 class LidarDetection:
-    point: Location
+    _point: Location
     intensity: float
 
     def __init__(self, point = Location(), intensity: float = 0.0):
         """point: Location (a Vector3D is accepted as in the Python API)."""
-        self.point = _location_arg(
+        self._point = _location_arg(
             point, "[tsc-compat] a Vector3D passed as a Location to LidarDetection(point)")
         self.intensity = intensity
+
+    @property
+    def point(self) -> Location:
+        return self._point
+
+    @point.setter
+    def point(self, v):
+        """v: Location (a Vector3D is accepted, as in the Python API); stored as a copy."""
+        self._point = _location_arg(v, "[tsc-compat] a Vector3D passed as a Location to LidarDetection.point")
 
     def __repr__(self) -> str:
         return (f"LidarDetection(x={fmt_f32(self.point.x)}, y={fmt_f32(self.point.y)}, "
@@ -449,7 +458,7 @@ class LidarMeasurement(_ArrayMeasurement[CLidarPoint]):
         return _save_point_cloud(self.data, path)
 
     def _item(self, p: CLidarPoint) -> LidarDetection:
-        return LidarDetection(Location(float(p.x), float(p.y), float(p.z)), float(p.intensity))
+        return LidarDetection(_Owned(Location(float(p.x), float(p.y), float(p.z))), float(p.intensity))
 
     def _element(self, d: LidarDetection) -> CLidarPoint:
         return CLidarPoint(float32(d.point.x), float32(d.point.y), float32(d.point.z), float32(d.intensity))
@@ -458,7 +467,7 @@ class LidarMeasurement(_ArrayMeasurement[CLidarPoint]):
         return _head("LidarMeasurement", self) + f", number_of_points={len(self)})"
 
 class SemanticLidarDetection:
-    point: Location
+    _point: Location
     cos_inc_angle: float
     object_idx: int  # id of the actor hit (0 for the static scene)
     object_tag: int  # semantic tag of the object hit
@@ -466,11 +475,20 @@ class SemanticLidarDetection:
     def __init__(self, point = Location(), cos_inc_angle: float = 0.0, object_idx: int = 0,
                  object_tag: int = 0):
         """point: Location (a Vector3D is accepted as in the Python API)."""
-        self.point = _location_arg(
+        self._point = _location_arg(
             point, "[tsc-compat] a Vector3D passed as a Location to SemanticLidarDetection(point)")
         self.cos_inc_angle = cos_inc_angle
         self.object_idx = object_idx
         self.object_tag = object_tag
+
+    @property
+    def point(self) -> Location:
+        return self._point
+
+    @point.setter
+    def point(self, v):
+        """v: Location (a Vector3D is accepted, as in the Python API); stored as a copy."""
+        self._point = _location_arg(v, "[tsc-compat] a Vector3D passed as a Location to SemanticLidarDetection.point")
 
     def __repr__(self) -> str:
         return (f"SemanticLidarDetection(x={fmt_f32(self.point.x)}, y={fmt_f32(self.point.y)}, "
@@ -504,7 +522,7 @@ class SemanticLidarMeasurement(_ArrayMeasurement[CSemanticLidarDetection]):
         return _save_point_cloud(self.data, path)
 
     def _item(self, p: CSemanticLidarDetection) -> SemanticLidarDetection:
-        return SemanticLidarDetection(Location(float(p.x), float(p.y), float(p.z)),
+        return SemanticLidarDetection(_Owned(Location(float(p.x), float(p.y), float(p.z))),
                                       float(p.cos_inc_angle), int(p.object_idx),
                                       int(p.object_tag))
 
@@ -855,15 +873,24 @@ class GnssMeasurement(_Measurement):
                 f"lon={fmt_f(self.longitude)}, alt={fmt_f(self.altitude)})")
 
 class IMUMeasurement(_Measurement):
-    accelerometer: Vector3D  # m/s^2
-    gyroscope: Vector3D  # rad/s
+    _accelerometer: Vector3D  # m/s^2
+    _gyroscope: Vector3D  # rad/s
     compass: float  # radians from north
 
     def __init__(self, data: SensorData, c: CImu):
         self.data = data
-        self.accelerometer = Vector3D._from_c(c.accelerometer)
-        self.gyroscope = Vector3D._from_c(c.gyroscope)
+        self._accelerometer = Vector3D._from_c(c.accelerometer)
+        self._gyroscope = Vector3D._from_c(c.gyroscope)
         self.compass = c.compass
+
+    # Copies, as the Python API's getters return values.
+    @property
+    def accelerometer(self) -> Vector3D:
+        return Vector3D(self._accelerometer)
+
+    @property
+    def gyroscope(self) -> Vector3D:
+        return Vector3D(self._gyroscope)
 
     def __repr__(self) -> str:
         return (_head("IMUMeasurement", self) + f", accelerometer={self.accelerometer}, "
@@ -872,13 +899,18 @@ class IMUMeasurement(_Measurement):
 class CollisionEvent(_Measurement):
     actor_id: int  # the actor the sensor is attached to
     other_actor_id: int  # 0 when the other side is not an actor (e.g. static geometry)
-    normal_impulse: Vector3D
+    _normal_impulse: Vector3D
 
     def __init__(self, data: SensorData, c: CCollision):
         self.data = data
         self.actor_id = int(c.actor_id)
         self.other_actor_id = int(c.other_actor_id)
-        self.normal_impulse = Vector3D._from_c(c.normal_impulse)
+        self._normal_impulse = Vector3D._from_c(c.normal_impulse)
+
+    @property
+    def normal_impulse(self) -> Vector3D:
+        """A copy, as the Python API's getter returns a value."""
+        return Vector3D(self._normal_impulse)
 
     @property
     def actor(self) -> Optional[Actor]:

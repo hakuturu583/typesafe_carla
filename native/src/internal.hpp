@@ -673,6 +673,10 @@ inline carla::rpc::TrafficLightState to_light_state(int32_t state) {
                                                 TSC_TRAFFIC_LIGHT_UNKNOWN, "traffic light state");
 }
 
+// The batch command's physics control: every field the C ABI carries, over
+// LibCarla's defaults (vehicle.cpp, issue #79).
+carla::rpc::VehiclePhysicsControl to_carla(const tsc_vehicle_physics_control_t &c);
+
 // Direct and batch walker control go through here.
 inline carla::rpc::WalkerControl to_carla_walker_control(const tsc_vector3d_t &direction,
                                                          double speed, bool jump) {

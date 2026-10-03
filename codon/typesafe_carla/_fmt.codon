@@ -158,13 +158,19 @@ def fmt_list(items) -> str:
 def fmt_fields(name: str, obj) -> str:
     """`Name(field=value, ...)` over obj's fields in declaration order: floats
     as C++ `float` through std::to_string, bools as boolalpha, the rest by
-    str(). The Python API's format for its plain-field value types."""
+    str(). The Python API's format for its plain-field value types.
+
+    Convention: a field named `_x` is the storage behind a property `x` (as
+    the copying vector setters, e.g. WalkerControl.direction) and prints as
+    `x`. Classes formatted here must not have other private fields."""
     parts = List[str]()
     for k, v in static.vars(obj):
+        # A field behind a property (`_direction` for `direction`) by its public name.
+        key = k[1:] if k.startswith("_") else k
         if isinstance(v, bool):
-            parts.append(k + "=" + fmt_bool(v))
+            parts.append(key + "=" + fmt_bool(v))
         elif isinstance(v, float):
-            parts.append(k + "=" + fmt_f32(v))
+            parts.append(key + "=" + fmt_f32(v))
         else:
-            parts.append(k + "=" + str(v))
+            parts.append(key + "=" + str(v))
     return name + "(" + ", ".join(parts) + ")"

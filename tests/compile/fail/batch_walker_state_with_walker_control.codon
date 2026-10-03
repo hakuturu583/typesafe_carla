@@ -1,0 +1,9 @@
+# command.ApplyWalkerState takes a Transform and a speed, not a WalkerControl.
+# expect-error: 'WalkerControl' does not match expected type 'Transform'
+import typesafe_carla as carla
+
+def batch(walker: carla.Walker) -> carla.Command:
+    return carla.command.ApplyWalkerState(walker.id, carla.WalkerControl(), 1.0)
+
+# Compile-only: Codon type-checks a function only when it is called.
+batch(carla.Client("localhost", 2000).get_world().get_actors()[0].as_walker())
