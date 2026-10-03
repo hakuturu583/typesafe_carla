@@ -1,5 +1,6 @@
 # Blueprints: BlueprintLibrary, ActorBlueprint, ActorAttribute.
 
+from ._enum import _IntEnum
 from ._ffi import (Handle, CString, CColor, CActorAttribute, take_string, copy_string, tsc_actor_attribute_free,
                    tsc_blueprint_library_size, tsc_blueprint_library_get,
                    tsc_blueprint_library_find, tsc_blueprint_library_filter,
@@ -12,12 +13,14 @@ from ._ffi import (tsc_actor_blueprint_size, tsc_actor_blueprint_get_attribute_i
                    tsc_actor_blueprint_get_recommended_values)
 from .errors import _check, _normalize_index, CarlaError
 
-class ActorAttributeType:
-    Bool: ClassVar[int] = 0
-    Int: ClassVar[int] = 1
-    Float: ClassVar[int] = 2
-    String: ClassVar[int] = 3
-    RGBColor: ClassVar[int] = 4
+class _ActorAttributeType(_IntEnum):
+    Bool: int = 0
+    Int: int = 1
+    Float: int = 2
+    String: int = 3
+    RGBColor: int = 4
+
+ActorAttributeType = _ActorAttributeType()
 
 def _type_name(t: int) -> str:
     if t == ActorAttributeType.Bool:

@@ -3,16 +3,19 @@
 # TextureFloatColor. Pixels are kept in a row-major buffer (index
 # y * width + x) that crosses the C ABI without conversion.
 
+from ._enum import _IntEnum
 from ._ffi import CColor, CFloatColor, CTextureColor, CTextureFloatColor, TSC_INVALID_ARGUMENT
 from .errors import CarlaError
 from .blueprint import Color
 
-class MaterialParameter:
+class _MaterialParameter(_IntEnum):
     """Which material texture to replace (rpc::MaterialParameter)."""
-    Normal: ClassVar[int] = 0
-    AO_Roughness_Metallic_Emissive: ClassVar[int] = 1
-    Diffuse: ClassVar[int] = 2
-    Emissive: ClassVar[int] = 3
+    Normal: int = 0
+    AO_Roughness_Metallic_Emissive: int = 1
+    Diffuse: int = 2
+    Emissive: int = 3
+
+MaterialParameter = _MaterialParameter()
 
 class FloatColor:
     """A color with float components (rpc::FloatColor), as in TextureFloatColor."""

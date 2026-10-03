@@ -1,0 +1,47 @@
+# The Python API's enumerations expose `names` (str -> member) and `values`
+# (int -> member; for members that share a value, the last one declared, as
+# Boost.Python's enum_ builds it). Issue #33.
+#
+# Codon cannot enumerate a class's ClassVars, but it can enumerate an
+# instance's fields at compile time (static.vars). So an integer enumeration
+# is a subclass of _IntEnum whose int fields are the members, and its public
+# name is the one instance of it:
+#
+#     class _TrafficLightState(_IntEnum):
+#         Red: int = 0
+#         ...
+#     TrafficLightState = _TrafficLightState()
+#
+# TrafficLightState.Red reads a member, as in the Python API, and every
+# enumeration shares the names / values implementation below. (Codon 0.19
+# realizes classes before module-level values, so a method's default argument
+# in the library cannot name a member: those defaults are literals with a
+# comment. User code is not affected: `carla.LaneType.Driving` works there.) The typed
+# enumerations (VehicleDoor & co., which are types themselves) list their
+# members once in a ClassVar and use _member_names / _member_values.
+
+import internal.static as static
+
+class _IntEnum:
+    @property
+    def names(self: S, S: type) -> Dict[str, int]:
+        """Member name -> value, as the Python API's names."""
+        out = Dict[str, int]()
+        for name, value in static.vars(self, False):
+            out[name] = value
+        return out
+
+    @property
+    def values(self: S, S: type) -> Dict[int, int]:
+        """Value -> member (the value itself here), as the Python API's values."""
+        out = Dict[int, int]()
+        for _, value in static.vars(self, False):
+            out[value] = value
+        return out
+
+def _member_names(members: List[Tuple[str, T]], T: type) -> Dict[str, T]:
+    return {name: member for name, member in members}
+
+def _member_values(members: List[Tuple[str, T]], T: type) -> Dict[int, T]:
+    """int(member) -> member; the last of members sharing a value wins."""
+    return {int(member): member for _, member in members}

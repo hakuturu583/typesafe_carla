@@ -25,6 +25,7 @@ from .map import _read_buffer
 from .geometry import Transform
 from .actor import Vehicle
 from .control import _fields_eq, _fields_repr
+from ._enum import _member_names, _member_values
 
 def _enum_repr(name: str, names: List[str], value: int) -> str:
     """The member's name, as the Python API prints it, else name(value)."""
@@ -39,6 +40,11 @@ class VehicleDoor:
     RL: ClassVar[VehicleDoor] = VehicleDoor(2)
     RR: ClassVar[VehicleDoor] = VehicleDoor(3)
     All: ClassVar[VehicleDoor] = VehicleDoor(6)
+    _MEMBERS: ClassVar[List[Tuple[str, VehicleDoor]]] = [
+        ("FL", VehicleDoor.FL), ("FR", VehicleDoor.FR), ("RL", VehicleDoor.RL),
+        ("RR", VehicleDoor.RR), ("All", VehicleDoor.All)]
+    names: ClassVar[Dict[str, VehicleDoor]] = _member_names(VehicleDoor._MEMBERS)
+    values: ClassVar[Dict[int, VehicleDoor]] = _member_values(VehicleDoor._MEMBERS)
 
     def __int__(self) -> int:
         return self.value
@@ -59,6 +65,15 @@ class VehicleWheelLocation:
     BR_Wheel: ClassVar[VehicleWheelLocation] = VehicleWheelLocation(3)
     Front_Wheel: ClassVar[VehicleWheelLocation] = VehicleWheelLocation(0)
     Back_Wheel: ClassVar[VehicleWheelLocation] = VehicleWheelLocation(1)
+    _MEMBERS: ClassVar[List[Tuple[str, VehicleWheelLocation]]] = [
+        ("FL_Wheel", VehicleWheelLocation.FL_Wheel), ("FR_Wheel", VehicleWheelLocation.FR_Wheel),
+        ("BL_Wheel", VehicleWheelLocation.BL_Wheel), ("BR_Wheel", VehicleWheelLocation.BR_Wheel),
+        ("Front_Wheel", VehicleWheelLocation.Front_Wheel),
+        ("Back_Wheel", VehicleWheelLocation.Back_Wheel)]
+    names: ClassVar[Dict[str, VehicleWheelLocation]] = _member_names(
+        VehicleWheelLocation._MEMBERS)
+    values: ClassVar[Dict[int, VehicleWheelLocation]] = _member_values(
+        VehicleWheelLocation._MEMBERS)
 
     def __int__(self) -> int:
         return self.value
@@ -77,6 +92,13 @@ class VehicleFailureState:
     Rollover: ClassVar[VehicleFailureState] = VehicleFailureState(1)
     Engine: ClassVar[VehicleFailureState] = VehicleFailureState(2)
     TirePuncture: ClassVar[VehicleFailureState] = VehicleFailureState(3)
+    _MEMBERS: ClassVar[List[Tuple[str, VehicleFailureState]]] = [
+        ("NONE", VehicleFailureState.NONE), ("Rollover", VehicleFailureState.Rollover),
+        ("Engine", VehicleFailureState.Engine),
+        ("TirePuncture", VehicleFailureState.TirePuncture)]
+    names: ClassVar[Dict[str, VehicleFailureState]] = _member_names(VehicleFailureState._MEMBERS)
+    values: ClassVar[Dict[int, VehicleFailureState]] = _member_values(
+        VehicleFailureState._MEMBERS)
 
     def __int__(self) -> int:
         return self.value

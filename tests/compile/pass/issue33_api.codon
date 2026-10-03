@@ -31,6 +31,21 @@ def weather_presets(world: carla.World):
     storm = carla.WeatherParameters.DustStorm
     print(noon.cloudiness, storm.dust_storm, carla.WeatherParameters.Default == noon)
 
+def enum_maps():
+    states: Dict[str, int] = carla.TrafficLightState.names
+    by_value: Dict[int, int] = carla.LaneType.values
+    doors: Dict[str, carla.VehicleDoor] = carla.VehicleDoor.names
+    wheels: Dict[int, carla.VehicleWheelLocation] = carla.VehicleWheelLocation.values
+    failure: carla.VehicleFailureState = carla.VehicleFailureState.names["Engine"]
+    print(states["Red"], by_value[carla.LaneType.Driving], doors["All"], wheels[0], failure)
+    print(len(carla.ActorAttributeType.names), len(carla.ActorState.names),
+          len(carla.AttachmentType.names), len(carla.CityObjectLabel.names),
+          len(carla.ColorConverter.names), len(carla.GBufferTextureID.names),
+          len(carla.LandmarkOrientation.names), len(carla.LaneChange.names),
+          len(carla.LaneMarkingColor.values), len(carla.LaneMarkingType.values),
+          len(carla.LightGroup.values), len(carla.MapLayer.values),
+          len(carla.MaterialParameter.values), len(carla.VehicleLightState.values))
+
 world = carla.Client("localhost", 2000).get_world()
 actors = world.get_actors()
 actor_world(actors[0], actors[0].as_vehicle())
@@ -38,3 +53,4 @@ light_state(actors[2].as_traffic_light())
 sensor_class_names(actors[5].as_sensor())
 blueprint_attributes(world.get_blueprint_library().find("vehicle.tesla.model3"))
 weather_presets(world)
+enum_maps()

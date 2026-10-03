@@ -1,5 +1,6 @@
 # Control value types.
 
+from ._enum import _IntEnum
 from ._ffi import (Handle, CVehicleControl, CWalkerControl, CVector2D, CVehiclePhysicsControl,
                    CWheelPhysicsControl, tsc_vehicle_get_physics_control,
                    tsc_physics_control_view, tsc_vehicle_apply_physics_control)
@@ -492,25 +493,29 @@ class WalkerControl:
     def _from_c(c: CWalkerControl) -> WalkerControl:
         return WalkerControl(Vector3D._from_c(c.direction), c.speed, int(c.jump) != 0)
 
-class VehicleLightState:
+class _VehicleLightState(_IntEnum):
     """Vehicle light bit flags (combine with |), as carla.VehicleLightState."""
-    NONE: ClassVar[int] = 0
-    Position: ClassVar[int] = 0x1
-    LowBeam: ClassVar[int] = 0x1 << 1
-    HighBeam: ClassVar[int] = 0x1 << 2
-    Brake: ClassVar[int] = 0x1 << 3
-    RightBlinker: ClassVar[int] = 0x1 << 4
-    LeftBlinker: ClassVar[int] = 0x1 << 5
-    Reverse: ClassVar[int] = 0x1 << 6
-    Fog: ClassVar[int] = 0x1 << 7
-    Interior: ClassVar[int] = 0x1 << 8
-    Special1: ClassVar[int] = 0x1 << 9
-    Special2: ClassVar[int] = 0x1 << 10
-    All: ClassVar[int] = 0xFFFFFFFF
+    NONE: int = 0
+    Position: int = 0x1
+    LowBeam: int = 0x1 << 1
+    HighBeam: int = 0x1 << 2
+    Brake: int = 0x1 << 3
+    RightBlinker: int = 0x1 << 4
+    LeftBlinker: int = 0x1 << 5
+    Reverse: int = 0x1 << 6
+    Fog: int = 0x1 << 7
+    Interior: int = 0x1 << 8
+    Special1: int = 0x1 << 9
+    Special2: int = 0x1 << 10
+    All: int = 0xFFFFFFFF
 
-class TrafficLightState:
-    Red: ClassVar[int] = 0
-    Yellow: ClassVar[int] = 1
-    Green: ClassVar[int] = 2
-    Off: ClassVar[int] = 3
-    Unknown: ClassVar[int] = 4
+VehicleLightState = _VehicleLightState()
+
+class _TrafficLightState(_IntEnum):
+    Red: int = 0
+    Yellow: int = 1
+    Green: int = 2
+    Off: int = 3
+    Unknown: int = 4
+
+TrafficLightState = _TrafficLightState()

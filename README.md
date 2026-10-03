@@ -132,6 +132,17 @@ Notes on Milestone 4:
 - **Weather depends on the server.** It can be disabled there: CARLA 0.10.0 (the Docker image used for testing) reports `is_weather_enabled() == False`, and `set_weather` has no effect, exactly as with the official Python API.
 - **Traffic Manager.** It runs inside LibCarla in the client process. In synchronous mode, call `tm.set_synchronous_mode(True)` as well.
 - **Enumerations.** `TrafficLightState`, `VehicleLightState` and `LaneType` are integer constants, as in the Python API (`VehicleLightState` values combine with `|`).
+- **`names` / `values` (issue #33).** Every enumeration has the Python API's
+  `names` (member name → member) and `values` (value → member; where members
+  share a value, the last one declared, e.g. `LaneMarkingColor.values[0]` is
+  `White`). The integer enumerations (`TrafficLightState`, `LaneType`,
+  `CityObjectLabel`, ...) are each the one instance of a class whose fields are
+  the members, so `names` / `values` come from one shared implementation
+  (`_enum.codon`); a misspelt member is a compile error naming that class
+  (`'_TrafficLightState' object has no attribute 'Purple'`). Their `names` and
+  `values` build a new dict on each access; in the Python API they are shared
+  class attributes. The members are the same as the official CARLA 0.10.0
+  module's (checked by `tests/test_runtime.py`).
 
 Notes on issue #20 (Vehicle and Walker API gaps):
 - **Typed enumerations.** `VehicleDoor`, `VehicleWheelLocation` and `VehicleFailureState`

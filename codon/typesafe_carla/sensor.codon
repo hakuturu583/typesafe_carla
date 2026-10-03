@@ -21,6 +21,7 @@
 #
 # Typed measurements keep their SensorData (and so the native buffer) alive.
 
+from ._enum import _IntEnum
 from ._ffi import (Handle, CString, CSensorDataInfo, CImage, CLidar, CLidarPoint, CGnss, CImu,
                    CCollision, CRadar, CRadarDetection, CSemanticLidar, CSemanticLidarDetection,
                    CLaneMarking, CDvs, COpticalFlow, COpticalFlowPixel,
@@ -63,12 +64,14 @@ class SensorDataType:
     DVS: ClassVar[int] = 10
     OpticalFlow: ClassVar[int] = 11
 
-class ColorConverter:
+class _ColorConverter(_IntEnum):
     """carla.ColorConverter, for Image.convert and Image.save_to_disk."""
-    Raw: ClassVar[int] = 0
-    Depth: ClassVar[int] = 1
-    LogarithmicDepth: ClassVar[int] = 2
-    CityScapesPalette: ClassVar[int] = 3
+    Raw: int = 0
+    Depth: int = 1
+    LogarithmicDepth: int = 2
+    CityScapesPalette: int = 3
+
+ColorConverter = _ColorConverter()
 
 class SensorData:
     """One measurement. Convert with as_image(), as_lidar(), ... (checked)."""
@@ -237,7 +240,7 @@ class Image(_ArrayMeasurement[_CBgra]):
         Python API; raw_data() views see the change."""
         _check(tsc_image_convert(self.data._h.ptr, i32(color_converter)))
 
-    def save_to_disk(self, path: str, color_converter: int = ColorConverter.Raw) -> str:
+    def save_to_disk(self, path: str, color_converter: int = 0) -> str:  # ColorConverter.Raw
         """Writes a PNG (the image itself is not converted); returns the path
         written. As in LibCarla's PNG-only build, another extension is
         replaced by .png; missing directories are created."""

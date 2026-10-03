@@ -1,28 +1,34 @@
 # Integer enumerations of the Python API that no typesafe_carla call takes yet.
 # The values are the official module's (CARLA 0.10.0 / ue5-dev).
 
-class AttachmentType:
+from ._enum import _IntEnum
+
+class _AttachmentType(_IntEnum):
     """How a spawned actor attaches to its parent (carla.AttachmentType).
 
     World.spawn_actor does not take an attachment type yet: attachments are Rigid.
     """
-    Rigid: ClassVar[int] = 0
-    SpringArm: ClassVar[int] = 1
-    SpringArmGhost: ClassVar[int] = 2
+    Rigid: int = 0
+    SpringArm: int = 1
+    SpringArmGhost: int = 2
 
-class GBufferTextureID:
+AttachmentType = _AttachmentType()
+
+class _GBufferTextureID(_IntEnum):
     """Unreal G-buffer textures of a camera (carla.GBufferTextureID), for
     Sensor.listen_to_gbuffer in the Python API (not available here yet)."""
-    SceneColor: ClassVar[int] = 0
-    SceneDepth: ClassVar[int] = 1
-    SceneStencil: ClassVar[int] = 2
-    GBufferA: ClassVar[int] = 3
-    GBufferB: ClassVar[int] = 4
-    GBufferC: ClassVar[int] = 5
-    GBufferD: ClassVar[int] = 6
-    GBufferE: ClassVar[int] = 7
-    GBufferF: ClassVar[int] = 8
-    Velocity: ClassVar[int] = 9
-    SSAO: ClassVar[int] = 10
-    CustomDepth: ClassVar[int] = 11
-    CustomStencil: ClassVar[int] = 12
+    SceneColor: int = 0
+    SceneDepth: int = 1
+    SceneStencil: int = 2
+    GBufferA: int = 3
+    GBufferB: int = 4
+    GBufferC: int = 5
+    GBufferD: int = 6
+    GBufferE: int = 7
+    GBufferF: int = 8
+    Velocity: int = 9
+    SSAO: int = 10
+    CustomDepth: int = 11
+    CustomStencil: int = 12
+
+GBufferTextureID = _GBufferTextureID()

@@ -8,6 +8,7 @@
 # compatibility, _actor_compat.codon also puts the subclass methods on Actor
 # (converting at run time; compile errors in strict mode).
 
+from ._enum import _IntEnum
 from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_KIND_VEHICLE,
                    tsc_handle_kind, tsc_actor_get_id, tsc_actor_get_type_id, tsc_actor_is_alive,
                    tsc_actor_get_transform, tsc_actor_set_transform, tsc_actor_get_location,
@@ -42,13 +43,15 @@ from .texture import TextureColor, TextureFloatColor
 
 TM_DEFAULT_PORT = 8000
 
-class ActorState:
+class _ActorState(_IntEnum):
     """Actor.actor_state values (rpc::ActorState). LibCarla also has 3
     (PendingKill), which the Python API has no name for. A destroyed actor's
     state cannot be read (CarlaError); is_active is then False."""
-    Invalid: ClassVar[int] = 0
-    Active: ClassVar[int] = 1
-    Dormant: ClassVar[int] = 2
+    Invalid: int = 0
+    Active: int = 1
+    Dormant: int = 2
+
+ActorState = _ActorState()
 
 def _take_transforms(out: Ptr[CTransformList]) -> List[Transform]:
     """Copies an owned tsc_transform_list_t and frees it."""
