@@ -320,6 +320,20 @@ TYPESAFE_CARLA_BUILD_DIR=build-carla uv run typesafe-codon run examples/connect.
 If GitHub archive downloads are blocked by your network but git works, add
 `-DPREFER_CLONE=ON`; CARLA then clones its dependencies instead.
 
+To skip compiling LibCarla, add `-DTSC_CARLA_PREBUILT=auto`: CMake then
+downloads the LibCarla that CI built for the same CARLA commit and the same
+compiler (Ubuntu 22.04/GCC 11, 24.04/GCC 13 or 26.04/GCC 15, from a run on
+`main`), and only compiles the shim. This needs an authenticated
+[`gh`](https://cli.github.com/) (`gh auth login`), because GitHub serves
+workflow artifacts only with a token. If there is no matching prebuilt, CMake
+builds LibCarla from source as usual. `-DTSC_CARLA_PREBUILT_DIR=<prefix>` uses
+a prefix you already have, e.g. from `tools/fetch_libcarla_prebuilt.py <ref>`
+or `cmake --build <build dir> --target libcarla_prebuilt`. Downloads are
+cached (about 155 MB each) in `~/.cache/typesafe-carla/libcarla-prebuilt`
+(or under `$TYPESAFE_CARLA_CACHE_DIR`) and removed after 30 days unused;
+`tools/fetch_libcarla_prebuilt.py --prune` empties it. See
+[docs/releasing.md](docs/releasing.md#libcarla-prebuilt).
+
 `typesafe-codon` passes its arguments to `codon` after setting `CODON_PATH`
 (the Codon sources), `TYPESAFE_CARLA_LIB` (the native library) and
 `LD_LIBRARY_PATH`. For `build`, it also gives the executable an RPATH to the
