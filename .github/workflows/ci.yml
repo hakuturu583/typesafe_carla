@@ -52,15 +52,9 @@ jobs:
   libcarla:
     # The shim compiled and linked against real LibCarla built from CARLA
     # sources. Runs the C ABI tests that need no server.
-    #
-    # The CARLA ref is resolved to its current commit SHA first and LibCarla
-    # is built from that SHA, so the run always follows the latest ue5-dev
-    # commit. The whole build directory (the CARLA sparse checkout, LibCarla's
-    # fetched and built dependencies, LibCarla and the shim) is cached under a
-    # key naming that SHA: a run on an unchanged CARLA commit restores it, and
-    # make rebuilds only what changed (the shim); a new commit misses and
-    # builds from scratch. The directory is not relocatable (CMake records
-    # absolute paths), which is why it lives at the same path on every run.
+    # LibCarla is built from the ref's current commit SHA, and build/ is
+    # cached keyed by that SHA and the toolchain (docs/releasing.md,
+    # "LibCarla build cache").
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -76,11 +70,12 @@ jobs:
           set -euo pipefail
           sha=$(tools/resolve_carla_ref.sh "$CARLA_REF")
           echo "CARLA ${CARLA_REF} = ${sha}"
-          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
-          # The toolchain is part of the cache key: objects from another
-          # compiler or CMake are never reused.
-          tc=$({ c++ --version | head -n 1; cmake --version | head -n 1; } | sha256sum | cut -c1-12)
-          echo "toolchain=${tc}" >> "$GITHUB_OUTPUT"
+          # Objects from another toolchain are never restored.
+          tc=$(tools/libcarla_cache_guard.sh --toolchain | sha256sum | cut -c1-12)
+          {
+            echo "sha=${sha}"
+            echo "key=libcarla-${RUNNER_OS}-${RUNNER_ARCH}-ubuntu-24.04-${tc}-${sha}"
+          } >> "$GITHUB_OUTPUT"
       - name: Restore the LibCarla build
         id: cache
         uses: actions/cache@v4
@@ -89,9 +84,8 @@ jobs:
           # CMake files that configure LibCarla and its dependencies. On a
           # change, the newest build of the same CARLA commit and toolchain is
           # restored and CMake/make bring it up to date.
-          key: libcarla-${{ runner.os }}-${{ runner.arch }}-ubuntu-24.04-${{ steps.carla.outputs.toolchain }}-${{ steps.carla.outputs.sha }}-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
-          restore-keys: |
-            libcarla-${{ runner.os }}-${{ runner.arch }}-ubuntu-24.04-${{ steps.carla.outputs.toolchain }}-${{ steps.carla.outputs.sha }}-
+          key: ${{ steps.carla.outputs.key }}-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+          restore-keys: ${{ steps.carla.outputs.key }}-
       - name: Check the restored build (CARLA commit, toolchain)
         run: tools/libcarla_cache_guard.sh build "${{ steps.carla.outputs.sha }}"
       - name: Configure (CARLA ${{ matrix.carla_ref }} @ ${{ steps.carla.outputs.sha }})

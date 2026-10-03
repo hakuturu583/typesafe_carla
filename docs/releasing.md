@@ -135,8 +135,9 @@ with `actions/cache`, keyed by the resolved CARLA commit SHA:
   `git ls-remote`), builds from that SHA, and caches the whole CMake build
   directory (`build/`: the CARLA sparse checkout, the fetched and built
   dependencies under `_deps/`, LibCarla under `carla/`, and the shim) under
-  `libcarla-<os>-<arch>-<image>-<compiler and CMake hash>-<CARLA SHA>-<hash of
-  CMakeLists.txt and cmake/>`. A run on an unchanged `ue5-dev` restores it and
+  `libcarla-<os>-<arch>-<image>-<toolchain hash>-<CARLA SHA>-<hash of
+  CMakeLists.txt and cmake/>` (the toolchain hash is of
+  `tools/libcarla_cache_guard.sh --toolchain`). A run on an unchanged `ue5-dev` restores it and
   only the shim is recompiled; a new `ue5-dev` commit misses and builds from
   scratch.
 - The release `wheel` job keys by the exact SHA it builds and the
