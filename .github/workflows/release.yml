@@ -253,9 +253,11 @@ jobs:
               carla_ref="$TAG_CARLA_REF"; carla_commit="$TAG_CARLA_COMMIT"
             fi
           elif [ "$EVENT" = workflow_dispatch ]; then
-            # A dry run from the carla_ref input (as given, not resolved to a
-            # SHA); publish=true uploads to TestPyPI.
+            # A dry run from the carla_ref input, built from the ref's current
+            # commit (which also keys the LibCarla build cache); publish=true
+            # uploads to TestPyPI.
             proceed=true; index=testpypi; carla_ref="${INPUT_CARLA_REF:-ue5-dev}"
+            carla_commit=$(tools/resolve_carla_ref.sh "$carla_ref")
             if [ "$INPUT_PUBLISH" = true ]; then publish=true; fi
           fi
           # PyPI accepts a version once: fail now, not after the build. A re-run
@@ -267,7 +269,7 @@ jobs:
               python3 tools/release_tag.py unpublished --index "$index" ${version:+--version "$version"}
             fi
           fi
-          # What CMake fetches (CARLA_GIT_REF): the resolved SHA for a release.
+          # What CMake fetches (CARLA_GIT_REF): the resolved SHA.
           carla_build_ref="${carla_commit:-$carla_ref}"
           {
             echo "proceed=$proceed"; echo "publish=$publish"; echo "index=$index"
@@ -326,8 +328,18 @@ jobs:
 
   wheel:
     # LibCarla is built from CARLA sources at $CARLA_GIT_REF (the resolved
-    # commit SHA for a release) inside the manylinux_2_28 image; the wheel is
-    # py3-none (no CPython extension).
+    # commit SHA) inside the manylinux_2_28 image; the wheel is py3-none (no
+    # CPython extension).
+    #
+    # The build directory (LibCarla, its fetched and built dependencies, the
+    # shim) is cached under a key naming that exact SHA and the image, with no
+    # fallback to other keys. It lives outside the project, in a host directory
+    # bind-mounted into the container at /libcarla-build, so the build sees the
+    # same absolute path on every run and the result is still on the host for
+    # actions/cache to save. tools/libcarla_cache_guard.sh, run in the
+    # container before the build, empties it unless it was built for the same
+    # CARLA SHA with the same compilers and CMake. On a miss the build is a
+    # clean one, exactly as without the cache.
     needs: [resolve, verify]
     if: always() && needs.verify.result == 'success'
     runs-on: ubuntu-24.04
@@ -340,20 +352,35 @@ jobs:
         with:
           ref: ${{ needs.resolve.outputs.ref }}
       - name: CARLA ref and commit
-        run: echo "CARLA ${CARLA_REF} -> LibCarla from CARLA_GIT_REF=${CARLA_GIT_REF}"
+        run: |
+          echo "CARLA ${CARLA_REF} -> LibCarla from CARLA_GIT_REF=${CARLA_GIT_REF}"
+          mkdir -p "$RUNNER_TEMP/libcarla-build"
+      - name: Restore the LibCarla build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/libcarla-build
+          # The image tag is the one cibuildwheel pins (bump with it).
+          key: libcarla-wheel-manylinux_2_28-cibuildwheel-v3.1-${{ needs.resolve.outputs.carla_build_ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'pyproject.toml') }}
       - uses: pypa/cibuildwheel@v3.1
         env:
           CIBW_BUILD: cp312-manylinux_x86_64
           CIBW_ARCHS: x86_64
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_ENVIRONMENT_PASS_LINUX: CARLA_GIT_REF
-          CIBW_CONFIG_SETTINGS: cmake.define.TSC_BACKEND=libcarla
+          CIBW_CONTAINER_ENGINE: "docker; create_args: --volume=${{ runner.temp }}/libcarla-build:/libcarla-build"
+          CIBW_BEFORE_BUILD: bash {project}/tools/libcarla_cache_guard.sh /libcarla-build/wheel "$CARLA_GIT_REF"
+          CIBW_CONFIG_SETTINGS: cmake.define.TSC_BACKEND=libcarla build-dir=/libcarla-build/wheel
           # cibuildwheel's own test install would resolve typesafe-carla-toolchain
           # from PyPI, which does not exist before the first release; the wheel
           # is checked in the next step instead, without dependencies.
           CIBW_TEST_SKIP: "*"
         with:
           output-dir: dist
+      # The container wrote the build directory as root; actions/cache saves
+      # it as the runner user.
+      - name: Hand the LibCarla build back to the runner user (cache ${{ steps.cache.outputs.cache-hit == 'true' && 'hit' || 'miss' }})
+        run: sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/libcarla-build"
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - name: Check the wheel (backend, CARLA ref and commit, exports, no libpython)

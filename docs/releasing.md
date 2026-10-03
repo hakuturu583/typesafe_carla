@@ -122,8 +122,36 @@ SHA. UE4 refs (`0.9.x`, `ue4-dev`) are rejected.
   `carla.libcarla_git_commit()` in Codon;
 - `typesafe_carla/_native/BUILD_INFO.json` inside the wheel.
 
-Releases set `CARLA_GIT_REF` to the commit SHA resolved from the release tag,
-so for them the recorded ref and commit are both that SHA.
+Releases set `CARLA_GIT_REF` to the commit SHA resolved from the release tag
+(a dry run, to the current commit of its `carla_ref`), so for them the
+recorded ref and commit are both that SHA.
+
+### LibCarla build cache
+
+Both CI's `libcarla` job and the release `wheel` job cache the LibCarla build
+with `actions/cache`, keyed by the resolved CARLA commit SHA:
+
+- CI resolves the ref first (`tools/resolve_carla_ref.sh`, i.e.
+  `git ls-remote`), builds from that SHA, and caches the whole CMake build
+  directory (`build/`: the CARLA sparse checkout, the fetched and built
+  dependencies under `_deps/`, LibCarla under `carla/`, and the shim) under
+  `libcarla-<os>-<arch>-<image>-<compiler and CMake hash>-<CARLA SHA>-<hash of
+  CMakeLists.txt and cmake/>`. A run on an unchanged `ue5-dev` restores it and
+  only the shim is recompiled; a new `ue5-dev` commit misses and builds from
+  scratch.
+- The release `wheel` job keys by the exact SHA it builds and the
+  cibuildwheel/manylinux image, with no fallback key. The cached directory is
+  a host directory bind-mounted into the cibuildwheel container at
+  `/libcarla-build` and used as scikit-build-core's `build-dir`.
+- A CMake build directory is not relocatable, so it is always restored to
+  the same absolute path. Before configuring, `tools/libcarla_cache_guard.sh`
+  compares the CARLA SHA, compilers and CMake recorded in the directory with
+  the current ones and empties it on any difference, so a release never
+  reuses objects from another CARLA commit or toolchain. A miss is a clean
+  build, the same as without the cache.
+
+An entry is about 275 MB compressed (1.1 GB unpacked, mostly Boost sources).
+GitHub evicts the least recently used entries beyond 10 GB per repository.
 
 The wheel also ships `_native/THIRD_PARTY_NOTICES`, the license notices of
 everything LibCarla links statically. They are collected from the fetched
@@ -189,7 +217,7 @@ in the PR itself if the C ABI changed.
 ### Dry run
 
 Run **Release** manually (workflow_dispatch) with the `carla_ref` you want
-(built as given, not resolved to a SHA). It builds and checks every artifact
+(resolved to its current commit SHA, which is what is built). It builds and checks every artifact
 and uploads them as workflow artifacts; with `publish=true` it also uploads to
 TestPyPI. `tests/distribution/clean_env.sh <dir with the downloaded wheels>
 <port>` then checks the design's success criteria (section 44) in a clean
