@@ -30,8 +30,6 @@ include_guard(GLOBAL)
 include(FetchContent)
 
 set(_TSC_LICENSES_DIR "${CMAKE_CURRENT_LIST_DIR}/licenses")
-# Stands in for ';' in texts passed around as list elements; restored on write.
-set(_TSC_SEMI "@TSC_SEMICOLON@")
 
 # Fails unless <file> exists and is non-empty.
 function(_tsc_require_file file what)
@@ -43,9 +41,8 @@ function(_tsc_require_file file what)
   if(_size EQUAL 0)
     message(FATAL_ERROR "typesafe_carla: license file for ${what} is empty: ${file}")
   endif()
-  if(NOT CMAKE_SCRIPT_MODE_FILE)  # re-collect when a license file changes
-    set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${file}")
-  endif()
+  # Re-collect when a license file changes.
+  set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${file}")
 endfunction()
 
 # Sets <out> to the source dir of FetchContent dependency <name>.
@@ -59,6 +56,17 @@ function(_tsc_dep_dir name out)
   set(${out} "${${_lc}_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
+# Sets <out> to the first capture group of <regex> in the first line of
+# <file> it matches. Fails if no line matches.
+function(_tsc_version file regex out)
+  file(STRINGS "${file}" _lines REGEX "${regex}")
+  if(NOT _lines MATCHES "${regex}")
+    message(FATAL_ERROR "typesafe_carla: no version matching '${regex}' in ${file}; "
+                        "update cmake/ThirdPartyNotices.cmake")
+  endif()
+  set(${out} "${CMAKE_MATCH_1}" PARENT_SCOPE)
+endfunction()
+
 # Sets <out> to the leading license comment of a source file: a /* ... */
 # block, or the run of // lines it starts with. Fails unless it contains
 # every string in <ARGN> (e.g. "Copyright").
@@ -66,8 +74,6 @@ function(_tsc_leading_comment file out)
   _tsc_require_file("${file}" "${file}")
   file(READ "${file}" _text)
   string(REPLACE "\r" "" _text "${_text}")
-  # Semicolons would split the text when passed on as a CMake list element.
-  string(REPLACE ";" "${_TSC_SEMI}" _text "${_text}")
   if(_text MATCHES "^[ \t\n]*/\\*")
     string(FIND "${_text}" "*/" _end)
     math(EXPR _end "${_end} + 2")
@@ -91,12 +97,13 @@ endfunction()
 # Appends a component to the index (_tsc_index) and its notice to the body
 # (_tsc_body), and bumps the counter (_tsc_n), in the caller's scope.
 #   _tsc_component(NAME n VERSION v LICENSE spdx UPSTREAM url SOURCE dir
-#                  [CONTAINS text] [HEADER t...] [FILES f...] [TEXT t...])
-# FILES are read verbatim; HEADER (before them) and TEXT (after them) entries
-# are inserted as given.
+#                  [CONTAINS text] [HEADER var] [FILES f...] [TEXT var])
+# FILES are read verbatim. HEADER (before them) and TEXT (after them) name
+# variables holding text to insert as is; passing names rather than values
+# keeps license texts, which contain ';' and '[', out of argument lists.
 function(_tsc_component)
-  cmake_parse_arguments(PARSE_ARGV 0 _c "" "NAME;VERSION;LICENSE;UPSTREAM;SOURCE;CONTAINS"
-                        "HEADER;FILES;TEXT")
+  cmake_parse_arguments(PARSE_ARGV 0 _c ""
+                        "NAME;VERSION;LICENSE;UPSTREAM;SOURCE;CONTAINS;HEADER;TEXT" "FILES")
   math(EXPR _tsc_n "${_tsc_n} + 1")
   file(RELATIVE_PATH _c_rel "${CMAKE_BINARY_DIR}" "${_c_SOURCE}")
   if(_c_rel MATCHES "^\\.\\./")
@@ -115,9 +122,9 @@ function(_tsc_component)
     "\n================================================================================\n"
     "${_tsc_n}. ${_c_NAME} ${_c_VERSION} (${_c_LICENSE})\n"
     "================================================================================\n")
-  foreach(_t IN LISTS _c_HEADER)
-    string(APPEND _tsc_body "\n${_t}\n")
-  endforeach()
+  if(_c_HEADER)
+    string(APPEND _tsc_body "\n${${_c_HEADER}}\n")
+  endif()
   foreach(_f IN LISTS _c_FILES)
     _tsc_require_file("${_f}" "${_c_NAME}")
     file(READ "${_f}" _c_text)
@@ -131,9 +138,9 @@ function(_tsc_component)
     endif()
     string(APPEND _tsc_body "\n--- ${_c_frel} ---\n\n${_c_text}\n")
   endforeach()
-  foreach(_t IN LISTS _c_TEXT)
-    string(APPEND _tsc_body "\n${_t}\n")
-  endforeach()
+  if(_c_TEXT)
+    string(APPEND _tsc_body "\n${${_c_TEXT}}\n")
+  endif()
   set(_tsc_n "${_tsc_n}" PARENT_SCOPE)
   set(_tsc_index "${_tsc_index}" PARENT_SCOPE)
   set(_tsc_body "${_tsc_body}" PARENT_SCOPE)
@@ -168,11 +175,9 @@ function(tsc_write_third_party_notices output)
   set(_tsc_body "")
   set(_apache "${_TSC_LICENSES_DIR}/Apache-2.0.txt")
   set(_mit "${_TSC_LICENSES_DIR}/MIT.txt")
-  _tsc_require_file("${_apache}" "Apache-2.0 (template)")
   _tsc_require_file("${_mit}" "MIT (template)")
   file(READ "${_mit}" _mit_terms)
   string(STRIP "${_mit_terms}" _mit_terms)
-  string(REPLACE ";" "${_TSC_SEMI}" _mit_terms "${_mit_terms}")
 
   # --- LibCarla and its vendored sources --------------------------------------
   set(_carla_ver "${TSC_CARLA_VERSION}")
@@ -190,27 +195,29 @@ function(tsc_write_third_party_notices output)
   _tsc_leading_comment("${_tp}/odrSpiral/odrSpiral.h" _odr "Copyright" "Apache License, Version 2.0")
   _tsc_component(NAME "odrSpiral" VERSION "(vendored in LibCarla)" LICENSE "Apache-2.0"
     UPSTREAM "https://www.asam.net/standards/detail/opendrive/" SOURCE "${_tp}/odrSpiral"
-    HEADER "${_odr}" FILES "${_apache}")
+    HEADER _odr FILES "${_apache}")
 
   _tsc_leading_comment("${_tp}/moodycamel/ConcurrentQueue.h" _mc
     "Copyright" "Redistributions in binary form")
   _tsc_component(NAME "moodycamel::ConcurrentQueue" VERSION "(vendored in LibCarla)"
     LICENSE "BSD-2-Clause" UPSTREAM "https://github.com/cameron314/concurrentqueue"
-    SOURCE "${_tp}/moodycamel" TEXT "${_mc}")
+    SOURCE "${_tp}/moodycamel" TEXT _mc)
 
   _tsc_leading_comment("${_tp}/simplify/Simplify.h" _simp "(C) by Sven Forstmann" "MIT")
+  string(APPEND _simp "\n\nCopyright (c) 2014 Sven Forstmann\n\n${_mit_terms}")
   _tsc_component(NAME "Fast-Quadric-Mesh-Simplification" VERSION "(vendored in LibCarla)"
     LICENSE "MIT" UPSTREAM "https://github.com/sp4cerat/Fast-Quadric-Mesh-Simplification"
     SOURCE "${_tp}/simplify"
-    TEXT "${_simp}" "Copyright (c) 2014 Sven Forstmann\n\n${_mit_terms}")
+    TEXT _simp)
 
   # The vendored headers carry no notice; upstream states "The library can be
   # used under the terms of the MIT License" (Readme.md) without a copyright
   # line.
   _tsc_require_file("${_tp}/marchingcube/MeshReconstruction.h" "MeshReconstruction")
+  set(_mr "Upstream: \"The library can be used under the terms of the MIT License.\"\n\nCopyright (c) the MeshReconstruction authors (https://github.com/Magnus2/MeshReconstruction)\n\n${_mit_terms}")
   _tsc_component(NAME "MeshReconstruction" VERSION "(vendored in LibCarla)" LICENSE "MIT"
     UPSTREAM "https://github.com/Magnus2/MeshReconstruction" SOURCE "${_tp}/marchingcube"
-    TEXT "Upstream: \"The library can be used under the terms of the MIT License.\"\n\nCopyright (c) the MeshReconstruction authors (https://github.com/Magnus2/MeshReconstruction)\n\n${_mit_terms}")
+    TEXT _mr)
 
   # --- Boost ------------------------------------------------------------------
   _tsc_dep_dir(boost _boost)
@@ -225,9 +232,8 @@ function(tsc_write_third_party_notices output)
   list(REMOVE_DUPLICATES _boost_libs)
   list(SORT _boost_libs)
   list(JOIN _boost_libs ", " _boost_libs)
-  file(STRINGS "${_boost}/libs/config/include/boost/version.hpp" _bv
-       REGEX "^#define BOOST_VERSION [0-9]+")
-  string(REGEX REPLACE ".* ([0-9]+)$" "\\1" _bv "${_bv}")
+  _tsc_version("${_boost}/libs/config/include/boost/version.hpp"
+               "^#define BOOST_VERSION ([0-9]+)" _bv)
   math(EXPR _bmaj "${_bv} / 100000")
   math(EXPR _bmin "${_bv} / 100 % 1000")
   math(EXPR _bpat "${_bv} % 100")
@@ -238,28 +244,26 @@ function(tsc_write_third_party_notices output)
 
   # --- rpclib (CARLA's fork) --------------------------------------------------
   _tsc_dep_dir(rpclib _rpc)
-  file(STRINGS "${_rpc}/CMakeLists.txt" _rv REGEX "^project\\(rpc VERSION [0-9.]+\\)")
-  string(REGEX REPLACE ".*VERSION ([0-9.]+).*" "\\1" _rv "${_rv}")
+  _tsc_version("${_rpc}/CMakeLists.txt" "^project\\(rpc VERSION ([0-9.]+)\\)" _rv)
   _tsc_leading_comment("${_rpc}/dependencies/include/format.h" _fmt
     "Copyright" "Redistributions in binary form")
   _tsc_leading_comment("${_rpc}/include/rpc/nonstd/optional.hpp" _opt "Copyright" "MIT")
   _tsc_leading_comment("${_rpc}/include/rpc/msgpack.hpp" _mp "Copyright" "Apache License")
   _tsc_leading_comment("${_rpc}/dependencies/include/asio.hpp" _asio
     "Copyright" "Boost Software License")
-  _tsc_component(NAME "rpclib" VERSION "${_rv} (carla-simulator fork)" LICENSE "MIT"
-    UPSTREAM "https://github.com/carla-simulator/rpclib" SOURCE "${_rpc}"
-    CONTAINS "bundled asio (BSL-1.0), msgpack-c (BSL-1.0/Apache-2.0), cppformat (BSD-2-Clause), optional-lite (MIT)"
-    FILES "${_rpc}/LICENSE.md"
-    TEXT
+  string(JOIN "\n\n" _rpc_bundled
       "--- bundled asio (dependencies/include/asio.hpp; BSL-1.0, text in the Boost section) ---\n\n${_asio}"
       "--- bundled msgpack-c (include/rpc/msgpack.hpp, include/rpc/msgpack/; BSL-1.0, text in the Boost section, and Apache-2.0, text in the odrSpiral section) ---\n\n${_mp}"
       "--- bundled cppformat (dependencies/include/format.h, dependencies/src/format.cc, posix.cc) ---\n\n${_fmt}"
       "--- bundled optional-lite (include/rpc/nonstd/optional.hpp) ---\n\n${_opt}\n\n${_mit_terms}")
+  _tsc_component(NAME "rpclib" VERSION "${_rv} (carla-simulator fork)" LICENSE "MIT"
+    UPSTREAM "https://github.com/carla-simulator/rpclib" SOURCE "${_rpc}"
+    CONTAINS "bundled asio (BSL-1.0), msgpack-c (BSL-1.0/Apache-2.0), cppformat (BSD-2-Clause), optional-lite (MIT)"
+    FILES "${_rpc}/LICENSE.md" TEXT _rpc_bundled)
 
   # --- RecastNavigation (CARLA's fork) ----------------------------------------
   _tsc_dep_dir(recastnavigation _recast)
-  file(STRINGS "${_recast}/CMakeLists.txt" _recv REGEX "^set\\(LIB_VERSION [0-9.]+\\)")
-  string(REGEX REPLACE ".*LIB_VERSION ([0-9.]+).*" "\\1" _recv "${_recv}")
+  _tsc_version("${_recast}/CMakeLists.txt" "^set\\(LIB_VERSION ([0-9.]+)\\)" _recv)
   _tsc_component(NAME "RecastNavigation" VERSION "${_recv} (carla-simulator fork)"
     LICENSE "Zlib" UPSTREAM "https://github.com/carla-simulator/recastnavigation"
     SOURCE "${_recast}" CONTAINS "Recast, Detour, DetourCrowd"
@@ -267,15 +271,13 @@ function(tsc_write_third_party_notices output)
 
   # --- libpng and zlib --------------------------------------------------------
   _tsc_dep_dir(libpng _png)
-  file(STRINGS "${_png}/png.h" _pngv REGEX "^#define PNG_LIBPNG_VER_STRING \"[0-9.]+\"")
-  string(REGEX REPLACE ".*\"([0-9.]+)\".*" "\\1" _pngv "${_pngv}")
+  _tsc_version("${_png}/png.h" "^#define PNG_LIBPNG_VER_STRING \"([0-9.]+)\"" _pngv)
   _tsc_component(NAME "libpng" VERSION "${_pngv}" LICENSE "Libpng-2.0"
     UPSTREAM "https://github.com/pnggroup/libpng" SOURCE "${_png}"
     FILES "${_png}/LICENSE")
 
   _tsc_dep_dir(zlib _zlib)
-  file(STRINGS "${_zlib}/zlib.h" _zv REGEX "^#define ZLIB_VERSION \"[0-9.]+\"")
-  string(REGEX REPLACE ".*\"([0-9.]+)\".*" "\\1" _zv "${_zv}")
+  _tsc_version("${_zlib}/zlib.h" "^#define ZLIB_VERSION \"([0-9.]+)\"" _zv)
   _tsc_component(NAME "zlib" VERSION "${_zv}" LICENSE "Zlib"
     UPSTREAM "https://zlib.net" SOURCE "${_zlib}"
     FILES "${_zlib}/LICENSE")
@@ -292,7 +294,9 @@ Fetched by CARLA but not linked: Eigen (unused by the client library) and
 SQLite (server-side tools only). Boost.Python is not built.
 
 ${_tsc_index}${_tsc_body}")
-  string(REPLACE "${_TSC_SEMI}" ";" _notices "${_notices}")
-  file(WRITE "${output}" "${_notices}")
+  # Only touch <output> when it changes, so reconfiguring does not re-install it.
+  file(WRITE "${output}.tmp" "${_notices}")
+  file(COPY_FILE "${output}.tmp" "${output}" ONLY_IF_DIFFERENT)
+  file(REMOVE "${output}.tmp")
   message(STATUS "typesafe_carla: wrote ${_tsc_n} third-party notices to ${output}")
 endfunction()
