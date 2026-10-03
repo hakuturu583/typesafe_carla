@@ -397,7 +397,8 @@ try:
             carla.Location(rel.location.x, rel.location.y, rel.location.z + 0.1),
             carla.Rotation(rel.rotation.pitch, rel.rotation.yaw + 30.0, rel.rotation.roll)))]))
         walker.show_pose()
-        # The server can apply the pose a tick late (issue #73): wait, bounded.
+        # The server can apply the pose a tick late (issue #73): tick up to 10
+        # times until the bone has moved by over half of the +0.1 z offset.
         posed = rel
         for _ in range(10):
             world.tick()
