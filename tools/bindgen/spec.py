@@ -140,7 +140,23 @@ class Function:
         self_ = f"{self.self_get}({self.self_name})"
         args = [a.to_carla() for a in self.args]
         if self.optional:
-            return f'TSC_CALL_OPTIONAL({", ".join([self_, self.call, chr(34) + self.optional + chr(34)] + args)});'
+            what = f'"{self.optional}"'
+            # As for `via` below, the handle is checked before the arguments.
+            obj = "self_" if args else self_
+            if self.out is None:
+                call = f'TSC_CALL_OPTIONAL({", ".join([obj, self.call, what] + args)})'
+                checks = ""
+            else:
+                # An `assign` output (checked before the call), written by
+                # `use` with the result where the method exists.
+                name, t = self.out.name, self.out.type
+                checks = "".join(f'require_ptr({r}, "{r}"); ' for r in
+                                 (r.replace("{out}", name) for r in t.require))
+                use = f"([&](auto &&r_) {{ {t.assign.replace('{out}', name).replace('{}', 'r_')}; }})"
+                call = f'TSC_CALL_OPTIONAL_THEN({", ".join([use, obj, self.call, what] + args)})'
+            if args:
+                call = f"[&](auto &self_) {{ {call}; }}({self_})"
+            return f"{checks}{call};"
         if self.expr:
             call = self.expr
         elif self.via and args:
@@ -289,8 +305,9 @@ def load(bindings: Path = BINDINGS) -> Spec:
                         raise SpecError(f"{where}: {out.type.name} is input-only")
                 optional, missing_in = None, ()
                 if "optional" in entry:
-                    if out:
-                        raise SpecError(f"{where}: an optional method has no output")
+                    if out and not (out.type.assign and not out.type.handle):
+                        raise SpecError(f"{where}: an optional method's output needs a type "
+                                        "with `assign` (e.g. string)")
                     if "via" in entry:
                         raise SpecError(f"{where}: `optional` and `via` exclude each other")
                     o = entry["optional"]

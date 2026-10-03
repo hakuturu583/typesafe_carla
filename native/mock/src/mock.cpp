@@ -1844,12 +1844,12 @@ traffic_manager::TrafficManager Client::GetInstanceTM(uint16_t port) const {
   return traffic_manager::TrafficManager(mock::Connect(_endpoint, _timeout), port);
 }
 
-std::string Client::StartRecorder(std::string name, bool) {
+std::string Client::StartRecorder(std::string name, bool, bool stop_replayer) {
   auto e = mock::Connect(_endpoint, _timeout);
   std::lock_guard<std::mutex> lock(e->mutex);
   e->recording = name;
   e->recordings[name] = e->frame;
-  return "Recording on file: " + name;
+  return "Recording on file: " + name + (stop_replayer ? "" : " (replayer kept)");
 }
 
 void Client::StopRecorder() {
@@ -1882,9 +1882,20 @@ std::string Client::ShowRecorderActorsBlocked(std::string name, double, double) 
   return "Blocked actors in " + name + ": 0\n";
 }
 
-std::string Client::ReplayFile(std::string name, double, double, uint32_t, bool) {
-  return "Replaying " + std::to_string(RecordedFrames(mock::Connect(_endpoint, _timeout), name)) +
-         " frames of " + name;
+std::string Client::ReplayFile(std::string name, double, double, uint32_t, bool,
+                               bool replay_weather, const geom::Transform &offset,
+                               std::string map_override) {
+  // The text echoes the ue5-dev arguments, so tests can see them arrive.
+  std::string text = "Replaying " +
+                     std::to_string(RecordedFrames(mock::Connect(_endpoint, _timeout), name)) +
+                     " frames of " + name;
+  if (replay_weather) text += " with weather";
+  if (offset.location.x != 0.0f || offset.location.y != 0.0f || offset.location.z != 0.0f) {
+    text += " offset by (" + std::to_string(offset.location.x) + ", " +
+            std::to_string(offset.location.y) + ", " + std::to_string(offset.location.z) + ")";
+  }
+  if (!map_override.empty()) text += " on " + map_override;
+  return text;
 }
 
 void Client::StopReplayer(bool) {}

@@ -1,0 +1,90 @@
+# Issue #36 against a real CARLA server: the recorder and replayer with the
+# official keywords, and the ue5-dev arguments. LibCarla 0.10.0 has none of
+# replay_weather / offset / map_override / stop_replayer: their defaults work
+# (the 0.10.0 call), another value raises CarlaError. The recording stays in
+# the server's folder (the API cannot delete it); its name is fixed, so a
+# rerun overwrites it.
+import os
+import typesafe_carla as carla
+
+host = os.getenv("TSC_CARLA_HOST", "localhost")
+port = int(os.getenv("TSC_CARLA_PORT", "2000"))
+NAME = "tsc_issue36_test.log"
+
+assert carla.backend() == "libcarla"
+client = carla.Client(host, port)
+client.set_timeout(30.0)
+world = client.get_world()
+sync = world.get_settings().synchronous_mode
+old_libcarla = carla.libcarla_git_ref() == "0.10.0"
+server = client.get_server_version()
+print("libcarla", carla.libcarla_git_ref(), "server", server)
+
+def advance(n: int):
+    for _ in range(n):
+        if sync:
+            world.tick()
+        else:
+            world.wait_for_tick()
+
+def unsupported(e: carla.CarlaError) -> bool:
+    """This LibCarla lacks the argument, or (ue5-dev LibCarla) the server's
+    RPC takes fewer parameters."""
+    if old_libcarla:
+        return "is not available in LibCarla 0.10.0" in e.message
+    return server.startswith("0.10.0")
+
+# --- Recorder (stop_replayer at its default: the 0.10.0 call) -------------------
+text = client.start_recorder(name=NAME, additional_data=False)
+print("recorder:", text)
+assert NAME in text, text
+try:
+    advance(20)
+finally:
+    client.stop_recorder()
+
+info = client.show_recorder_file_info(name=NAME, show_all=False)
+print("recorder file:", info.split("\n")[0], "...", len(info), "bytes of info")
+assert len(info) > 0
+assert len(client.show_recorder_collisions(name=NAME, type1="v", type2="a")) > 0
+assert len(client.show_recorder_actors_blocked(name=NAME, min_time=1.0, min_distance=1.0)) > 0
+
+# A non-default stop_replayer.
+raised = False
+try:
+    client.start_recorder(name=NAME + ".kept", stop_replayer=False)
+    client.stop_recorder()
+except carla.CarlaError as e:
+    print("stop_replayer=False:", e.message)
+    assert unsupported(e), e.message
+    raised = True
+assert raised or not old_libcarla  # 0.10.0 LibCarla: always raises
+
+# --- Replayer (the new arguments at their defaults: the 0.10.0 call) -------------
+try:
+    text = client.replay_file(name=NAME, time_start=0.0, duration=1.0, follow_id=0,
+                              replay_sensors=False, replay_weather=False,
+                              offset=carla.Transform(), map_override="")
+    print("replay:", text)
+    assert len(text) > 0
+    advance(5)
+finally:
+    client.stop_replayer(keep_actors=False)
+advance(2)
+
+# A non-default replay_weather.
+raised = False
+try:
+    text = client.replay_file(name=NAME, time_start=0.0, duration=1.0, follow_id=0,
+                              replay_weather=True)
+    print("replay with weather:", text)
+    advance(5)
+except carla.CarlaError as e:
+    print("replay_weather=True:", e.message)
+    assert unsupported(e), e.message
+    raised = True
+finally:
+    client.stop_replayer(keep_actors=False)
+assert raised or not old_libcarla  # 0.10.0 LibCarla: always raises
+advance(2)
+print("OK")

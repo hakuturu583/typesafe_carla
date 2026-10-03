@@ -145,6 +145,15 @@ Notes on issue #20 (Vehicle and Walker API gaps):
   `Vehicle.get_vehicle_bone_world_transforms()` call LibCarla methods that ue5-dev has
   and CARLA 0.10.0 does not. Built against LibCarla 0.10.0, they raise `CarlaError`
   ("... is not available in LibCarla 0.10.0"); the rest of the library is unaffected.
+- **Recorder and replayer arguments (issue #36).** `Client.replay_file(name, time_start,
+  duration, follow_id, replay_sensors, replay_weather, offset, map_override)` and
+  `Client.start_recorder(name, additional_data, stop_replayer)` have the official
+  arguments and keywords (`show_recorder_*` take `name`, and `show_recorder_collisions`
+  `type1` / `type2`). `replay_weather`, `offset` and `map_override`, and `stop_replayer`,
+  exist only in LibCarla ue5-dev: while they keep their defaults (`False`, `Transform()`,
+  `""`; `True`) the call is the one LibCarla 0.10.0 also has, so they work everywhere;
+  another value needs ue5-dev, and built against 0.10.0 raises `CarlaError`
+  ("... is not available in LibCarla 0.10.0"). `offset` may also be `None` (the default).
 - **Server plugins.** `enable_carsim`, `use_carsim_road` and `enable_chrono_physics`
   are bound (one LibCarla call each), but they only do something on a server built with
   the CarSim or Chrono plugin, which CARLA UE5 does not ship. LibCarla sends them
@@ -205,7 +214,7 @@ resolved commit are compiled in: `typesafe-codon info`,
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
-| 0.1.0 | 3.7 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
+| 0.1.0 | 3.8 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
 
 ### Backends
 

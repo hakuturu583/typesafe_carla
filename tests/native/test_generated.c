@@ -85,6 +85,8 @@ int main(void) {
   expect_null_rejected(tsc_client_show_recorder_actors_blocked(NULL, NULL, 1, 0, 0, (tsc_string_t[1]){0}), "tsc_client_show_recorder_actors_blocked");
   expect_null_rejected(tsc_client_replay_file(NULL, NULL, 1, 0, 0, 0, 0, (tsc_string_t[1]){0}), "tsc_client_replay_file");
   expect_null_rejected(tsc_client_stop_replayer(NULL, 0), "tsc_client_stop_replayer");
+  expect_null_rejected(tsc_client_start_recorder_ex(NULL, NULL, 1, 0, 0, (tsc_string_t[1]){0}), "tsc_client_start_recorder_ex");
+  expect_null_rejected(tsc_client_replay_file_ex(NULL, NULL, 1, 0, 0, 0, 0, 0, NULL, NULL, 1, (tsc_string_t[1]){0}), "tsc_client_replay_file_ex");
   expect_null_rejected(tsc_client_set_replayer_time_factor(NULL, NAN), "tsc_client_set_replayer_time_factor");
   expect_null_rejected(tsc_client_generate_opendrive_world(NULL, NULL, 0, NULL, 0, (tsc_world_t *[1]){NULL}), "tsc_client_generate_opendrive_world");
   expect_null_rejected(tsc_client_get_traffic_manager(NULL, 0, (tsc_traffic_manager_t *[1]){NULL}), "tsc_client_get_traffic_manager");
@@ -276,6 +278,6 @@ int main(void) {
   if (tsc_world_snapshot_size(NULL) != 0) { fputs("tsc_world_snapshot_size(NULL)\n", stderr); ++g_failures; }
   expect_null_rejected(tsc_world_snapshot_get(NULL, 0, (tsc_actor_snapshot_t[1]){0}), "tsc_world_snapshot_get");
   if (g_failures != 0) return 1;
-  printf("test_generated: 255 generated functions reject NULL handles\n");
+  printf("test_generated: 257 generated functions reject NULL handles\n");
   return 0;
 }

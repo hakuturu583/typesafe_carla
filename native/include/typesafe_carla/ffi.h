@@ -48,9 +48,10 @@ extern "C" {
  *      map layers, IMU gravity, textures, on_tick, light manager (#21).
  * 3.6: sensor data frame_number, image convert/save, point cloud save, collision
  *      actors, radar, semantic LiDAR, lane invasion, obstacle, DVS, optical flow (#24).
- * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37). */
+ * 3.7: tsc_debug_draw_* take a trailing persistent_lines flag (#37).
+ * 3.8: tsc_client_replay_file_ex, tsc_client_start_recorder_ex (#36). */
 #define TSC_ABI_VERSION_MAJOR 3
-#define TSC_ABI_VERSION_MINOR 7
+#define TSC_ABI_VERSION_MINOR 8
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -1063,6 +1064,17 @@ TSC_API tsc_status_t tsc_client_replay_file(tsc_client_t *client, const char *na
                                             double start, double duration, uint32_t follow_id,
                                             int32_t replay_sensors, tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_stop_replayer(tsc_client_t *client, int32_t keep_actors);
+TSC_API tsc_status_t tsc_client_start_recorder_ex(tsc_client_t *client,
+                                                  const char *name, size_t name_len,
+                                                  int32_t additional_data, int32_t stop_replayer,
+                                                  tsc_string_t *out);
+TSC_API tsc_status_t tsc_client_replay_file_ex(tsc_client_t *client,
+                                               const char *name, size_t name_len, double start,
+                                               double duration, uint32_t follow_id,
+                                               int32_t replay_sensors, int32_t replay_weather,
+                                               const tsc_transform_t *offset,
+                                               const char *map_override, size_t map_override_len,
+                                               tsc_string_t *out);
 TSC_API tsc_status_t tsc_client_set_replayer_time_factor(tsc_client_t *client, double factor);
 /* END GENERATED client_recorder */
 

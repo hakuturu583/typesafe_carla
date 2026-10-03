@@ -229,7 +229,8 @@ def _missing_allowed(f: Function, backend: str, ref: str) -> str | None:
 def _check(f: Function, overloads: list[Method], backend: str = "mock", ref: str = "") -> str | None:
     """None if one overload accepts the spec's arguments, else why not. A
     result the spec does not output is ignored (e.g. Destroy's bool). A missing
-    method is checked by _missing_allowed."""
+    method (or, for `optional`, a missing overload) is checked by
+    _missing_allowed."""
     if not overloads:
         return _missing_allowed(f, backend, ref)
     reasons = []
@@ -245,6 +246,10 @@ def _check(f: Function, overloads: list[Method], backend: str = "mock", ref: str
         if not bad:
             return None
         reasons.append("; ".join(bad))
+    # An `optional` call whose arguments no overload takes: the ref lacks this
+    # overload (e.g. 0.10.0's ReplayFile without the ue5-dev parameters).
+    if f.optional and _missing_allowed(f, backend, ref) is None:
+        return None
     return " | ".join(reasons) or "no such method"
 
 

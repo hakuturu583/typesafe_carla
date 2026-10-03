@@ -1,0 +1,8 @@
+# The recorder takes the official keyword `name`, not `filename`.
+# expect-error: 'filename' is an invalid keyword argument for start_recorder()
+import typesafe_carla as carla
+
+def record(client: carla.Client):
+    client.start_recorder(filename="run.log")
+
+record(carla.Client("localhost", 2000))

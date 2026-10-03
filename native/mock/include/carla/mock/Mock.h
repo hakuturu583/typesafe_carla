@@ -1443,13 +1443,16 @@ class Client {
                   rpc::MapLayer map_layers = rpc::MapLayer::All) const;
   void ApplyBatch(std::vector<rpc::Command> commands, bool do_tick_cue = false) const;
   traffic_manager::TrafficManager GetInstanceTM(uint16_t port = 8000) const;
-  std::string StartRecorder(std::string name, bool additional_data = false);
+  std::string StartRecorder(std::string name, bool additional_data = false,
+                            bool stop_replayer = true);
   void StopRecorder();
   std::string ShowRecorderFileInfo(std::string name, bool show_all);
   std::string ShowRecorderCollisions(std::string name, char type1, char type2);
   std::string ShowRecorderActorsBlocked(std::string name, double min_time, double min_distance);
   std::string ReplayFile(std::string name, double start, double duration, uint32_t follow_id,
-                         bool replay_sensors);
+                         bool replay_sensors, bool replay_weather = false,
+                         const geom::Transform &offset = geom::Transform(),
+                         std::string map_override = "");
   void StopReplayer(bool keep_actors);
   void SetReplayerTimeFactor(double time_factor);
   void SetReplayerIgnoreHero(bool ignore_hero);

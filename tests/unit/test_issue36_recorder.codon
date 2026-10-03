@@ -1,0 +1,46 @@
+# Issue #36 on the mock backend (which mirrors LibCarla ue5-dev): the recorder
+# and replayer take the official keywords and the ue5-dev arguments.
+import typesafe_carla as carla
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+
+text = client.start_recorder(name="i36.log", additional_data=True)
+assert text == "Recording on file: i36.log", text
+for _ in range(2):
+    world.tick()
+client.stop_recorder()
+# stop_replayer=False goes through the ue5-dev overload.
+assert "(replayer kept)" in client.start_recorder("i36b.log", False, stop_replayer=False)
+client.stop_recorder()
+
+assert "Frames: 2" in client.show_recorder_file_info(name="i36.log", show_all=True)
+assert "Collisions" in client.show_recorder_collisions(name="i36.log", type1="h", type2="v")
+assert "Blocked" in client.show_recorder_actors_blocked(name="i36.log", min_time=1.0,
+                                                        min_distance=1.0)
+
+# The defaults: the plain replay, as on LibCarla 0.10.0.
+plain = client.replay_file(name="i36.log", time_start=0.0, duration=0.0, follow_id=0)
+assert plain == "Replaying 2 frames of i36.log", plain
+assert client.replay_file("i36.log", 0.0, 0.0, 0, False, False, carla.Transform(), "") == plain
+
+# The ue5-dev arguments reach LibCarla.
+text = client.replay_file("i36.log", time_start=0.5, replay_weather=True)
+assert text == plain + " with weather", text
+offset = carla.Transform(carla.Location(1.0, 2.0, 3.0))
+text = client.replay_file("i36.log", offset=offset, map_override="Town10HD_Opt")
+assert text.startswith(plain + " offset by (1.0") and text.endswith(" on Town10HD_Opt"), text
+client.stop_replayer(keep_actors=False)
+
+def raises(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError:
+        return True
+    return False
+
+# Invalid arguments are rejected on either path.
+assert raises(lambda: client.replay_file("missing.log", replay_weather=True))
+assert raises(lambda: client.replay_file("i36.log", follow_id=-1, replay_weather=True))
+assert raises(lambda: client.show_recorder_collisions("i36.log", type1="x", type2="a"))
+print("OK")

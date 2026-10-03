@@ -1,0 +1,24 @@
+# Recorder and replayer with the official keyword names and the ue5-dev
+# arguments (issue #36), by keyword and positionally.
+import typesafe_carla as carla
+
+def record(client: carla.Client):
+    info: str = client.start_recorder(name="run.log", additional_data=True, stop_replayer=False)
+    client.start_recorder("run.log", False, True)
+    client.stop_recorder()
+    info = client.show_recorder_file_info(name="run.log", show_all=True)
+    info = client.show_recorder_collisions(name="run.log", type1="v", type2="a")
+    info = client.show_recorder_actors_blocked(name="run.log", min_time=1.0, min_distance=2.0)
+
+def replay(client: carla.Client):
+    offset = carla.Transform(carla.Location(1.0, 2.0, 0.0), carla.Rotation(yaw=90.0))
+    text: str = client.replay_file(name="run.log", time_start=1.0, duration=5.0, follow_id=0,
+                                   replay_sensors=True, replay_weather=True, offset=offset,
+                                   map_override="Town10HD_Opt")
+    text = client.replay_file("run.log", 0.0, 0.0, 0, False, False, carla.Transform(), "")
+    text = client.replay_file("run.log", time_start=2.0)
+    client.stop_replayer(keep_actors=False)
+
+client = carla.Client("localhost", 2000)
+record(client)
+replay(client)

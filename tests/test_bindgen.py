@@ -36,7 +36,24 @@ g: {call: G, args: {flag: bool}, optional: {name: Thing.g, missing_in: ["0.10.0"
                             "int32_t n", "tsc_string_list_t *out"]
     assert f.codon_params() == ["cobj", "cobj, int", "i32", "Ptr[CStringList]"]
     assert g.optional == "Thing.g" and g.missing_in == ("0.10.0",)
-    assert g.body().startswith("TSC_CALL_OPTIONAL(thing_of(thing), G, \"Thing.g\"")
+    # The handle is checked before the arguments, as for `via`.
+    assert g.body() == ('[&](auto &self_) { TSC_CALL_OPTIONAL(self_, G, "Thing.g", flag != 0); }'
+                        '(thing_of(thing));')
+
+
+def test_optional_with_output(tmp_path):
+    """An `optional` method with an `assign` output (issue #36): the output is
+    checked before the call, and written only where the method exists."""
+    s = _load(tmp_path, """
+r: {call: R, optional: {name: Thing.r, missing_in: ["0.10.0"]}, out: string}
+q: {call: Q, optional: {name: Thing.q, missing_in: ["0.10.0"]}, args: {flag: bool}, out: string}
+""")
+    r, q = s.functions
+    assert r.body() == ('require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { '
+                        'string_assign(out, r_); }), thing_of(thing), R, "Thing.r");')
+    assert q.body() == ('require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(('
+                        '[&](auto &&r_) { string_assign(out, r_); }), self_, Q, "Thing.q", '
+                        'flag != 0); }(thing_of(thing));')
 
 
 
@@ -57,7 +74,9 @@ g: {call: G, via: g_compat, out: string_list}
 
 @pytest.mark.parametrize("entry, message", [
     ("f: {call: F, out: bool, optional: {name: Thing.f, missing_in: [\"0.10.0\"]}}",
-     "an optional method has no output"),
+     "an optional method's output needs a type with `assign`"),
+    ("f: {call: F, out: world_handle, optional: {name: Thing.f, missing_in: [\"0.10.0\"]}}",
+     "an optional method's output needs a type with `assign`"),
     ("f: {call: F, optional: Thing.f}", "optional must be"),
     ("f: {call: F, optional: {name: Thing.f, missing_in: []}}", "optional must be"),
     ("f: {call: F, optional: {name: Thing.f}}", "optional must be"),
@@ -120,6 +139,23 @@ def test_missing_method_rule():
         assert _missing_allowed(via, "mock", "unknown") is not None
     plain = next(f for f in s.functions if not f.via and not f.optional)
     assert _missing_allowed(plain, "libcarla", "0.10.0") == "no such method"
+
+
+def test_missing_overload_rule():
+    """An `optional` call may also find the method with another arity (issue
+    #36: 0.10.0's ReplayFile lacks the ue5-dev parameters): validate accepts
+    that only where the method may be missing."""
+    pytest.importorskip("clang.cindex")
+    from tools.bindgen.clang import Method, _check
+
+    s = spec.load()
+    replay = next(f for f in s.functions if f.name == "tsc_client_replay_file_ex")
+    old = Method("carla::client::Client", "ReplayFile",
+                 ["std::basic_string<char>", "double", "double", "unsigned int", "bool"],
+                 "std::basic_string<char>", 5, False)
+    assert _check(replay, [old], "libcarla", "0.10.0") is None
+    assert "takes 5..5 arguments" in _check(replay, [old], "libcarla", "ue5-dev")
+    assert "takes 5..5 arguments" in _check(replay, [old], "mock", "unknown")
 
 
 def test_list_accessors():

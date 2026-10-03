@@ -144,6 +144,12 @@ std::vector<carla::geom::Transform> vehicle_bone_world_transforms(const V &vehic
   [](auto &&s, auto &&...a) {                                                    \
     if constexpr (requires { s.method(a...); }) s.method(a...); else unsupported(what); \
   }(obj __VA_OPT__(, ) __VA_ARGS__)
+// The same for a method with a result: use(obj.method(args...)). A method
+// that exists with fewer parameters (an older overload) counts as missing.
+#define TSC_CALL_OPTIONAL_THEN(use, obj, method, what, ...)                    \
+  [](auto &&u, auto &&s, auto &&...a) {                                        \
+    if constexpr (requires { s.method(a...); }) u(s.method(a...)); else unsupported(what); \
+  }(use, obj __VA_OPT__(, ) __VA_ARGS__)
 // The actor skeleton queries (bones, components, sockets, issue #19) are in
 // ue5-dev, not in CARLA 0.10.0's LibCarla; there they throw (TSC_ERROR).
 // LibCarla refs known to have every skeleton query (the mock mirrors
