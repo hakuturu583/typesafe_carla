@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 4
-TSC_ABI_VERSION_MINOR = 1
+TSC_ABI_VERSION_MINOR = 2
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -707,6 +707,9 @@ from C import LIB.tsc_world_snapshot_find(cobj, u32, Ptr[CActorSnapshot]) -> i32
 # BEGIN GENERATED world_map from bindings/world.yaml, do not edit
 from C import LIB.tsc_world_get_map(cobj, Ptr[cobj]) -> i32
 # END GENERATED world_map
+# BEGIN GENERATED map_new from bindings/map.yaml, do not edit
+from C import LIB.tsc_map_new_from_opendrive(cobj, int, cobj, int, Ptr[cobj]) -> i32
+# END GENERATED map_new
 # BEGIN GENERATED map_core from bindings/map.yaml, do not edit
 from C import LIB.tsc_map_get_name(cobj, Ptr[CString]) -> i32
 from C import LIB.tsc_map_to_opendrive(cobj, Ptr[CString]) -> i32

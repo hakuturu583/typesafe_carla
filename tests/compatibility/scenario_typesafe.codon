@@ -68,6 +68,17 @@ out("batch_error", r[0].error)
 
 # Milestone 4: map queries, traffic lights, weather.
 out("topology", str(len(m.get_topology())))
+# Issue #39: carla.Map(name, xodr_content) from the server map's OpenDRIVE.
+xm = carla.Map("copy", m.to_opendrive())
+xwp = unwrap(xm.get_waypoint(p0.location))
+xbad = 0
+try:
+    carla.Map("bad", "")
+except carla.CarlaError:
+    xbad = 1
+out("map_from_xodr", xm.name + "," + str(len(xm.get_spawn_points())) + "," +
+    str(len(xm.get_topology())) + "," + str(len(xm.generate_waypoints(2.0))) + "," +
+    str(xwp.road_id) + "," + str(xwp.lane_id) + "," + fmt(xwp.s) + "," + str(xbad))
 out("crosswalk_points", str(len(m.get_crosswalks())))
 lms = m.get_all_landmarks()
 out("landmarks", str(len(lms)))

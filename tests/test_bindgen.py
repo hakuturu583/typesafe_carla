@@ -72,11 +72,44 @@ g: {call: G, via: g_compat, out: string_list}
      "duplicate C parameter(s) ['count']"),
     ("f: {call: F, args: {thing: bool}}", "duplicate C parameter(s) ['thing']"),
     ("f: {call: F, args: {name: string_in, name_len: bool}}", "duplicate C parameter(s) ['name_len']"),
+    ("f: {args: {flag: bool}}", "missing key 'call'"),
+    ("f: {new: \"yes\", out: thing_handle}", "new must be true or false"),
+    ("f: {new: true, call: F, out: thing_handle}", "a constructor (new: true) has no call"),
+    ("f: {new: true, args: {flag: bool}}", "a constructor needs a handle output"),
+    ("f: {new: true, out: string}", "a constructor needs a handle output"),
+    ("f: {new: true, args: {name: string_in}, out: map_handle}",
+     "the output map_handle is not a handle of carla::client::Thing"),
+    ("f: {new: true, args: {flag: bool}, out: thing_handle}",
+     "a constructor needs an argument that can be invalid"),
+    ("f: {new: true, out: thing_handle}", "a constructor needs an argument that can be invalid"),
 ])
 def test_spec_errors(tmp_path, entry, message):
     with pytest.raises(spec.SpecError) as e:
-        _load(tmp_path, entry)
+        _load(tmp_path, entry, THING_HANDLE)
     assert message in str(e.value)
+
+
+THING_HANDLE = ("thing_handle:\n  c: tsc_thing_t\n  handle: true\n"
+                "  cpp: [\"std::shared_ptr<carla::client::Thing>\"]\n")
+
+
+def test_constructor(tmp_path):
+    """`new: true` (issue #39): a constructor has no self parameter; it makes
+    the class's object from the arguments and returns a new handle. `call` is
+    the class's own name, which is how validate finds the constructors."""
+    s = _load(tmp_path, """
+new: {new: true, args: {name: string_in, flag: bool}, out: thing_handle}
+new_checked: {new: true, via: make_thing, args: {name: string_in}, out: thing_handle}
+""", THING_HANDLE)
+    f, g = s.functions
+    assert f.constructor and f.call == "Thing" and f.name == "tsc_thing_new"
+    assert f.c_params() == ["const char *name, size_t name_len", "int32_t flag", "tsc_thing_t **out"]
+    assert f.codon_params() == ["cobj, int", "i32", "Ptr[cobj]"]
+    assert f.body() == ("return new tsc_thing(std::make_shared<carla::client::Thing>("
+                        'to_string(name, name_len, "name"), flag != 0));')
+    # `via`: a helper makes the object (e.g. to translate LibCarla's errors).
+    assert g.call == "Thing" and g.body() == ('return new tsc_thing(make_thing('
+                                              'to_string(name, name_len, "name")));')
 
 
 def test_self_by_value(tmp_path):

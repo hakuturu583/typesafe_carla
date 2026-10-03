@@ -52,9 +52,10 @@ extern "C" {
  * 3.8: tsc_world_get_actors_by_id (#38).
  * 4.0: tsc_world_spawn_actor / try_spawn_actor take a tsc_attachment_type_t (#34).
  * 4.1: tsc_client_create worker_threads; map_layers on load_world and
- *      load_world_if_different (#35). */
+ *      load_world_if_different (#35).
+ * 4.2: tsc_map_new_from_opendrive, a client-side Map from an OpenDRIVE string (#39). */
 #define TSC_ABI_VERSION_MAJOR 4
-#define TSC_ABI_VERSION_MINOR 1
+#define TSC_ABI_VERSION_MINOR 2
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -449,6 +450,12 @@ typedef struct tsc_waypoint_list tsc_waypoint_list_t;
 /* BEGIN GENERATED world_map from bindings/world.yaml, do not edit */
 TSC_API tsc_status_t tsc_world_get_map(tsc_world_t *world, tsc_map_t **out);
 /* END GENERATED world_map */
+/* BEGIN GENERATED map_new from bindings/map.yaml, do not edit */
+/* carla.Map(name, xodr_content), no server. TSC_ERROR when the XML does not parse; bad OpenDRIVE may give another status, or crash LibCarla (a road without planView). */
+TSC_API tsc_status_t tsc_map_new_from_opendrive(const char *name, size_t name_len,
+                                                const char *xodr_content, size_t xodr_content_len,
+                                                tsc_map_t **out);
+/* END GENERATED map_new */
 /* BEGIN GENERATED map_core from bindings/map.yaml, do not edit */
 TSC_API tsc_status_t tsc_map_get_name(const tsc_map_t *map, tsc_string_t *out);
 TSC_API tsc_status_t tsc_map_to_opendrive(const tsc_map_t *map, tsc_string_t *out);

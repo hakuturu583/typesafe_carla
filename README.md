@@ -30,7 +30,7 @@ Milestones (design section 43):
 | 2: sensors | ✅ verified against a CARLA 0.10.0 server |
 | 3: distribution | ✅ release pipeline verified end to end (manylinux wheels from CI, clean-container `uv sync` → `build` → `./main` against a CARLA server); publishing to PyPI needs the one-time setup in [docs/releasing.md](docs/releasing.md) |
 | 4: broader compatibility | ✅ verified against a CARLA 0.10.0 server |
-| 5: binding generation | ✅ 240 C ABI functions generated from `bindings/*.yaml`, spec validated against LibCarla 0.10.0 and ue5-dev with libclang, [coverage report](docs/coverage.md) |
+| 5: binding generation | ✅ 242 C ABI functions generated from `bindings/*.yaml`, spec validated against LibCarla 0.10.0 and ue5-dev with libclang, [coverage report](docs/coverage.md) |
 
 | Area | Implemented |
 |---|---|
@@ -44,7 +44,7 @@ Milestones (design section 43):
 | Lights | `World.get_lightmanager()`, `LightManager` (`get_all_lights`, `get_turned_on_lights` / `get_turned_off_lights`, `turn_on` / `turn_off`, `set_active` / `is_active`, `set_color(s)` / `get_color`, `set_intensity` / `set_intensities` / `get_intensity`, `set_light_group(s)` / `get_light_group`, `set_light_state(s)` / `get_light_state`, `set_day_night_cycle`), `Light` (`id`, `location`, `color`, `intensity`, `light_group`, `light_state`, `is_on`, `turn_on` / `turn_off`, `set_color`, `set_intensity`, `set_light_group`, `set_light_state`), `LightGroup`, `LightState` |
 | Traffic Manager | `TrafficManager` (`set_synchronous_mode`, `set_random_device_seed`, `set_hybrid_physics_mode`, `global_percentage_speed_difference`, `set_global_distance_to_leading_vehicle`, per-vehicle `vehicle_percentage_speed_difference`, `distance_to_leading_vehicle`, `random_left/right_lanechange_percentage`, `ignore_lights/signs/vehicles/walkers_percentage`, `keep_right_rule_percentage` / `keep_slow_lane_rule_percentage`, `set_desired_speed`, `vehicle_lane_offset`, `auto_lane_change`, `force_lane_change`, `update_vehicle_lights`, `get_port`, `global_lane_offset`, `collision_detection` (any actor as the other one), `set_osm_mode`, `set_respawn_dormant_vehicles`, `set_boundaries_respawn_dormant_vehicles`, `set_hybrid_physics_radius`, `set_path` (`List[Location]`), `set_route` (road option names), `get_next_action` (→ `Tuple[str, Waypoint]`), `get_all_actions` (→ `List[Tuple[str, Waypoint]]`), `shut_down`; `global_large_vehicle_wide_turn` / `vehicle_large_vehicle_wide_turn` (LibCarla ue5-dev)) |
 | Weather | `WeatherParameters` (all 14 fields, `WeatherParameters.preset("ClearNoon")` for LibCarla's named presets) |
-| Map | `name`, `get_spawn_points`, `get_waypoint` (→ `Optional[Waypoint]`), `get_waypoint_xodr` (→ `Optional[Waypoint]`), `generate_waypoints`, `to_opendrive`, `save_to_disk`, `cook_in_memory_map`, `get_topology`, `get_crosswalks`, `get_all_landmarks`, `get_all_landmarks_of_type`, `get_all_landmarks_from_id`, `get_landmark_group`; geo-referencing: `get_georeference`, `transform_to_geolocation`, and with CARLA ue5-dev `get_geoprojection`, `geolocation_to_transform` and explicit projections (`GeoLocation`, `GeoEllipsoid`, `GeoOffsetTransform`, `GeoProjectionTM` / `UTM` / `WebMerc` / `LCC2SP`, `GeoProjection`); `LaneType`, `Junction` (`id`, `bounding_box`, `get_waypoints`) |
+| Map | `carla.Map(name, xodr_content)` (client-side, from an OpenDRIVE string), `name`, `get_spawn_points`, `get_waypoint` (→ `Optional[Waypoint]`), `get_waypoint_xodr` (→ `Optional[Waypoint]`), `generate_waypoints`, `to_opendrive`, `save_to_disk`, `cook_in_memory_map`, `get_topology`, `get_crosswalks`, `get_all_landmarks`, `get_all_landmarks_of_type`, `get_all_landmarks_from_id`, `get_landmark_group`; geo-referencing: `get_georeference`, `transform_to_geolocation`, and with CARLA ue5-dev `get_geoprojection`, `geolocation_to_transform` and explicit projections (`GeoLocation`, `GeoEllipsoid`, `GeoOffsetTransform`, `GeoProjectionTM` / `UTM` / `WebMerc` / `LCC2SP`, `GeoProjection`); `LaneType`, `Junction` (`id`, `bounding_box`, `get_waypoints`) |
 | Waypoint | `id`, `transform`, `road_id`, `section_id`, `lane_id`, `s`, `is_junction`, `is_intersection`, `junction_id`, `lane_width`, `lane_type`, `lane_change` (`LaneChange`), `left_lane_marking` / `right_lane_marking` (→ `Optional[LaneMarking]`: `LaneMarkingType`, `LaneMarkingColor`), `is_rht`, `next`, `previous`, `next_until_lane_end`, `previous_until_lane_start`, `get_left_lane` / `get_right_lane` / `get_junction` (→ `Optional`), `get_landmarks`, `get_landmarks_of_type` |
 | Landmark | every field of the Python API (`id`, `name`, `type`, `road_id`, `s`, `t`, `distance`, `orientation` (`LandmarkOrientation`), `h_offset`, `pitch`, `roll`, `is_dynamic`, ...), `waypoint` (→ `Optional[Waypoint]`), `get_lane_validities`; `LandmarkType` |
 | Snapshots | `WorldSnapshot` (`id`, `frame` / `frame_count`, `timestamp`, `elapsed_seconds`, `delta_seconds`, `platform_timestamp`, `find` → `Optional`, `has_actor`, indexing, iteration), `ActorSnapshot`, `Timestamp` (`frame` / `frame_count`) |
@@ -82,6 +82,18 @@ Notes on issue #22 (map, waypoint, landmark and traffic light gaps):
   lane id outside int32 returns `None` (the Python API raises `OverflowError`).
 - `Map.save_to_disk` raises `CarlaError` when the file cannot be written (the
   Python API ignores it); `cook_in_memory_map`, like LibCarla, only logs it.
+- `carla.Map(name, xodr_content)` (issue #39) parses the OpenDRIVE text in
+  this process, with no server. Such a map has no recommended spawn points,
+  as in LibCarla. Only text that does not parse as XML reliably raises:
+  `CarlaError` "the OpenDRIVE document does not parse" (the Python API:
+  `RuntimeError: std::exception`). LibCarla accepts any well-formed XML
+  (`<foo/>` or `<OpenDRIVE/>` give an empty map); a well-formed but
+  inconsistent OpenDRIVE document can raise another error (e.g. `IndexError`
+  from an `out_of_range`) or crash inside LibCarla (e.g. a `<road>` without
+  `<planView>`), as it does with the Python API. The mock backend has no
+  OpenDRIVE parser: it accepts only a document with a closed `<OpenDRIVE>`
+  element (`<foo/>` raises there) and models any such document, even
+  `<OpenDRIVE/>`, as its own two-lane road.
 
 Notes on issue #23 (Client, Traffic Manager, blueprint, debug and value-type gaps):
 - **Rotation convention follows LibCarla.** CARLA ue5-dev flipped the sign of the pitch and roll terms of `Rotation`'s basis vectors and of `Transform`'s matrices relative to 0.10.0 (yaw-only rotations are the same). `get_forward_vector`, `get_right_vector`, `get_up_vector`, `get_matrix`, `get_inverse_matrix`, `transform`, `transform_vector` and `BoundingBox`'s methods take the rotation matrix from the LibCarla this library is built from, as the official Python API built from the same sources does; the rest of the math is Codon. `Quaternion` (only in ue5-dev's LibCarla and Python API) is pure Codon with ue5-dev's math, so with a LibCarla 0.10.0 build its basis vectors can differ from `Rotation`'s for a non-zero pitch or roll.
@@ -162,7 +174,7 @@ Notes on issue #20 (Vehicle and Walker API gaps):
   bone only; `get_wheel_steer_angle` reports the physics angle.
 
 Notes on Milestone 5:
-- **Generated plumbing, hand-written API.** 240 C ABI functions are generated from
+- **Generated plumbing, hand-written API.** 242 C ABI functions are generated from
   `bindings/*.yaml`: the C declarations, the C++ shim and the Codon FFI. Each one is a handle check,
   argument conversions and a single LibCarla call. The ABI is unchanged; libclang compared every
   prototype and struct size before and after the migration. See [docs/bindgen.md](docs/bindgen.md).
@@ -210,7 +222,7 @@ resolved commit are compiled in: `typesafe-codon info`,
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
-| 0.1.0 | 4.1 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
+| 0.1.0 | 4.2 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64 | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev`: builds, links, C ABI tests pass |
 
 ### Backends
 

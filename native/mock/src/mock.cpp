@@ -946,6 +946,27 @@ Map::Map() : _name("Carla/Maps/MockTown") {
   }
 }
 
+// LibCarla parses the document client-side and, when the XML does not parse,
+// throws a plain std::exception (throw_exception slices its "failed to
+// generate map" runtime_error); the mock throws the same. It has no XML
+// parser: it accepts a
+// document with a closed <OpenDRIVE> element (<OpenDRIVE .../> or
+// <OpenDRIVE>...</OpenDRIVE>) and models it as its own two-lane road, under
+// the given name and with the given OpenDRIVE text. As in LibCarla, such a
+// map has no recommended spawn points (they come from the server).
+Map::Map(std::string name, std::string xodr_content) : Map() {
+  const auto open = xodr_content.find("<OpenDRIVE");
+  const auto tag_end = open == std::string::npos ? open : xodr_content.find('>', open);
+  if (tag_end == std::string::npos ||
+      (xodr_content[tag_end - 1] != '/' &&
+       xodr_content.find("</OpenDRIVE>", tag_end) == std::string::npos)) {
+    throw std::exception();
+  }
+  _name = std::move(name);
+  _xodr = std::move(xodr_content);
+  _spawn_points.clear();
+}
+
 SharedPtr<Waypoint> Map::GetWaypoint(const geom::Location &location, bool project_to_road,
                                      int32_t lane_type) const {
   if ((lane_type & static_cast<int32_t>(road::Lane::LaneType::Driving)) == 0) return nullptr;

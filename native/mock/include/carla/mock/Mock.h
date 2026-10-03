@@ -890,6 +890,9 @@ class Waypoint : public std::enable_shared_from_this<Waypoint> {
 class Map : public std::enable_shared_from_this<Map> {
  public:
   Map();
+  // carla.Map(name, xodr_content) (issue #39); throws a plain std::exception,
+  // as LibCarla does, when the document does not parse (see mock.cpp).
+  explicit Map(std::string name, std::string xodr_content);
   const std::string &GetName() const { return _name; }
   const std::string &GetOpenDrive() const { return _xodr; }
   const std::vector<geom::Transform> &GetRecommendedSpawnPoints() const { return _spawn_points; }

@@ -208,6 +208,15 @@ def _methods(defs: dict[str, cindex.Cursor], cls: str,
     return out
 
 
+def _constructors(defs: dict[str, cindex.Cursor], cls: str) -> list[Method]:
+    """The public constructors `cls` itself declares (not inherited)."""
+    if cls not in defs:
+        return []
+    return [_method(cls, c) for c in defs[cls].get_children()
+            if c.kind == cindex.CursorKind.CONSTRUCTOR and not c.is_deleted_method()
+            and c.access_specifier == cindex.AccessSpecifier.PUBLIC]
+
+
 def _matches(patterns: tuple[str, ...], canonical: str) -> bool:
     return any(re.fullmatch(p, canonical) for p in patterns)
 
@@ -217,7 +226,7 @@ def _missing_allowed(f: Function, backend: str, ref: str) -> str | None:
     may: through a `via` helper (any ref), or an `optional` method on a ref the
     spec lists as lacking it. The mock mirrors the newest LibCarla and must have
     every method, so a misspelt `call` still fails there."""
-    if f.via:
+    if f.via and not f.constructor:  # a constructor's `via` wraps it; it must exist
         return None if backend == "libcarla" else "no such method (a `via` call must exist in the mock)"
     if f.optional:
         if backend == "libcarla" and ref in f.missing_in:
@@ -241,7 +250,8 @@ def _check(f: Function, overloads: list[Method], backend: str = "mock", ref: str
             continue
         bad = [f"{a.name}: {a.type.name} vs {p}" for a, p in zip(f.args, m.params)
                if not _matches(a.type.cpp, p)]
-        if f.out and not _matches(f.out.type.cpp, m.result):
+        # A constructor's output is a handle of the new object, not a result.
+        if f.out and not f.constructor and not _matches(f.out.type.cpp, m.result):
             bad.append(f"result: {f.out.type.name} vs {m.result}")
         if not bad:
             return None
@@ -272,7 +282,9 @@ def validate(spec: Spec, build_dir: Path) -> int:
     backend = _cache_var(build_dir, "TSC_BACKEND")
     ref = _cache_var(build_dir, "TSC_CARLA_GIT_REF")
     for f in spec.functions:
-        why = _check(f, methods[f.cpp_class].get(f.call, []), backend, ref)
+        overloads = (_constructors(defs, f.cpp_class) if f.constructor
+                     else methods[f.cpp_class].get(f.call, []))
+        why = _check(f, overloads, backend, ref)
         if why:
             failures.append(f"{f.spec_file}: {f.name} -> {f.cpp_class}::{f.call}: {why}")
     if failures:
