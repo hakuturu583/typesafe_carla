@@ -474,19 +474,44 @@ Deliberate differences, all in favour of static checking:
   method is a compile error in every mode (`vehicle.listen()`: "Vehicle has
   no method listen()"), as in the Python API, where `carla.Vehicle` has no
   `listen`.
-* **A `Vector3D` does not become a `Location` on assignment.** As in CARLA
-  0.10.0, `Location` arithmetic gives a `Vector3D`, and the Python API
-  converts it back implicitly. API parameters do the same here (with a
-  warning; see docs/usage.md). Assignments cannot convert, because Codon has
-  no hook for it and a variable keeps one static type. These do not compile,
-  each with `'Vector3D' does not match expected type 'Location'`:
-  - a field: `t.location = loc + offset`;
-  - a rebound local: `loc = actor.get_location()` followed by
-    `loc += offset`, `loc = loc + offset` in a loop, or a conditional
-    `loc = loc + offset`.
-
-  Write `loc = carla.Location(loc + offset)`, or start from a vector
-  (`pos = actor.get_location().as_vector()`, then `pos += offset`).
+* **A `Vector3D` does not become a `Location` on assignment to a variable.**
+  As in CARLA 0.10.0, `Location` arithmetic gives a `Vector3D`, and the
+  Python API converts it back implicitly. API parameters and field setters
+  do the same here, with a warning (see docs/usage.md): `t.location = loc +
+  offset` and `t.location /= k` store a `Location`, as in Python. A
+  variable cannot convert, because Codon has no hook for it and a variable
+  keeps one static type: a rebound local (`loc = actor.get_location()`
+  followed by `loc = loc + offset` in a loop, or a conditional
+  `loc = loc + offset`) does not compile (`'Vector3D' does not match
+  expected type 'Location'`). Write `loc += offset` (in place: `loc` stays a
+  `Location`, as in Python) or `loc = carla.Location(loc + offset)`.
+* **No `/=` on a `Location`.** The Python API has no in-place `/=`, so
+  `loc /= k` rebinds `loc` to the `Vector3D` `loc / k`. A variable keeps one
+  static type here, so on a `Location`, `Velocity`, `AngularVelocity` or
+  `Acceleration` variable it is a compile error (`'Vector3D' does not match
+  expected type 'Location'`); write `loc *= 1.0 / k` (in place) or
+  `v = loc / k`. On a `Vector3D` or `Vector2D` it works as in Python, and on
+  a field (`t.location /= k`) the setter converts, as above.
+* **Vector arithmetic otherwise matches the Python API.** Arithmetic across `Vector3D`, `Location`, `Velocity`,
+  `AngularVelocity`, `Acceleration` and `Vector2D` matches the Python API
+  (`tests/compatibility/arithmetic_cases.py`): `+` and `-` mix any of the
+  Vector3D family and give a `Vector3D`; `*` and `/` by a scalar give a
+  `Vector3D` (a `Vector2D` on a `Vector2D`), and `k / v` is `v / k`, as
+  LibCarla computes it; `+=`, `-=` and `*=` update the left operand in place
+  and keep its type (`t.location += v` changes `t`). Mixing a `Vector2D`
+  with the Vector3D family, or any other type (`loc + rotation`), is a
+  compile error. One difference: a `bool` scalar (`v * True`) does not
+  compile.
+* **Value semantics.** The Python API's vectors and transforms are C++
+  values, and typesafe_carla copies where it does: constructors and field
+  setters store copies (`t.location = loc`, then `loc += v`, leaves `t`
+  alone; a setter accepts the other vector type with a warning, as the
+  constructor does), and getter methods and read-only properties return copies
+  (`ActorSnapshot.get_velocity()`, `Light.location`, `Landmark.transform`,
+  `IMUMeasurement.accelerometer`, ...). Field getters return the stored value,
+  as the Python API's do, so `t.location.x = 1` and `t.location += v` change
+  `t`. Lists are not covered: a list field (`VehiclePhysicsControl.wheels`,
+  `torque_curve`, ...) is shared with the list it was set from.
 * **`get_landmarks_of_type(distance, type)`**: pass the type by position.
   Codon 0.19 cannot compile these methods with a parameter named `type`, so
   it is `landmark_type` (as in `Map.get_all_landmarks_of_type`).
@@ -551,9 +576,13 @@ Deliberate differences, all in favour of static checking:
   `center_of_mass`) stay `Location`.
 * **Float precision.** Values cross into LibCarla as float32, as they do in
   the Python API, so `get_control().throttle` after setting `0.2` is
-  `0.2000000029802322`. `Vector3D` and `Location` arithmetic runs in double
-  precision here and in float32 in the Python API. Results can differ in the
-  last digits. Near the edges they can differ outright:
+  `0.2000000029802322`. Arithmetic on `Vector3D`, `Location`, `Velocity`,
+  `AngularVelocity`, `Acceleration` and `Vector2D` runs in double precision
+  here and in float32 in the Python API. Results can differ in the last
+  digits, and so can `==` on them, which compares in float32 as LibCarla
+  does: `Vector3D(-81.2, 0, 0) + Vector3D(78.6634, 0, 0) ==
+  Vector3D(-81.2 + 78.6634, 0, 0)` is True here and False in Python. Near
+  the edges they can differ outright:
   `get_vector_angle` clamps the cosine to [-1, 1], so nearly parallel vectors
   give 0 rather than NaN. In `make_unit_vector`, Python computes the squared
   length in float32: with an `epsilon` below the vector's true length, a

@@ -1,0 +1,10 @@
+# Issue #77: a field setter checks its argument as the constructor does: a
+# Location assigned to WalkerControl.direction warns, and is an error in
+# strict mode.
+# expect-error: strict mode: convert with location.as_vector() (Location as Vector3D is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def aim(w: carla.WalkerControl, target: carla.Location):
+    w.direction = target
+
+aim(carla.WalkerControl(), carla.Location(1.0, 0.0, 0.0))

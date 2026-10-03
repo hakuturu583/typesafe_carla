@@ -1,0 +1,12 @@
+# Issue #77: the official module has no in-place /=, so `loc /= k` rebinds
+# `loc` to `loc / k`, a Vector3D. A variable keeps one static type here: a
+# compile error. Write `loc = carla.Location(loc / k)`, or `loc *= 1.0 / k`
+# (in place, as in Python).
+# expect-error: 'Vector3D' does not match expected type 'Location'
+import typesafe_carla as carla
+
+def halve(loc: carla.Location) -> carla.Location:
+    loc /= 2
+    return loc
+
+halve(carla.Location(1.0, 2.0, 3.0))

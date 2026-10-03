@@ -25,7 +25,7 @@ from ._ffi import (CGeoLocation, CGeoProjection, CLaneMarking, CLaneValidity,
                    tsc_waypoint_get_left_lane_marking, tsc_waypoint_get_right_lane_marking,
                    tsc_waypoint_is_rht, tsc_waypoint_get_lane_change)
 from .errors import _check
-from .geometry import Location, Transform, BoundingBox, _location_arg
+from .geometry import Location, Transform, BoundingBox, _location_ref
 from .geo import GeoLocation, GeoProjection, _projection_ptr, _projection_from_c
 from .lane_marking import LaneMarking
 
@@ -251,7 +251,7 @@ class Map:
 
         location: Location (a Vector3D is accepted as in the Python API)."""
         loc = Ptr[CVector3D](1)
-        loc[0] = _location_arg(
+        loc[0] = _location_ref(
             location, "[tsc-compat] a Vector3D passed as a Location to Map.get_waypoint")._to_c()
         out = Ptr[cobj](1)
         _check(tsc_map_get_waypoint(self._h.ptr, loc, i32(int(project_to_road)), i32(lane_type),
@@ -362,7 +362,7 @@ class Landmark:
     value: float
     height: float
     width: float
-    transform: Transform
+    _transform: Transform
 
     def __init__(self, c: CLandmark, h: Handle):
         self._h = h
@@ -382,7 +382,12 @@ class Landmark:
         self.value = c.value
         self.height = c.height
         self.width = c.width
-        self.transform = Transform._from_c(c.transform)
+        self._transform = Transform._from_c(c.transform)
+
+    @property
+    def transform(self) -> Transform:
+        """A copy, as the Python API's getter returns a value."""
+        return self._transform._copy()
 
     @property
     def h_offset(self) -> float:
@@ -512,7 +517,7 @@ class Map:
         """location: Location (a Vector3D is accepted as in the Python API).
         An explicit projection needs CARLA ue5-dev."""
         loc = Ptr[CVector3D](1)
-        loc[0] = _location_arg(
+        loc[0] = _location_ref(
             location, "[tsc-compat] a Vector3D passed as a Location to Map.transform_to_geolocation")._to_c()
         out = Ptr[CGeoLocation](1)
         _check(tsc_map_transform_to_geolocation(self._h.ptr, loc, _projection_ptr(projection), out))

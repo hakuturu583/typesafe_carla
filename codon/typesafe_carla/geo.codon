@@ -4,7 +4,7 @@
 
 from math import cos, sin, inf
 from ._ffi import CGeoLocation, CGeoProjection
-from .geometry import Location, _location_arg
+from .geometry import Location, _location_ref
 from ._eq import _fields_eq_exact
 from ._fmt import fmt_f
 
@@ -79,7 +79,7 @@ class GeoOffsetTransform:
         """As LibCarla's OffsetTransform::ApplyTransformation (float results).
 
         location: Location (a Vector3D is accepted as in the Python API)."""
-        loc = _location_arg(
+        loc = _location_ref(
             location, "[tsc-compat] a Vector3D passed as a Location to GeoOffsetTransform.ApplyTransformation")
         tx = loc.x + self.offset_x
         ty = -loc.y + self.offset_y

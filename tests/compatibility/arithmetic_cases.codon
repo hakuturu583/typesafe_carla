@@ -1,0 +1,97 @@
+# Issue #77: arithmetic between the Vector3D family and Vector2D, as the
+# official module computes it. Mirrors arithmetic_cases.py (see its format).
+# Offline: no server needed. Used by tests/unit/test_issue77_arithmetic.codon.
+#
+# A combination the official module rejects (a Vector2D with a Vector3D-family
+# operand) is a compile error here, so it is not written out: it gives "E",
+# as in Python, and tests/compile/fail checks the rejection. `/=` on a
+# Vector3D subclass is legal in Python (it rebinds the variable to a
+# Vector3D) but a compile error here, where a variable keeps its static
+# type: "C".
+import typesafe_carla as carla
+
+def _copy(v):
+    """A fresh copy of `v`, of the same type (in-place operators mutate it)."""
+    if isinstance(v, carla.Vector2D):
+        return carla.Vector2D(v.x, v.y)
+    else:
+        return type(v)(v.x, v.y, v.z)
+
+def _fmt(v) -> str:
+    s = v.__class__.__name__ + "(" + str(int(v.x * 16.0)) + "," + str(int(v.y * 16.0))
+    if not isinstance(v, carla.Vector2D):
+        s += "," + str(int(v.z * 16.0))
+    return s + ")"
+
+def _same(r, alias) -> str:
+    return "&" if r is alias else ""
+
+def _vop(op: Literal[str], a, b) -> str:
+    if op == "+":
+        return _fmt(a + b)
+    elif op == "-":
+        return _fmt(a - b)
+    elif op == "+=":
+        alias = a
+        a += b
+        return _fmt(a) + _same(a, alias)
+    else:
+        alias = a
+        a -= b
+        return _fmt(a) + _same(a, alias)
+
+# Left operands and right operands, one of each type, as in arithmetic_cases.py.
+LHS = (carla.Vector3D(1.5, -2.25, 4.0), carla.Location(1.5, -2.25, 4.0),
+       carla.Velocity(1.5, -2.25, 4.0), carla.AngularVelocity(1.5, -2.25, 4.0),
+       carla.Acceleration(1.5, -2.25, 4.0), carla.Vector2D(1.5, -2.25))
+RHS = (carla.Vector3D(0.5, 1.0, -3.0), carla.Location(0.5, 1.0, -3.0),
+       carla.Velocity(0.5, 1.0, -3.0), carla.AngularVelocity(0.5, 1.0, -3.0),
+       carla.Acceleration(0.5, 1.0, -3.0), carla.Vector2D(0.5, 1.0))
+
+def _vectors(op: Literal[str]) -> str:
+    out = List[str]()
+    for la in LHS:
+        for b in RHS:
+            a = _copy(la)
+            if isinstance(a, carla.Vector2D):
+                if isinstance(b, carla.Vector2D):
+                    out.append(_vop(op, a, b))
+                else:
+                    out.append("E")
+            elif isinstance(b, carla.Vector2D):
+                out.append("E")
+            else:
+                out.append(_vop(op, a, b))
+    return op + ":" + ",".join(out)
+
+def _scalars(op: Literal[str]) -> str:
+    out = List[str]()
+    for la in LHS:
+        for k in (4, 0.5):
+            a = _copy(la)
+            if op == "*":
+                out.append(_fmt(a * k))
+            elif op == "/":
+                out.append(_fmt(a / k))
+            elif op == "*=":
+                alias = a
+                a *= k
+                out.append(_fmt(a) + _same(a, alias))
+            elif op == "/=":
+                if (isinstance(a, carla.Location) or isinstance(a, carla.Velocity) or
+                        isinstance(a, carla.AngularVelocity) or isinstance(a, carla.Acceleration)):
+                    out.append("C")
+                else:
+                    alias = a
+                    a /= k
+                    out.append(_fmt(a) + _same(a, alias))
+            elif op == "r*":
+                out.append(_fmt(k * a))
+            else:
+                out.append(_fmt(k / a))
+    return op + ":" + ",".join(out)
+
+def arithmetic_cases() -> str:
+    return ";".join([_vectors("+"), _vectors("-"), _vectors("+="), _vectors("-="),
+                     _scalars("*"), _scalars("/"), _scalars("*="), _scalars("/="),
+                     _scalars("r*"), _scalars("r/")])
