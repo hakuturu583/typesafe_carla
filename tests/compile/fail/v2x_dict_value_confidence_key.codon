@@ -1,0 +1,12 @@
+# Issue #85: an unknown key at a "Value"/"Confidence" level is a compile error
+# (keys are case-sensitive, as in the Python API's dict).
+# expect-error: the "Value"/"Confidence" dict has no key "value" (the Python API's dict has "Value", "Confidence")
+import typesafe_carla as carla
+
+def heading(sensor: carla.Sensor) -> int:
+    params = sensor.wait_for_data(1.0).as_cam_event()[0].get()["Message"]["Message"]["CAM Parameters"]
+    hf = params["High Frequency Container"]["Basic Vehicle Container High Frequency"]
+    return hf["Heading"]["value"]
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(heading(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()))

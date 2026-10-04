@@ -125,6 +125,11 @@ try:
         assert message.data.get_string() == "hello v2x" and message.data.data_size == 9
         assert message.header.message_id == 0 and message.header.station_id == first.id
         print("custom power", received[0].power, "header", message.header)
+        # Issue #85: upstream smoke/test_v2x.py's dict path.
+        dict_payload = received[0].get()["Message"]["Message"]
+        assert dict_payload["DataSize"] == len("hello v2x")
+        assert dict_payload["Bytes"] == b"hello v2x" and dict_payload["MaxDataSize"] == 100
+        assert received[0].get()["Message"]["Header"]["Message ID"] == "CUSTOM"
 
         cam_bp = lib.find("sensor.other.v2x")
         cam_bp.set_attribute("fixed_rate", "true")
@@ -147,6 +152,15 @@ try:
         assert cam.header.message_id == 2 and cam.header.station_id == first.id
         assert cam.basic_vehicle_container_high_frequency is not None
         assert cam.protected_communication_zones_rsu is None
+        # Issue #85: the same CAM through the Python API's dict keys.
+        params = cam["Message"]["Message"]["CAM Parameters"]
+        hfc = params["High Frequency Container"]
+        assert cam["Message"]["Header"]["Message ID"] == "CAM"
+        assert hfc["High Frequency Container Present"] == "Basic Vehicle Container High Frequency"
+        hf = hfc["Basic Vehicle Container High Frequency"]
+        assert hf["Speed"]["Value"] == cam.basic_vehicle_container_high_frequency.speed.value
+        print("CAM station type", params["Basic Container"]["Station Type"], "heading confidence",
+              hf["Heading"]["Confidence"])
 finally:
     for a in reversed(actors):
         if a.is_sensor():
