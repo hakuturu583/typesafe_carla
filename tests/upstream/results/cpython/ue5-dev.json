@@ -1,6 +1,8 @@
 {
  "files": {
   "unit/test_boost_version.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestBoostInstallVersion.test_cmake_options_pins_correct_version": [
@@ -19,11 +21,11 @@
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "unit/test_client.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestClient.test_client_version": [
@@ -31,21 +33,24 @@
      "subprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestClient.test_client_version": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/unit/test_client.py\", line 19, in test_client_version\n    out = check_output(['git', 'describe', '--tags', '--dirty', '--always', ])\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/subprocess.py\", line 421, in check_output\n    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/subprocess.py\", line 526, in run\n    raise CalledProcessError(retcode, process.args,\nsubprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
+   }
   },
   "unit/test_lidar_smoke_helpers.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestLidarSmokeHelpers.test_get_current_detection_points_is_instance_method": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "unit/test_numpy_compat.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestPropControlDvsDtype.test_uses_bool_underscore": [
@@ -60,11 +65,11 @@
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "unit/test_transform.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestLocation.test_default_values": [
@@ -179,11 +184,11 @@
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "unit/test_vehicle.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestVehicleControl.test_default_values": [
@@ -199,10 +204,13 @@
      "TypeError: could not find callable method 'WheelPhysicsControl__new' for given arguments [] ['max_steer_angle', 'radius', 'tire_friction']"
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestVehiclePhysicsControl.test_named_args": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/unit/test_vehicle.py\", line 55, in test_named_args\n    wheels = [carla.WheelPhysicsControl(tire_friction=2, max_steer_angle=30, radius=10),\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 234, in __init__\n    self._o = _call(fn, args, kwargs)._o\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 125, in _call\n    return _wrap(fn(*(_unwrap(a) for a in args),\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 57, in __call__\n    raise TypeError(f\"could not find callable method '{self.name}' for given arguments \"\nTypeError: could not find callable method 'WheelPhysicsControl__new' for given arguments [] ['max_steer_angle', 'radius', 'tire_friction']"
+   }
   },
   "smoke/test_actor_introspection.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestActorIntrospection.test_vehicle_components": [
@@ -221,9 +229,7 @@
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "smoke/test_blueprint.py": {
    "file_error": null,
@@ -282,6 +288,8 @@
    "backend": "libcarla"
   },
   "smoke/test_debug_clear.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestDebugClear.test_clear_debug_shape": [
@@ -296,9 +304,7 @@
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "smoke/test_determinism.py": {
    "file_error": null,
@@ -312,6 +318,8 @@
    "backend": "libcarla"
   },
   "smoke/test_encoding_cameras.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels": [
@@ -326,9 +334,7 @@
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "smoke/test_geoconversion.py": {
    "file_error": null,
@@ -455,6 +461,8 @@
    "backend": "libcarla"
   },
   "smoke/test_recorder.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestRecorder.test_record_replay_blueprint_id_round_trips": [
@@ -465,20 +473,18 @@
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "smoke/test_replay_no_actor_aliasing.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestReplayNoActorAliasing.test_replayed_actors_have_clean_state": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "smoke/test_sensor_determinism.py": {
    "file_error": null,
@@ -555,28 +561,30 @@
    "backend": "libcarla"
   },
   "smoke/test_traffic_manager_large_vehicle.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "smoke/test_traffic_manager_sync_step.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "smoke/test_v2x.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestV2X.test_custom_v2x_send_and_receive": [
@@ -596,8 +604,10 @@
      ""
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestV2X.test_custom_v2x_send_and_receive": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/smoke/test_v2x.py\", line 82, in test_custom_v2x_send_and_receive\n    payload = first[0].get()[\"Message\"][\"Message\"]\nTypeError: 'CustomV2XMessage' object is not subscriptable",
+    "TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/smoke/test_v2x.py\", line 119, in test_custom_v2x_set_bytes_uses_buffer_byte_length\n    payload_dict = received[0][0].get()[\"Message\"][\"Message\"]\nTypeError: 'CustomV2XMessage' object is not subscriptable"
+   }
   },
   "smoke/test_vehicle_physics.py": {
    "file_error": null,
@@ -647,37 +657,37 @@
    "backend": "libcarla"
   },
   "smoke/test_vehicle_telemetry.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestVehicleTelemetry.test_get_telemetry_data_shape_and_values": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "smoke/test_walker_bounding_box.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "smoke/test_walker_navigation.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestWalkerNavigation.test_walker_ai_controller_routes_without_crash": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "smoke/test_world.py": {
    "file_error": null,
@@ -691,6 +701,8 @@
    "backend": "libcarla"
   },
   "API/prop_control.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "<script>": [
@@ -698,10 +710,13 @@
      "exit 1: IndexError: tsc_actor_blueprint_set_attribute: blueprint 'sensor.camera.rgb' has no attribute 'chromatic_aberration_intensity'"
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "<script>": "  File \"API/prop_control.py\", line 873, in __init__\n    bp.set_attribute(attr_name, attr_value)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 125, in _call\n    return _wrap(fn(*(_unwrap(a) for a in args),\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 53, in __call__\n    return f(*args, **kwargs)\nIndexError: tsc_actor_blueprint_set_attribute: blueprint 'sensor.camera.rgb' has no attribute 'chromatic_aberration_intensity'"
+   }
   },
   "API/spawn_actor.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "<script>": [
@@ -709,19 +724,20 @@
      "exit 2: spawn_actor.py: error: the following arguments are required: -b/--blueprint"
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "<script>": "usage: spawn_actor.py [-h] [--host HOST] [-p PORT] -b BLUEPRINT\n                      [-t TRANSFORM [TRANSFORM ...]] [--sync]\nspawn_actor.py: error: the following arguments are required: -b/--blueprint"
+   }
   },
   "API/test_apply_textures.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestApplyTextures.test_apply_textures": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "API/test_collision.py": {
    "file_error": null,
@@ -735,6 +751,8 @@
    "backend": "libcarla"
   },
   "API/test_no_rendering_mode.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestNoRenderingMode.test_no_rendering_mode": [
@@ -742,21 +760,24 @@
      "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestNoRenderingMode.test_no_rendering_mode": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_no_rendering_mode.py\", line 1111, in test_no_rendering_mode\n    world.start(hud)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_no_rendering_mode.py\", line 754, in start\n    self.world = self.client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
+   }
   },
   "API/test_semantic_segmentation.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestSemanticSegmentation.test_semantic_segmentation": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "API/test_sensor_recording.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestSensorRecording.test_gnss": [
@@ -796,10 +817,21 @@
      "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestSensorRecording.test_gnss": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 466, in test_gnss\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_imu": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 473, in test_imu\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_radar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 480, in test_radar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_rgb": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 487, in test_rgb\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_depth": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 495, in test_depth\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_instance_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 504, in test_instance_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_semantic_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 512, in test_semantic_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 520, in test_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_semantic_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 527, in test_semantic_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
+   }
   },
   "API/test_sensor_recording_fast.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestSensorRecording.test_gnss": [
@@ -839,10 +871,21 @@
      "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestSensorRecording.test_gnss": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 450, in test_gnss\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_imu": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 457, in test_imu\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_radar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 464, in test_radar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_rgb": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 471, in test_rgb\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_depth": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 479, in test_depth\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_instance_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 488, in test_instance_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_semantic_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 496, in test_semantic_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 504, in test_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]",
+    "TestSensorRecording.test_semantic_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 511, in test_semantic_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
+   }
   },
   "API/test_spawn_vehicles.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestVehiclesSpawnTest.test_vehicle_spawn": [
@@ -850,10 +893,13 @@
      "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestVehiclesSpawnTest.test_vehicle_spawn": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_spawn_vehicles.py\", line 14, in test_vehicle_spawn\n    world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
+   }
   },
   "API/test_spawn_walkers.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestWalkersSpawn.test_walker_spawn": [
@@ -861,32 +907,38 @@
      "RuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestWalkersSpawn.test_walker_spawn": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_spawn_walkers.py\", line 13, in test_walker_spawn\n    world = client.load_world('Town10HD_Opt')\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_load_world: std::exception [carla.Client.load_world('Town10HD_Opt')]"
+   }
   },
   "API/test_sync_mode.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestSyncMode.test_sync_mode_set_transform": [
      "fail",
-     "AssertionError: -64.64484405517578 != 75.0"
+     "AssertionError: -64.64484405517578 != 232.0"
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestSyncMode.test_sync_mode_set_transform": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sync_mode.py\", line 56, in test_sync_mode_set_transform\n    self.assertEqual(transform.location.x, new_tran.location.x)\nAssertionError: -64.64484405517578 != 232.0"
+   }
   },
   "test_connection.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "<script>": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "test_ground_truth.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "<script>": [
@@ -894,19 +946,20 @@
      "exit 1: ModuleNotFoundError: No module named 'cv2'"
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "<script>": "  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/runpy.py\", line 289, in run_path\n    return _run_module_code(code, init_globals, run_name,\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/runpy.py\", line 96, in _run_module_code\n    _run_code(code, mod_globals, init_globals,\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"test_ground_truth.py\", line 11, in <module>\n    import cv2\nModuleNotFoundError: No module named 'cv2'"
+   }
   },
   "test_raycast_sensor.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "<script>": [
      "skip",
      "an interactive script (a pygame loop; the official module also runs until the time-out)"
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "test_vehicle_physics.py": {
    "file_error": null,
@@ -920,57 +973,98 @@
    "backend": "libcarla"
   },
   "ported/API/test_collision.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestCollision.test_collision_against_side_of_car": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "ported/smoke/test_blueprint.py": {
-   "file_error": null,
-   "tests": {},
    "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestBlueprintLibrary.test_blueprint_ids": [
+     "fail",
+     "AssertionError: None is not true"
+    ]
+   },
+   "traces": {
+    "TestBlueprintLibrary.test_blueprint_ids": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_blueprint.py\", line 29, in test_blueprint_ids\n    self.assertTrue(rgx.match(bp.id))\nAssertionError: None is not true"
+   }
   },
   "ported/smoke/test_client.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestClient.test_version": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "ported/smoke/test_collision_determinism.py": {
-   "file_error": null,
-   "tests": {},
    "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestCollisionDeterminism.test_two_cars": [
+     "error",
+     "RuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]"
+    ],
+    "TestCollisionDeterminism.test_three_cars": [
+     "error",
+     "RuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]"
+    ],
+    "TestCollisionDeterminism.test_car_bike": [
+     "error",
+     "RuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]"
+    ],
+    "TestCollisionDeterminism.test_car_walker": [
+     "error",
+     "RuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]"
+    ]
+   },
+   "traces": {
+    "TestCollisionDeterminism.test_two_cars": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]",
+    "TestCollisionDeterminism.test_three_cars": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]",
+    "TestCollisionDeterminism.test_car_bike": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]",
+    "TestCollisionDeterminism.test_car_walker": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]"
+   }
   },
   "ported/smoke/test_collision_sensor.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestCollisionSensor.test_single_car": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "ported/smoke/test_determinism.py": {
-   "file_error": null,
-   "tests": {},
    "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestDeterminism.test_determ": [
+     "error",
+     "RuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]"
+    ]
+   },
+   "traces": {
+    "TestDeterminism.test_determ": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_determinism.py\", line 127, in test_determ\n    self.client.reload_world(False)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]"
+   }
   },
   "ported/smoke/test_geoconversion.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestGeoLocationConversion.test_geo_reference": [
@@ -1042,11 +1136,11 @@
     "TestGeoLocationConversion.test_utm_south_location_to_geo_and_back": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 184, in test_utm_south_location_to_geo_and_back\n    self._assert_location_close(loc, loc2)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 33, in _assert_location_close\n    self.assertAlmostEqual(a.y, b.y, delta=tol)\nAssertionError: 8444444.444444444 != 8444444.0 within 0.1 delta (0.4444444440305233 difference)",
     "TestGeoLocationConversion.test_webmerc_location_to_geo_and_back": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 208, in test_webmerc_location_to_geo_and_back\n    self._assert_location_close(loc, loc2)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 32, in _assert_location_close\n    self.assertAlmostEqual(a.x, b.x, delta=tol)\nAssertionError: -15555555.555555556 != -15555556.0 within 0.1 delta (0.4444444440305233 difference)",
     "TestGeoLocationConversion.test_lcc_location_to_geo_and_back": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 232, in test_lcc_location_to_geo_and_back\n    self._assert_location_close(loc, loc2)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_geoconversion.py\", line 33, in _assert_location_close\n    self.assertAlmostEqual(a.y, b.y, delta=tol)\nAssertionError: 5333333.333333333 != 5333333.5 within 0.1 delta (0.16666666697710752 difference)"
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "ported/smoke/test_lidar.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestSyncLidar.test_lidar_point_count": [
@@ -1072,65 +1166,108 @@
    },
    "traces": {
     "TestCompareLidars.test_lidar_comparison": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_lidar.py\", line 221, in test_lidar_comparison\n    data = sensor_queue.get(True, 10.0)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/queue.py\", line 179, in get\n    raise Empty\n_queue.Empty"
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "ported/smoke/test_map.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
+    "TestMap.test_reload_world": [
+     "error",
+     "RuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world()]"
+    ],
     "TestMap.test_load_all_maps": [
      "pass",
      ""
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestMap.test_reload_world": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_map.py\", line 24, in test_reload_world\n    world = self.client.reload_world()\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world()]"
+   }
   },
   "ported/smoke/test_props_loading.py": {
-   "file_error": null,
-   "tests": {},
    "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestPropsLoading.test_spawn_loaded_props": [
+     "fail",
+     "AssertionError: 'Unknown error while trying to spawn actor' is not false"
+    ]
+   },
+   "traces": {
+    "TestPropsLoading.test_spawn_loaded_props": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_props_loading.py\", line 42, in test_spawn_loaded_props\n    self.assertFalse(response.error)\nAssertionError: 'Unknown error while trying to spawn actor' is not false"
+   }
   },
   "ported/smoke/test_sensor_determinism.py": {
-   "file_error": null,
-   "tests": {},
    "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSensorDeterminism.test_all_sensors": [
+     "error",
+     "RuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]"
+    ]
+   },
+   "traces": {
+    "TestSensorDeterminism.test_all_sensors": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 55, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 95, in reload_world\n    self.client.reload_world(False)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world(False)]"
+   }
   },
   "ported/smoke/test_sensor_tick_time.py": {
-   "file_error": null,
-   "tests": {},
    "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSensorTickTime.test_sensor_tick_time": [
+     "fail",
+     "AssertionError: 0 != 3 :"
+    ]
+   },
+   "traces": {
+    "TestSensorTickTime.test_sensor_tick_time": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_tick_time.py\", line 74, in test_sensor_tick_time\n    self.assertEqual(sensor.num_ticks, num_sensor_ticks,\nAssertionError: 0 != 3 : \n\n sensor.other.v2x_custom does not match tick count"
+   }
   },
   "ported/smoke/test_snapshot.py": {
-   "file_error": null,
-   "tests": {},
    "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSnapshot.test_spawn_points": [
+     "error",
+     "RuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world()]"
+    ]
+   },
+   "traces": {
+    "TestSnapshot.test_spawn_points": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_snapshot.py\", line 23, in test_spawn_points\n    self.world = self.client.reload_world()\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world()]"
+   }
   },
   "ported/smoke/test_spawnpoints.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestSpawnpoints.test_spawn_points": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "ported/smoke/test_streamming.py": {
-   "file_error": null,
-   "tests": {},
    "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {}
   },
   "ported/smoke/test_sync.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
+    "TestSynchronousMode.test_reloading_map": [
+     "error",
+     "RuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world()]"
+    ],
     "TestSynchronousMode.test_sensor_transform_on_synchronous_mode": [
      "pass",
      ""
@@ -1140,10 +1277,13 @@
      ""
     ]
    },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   "traces": {
+    "TestSynchronousMode.test_reloading_map": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sync.py\", line 37, in test_reloading_map\n    self.world = self.client.reload_world()\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 188, in method\n    return _call(fn, (self,) + args, kwargs)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/pycarla/carla/_runtime.py\", line 132, in _call\n    raise RuntimeError(f\"{e} [{_describe(fn, args, kwargs)}]\") from None\nRuntimeError: tsc_client_reload_world: std::exception [carla.Client.reload_world()]"
+   }
   },
   "ported/smoke/test_vehicle_physics.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestApplyVehiclePhysics.test_single_physics_control": [
@@ -1154,11 +1294,23 @@
      "error",
      "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
+    "TestVehicleFriction.test_vehicle_zero_friction": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
     "TestVehicleFriction.test_vehicle_friction_volume": [
      "error",
      "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
     "TestVehicleFriction.test_vehicle_friction_values": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestVehicleTireConfig.test_vehicle_wheel_collision": [
+     "error",
+     "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
+    ],
+    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": [
      "error",
      "AttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
     ],
@@ -1178,36 +1330,37 @@
    "traces": {
     "TestApplyVehiclePhysics.test_single_physics_control": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
     "TestApplyVehiclePhysics.test_multiple_physics_control": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
+    "TestVehicleFriction.test_vehicle_zero_friction": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
     "TestVehicleFriction.test_vehicle_friction_volume": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
     "TestVehicleFriction.test_vehicle_friction_values": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
+    "TestVehicleTireConfig.test_vehicle_wheel_collision": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
+    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
     "TestStickyControl.test_default": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
     "TestStickyControl.test_true": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'",
     "TestStickyControl.test_false": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/tsc_unittest_driver.py\", line 53, in <module>\n    unittest.defaultTestLoader.loadTestsFromName(name).run(result)\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/unittest/loader.py\", line 154, in loadTestsFromName\n    module = __import__(module_name)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 105, in <module>\n    ApplyVehiclePhysicsControl = carla.command.ApplyVehiclePhysicsControl\nAttributeError: module 'carla.command' has no attribute 'ApplyVehiclePhysicsControl'"
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "ported/smoke/test_world.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "TestWorld.test_fixed_delta_seconds": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   },
   "ported/test_vehicle_physics.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
    "file_error": null,
    "tests": {
     "<script>": [
      "pass",
      ""
     ]
-   },
-   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
-   "backend": "libcarla"
+   }
   }
  },
  "ref": "ue5-dev"
