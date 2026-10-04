@@ -1,0 +1,135 @@
+# Issue #86: stream churn while another thread delivers callbacks. Sensors
+# are stopped, destroyed and re-listened, and on_tick callbacks replaced,
+# while callbacks run; no callback may run after its stop()/destroy()/
+# remove_on_tick() returned. Run twice: with the callback thread, and with an
+# external dispatcher thread (set_auto_dispatch(False)), which a Codon program
+# may run itself: the registry is locked in that mode too.
+import time
+import threading
+import typesafe_carla as carla
+from typesafe_carla._ffi import LIB
+from C import LIB.tsc_mock_set_delivery_delay_ms(u32)
+from C import pthread_create(Ptr[u64], cobj, cobj, cobj) -> i32
+from C import pthread_join(u64, Ptr[cobj]) -> i32
+
+world = carla.Client("localhost", 2000).get_world()
+lib = world.get_blueprint_library()
+vehicle = world.get_actors()[0].as_vehicle()
+
+class Rec:
+    lock: threading.Lock
+    stopped: bool
+    late: int
+    calls: int
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.stopped = False
+        self.late = 0
+        self.calls = 0
+
+    def hit(self):
+        with self.lock:
+            if self.stopped:
+                self.late += 1
+            self.calls += 1
+
+    def on(self, d: carla.SensorData):
+        self.hit()
+        junk = List[List[int]]()  # allocate on the delivering thread
+        for i in range(300):
+            junk.append([i] * 6)
+
+    def on_tick(self, s: carla.WorldSnapshot):
+        self.hit()
+
+    def kill(self):
+        with self.lock:
+            self.stopped = True
+
+def spawn() -> carla.Sensor:
+    return world.spawn_actor(lib.find("sensor.other.imu"), carla.Transform(),
+                             attach_to=vehicle).as_sensor()
+
+def churn(iterations: int) -> int:
+    n = 6
+    sensors = [spawn() for _ in range(n)]
+    recs = [Rec() for _ in range(n)]
+    for i in range(n):
+        sensors[i].listen(recs[i].on)
+    dead = List[Rec]()
+    tr = Rec()
+    tid = world.on_tick(tr.on_tick)
+    for it in range(iterations):
+        world.tick()
+        k = it % n
+        assert sensors[k].is_listening and sensors[k].pending_count >= 0
+        if it % 3 == 0:
+            sensors[k].stop()
+            recs[k].kill()
+            dead.append(recs[k])
+            recs[k] = Rec()
+            sensors[k].listen(recs[k].on)
+        elif it % 7 == 0:
+            sensors[k].destroy()
+            recs[k].kill()
+            dead.append(recs[k])
+            sensors[k] = spawn()
+            recs[k] = Rec()
+            sensors[k].listen(recs[k].on)
+        elif it % 11 == 0:
+            world.remove_on_tick(tid)
+            tr.kill()
+            dead.append(tr)
+            tr = Rec()
+            tid = world.on_tick(tr.on_tick)
+        junk = List[List[int]]()
+        for i in range(500):
+            junk.append([i] * 6)
+    time.sleep(0.3)
+    late = 0
+    calls = 0
+    for r in dead:
+        with r.lock:
+            late += r.late
+    for r in recs:
+        with r.lock:
+            calls += r.calls
+    assert calls > 0
+    world.remove_on_tick(tid)
+    for s in sensors:
+        s.destroy()
+    return late
+
+_stop = False
+
+def _request_stop():
+    # Through a function: Codon 0.19 does not let a top-level assignment
+    # reach a global another thread's function reads.
+    global _stop
+    _stop = True
+
+def _dispatcher(arg: cobj) -> cobj:
+    attached = carla.attach_current_thread()
+    while not _stop:
+        seen = carla.queue_signal_count()
+        carla.dispatch_callbacks()
+        carla.wait_queue_signal(seen, 0.05)
+    if attached:
+        carla.detach_current_thread()
+    return cobj()
+
+tsc_mock_set_delivery_delay_ms(u32(1))
+
+carla.start_callback_thread()
+assert churn(150) == 0
+carla.stop_callback_thread()
+
+carla.set_auto_dispatch(False)  # locked external-dispatcher mode
+tid = Ptr[u64](1)
+assert pthread_create(tid, cobj(), _dispatcher(...).F.T.__raw__(), cobj()) == i32(0)
+assert churn(150) == 0
+_request_stop()
+pthread_join(tid[0], Ptr[cobj](1))
+carla.set_auto_dispatch(True)
+print("OK")

@@ -550,27 +550,63 @@ Deliberate differences, all in favour of static checking:
   and `on_tick` callbacks run on LibCarla's streaming threads, so a program
   can tick and then block on its own queue (`queue.get(True, 10.0)`) while
   the data arrives. Here that pattern starves unless the program calls
-  `carla.start_callback_thread()` (or sets `TYPESAFE_CARLA_CALLBACK_THREAD=1`,
-  which starts it at the first `listen()`, `on_tick()` or other stream
-  operation). Then one background
-  thread runs every callback as soon as its data is queued; `tick()` and the
-  other dispatch points no longer run callbacks, and `dispatch_callbacks()`
-  returns 0. Unlike the Python API: callbacks run one at a time, on that one
-  thread (not concurrently with each other); per stream in arrival order;
-  `stop()` / `destroy()` / `listen()` wait for the callback in progress, so
-  no callback of the stream starts after they return (do not make a callback
-  wait for the main thread while it may be stopping a sensor: deadlock); an
-  exception in a callback is printed to stderr and delivery goes on.
-  **Codon has no GIL**: data a callback shares with the main thread needs a
-  `threading.Lock` (a plain `List.append` from both threads corrupts memory).
+  `carla.start_callback_thread()`. Then one background thread runs every
+  callback as soon as its data is queued; `tick()` and the other dispatch
+  points no longer run callbacks, and `dispatch_callbacks()` returns 0.
+  `carla.stop_callback_thread()` returns to dispatch points (undelivered
+  data is kept); the thread is also stopped at exit (a callback still running
+  2 s later is reported and abandoned). The switch is process-wide (the
+  callback registry is), not per client. Unlike the Python API: callbacks run
+  one at a time, on that one thread (not concurrently with each other); per
+  stream in arrival order; `stop()` / `destroy()` / `listen()` wait for the
+  callback in progress, so no callback of the stream starts after they
+  return (do not make a callback wait for the main thread while it may be
+  stopping a sensor: deadlock); an exception in a callback is printed to
+  stderr and delivery goes on.
+
+  **Codon has no GIL, so callbacks race with the main thread.** Every access
+  to data shared with a callback, reads included (`len`, indexing, iterating
+  a list a callback appends to), must hold the same `threading.Lock`; an
+  unguarded `List.append` from two threads corrupts memory. Codon 0.19 has no
+  `queue.Queue` or `threading.Condition`, so a blocking get polls with a
+  short sleep:
+
+  ```python
+  class SensorQueue:
+      lock: threading.Lock
+      items: List[carla.SensorData]
+      def __init__(self):
+          self.lock = threading.Lock()
+          self.items = []
+      def put(self, data: carla.SensorData):   # sensor.listen(q.put)
+          with self.lock:
+              self.items.append(data)
+      def get(self, timeout: float) -> carla.SensorData:
+          deadline = time.time() + timeout
+          while True:
+              with self.lock:
+                  if len(self.items) > 0:
+                      return self.items.pop(0)
+              if time.time() > deadline:
+                  raise carla.TimeoutError("no sensor data")
+              time.sleep(0.001)
+  ```
+
   That is why it is off by default: existing programs whose callbacks append
-  to unguarded lists stay correct. `carla.stop_callback_thread()` returns to
-  dispatch points (undelivered data is kept); the thread is also stopped at
-  exit. The switch is process-wide (the callback registry is), not per client.
-  Wrappers that run their own dispatcher thread (pycarla) use
-  `carla.set_auto_dispatch(False)` plus `dispatch_callbacks()`,
-  `queue_signal_count()` and `wait_queue_signal()` instead, on a thread
-  registered with `carla.attach_current_thread()`.
+  to unguarded lists stay correct. `TYPESAFE_CARLA_CALLBACK_THREAD=1` starts
+  the thread at the first callback registration (`listen(callback)`,
+  `listen_to_gbuffer`, `on_tick`) **without changing the program: it makes an
+  unchanged program multithreaded**, so set it only for programs whose
+  callbacks follow the rule above. An explicit `start_callback_thread()` or
+  `stop_callback_thread()` overrides it.
+
+  A program (or wrapper) may instead run its own dispatcher thread:
+  `carla.set_auto_dispatch(False)`, then loop on `seen =
+  carla.queue_signal_count()`, `carla.dispatch_callbacks()`,
+  `carla.wait_queue_signal(seen, timeout)`; the registry is then locked as
+  with the callback thread. A thread not created by Codon (e.g. a CPython
+  thread) calls `carla.attach_current_thread()` first. pycarla, serialized
+  by the GIL, passes `set_auto_dispatch(False, lock=False)`.
 * **`TrafficLight` is not statically a `TrafficSign`.** In the Python API
   `carla.TrafficLight` derives from `carla.TrafficSign`. Here both derive from
   `Actor` (see [Codon limitation 9](#codon-limitations-found-while-building-this)):

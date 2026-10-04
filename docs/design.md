@@ -661,16 +661,24 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   `GC_pthread_create` (exported by Codon's runtime), so the Boehm collector
   registers it and scans its stack; its entry point is a top-level Codon
   function's raw pointer. Callbacks may allocate freely.
-- **Locking.** While the thread runs, every registry operation and every
-  public operation that changes a sensor's streams (`listen`, `stop`,
-  `listen_to_gbuffer`, `stop_gbuffer`, `destroy`, `apply_batch(_sync)`,
-  `on_tick` / `remove_on_tick`) holds one lock, and the thread holds it for
-  each delivered item. So the registry and the shim's per-handle queue
-  pointers are never touched by two threads at once, and once `stop()`
-  returns no callback of that stream starts. The lock is recursive (a
-  callback may stop or listen) and fair: a gate lock in front of it keeps the
-  thread, which re-takes it per item, from starving the program's `stop()`.
-  Without the thread no lock is taken.
+- **Locking.** While another thread may deliver callbacks (the callback
+  thread, or an external dispatcher after `set_auto_dispatch(False)`), every
+  registry operation, every delivered item, and every sensor stream
+  operation that reads or changes the shim's queue pointers (`listen`,
+  `stop`, `listen_to_gbuffer`, `stop_gbuffer`, `poll`, `pending_count`,
+  `dropped_count`, `is_listening`, `is_listening_gbuffer`, `on_tick` /
+  `remove_on_tick`) holds one lock. Once `stop()` returns no callback of
+  that stream starts. The lock is not held across server round trips:
+  `destroy()` and `apply_batch(_sync)` lock only their registry steps (the
+  G-buffer stops before, the unregistration after), so a slow RPC does not
+  stall delivery. `wait_for_data()` blocks, so it is not locked either.
+  Underneath, the shim keeps each sensor handle's queue pointers behind a
+  mutex and hands readers their own reference (`tsc_sensor::get_queue`), so
+  even a wait that overlaps a re-`listen()` from a callback stays memory
+  safe. The lock is recursive (a callback may stop or listen) and fair: a
+  gate lock in front of it keeps the delivering thread, which re-takes it
+  per item, from starving the program's `stop()`. Without another thread,
+  no lock is taken.
 - **Semantics.** Callbacks run one at a time, on that thread only: dispatch
   points stop dispatching and `dispatch_callbacks()` returns 0, so a
   callback never runs inside `tick()` (as in the Python API). Per stream,
@@ -679,13 +687,18 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   it too); in dispatch-point mode it propagates instead. `stop_callback_thread()`
   waits for the callback in progress and joins the thread; undelivered data
   stays queued for the dispatch points. An `atexit` handler stops and joins
-  it (waiting at most 2 s for a running callback).
+  it (waiting at most 2 s for a running callback, then warning and exiting
+  anyway). If the queue signal itself fails, the thread reports it and
+  callbacks fall back to the dispatch points.
 - **Default: off.** The Python API's semantics argue for on, but Codon has no
   GIL: the documented `frames.append(...)` callback would race with the main
   thread and corrupt memory instead of merely interleaving. Existing programs
   keep their single-threaded guarantees; programs ported from Python opt in
   with `start_callback_thread()` or `TYPESAFE_CARLA_CALLBACK_THREAD=1` (which
-  starts it at the first registry operation). The switch is process-wide, as
+  starts it once, at the first callback registration: `listen(callback)`,
+  `listen_to_gbuffer` or `on_tick`; an explicit start or stop cancels it).
+  The variable makes an unchanged program multithreaded, so it suits only
+  callbacks that already guard shared data. The switch is process-wide, as
   the registry is; a per-client switch would not help, because a World does
   not know its sensors.
 - **External dispatchers.** A wrapper that must call back into another
@@ -694,11 +707,14 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   `set_auto_dispatch(False)` and runs its own loop: `seen =
   queue_signal_count()`, `dispatch_callbacks()`, `wait_queue_signal(seen,
   timeout)` (or `tsc_queue_signal_wait` directly, without holding the GIL).
-  Such a thread was not made by Codon, so it first calls
-  `attach_current_thread()` (`GC_register_my_thread`) so the collector scans
-  its stack, and `detach_current_thread()` before it exits. With the GIL
-  held across each call into Codon, its calls never overlap the program's,
-  which is all the unlocked registry needs.
+  A thread not made by Codon first calls `attach_current_thread()`
+  (`GC_register_my_thread`) so the collector scans its stack, and
+  `detach_current_thread()` before it exits. In Codon, that mode is locked
+  like the callback thread. Under CPython it must not be: a Python callback
+  may release the GIL while holding the lock, and the main thread would then
+  block on the lock while holding the GIL (deadlock). The wrapper therefore
+  passes `set_auto_dispatch(False, lock=False)`; the GIL, held across each
+  call into Codon, already keeps its calls from overlapping the program's.
 
 The callback type is `Callable[[SensorData], None]`. Functions, bound methods,
 lambdas and closures are all accepted (Codon 0.19 cannot convert a capturing

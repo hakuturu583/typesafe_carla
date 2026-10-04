@@ -7,6 +7,7 @@ def use(world: carla.World):
     carla.stop_callback_thread()
     carla.set_auto_dispatch(False)
     enabled: bool = carla.auto_dispatch()
+    carla.set_auto_dispatch(False, lock=False)
     carla.set_auto_dispatch(True)
     seen: int = carla.queue_signal_count()
     now: int = carla.wait_queue_signal(seen, 0.0)

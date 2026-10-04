@@ -168,12 +168,28 @@ using SensorQueue = ItemQueue<carla::SharedPtr<carla::sensor::SensorData>>;
 // handle for the same actor (e.g. from World.get_actor) is not listening, and
 // releasing the last reference stops the stream (LibCarla's destructor calls
 // Stop()). The queue is shared with the callback, so late measurements are safe.
+// The queue pointers are read and replaced under queues_mutex (issue #86: a
+// callback thread may listen() or stop() while another thread polls), and
+// readers keep their own reference, so a replaced queue outlives a wait on it.
 struct tsc_sensor : tsc_actor {
+  explicit tsc_sensor(carla::SharedPtr<carla::client::Sensor> s)
+      : tsc_actor(std::move(s), TSC_KIND_SENSOR) {}
+
+  // gbuffer_id < 0: the measurements' queue; else a G-buffer texture's (#33).
+  std::shared_ptr<tsc::SensorQueue> get_queue(int gbuffer_id = -1) const {
+    std::lock_guard<std::mutex> lock(queues_mutex);
+    return gbuffer_id < 0 ? queue : gbuffer_queues[static_cast<size_t>(gbuffer_id)];
+  }
+  void set_queue(std::shared_ptr<tsc::SensorQueue> q, int gbuffer_id = -1) {
+    std::lock_guard<std::mutex> lock(queues_mutex);
+    (gbuffer_id < 0 ? queue : gbuffer_queues[static_cast<size_t>(gbuffer_id)]).swap(q);
+  }  // the previous queue is released here, after unlocking
+
+ private:
+  mutable std::mutex queues_mutex;
   std::shared_ptr<tsc::SensorQueue> queue;
   // Issue #33: one queue per G-buffer texture listened to (listen_to_gbuffer).
   std::array<std::shared_ptr<tsc::SensorQueue>, TSC_GBUFFER_TEXTURE_COUNT> gbuffer_queues;
-  explicit tsc_sensor(carla::SharedPtr<carla::client::Sensor> s)
-      : tsc_actor(std::move(s), TSC_KIND_SENSOR) {}
 };
 
 struct tsc_walker : tsc_actor {

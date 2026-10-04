@@ -52,6 +52,7 @@ from .lane_marking import LaneMarking
 from .map import _read_buffer
 from ._eq import _fields_eq
 from ._callbacks import (_register_callback, _unregister_stream, _find_callback, _pop, _Locked,
+                         _maybe_autostart,
                          dispatch_sensor_callbacks)
 from ._ffi import (TSC_GBUFFER_TEXTURE_COUNT, tsc_sensor_enable_for_ros,
                    tsc_sensor_disable_for_ros, tsc_sensor_is_enabled_for_ros,
@@ -1069,6 +1070,8 @@ class Sensor(Actor):
         if isinstance(callback, int):
             if queue_size is not None:
                 raise CarlaError("listen(): queue size given twice", TSC_INVALID_ARGUMENT)
+        elif callback is not None:
+            _maybe_autostart()  # TYPESAFE_CARLA_CALLBACK_THREAD=1
         with _Locked():  # the callback thread (issue #86): see stop()
             if isinstance(callback, int):
                 self._start(callback)
@@ -1106,7 +1109,8 @@ class Sensor(Actor):
     @property
     def is_listening(self) -> bool:
         out = Ptr[i32](1)
-        _check(tsc_sensor_is_listening(self._h.ptr, out))
+        with _Locked():  # issue #86: a callback may listen() or stop() meanwhile
+            _check(tsc_sensor_is_listening(self._h.ptr, out))
         return int(out[0]) != 0
 
     @property
@@ -1118,14 +1122,16 @@ class Sensor(Actor):
     def dropped_count(self) -> int:
         """Measurements dropped because a bounded queue was full."""
         out = Ptr[u64](1)
-        _check(tsc_sensor_dropped_count(self._h.ptr, out))
+        with _Locked():
+            _check(tsc_sensor_dropped_count(self._h.ptr, out))
         return int(out[0])
 
     @property
     def pending_count(self) -> int:
         """Measurements queued and not yet polled or dispatched."""
         out = Ptr[int](1)
-        _check(tsc_sensor_pending_count(self._h.ptr, out))
+        with _Locked():
+            _check(tsc_sensor_pending_count(self._h.ptr, out))
         return out[0]
 
     def _check_polling(self, what: str):
@@ -1135,13 +1141,16 @@ class Sensor(Actor):
 
     def poll(self) -> Optional[SensorData]:
         """The oldest queued measurement, or None. Never blocks. Polling mode only."""
-        self._check_polling("poll()")
-        return self._pop()
+        with _Locked():  # the check and the pop, against a concurrent listen(callback)
+            self._check_polling("poll()")
+            return self._pop()
 
     def wait_for_data(self, seconds: float = 10.0) -> SensorData:
         """Blocks until a measurement arrives. Raises TimeoutError. Polling mode only."""
         self._check_polling("wait_for_data()")
         out = Ptr[cobj](1)
+        # Not under _Locked: it blocks. The shim waits on its own reference to
+        # the queue, so a concurrent listen() or stop() is safe.
         _check(tsc_sensor_wait_for_data(self._h.ptr, seconds, out))
         return SensorData(Handle(out[0]))
 
@@ -1176,6 +1185,7 @@ class Sensor(Actor):
         a server known to stream G-buffers."""
         cb: Callable[[cobj], None] = _CallbackThunk(callback).run
         id = _gbuffer_id(gbuffer_id)
+        _maybe_autostart()  # TYPESAFE_CARLA_CALLBACK_THREAD=1
         with _Locked():  # the callback thread (issue #86): see stop()
             # Before listening: _register_callback's own unregister would stop the new stream.
             _unregister_stream(self.id, id)
@@ -1184,7 +1194,9 @@ class Sensor(Actor):
 
     def is_listening_gbuffer(self, gbuffer_id: int) -> bool:
         out = Ptr[i32](1)
-        _check(tsc_sensor_is_listening_gbuffer(self._h.ptr, u32(_gbuffer_id(gbuffer_id)), out))
+        id = _gbuffer_id(gbuffer_id)
+        with _Locked():
+            _check(tsc_sensor_is_listening_gbuffer(self._h.ptr, u32(id), out))
         return int(out[0]) != 0
 
     def stop_gbuffer(self, gbuffer_id: int):
