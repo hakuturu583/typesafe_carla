@@ -181,7 +181,10 @@ Python's `ast`), with no per-class code:
   Python classes mirroring the CARLA Python API, built from the generated
   `_spec.json`. They give the class hierarchy (`isinstance(v, carla.Actor)`),
   the enumerations, `carla.command`, callbacks receiving wrapped objects, and
-  errors as RuntimeError. As in CARLA's Python API, `listen` / `on_tick`
+  errors as RuntimeError. Instances take arbitrary attributes, as
+  Boost.Python's do, but each access builds a new wrapper (as in
+  Boost.Python), so an attribute set on one wrapper (`t.location.foo = 1`) is
+  not visible through another (`t.location.foo` again). As in CARLA's Python API, `listen` / `on_tick`
   callbacks run on a background thread as soon as their data arrives (issue
   #89). At the first callback registration (`listen`, `listen_to_gbuffer`,
   `on_tick`; importing `carla` starts no thread) the runtime starts a daemon

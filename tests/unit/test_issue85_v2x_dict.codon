@@ -188,8 +188,90 @@ def test_values():
     h = carla.ItsPduHeader(2, 9, 1)
     assert h["Message ID"] == "Not Found"
 
+def _hf(cam: carla.CAM):
+    return cam["Message"]["Message"]["CAM Parameters"]["High Frequency Container"][
+        "Basic Vehicle Container High Frequency"]
+
+def _basic(cam: carla.CAM):
+    return cam["Message"]["Message"]["CAM Parameters"]["Basic Container"]
+
+def _ellipse(cam: carla.CAM):
+    return _basic(cam)["Reference Position"]["Position Confidence Eliipse"]
+
+def _role(cam: carla.CAM) -> str:
+    return cam["Message"]["Message"]["CAM Parameters"]["Low Frequency Container"][
+        "Basic Vehicle Low Frequency"]["Vehicle Role"]
+
+def test_display_strings():
+    """Every display table, exactly, and each fallback: the strings of
+    PythonAPI/carla/src/V2XData.cpp for the LibITS.h codes, on a received CAM
+    whose fields are set by hand (the dict views read the typed objects)."""
+    bp = lib.find("sensor.other.v2x")
+    bp.set_attribute("fixed_rate", "true")
+    tx = world.spawn_actor(bp, carla.Transform(), attach_to=vehicle).as_sensor()
+    rx = world.spawn_actor(bp, carla.Transform(), attach_to=other).as_sensor()
+    rx.listen()
+    world.tick()
+    cam = rx.wait_for_data(1.0).as_cam_event()[0].get()
+    h = unwrap(cam.basic_vehicle_container_high_frequency)
+    low = unwrap(cam.basic_vehicle_container_low_frequency)
+
+    # One code per table.
+    h.heading.confidence = 126            # HeadingConfidence_outOfRange
+    h.speed.confidence = 100              # SpeedConfidence_equalOrWithinOneMeterPerSec
+    h.vehicle_length.confidence = 3       # ..._trailerPresenceIsUnknown
+    h.longitudinal_acceleration.confidence = 101  # AccelerationConfidence_outOfRange
+    h.curvature.confidence = 5            # CurvatureConfidence_onePerMeter_0_1
+    h.yaw_rate.confidence = 6             # YawRateConfidence_degSec_100_00
+    h.steering_wheel_angle = carla.ValueConfidence(0, 1)  # ..._equalOrWithinOnePointFiveDegree
+    assert _hf(cam)["Heading"]["Confidence"] == "Out of Range"
+    assert _hf(cam)["Speed"]["Confidence"] == "Equal or With in One Meter per Sec"
+    assert _hf(cam)["Vehicle Length"]["Confidence"] == "Trailer Presence Is Unknown"
+    assert _hf(cam)["Longitudinal Acceleration"]["Confidence"] == "Out Of Range"
+    assert _hf(cam)["Curvature"]["Confidence"] == "One Per Meter 0_1"
+    assert _hf(cam)["Yaw Rate"]["Confidence"] == "degSec 100_00"
+    assert unwrap(_hf(cam)["Steering Wheel Angle"])["Confidence"] == "Equal or With in 1.5 degree"
+    cam.station_type = 11                 # StationType_tram
+    assert _basic(cam)["Station Type"] == "Tram"
+    cam.reference_position.semi_major_confidence = 1  # SemiAxisLength_oneCentimeter
+    cam.reference_position.semi_major_orientation = 2700  # HeadingValue_wgs84West
+    assert _ellipse(cam)["Semi Major Confidence"] == "Semi Axis Length One Centimeter"
+    assert _ellipse(cam)["Semi Major Orientation"] == "Heading wgs84 West"
+    low.vehicle_role = 15                 # VehicleRole_reserved3
+    assert _role(cam) == "Reserved 3"
+    low.vehicle_role = 12                 # VehicleRole_taxi
+    assert _role(cam) == "Taxi"
+    cam.header.message_id = 7             # messageID_ev_rsr
+    assert cam["Message"]["Header"]["Message ID"] == "EV_RSR"
+
+    # The fallbacks (codes outside every table).
+    for v in (h.heading, h.speed, h.vehicle_length, h.longitudinal_acceleration, h.curvature,
+              h.yaw_rate):
+        v.confidence = 99
+    h.steering_wheel_angle = carla.ValueConfidence(0, 99)
+    assert _hf(cam)["Heading"]["Confidence"] == "Unavailable"
+    assert _hf(cam)["Speed"]["Confidence"] == "Unavailable"
+    assert _hf(cam)["Vehicle Length"]["Confidence"] == "Unavailable"
+    assert _hf(cam)["Longitudinal Acceleration"]["Confidence"] == "Unavailable"
+    assert _hf(cam)["Curvature"]["Confidence"] == "Unavailable"
+    assert _hf(cam)["Yaw Rate"]["Confidence"] == "Unavailable"
+    assert unwrap(_hf(cam)["Steering Wheel Angle"])["Confidence"] == "Unavailable"
+    cam.station_type = 99
+    assert _basic(cam)["Station Type"] == "Unknown"
+    cam.reference_position.semi_major_orientation = 5
+    assert _ellipse(cam)["Semi Major Orientation"] == "Heading Unavailable"
+    cam.reference_position.semi_major_confidence = 99
+    assert _ellipse(cam)["Semi Major Confidence"] == "Semi Axis Length Unavailable"
+    cam.header.message_id = 99
+    assert cam["Message"]["Header"]["Message ID"] == "Not Found"
+    low.vehicle_role = 99
+    assert _role(cam) == "Default"
+    for s in (tx, rx):
+        s.destroy()
+
 test_custom()
 test_cam()
 test_values()
+test_display_strings()
 other.destroy()
 print("OK")
