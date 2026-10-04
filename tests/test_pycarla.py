@@ -196,7 +196,9 @@ print('OK')
 """)
 
 
-_V2X = """
+def test_v2x_get_returns_the_python_api_dicts(pycarla):
+    """Issue #101: get() of a custom message and of a CAM crashed under pycarla."""
+    _run_ok(pycarla, _SETUP % 0 + """
 other = world.spawn_actor(lib.find('vehicle.audi.tt'), carla.Transform(carla.Location(12.0, 0.0, 0.5)))
 q = queue.Queue()
 # Custom messages (smoke/test_v2x.py's path).
@@ -226,14 +228,7 @@ assert basic['Station Type'] == 'Passenger Car', basic
 assert set(basic['Reference Position']) == {'Latitude', 'Longitude', 'Position Confidence Eliipse'}
 rx.stop()
 print('OK')
-"""
-
-
-def test_v2x_get_returns_the_python_api_dicts(pycarla):
-    """Issue #101: get() of a received custom message and of a CAM builds the
-    Python API's nested dicts (the display-name tables used to be
-    uninitialised in the extension, and get() crashed)."""
-    _run_ok(pycarla, _SETUP % 0 + _V2X)
+""")
 
 
 def test_instances_take_arbitrary_attributes(pycarla):
