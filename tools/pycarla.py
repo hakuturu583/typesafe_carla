@@ -100,9 +100,6 @@ MEMORYVIEWS = ["RawData"]
 # command.codon resolves that at compile time). The wrapper takes the id as an
 # int; the runtime turns `<x>=` into `<x>_id=` and an Actor into its id.
 # A target in OPTIONAL_TARGETS may also be left out (SpawnActor's parent).
-# Keys of the Python API's V2X dicts whose value is bytes (typesafe_carla:
-# a str of the raw bytes).
-BYTES_KEYS = {"Bytes"}
 MISSING = "_MISSING"
 # Parameter names an exported function must not have: Codon's exporter
 # (wrap_multiple in python.codon) realizes the library call with the
@@ -113,6 +110,9 @@ MISSING = "_MISSING"
 SHADOWING = {"type": "type_"}
 TARGETS = {"actor_id": "actor", "parent_id": "parent"}
 OPTIONAL_TARGETS = {"parent_id"}
+# Keys of the Python API's V2X dicts whose value is bytes (typesafe_carla:
+# a str of the raw bytes; see Gen.dict_views).
+BYTES_KEYS = {"Bytes"}
 # With more than this many defaulted generic parameters, each takes one
 # Optional of its most general type instead of one overload per type (the
 # product would explode, e.g. WheelPhysicsControl's six vectors).
@@ -157,7 +157,7 @@ def _strip_class_generics(line: str) -> str:
     m = re.match(r"^class \w+\[", line)
     if not m:
         return line
-    depth, i = 0, m.end() - 1
+    depth = 0
     for i in range(m.end() - 1, len(line)):
         depth += {"[": 1, "]": -1}.get(line[i], 0)
         if depth == 0:
@@ -268,11 +268,12 @@ class Inventory:
                        for a in node.names]
 
     @staticmethod
-    def _dict_views(trees: dict[str, ast.Module]) -> dict[str, tuple[str, list[str]]]:
+    def _dict_views(trees: dict[str, ast.Module]) -> dict[str, tuple[str, list[str], set[str]]]:
         """Classes standing for one of the Python API's dicts (V2X get(), issue
         #85): a `__getitem__(self, key: Static[str])` comparing `key` with
-        literal strings. name -> (module, the keys, in order)."""
-        views: dict[str, tuple[str, list[str]]] = {}
+        literal strings. name -> (module, the keys in order, the keys whose
+        branch may raise KeyError through `_required`: the dict leaves them out)."""
+        views: dict[str, tuple[str, list[str], set[str]]] = {}
         for m, tree in trees.items():
             for node in tree.body:
                 if not isinstance(node, ast.ClassDef):
@@ -282,12 +283,25 @@ class Inventory:
                             and any(_unparse(a.annotation) == "Static[str]" for a in f.args.args)):
                         continue
                     key = next(a.arg for a in f.args.args if _unparse(a.annotation) == "Static[str]")
-                    keys = [c.comparators[0].value for c in ast.walk(f)
-                            if isinstance(c, ast.Compare) and isinstance(c.left, ast.Name)
-                            and c.left.id == key and isinstance(c.ops[0], ast.Eq)
-                            and isinstance(c.comparators[0], ast.Constant)
-                            and isinstance(c.comparators[0].value, str)]
-                    views[node.name] = (m, list(dict.fromkeys(keys)))
+                    keys, optional = [], set()
+                    for branch in ast.walk(f):
+                        c = branch.test if isinstance(branch, ast.If) else None
+                        if not (isinstance(c, ast.Compare) and isinstance(c.left, ast.Name)
+                                and c.left.id == key and isinstance(c.ops[0], ast.Eq)
+                                and isinstance(c.comparators[0], ast.Constant)
+                                and isinstance(c.comparators[0].value, str)):
+                            continue
+                        k = c.comparators[0].value
+                        keys.append(k)
+                        if any(isinstance(n, ast.Call) and _unparse(n.func) == "_required"
+                               for stmt in branch.body for n in ast.walk(stmt)):
+                            optional.add(k)
+                    if not keys:
+                        raise RuntimeError(
+                            f"pycarla: {m}.codon: {node.name}.__getitem__ takes a Static[str] key but "
+                            f"does not dispatch on `{key} == \"<literal>\"`: its dict keys are unknown "
+                            f"(see Gen.dict_views)")
+                    views[node.name] = (m, list(dict.fromkeys(keys)), optional)
         return views
 
     def _class(self, node: ast.ClassDef, module: str, decos: list[str]) -> Cls:
@@ -399,6 +413,11 @@ def _split_params(sig: str) -> list[str]:
         else:
             cur += ch
     return out + ([cur.strip()] if cur.strip() else [])
+
+
+def _view_conv(key: str) -> str:
+    """The prelude function converting a dict view's value under `key`."""
+    return "_pybytes" if key in BYTES_KEYS else "_anypy"
 
 
 class Gen:
@@ -680,7 +699,7 @@ class Gen:
         if name == "__getitem__" and cls in self.inv.dict_views:
             # A dict view's literal keys, dispatched at run time (Gen.dict_views).
             keys = self.inv.dict_views[cls][1]
-            body = "".join(f"if key == {k!r}:\n    return _anypy(self.v[{k!r}])\n" for k in keys)
+            body = "".join(f"if key == {k!r}:\n    return {_view_conv(k)}(self.v[{k!r}])\n" for k in keys)
             emitted = self.fn(fname, selfp + [("key", "str", None)], body + "raise KeyError(key)")
             entry = {"fn": fname if emitted else None, "kind": kind}
             if not emitted:
@@ -925,14 +944,14 @@ class Gen:
         dict leaves out raises KeyError and is left out here too); `get()`
         returns it, and a box's `[key]` reads one key."""
         out = []
-        for name, (module, keys) in sorted(self.inv.dict_views.items()):
+        for name, (module, keys, optional) in sorted(self.inv.dict_views.items()):
             out.append(f"from typesafe_carla.{module} import {name}")
             lines = [f"@extend\nclass {name}:", "    def _tsc_py(self) -> pyobj:",
                      "        d = _pyo(_ipy.PyDict_New())"]
             for k in keys:
-                conv = "_pybytes" if k in BYTES_KEYS else "_anypy"
-                lines += ["        try:", f"            d[{k!r}] = {conv}(self[{k!r}])",
-                          "        except KeyError:", "            pass"]
+                value = f"d[{k!r}] = {_view_conv(k)}(self[{k!r}])"
+                lines += (["        try:", f"            {value}", "        except KeyError:", "            pass"]
+                          if k in optional else [f"        {value}"])
             lines.append("        return d")
             out.append("\n".join(lines))
         return out
