@@ -224,7 +224,9 @@ def _redirect(cls_name: str, args: tuple, kwargs: dict) -> tuple[tuple, dict]:
 
 
 def _make_class(name: str, spec: dict, bases: tuple) -> type:
-    ns: dict = {"__slots__": (), "__module__": "carla", "__qualname__": name}
+    # No __slots__: as Boost.Python's, the instances take arbitrary attributes
+    # (upstream tests set UE4-era fields, e.g. WheelPhysicsControl.tire_friction).
+    ns: dict = {"__module__": "carla", "__qualname__": name}
     init = spec.get("init")
     if init:
         fn = _fn(init)

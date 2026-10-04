@@ -235,3 +235,18 @@ def test_v2x_get_returns_the_python_api_dicts(pycarla):
     uninitialised in the extension, and get() crashed)."""
     _run_ok(pycarla, _SETUP % 0 + _V2X)
 
+
+def test_instances_take_arbitrary_attributes(pycarla):
+    """As Boost.Python's: upstream tests set UE4-era fields (e.g.
+    WheelPhysicsControl.tire_friction) and read them back."""
+    _run_ok(pycarla, """
+wheel = carla.WheelPhysicsControl()
+wheel.tire_friction = 3.0
+assert wheel.tire_friction == 3.0
+loc = carla.Location(1, 2, 3)
+loc.note = 'x'
+assert loc.note == 'x' and loc.x == 1
+loc.x = 5
+assert loc.x == 5 and 'x' not in vars(loc)  # a field still goes to the library
+print('OK')
+""")
