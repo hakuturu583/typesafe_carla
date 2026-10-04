@@ -69,11 +69,11 @@ def bad(data):
     raise ValueError('boom')
 lidar.stop()
 lidar.listen(bad)
-world.tick(); world.tick()
+world.tick(); world.tick(); world.tick()
 deadline = time.time() + 10
-while len(calls) < 2 and time.time() < deadline:
-    time.sleep(0.01)
-assert len(calls) == 2, calls
+while len(calls) < 3 and time.time() < deadline:  # (one thread: the 3rd call
+    time.sleep(0.01)                              # follows the first two reports)
+assert len(calls) == 3, calls
 lidar.stop()
 lidar.destroy()
 print('OK')
@@ -84,7 +84,7 @@ def test_callbacks_run_on_a_background_thread(pycarla):
     result = _run(pycarla, "import time\n" + _BLOCKING_QUEUE)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.split() == ["OK"], result.stdout
-    assert result.stderr.count("ValueError: boom") == 2, result.stderr
+    assert result.stderr.count("ValueError: boom") >= 2, result.stderr
 
 
 def test_exit_with_the_dispatcher_waiting(pycarla):

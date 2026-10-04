@@ -341,6 +341,7 @@ _DISPATCH_WAIT = 1.0  # seconds; only bounds a missed wake-up
 
 
 def _start_dispatcher(g: dict) -> None:
+    import atexit
     import ctypes
     import threading
     import time
@@ -351,17 +352,20 @@ def _start_dispatcher(g: dict) -> None:
     lib = ctypes.CDLL(os.environ["TYPESAFE_CARLA_LIB"])
     if not hasattr(lib, "tsc_queue_signal_wait"):
         return  # a native library older than ABI 4.7
-    count, wait = lib.tsc_queue_signal_count, lib.tsc_queue_signal_wait
+    count, wait, notify = lib.tsc_queue_signal_count, lib.tsc_queue_signal_wait, lib.tsc_queue_signal_notify
     count.argtypes = [ctypes.POINTER(ctypes.c_uint64)]
     wait.argtypes = [ctypes.c_uint64, ctypes.c_double, ctypes.POINTER(ctypes.c_uint64)]
-    count.restype = wait.restype = ctypes.c_int
+    notify.argtypes = []
+    count.restype = wait.restype = notify.restype = ctypes.c_int
     g["set_auto_dispatch"](False, False)  # enabled=False, lock=False (see above)
-    dispatch, attach = g["dispatch_callbacks"], g["attach_current_thread"]
+    dispatch, attach, detach = (g["dispatch_callbacks"], g["attach_current_thread"],
+                                g["detach_current_thread"])
+    stopping = threading.Event()
 
     def loop() -> None:
-        attach()  # Codon's collector must know the thread before it runs Codon code
+        attached = attach()  # Codon's collector must know the thread before it runs Codon code
         seen, out = ctypes.c_uint64(), ctypes.c_uint64()
-        while True:
+        while not stopping.is_set():
             if count(ctypes.byref(seen)) != 0:  # the signal failed: poll instead
                 time.sleep(_DISPATCH_WAIT)
                 seen.value = 0
@@ -370,7 +374,22 @@ def _start_dispatcher(g: dict) -> None:
             except Exception:  # a callback's own errors are printed by _callback
                 traceback.print_exc()
             wait(seen.value, _DISPATCH_WAIT, ctypes.byref(out))
+        if attached:
+            detach()
+
+    def stop() -> None:
+        # At exit, before the interpreter finalizes: a daemon thread still in a
+        # callback (printing, say) would then abort the process. Wait at most
+        # 2 s for the callback in progress, as typesafe_carla's own thread.
+        stopping.set()
+        notify()
+        thread.join(2.0)
+        if thread.is_alive():
+            print("carla: a sensor callback was still running 2 s after the program ended",
+                  file=sys.stderr)
 
     # A daemon: it never keeps the process alive, and holds no lock of the
     # program's while it waits (in native code, without the GIL).
-    threading.Thread(target=loop, name="carla-callbacks", daemon=True).start()
+    thread = threading.Thread(target=loop, name="carla-callbacks", daemon=True)
+    thread.start()
+    atexit.register(stop)
