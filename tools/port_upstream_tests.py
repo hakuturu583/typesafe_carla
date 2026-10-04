@@ -497,7 +497,9 @@ def exclude_originals(refs=("ue5-dev",)) -> None:
             for excludes in ported_excludes:
                 for rel, tests in excludes.items():
                     ported = entries.get(f"ported/{rel}")
-                    entries[f"ported/{rel}"] = {**(ported if isinstance(ported, dict) else {}), **tests}
+                    if isinstance(ported, str):
+                        continue  # a file-level entry (Codon: the module does not compile) covers them
+                    entries[f"ported/{rel}"] = {**(ported or {}), **tests}
         up.write_manifest(mode, manifest)
     official = up.load_manifest("official")
     for ref in refs:
