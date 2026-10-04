@@ -31,7 +31,9 @@ def pycarla(backend):
     return pydir
 
 
-def _run(pydir, program: str, timeout: float = 120) -> subprocess.CompletedProcess:
+def _run_ok(pydir, program: str, timeout: float = 120) -> str:
+    """Runs `program` with the generated `carla`; checks it printed only OK and
+    returns its stderr."""
     # As the upstream-test driver: load the generated package explicitly (an
     # installed official `carla` must not win).
     head = (
@@ -41,12 +43,15 @@ def _run(pydir, program: str, timeout: float = 120) -> subprocess.CompletedProce
         " submodule_search_locations=[pkg])\n"
         "carla = importlib.util.module_from_spec(spec); sys.modules['carla'] = carla\n"
         "spec.loader.exec_module(carla)\n")
-    return subprocess.run([up._python(), "-c", head + program], env=up._cpython_env(pydir, False),
-                          capture_output=True, text=True, timeout=timeout)
+    result = subprocess.run([up._python(), "-c", head + program], env=up._cpython_env(pydir, False),
+                            capture_output=True, text=True, timeout=timeout)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.split() == ["OK"], result.stdout
+    return result.stderr
 
 
 _BLOCKING_QUEUE = """
-import ctypes, queue, threading
+import ctypes, queue, threading, time
 ctypes.CDLL(os.environ['TYPESAFE_CARLA_LIB']).tsc_mock_set_delivery_delay_ms(ctypes.c_uint32(50))
 world = carla.Client('localhost', 2000).get_world()
 lib = world.get_blueprint_library()
@@ -71,8 +76,9 @@ lidar.stop()
 lidar.listen(bad)
 world.tick(); world.tick(); world.tick()
 deadline = time.time() + 10
-while len(calls) < 3 and time.time() < deadline:  # (one thread: the 3rd call
-    time.sleep(0.01)                              # follows the first two reports)
+# One thread: the 3rd call follows the first two tracebacks.
+while len(calls) < 3 and time.time() < deadline:
+    time.sleep(0.01)
 assert len(calls) == 3, calls
 lidar.stop()
 lidar.destroy()
@@ -81,15 +87,11 @@ print('OK')
 
 
 def test_callbacks_run_on_a_background_thread(pycarla):
-    result = _run(pycarla, "import time\n" + _BLOCKING_QUEUE)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.split() == ["OK"], result.stdout
-    assert result.stderr.count("ValueError: boom") >= 2, result.stderr
+    stderr = _run_ok(pycarla, _BLOCKING_QUEUE)
+    assert stderr.count("ValueError: boom") >= 2, stderr
 
 
 def test_exit_with_the_dispatcher_waiting(pycarla):
     """The dispatcher is a daemon thread blocked in native code without the
     GIL: it never keeps the process alive."""
-    result = _run(pycarla, "carla.Client('localhost', 2000).get_world()\nprint('OK')\n", timeout=30)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.split() == ["OK"]
+    _run_ok(pycarla, "carla.Client('localhost', 2000).get_world()\nprint('OK')\n", timeout=30)

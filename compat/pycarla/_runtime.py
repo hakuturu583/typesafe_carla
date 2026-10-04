@@ -326,16 +326,11 @@ def install(g: dict) -> None:
 
 # --- Issue #89: sensor callbacks on a background thread -----------------------
 #
-# CARLA's Python API runs a sensor's listen() callback on a LibCarla thread as
-# soon as the data arrives, so a program may tick and then block on its own
-# queue. typesafe_carla's default runs callbacks at its dispatch points
-# (World.tick(), ...); its own callback thread would call Python without the
-# GIL. So, as #86's design prescribes for a wrapper (docs/design.md, "External
-# dispatchers"), the dispatch points are turned off, unlocked (the GIL
-# serializes every call; a lock held across a Python callback that releases
-# the GIL would deadlock), and a daemon Python thread delivers: it reads the
-# native queue signal, runs dispatch_callbacks(), then waits for the signal
-# through ctypes, which releases the GIL while it blocks.
+# As in CARLA's Python API, callbacks run as soon as their data arrives. Per
+# docs/design.md "External dispatchers" (#86): dispatch points off and unlocked
+# (the GIL serializes calls; a lock held across a GIL-releasing callback would
+# deadlock), and a daemon thread runs dispatch_callbacks() whenever the native
+# queue signal changes, waiting for it through ctypes without the GIL.
 
 _DISPATCH_WAIT = 1.0  # seconds; only bounds a missed wake-up
 
@@ -346,7 +341,8 @@ def _start_dispatcher(g: dict) -> None:
     import threading
     import time
 
-    names = ("set_auto_dispatch", "dispatch_callbacks", "attach_current_thread")
+    names = ("set_auto_dispatch", "dispatch_callbacks", "attach_current_thread",
+             "detach_current_thread")
     if any(_SPEC["functions"].get(n, {}).get("fn") is None for n in names):
         return  # a typesafe_carla without #86's hooks: callbacks stay at the dispatch points
     lib = ctypes.CDLL(os.environ["TYPESAFE_CARLA_LIB"])
@@ -378,9 +374,8 @@ def _start_dispatcher(g: dict) -> None:
             detach()
 
     def stop() -> None:
-        # At exit, before the interpreter finalizes: a daemon thread still in a
-        # callback (printing, say) would then abort the process. Wait at most
-        # 2 s for the callback in progress, as typesafe_carla's own thread.
+        # Before finalization: a daemon thread still in a callback (printing,
+        # say) would abort the process. Wait at most 2 s, as typesafe_carla's own thread.
         stopping.set()
         notify()
         thread.join(2.0)
@@ -388,8 +383,6 @@ def _start_dispatcher(g: dict) -> None:
             print("carla: a sensor callback was still running 2 s after the program ended",
                   file=sys.stderr)
 
-    # A daemon: it never keeps the process alive, and holds no lock of the
-    # program's while it waits (in native code, without the GIL).
     thread = threading.Thread(target=loop, name="carla-callbacks", daemon=True)
     thread.start()
     atexit.register(stop)
