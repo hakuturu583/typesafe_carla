@@ -34,7 +34,7 @@
     ]
    },
    "traces": {
-    "TestClient.test_client_version": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/unit/test_client.py\", line 19, in test_client_version\n    out = check_output(['git', 'describe', '--tags', '--dirty', '--always', ])\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/subprocess.py\", line 421, in check_output\n    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/subprocess.py\", line 526, in run\n    raise CalledProcessError(retcode, process.args,\nsubprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
+    "TestClient.test_client_version": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/unit/test_client.py\", line 19, in test_client_version\n    out = check_output(['git', 'describe', '--tags', '--dirty', '--always', ])\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/subprocess.py\", line 421, in check_output\n    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/subprocess.py\", line 526, in run\n    raise CalledProcessError(retcode, process.args,\nsubprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
    }
   },
   "unit/test_lidar_smoke_helpers.py": {
@@ -205,7 +205,7 @@
     ]
    },
    "traces": {
-    "TestVehiclePhysicsControl.test_named_args": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/unit/test_vehicle.py\", line 81, in test_named_args\n    self.assertTrue(abs(pc.moi - 1) <= error)\nAttributeError: 'VehiclePhysicsControl' object has no attribute 'moi'"
+    "TestVehiclePhysicsControl.test_named_args": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/unit/test_vehicle.py\", line 81, in test_named_args\n    self.assertTrue(abs(pc.moi - 1) <= error)\nAttributeError: 'VehiclePhysicsControl' object has no attribute 'moi'"
    }
   },
   "smoke/test_actor_introspection.py": {
@@ -379,12 +379,9 @@
    "file_error": null,
    "tests": {
     "<script>": [
-     "error",
-     "exit 1: RuntimeError: std::exception"
+     "crash",
+     "SIGABRT"
     ]
-   },
-   "traces": {
-    "<script>": "  File \"API/prop_control.py\", line 1000, in game_loop\n    world = World(sim_world, hud, args)\n  File \"API/prop_control.py\", line 190, in __init__\n    self.restart()\n  File \"API/prop_control.py\", line 254, in restart\n    self.camera_manager = CameraManager(self.player, self.hud)\n  File \"API/prop_control.py\", line 873, in __init__\n    bp.set_attribute(attr_name, attr_value)\nRuntimeError: std::exception\nWARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 30976 (sensor.other.collision) \nWARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 30977 (sensor.other.gnss) \nWARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 30978 (sensor.other.imu)"
    }
   },
   "API/spawn_actor.py": {
@@ -423,7 +420,7 @@
     ]
    },
    "traces": {
-    "TestNoRenderingMode.test_no_rendering_mode": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_no_rendering_mode.py\", line 1111, in test_no_rendering_mode\n    world.start(hud)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_no_rendering_mode.py\", line 754, in start\n    self.world = self.client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
+    "TestNoRenderingMode.test_no_rendering_mode": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_no_rendering_mode.py\", line 1111, in test_no_rendering_mode\n    world.start(hud)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_no_rendering_mode.py\", line 754, in start\n    self.world = self.client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
    }
   },
   "API/test_semantic_segmentation.py": {
@@ -432,8 +429,8 @@
    "file_error": null,
    "tests": {
     "TestSemanticSegmentation.test_semantic_segmentation": [
-     "pass",
-     ""
+     "timeout",
+     "timed out after 900 s"
     ]
    }
   },
@@ -480,15 +477,15 @@
     ]
    },
    "traces": {
-    "TestSensorRecording.test_gnss": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 466, in test_gnss\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_imu": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 473, in test_imu\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_radar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 480, in test_radar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_rgb": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 487, in test_rgb\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_depth": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 495, in test_depth\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_instance_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 504, in test_instance_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_semantic_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 512, in test_semantic_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 520, in test_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_semantic_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 527, in test_semantic_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
+    "TestSensorRecording.test_gnss": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 466, in test_gnss\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_imu": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 473, in test_imu\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_radar": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 480, in test_radar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_rgb": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 487, in test_rgb\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_depth": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 495, in test_depth\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_instance_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 504, in test_instance_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_semantic_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 512, in test_semantic_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 520, in test_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_semantic_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 527, in test_semantic_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
    }
   },
   "API/test_sensor_recording_fast.py": {
@@ -534,15 +531,15 @@
     ]
    },
    "traces": {
-    "TestSensorRecording.test_gnss": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 450, in test_gnss\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_imu": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 457, in test_imu\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_radar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 464, in test_radar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_rgb": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 471, in test_rgb\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_depth": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 479, in test_depth\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_instance_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 488, in test_instance_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_semantic_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 496, in test_semantic_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 504, in test_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
-    "TestSensorRecording.test_semantic_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 511, in test_semantic_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
+    "TestSensorRecording.test_gnss": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 450, in test_gnss\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_imu": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 457, in test_imu\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_radar": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 464, in test_radar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_rgb": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 471, in test_rgb\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_depth": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 479, in test_depth\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_instance_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 488, in test_instance_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_semantic_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 496, in test_semantic_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 504, in test_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_semantic_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 511, in test_semantic_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
    }
   },
   "API/test_spawn_vehicles.py": {
@@ -556,7 +553,7 @@
     ]
    },
    "traces": {
-    "TestVehiclesSpawnTest.test_vehicle_spawn": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_spawn_vehicles.py\", line 14, in test_vehicle_spawn\n    world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
+    "TestVehiclesSpawnTest.test_vehicle_spawn": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_spawn_vehicles.py\", line 14, in test_vehicle_spawn\n    world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
    }
   },
   "API/test_spawn_walkers.py": {
@@ -570,7 +567,7 @@
     ]
    },
    "traces": {
-    "TestWalkersSpawn.test_walker_spawn": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_spawn_walkers.py\", line 13, in test_walker_spawn\n    world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
+    "TestWalkersSpawn.test_walker_spawn": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_spawn_walkers.py\", line 13, in test_walker_spawn\n    world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
    }
   },
   "API/test_sync_mode.py": {
@@ -580,11 +577,11 @@
    "tests": {
     "TestSyncMode.test_sync_mode_set_transform": [
      "fail",
-     "AssertionError: -64.64484405517578 != 141.0"
+     "AssertionError: -64.64484405517578 != 181.0"
     ]
    },
    "traces": {
-    "TestSyncMode.test_sync_mode_set_transform": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sync_mode.py\", line 56, in test_sync_mode_set_transform\n    self.assertEqual(transform.location.x, new_tran.location.x)\nAssertionError: -64.64484405517578 != 141.0"
+    "TestSyncMode.test_sync_mode_set_transform": "  File \"/mnt/sata_ssd/tsc-work/build-i86srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sync_mode.py\", line 56, in test_sync_mode_set_transform\n    self.assertEqual(transform.location.x, new_tran.location.x)\nAssertionError: -64.64484405517578 != 181.0"
    }
   },
   "test_connection.py": {
@@ -645,7 +642,7 @@
     ]
    },
    "traces": {
-    "TestBlueprintLibrary.test_blueprint_ids": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_blueprint.py\", line 29, in test_blueprint_ids\n    self.assertTrue(rgx.match(bp.id))\nAssertionError: None is not true"
+    "TestBlueprintLibrary.test_blueprint_ids": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_blueprint.py\", line 29, in test_blueprint_ids\n    self.assertTrue(rgx.match(bp.id))\nAssertionError: None is not true"
    }
   },
   "ported/smoke/test_client.py": {
@@ -682,10 +679,10 @@
     ]
    },
    "traces": {
-    "TestCollisionDeterminism.test_two_cars": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 146, in init_scene\n    super(TwoCarsHighSpeedCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception",
-    "TestCollisionDeterminism.test_three_cars": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 180, in init_scene\n    super(ThreeCarsSlowSpeedCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception",
-    "TestCollisionDeterminism.test_car_bike": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 216, in init_scene\n    super(CarBikeCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception",
-    "TestCollisionDeterminism.test_car_walker": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 250, in init_scene\n    super(CarWalkerCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception"
+    "TestCollisionDeterminism.test_two_cars": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 146, in init_scene\n    super(TwoCarsHighSpeedCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception",
+    "TestCollisionDeterminism.test_three_cars": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 180, in init_scene\n    super(ThreeCarsSlowSpeedCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception",
+    "TestCollisionDeterminism.test_car_bike": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 216, in init_scene\n    super(CarBikeCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception",
+    "TestCollisionDeterminism.test_car_walker": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 250, in init_scene\n    super(CarWalkerCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception"
    }
   },
   "ported/smoke/test_collision_sensor.py": {
@@ -710,7 +707,7 @@
     ]
    },
    "traces": {
-    "TestDeterminism.test_determ": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_determinism.py\", line 127, in test_determ\n    self.client.reload_world(False)\nRuntimeError: std::exception"
+    "TestDeterminism.test_determ": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_determinism.py\", line 127, in test_determ\n    self.client.reload_world(False)\nRuntimeError: std::exception"
    }
   },
   "ported/smoke/test_geoconversion.py": {
@@ -811,7 +808,7 @@
     ]
    },
    "traces": {
-    "TestCompareLidars.test_lidar_comparison": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_lidar.py\", line 232, in test_lidar_comparison\n    self.assertEqual(data_sem_lidar[0], data_lidar_nod[0], \"The frame numbers of LiDAR and SemLiDAR do not match.\")\nTypeError: 'NoneType' object is not subscriptable"
+    "TestCompareLidars.test_lidar_comparison": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_lidar.py\", line 232, in test_lidar_comparison\n    self.assertEqual(data_sem_lidar[0], data_lidar_nod[0], \"The frame numbers of LiDAR and SemLiDAR do not match.\")\nTypeError: 'NoneType' object is not subscriptable"
    }
   },
   "ported/smoke/test_map.py": {
@@ -829,7 +826,7 @@
     ]
    },
    "traces": {
-    "TestMap.test_reload_world": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_map.py\", line 24, in test_reload_world\n    world = self.client.reload_world()\nRuntimeError: std::exception"
+    "TestMap.test_reload_world": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_map.py\", line 24, in test_reload_world\n    world = self.client.reload_world()\nRuntimeError: std::exception"
    }
   },
   "ported/smoke/test_props_loading.py": {
@@ -843,7 +840,7 @@
     ]
    },
    "traces": {
-    "TestPropsLoading.test_spawn_loaded_props": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_props_loading.py\", line 42, in test_spawn_loaded_props\n    self.assertFalse(response.error)\nAssertionError: 'Unknown error while trying to spawn actor' is not false"
+    "TestPropsLoading.test_spawn_loaded_props": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_props_loading.py\", line 42, in test_spawn_loaded_props\n    self.assertFalse(response.error)\nAssertionError: 'Unknown error while trying to spawn actor' is not false"
    }
   },
   "ported/smoke/test_sensor_determinism.py": {
@@ -857,7 +854,7 @@
     ]
    },
    "traces": {
-    "TestSensorDeterminism.test_all_sensors": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 139, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 214, in init_scene\n    super(SpawnAllRaycastSensors, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 55, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 95, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception"
+    "TestSensorDeterminism.test_all_sensors": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 139, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 214, in init_scene\n    super(SpawnAllRaycastSensors, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 55, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 95, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception"
    }
   },
   "ported/smoke/test_sensor_tick_time.py": {
@@ -871,7 +868,7 @@
     ]
    },
    "traces": {
-    "TestSensorTickTime.test_sensor_tick_time": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_tick_time.py\", line 74, in test_sensor_tick_time\n    self.assertEqual(sensor.num_ticks, num_sensor_ticks,\nAssertionError: 0 != 3 : \n\n sensor.other.v2x_custom does not match tick count"
+    "TestSensorTickTime.test_sensor_tick_time": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_sensor_tick_time.py\", line 74, in test_sensor_tick_time\n    self.assertEqual(sensor.num_ticks, num_sensor_ticks,\nAssertionError: 0 != 3 : \n\n sensor.other.v2x_custom does not match tick count"
    }
   },
   "ported/smoke/test_snapshot.py": {
@@ -885,7 +882,7 @@
     ]
    },
    "traces": {
-    "TestSnapshot.test_spawn_points": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_snapshot.py\", line 23, in test_spawn_points\n    self.world = self.client.reload_world()\nRuntimeError: std::exception"
+    "TestSnapshot.test_spawn_points": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_snapshot.py\", line 23, in test_spawn_points\n    self.world = self.client.reload_world()\nRuntimeError: std::exception"
    }
   },
   "ported/smoke/test_spawnpoints.py": {
@@ -919,14 +916,13 @@
      "AssertionError: 10 != 0 :"
     ],
     "TestSynchronousMode.test_apply_batch_sync": [
-     "fail",
-     "AssertionError: 4631741 != 4631742 : Something has failed with the apply_batch_sync. These frames should be equal: 4631741 4631742"
+     "pass",
+     ""
     ]
    },
    "traces": {
-    "TestSynchronousMode.test_reloading_map": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sync.py\", line 37, in test_reloading_map\n    self.world = self.client.reload_world()\nRuntimeError: std::exception",
-    "TestSynchronousMode.test_sensor_transform_on_synchronous_mode": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sync.py\", line 119, in test_sensor_transform_on_synchronous_mode\n    self.assertEqual(\nAssertionError: 10 != 0 : \nQueue sensor.lidar.ray_castoversized",
-    "TestSynchronousMode.test_apply_batch_sync": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sync.py\", line 180, in test_apply_batch_sync\n    self.assertEqual(a_t0, a_t1, \"Something has failed with the apply_batch_sync. These frames should be equal: %d %d\" % (a_t0, a_t1))\nAssertionError: 4631741 != 4631742 : Something has failed with the apply_batch_sync. These frames should be equal: 4631741 4631742"
+    "TestSynchronousMode.test_reloading_map": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_sync.py\", line 37, in test_reloading_map\n    self.world = self.client.reload_world()\nRuntimeError: std::exception",
+    "TestSynchronousMode.test_sensor_transform_on_synchronous_mode": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_sync.py\", line 119, in test_sensor_transform_on_synchronous_mode\n    self.assertEqual(\nAssertionError: 10 != 0 : \nQueue sensor.lidar.ray_castoversized"
    }
   },
   "ported/smoke/test_vehicle_physics.py": {
@@ -968,9 +964,9 @@
     ]
    },
    "traces": {
-    "TestVehicleFriction.test_vehicle_zero_friction": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 265, in test_vehicle_zero_friction\n    self.fail(\"%s: Velocities are not equal after initialization. Ref: %.3f -> [%.3f, %.3f]\"\nAssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]",
-    "TestVehicleTireConfig.test_vehicle_wheel_collision": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 525, in test_vehicle_wheel_collision\n    self.fail(\"%s: Velocities are not equal after simulation. [%.3f, %.3f]\"\nAssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]",
-    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 589, in test_vehicle_tire_long_stiff\n    self.fail(\"%s: Longitudinal stiffness test failed, check that please. Veh00: [%f] Veh01: [%f]\"\nAssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]"
+    "TestVehicleFriction.test_vehicle_zero_friction": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 265, in test_vehicle_zero_friction\n    self.fail(\"%s: Velocities are not equal after initialization. Ref: %.3f -> [%.3f, %.3f]\"\nAssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]",
+    "TestVehicleTireConfig.test_vehicle_wheel_collision": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 525, in test_vehicle_wheel_collision\n    self.fail(\"%s: Velocities are not equal after simulation. [%.3f, %.3f]\"\nAssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]",
+    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": "  File \"/mnt/sata_ssd/tsc-work/wt-i89/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 589, in test_vehicle_tire_long_stiff\n    self.fail(\"%s: Longitudinal stiffness test failed, check that please. Veh00: [%f] Veh01: [%f]\"\nAssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]"
    }
   },
   "ported/smoke/test_world.py": {

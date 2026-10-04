@@ -15,10 +15,10 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 | ref | mode | suite | commit | pass | fail | skip | not run |
 |---|---|---|---|---:|---:|---:|---:|
 | ue5-dev | cpython | unit | 0a5ce0d5b4 | 38 | 2 | 0 | 0 |
-| ue5-dev | cpython | smoke | 0a5ce0d5b4 | 20 | 2 | 0 | 0 |
+| ue5-dev | cpython | smoke | 0a5ce0d5b4 | 22 | 0 | 0 | 0 |
 | ue5-dev | cpython | API | 0a5ce0d5b4 | 2 | 24 | 0 | 0 |
 | ue5-dev | cpython | top | 0a5ce0d5b4 | 1 | 1 | 1 | 0 |
-| ue5-dev | cpython | ported | 0a5ce0d5b4 | 26 | 26 | 0 | 0 |
+| ue5-dev | cpython | ported | 0a5ce0d5b4 | 35 | 17 | 0 | 0 |
 | ue5-dev | codon | unit | 0a5ce0d5b4 | 30 | 10 | 0 | 0 |
 | ue5-dev | codon | smoke | 0a5ce0d5b4 | 0 | 22 | 0 | 0 |
 | ue5-dev | codon | API | 0a5ce0d5b4 | 0 | 26 | 0 | 0 |
@@ -26,9 +26,9 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 | ue5-dev | codon | ported | 0a5ce0d5b4 | 0 | 52 | 0 | 0 |
 | ue5-dev | official | unit | 0a5ce0d5b4 | 38 | 2 | 0 | 0 |
 | ue5-dev | official | smoke | 0a5ce0d5b4 | 22 | 0 | 0 | 0 |
-| ue5-dev | official | API | 0a5ce0d5b4 | 1 | 25 | 0 | 0 |
+| ue5-dev | official | API | 0a5ce0d5b4 | 0 | 26 | 0 | 0 |
 | ue5-dev | official | top | 0a5ce0d5b4 | 1 | 1 | 1 | 0 |
-| ue5-dev | official | ported | 0a5ce0d5b4 | 32 | 18 | 0 | 0 |
+| ue5-dev | official | ported | 0a5ce0d5b4 | 33 | 17 | 0 | 0 |
 | 0.10.0 | cpython | unit | ada75f9206 | 13 | 2 | 0 | 0 |
 | 0.10.0 | codon | unit | ada75f9206 | 13 | 2 | 0 | 0 |
 | 0.10.0 | codon | smoke | ada75f9206 | 0 | 35 | 0 | 0 |
@@ -37,36 +37,30 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 
 ## Root causes: ue5-dev, cpython mode
 
-### typesafe_carla lacks this (missing API) (4 causes, 10 tests)
-
-- **missing `carla.command.ApplyVehiclePhysicsControl` (#79)**: 7 tests: `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`, `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume`, `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true`, `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false`
-- **missing `carla.command.ApplyVehiclePhysicsControl` (#79) (official also fails, differently: assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944])**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff`
-- **missing `carla.command.ApplyVehiclePhysicsControl` (#79) (official also fails, differently: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764])**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`
-- **missing `carla.command.ApplyVehiclePhysicsControl` (#79) (official also fails, differently: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364])**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision`
-
 ### typesafe_carla has it, with an incompatible signature (1 causes, 1 tests)
 
 - **`carla.WheelPhysicsControl.__init__`: these arguments are not accepted (official also fails, differently: missing `carla.VehiclePhysicsControl.moi`)**: 1 tests: `unit/test_vehicle.py::TestVehiclePhysicsControl.test_named_args`
 
-### behaviour differs (assertions, errors, crashes) (3 causes, 6 tests)
+### behaviour differs (assertions, errors, crashes) (3 causes, 4 tests)
 
-- **geo round trip keeps double precision where the official module rounds to float32 (differs by up to ~0.5 at millions of metres) (#81)**: 3 tests: `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_location_to_geo_and_back`, `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_location_to_geo_and_back`, `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back`
-- **TypeError: 'CustomV2XMessage' object is not subscriptable (#85)**: 2 tests: `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive`, `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length`
-- **sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads (#86) (official also fails, differently: TypeError: 'NoneType' object is not subscriptable)**: 1 tests: `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison`
+- **TypeError: unsupported operand type(s) for -: '_carla.B_VehiclePhysicsControl' and '_carla.B_VehiclePhysicsControl'**: 2 tests: `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control`, `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control`
+- **TypeError: int() argument must be a string, a bytes-like object or a real number, not 'ActorAttribute' (official also fails, differently: assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944])**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff`
+- **TypeError: int() argument must be a string, a bytes-like object or a real number, not 'ActorAttribute' (official also fails, differently: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364])**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision`
 
 ### the test server's content (maps, blueprints), not typesafe_carla (3 causes, 23 tests)
 
 - **load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way)**: 21 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +13 more
-- **blueprint `sensor.camera.rgb` has no attribute `chromatic_aberration_intensity` on this server (official also fails, differently: RuntimeError: std::exception)**: 1 tests: `API/prop_control.py::<script>`
+- **blueprint `sensor.camera.rgb` has no attribute `chromatic_aberration_intensity` on this server (official also fails, differently: crash: SIGABRT)**: 1 tests: `API/prop_control.py::<script>`
 - **the prop does not move after set_transform + tick in synchronous mode; the official module fails the same way on this server**: 1 tests: `API/test_sync_mode.py::TestSyncMode.test_sync_mode_set_transform`
 
-### the upstream test itself (fails with the official module too) (7 causes, 15 tests)
+### the upstream test itself (fails with the official module too) (8 causes, 16 tests)
 
 - **fails with the official module too: RuntimeError: std::exception**: 9 tests: `ported/smoke/test_collision_determinism.py::TestCollisionDeterminism.test_two_cars`, `ported/smoke/test_collision_determinism.py::TestCollisionDeterminism.test_three_cars`, `ported/smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_bike`, `ported/smoke/test_collision_determinism.py::TestCollisionDeterminism.test_car_walker`, `ported/smoke/test_determinism.py::TestDeterminism.test_determ`, `ported/smoke/test_map.py::TestMap.test_reload_world`, `ported/smoke/test_sensor_determinism.py::TestSensorDeterminism.test_all_sensors`, `ported/smoke/test_snapshot.py::TestSnapshot.test_spawn_points`, +1 more
 - **fails with the official module too: a script that needs command-line arguments (API/Tests.md documents them)**: 1 tests: `API/spawn_actor.py::<script>`
 - **fails with the official module too: assertion: AssertionError: 'Unknown error while trying to spawn actor' is not false**: 1 tests: `ported/smoke/test_props_loading.py::TestPropsLoading.test_spawn_loaded_props`
 - **fails with the official module too: assertion: AssertionError: 0 != 3 :**: 1 tests: `ported/smoke/test_sensor_tick_time.py::TestSensorTickTime.test_sensor_tick_time`
 - **fails with the official module too: assertion: AssertionError: None is not true**: 1 tests: `ported/smoke/test_blueprint.py::TestBlueprintLibrary.test_blueprint_ids`
+- **fails with the official module too: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`
 - **fails with the official module too: test dependency `cv2` not installed in the test interpreter**: 1 tests: `test_ground_truth.py::<script>`
 - **fails with the official module too: the test needs a CARLA git checkout (`git describe`)**: 1 tests: `unit/test_client.py::TestClient.test_client_version`
 
@@ -100,17 +94,17 @@ ported to maps shipped in ue5-dev (tests/upstream/ported, issue #80).
 
 ### behaviour differs (assertions, errors, crashes) (11 causes, 39 tests)
 
-- **RuntimeError: std::exception**: 29 tests: `API/prop_control.py::<script>`, `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, +21 more
+- **RuntimeError: std::exception**: 28 tests: `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode`, `API/test_sensor_recording.py::TestSensorRecording.test_gnss`, `API/test_sensor_recording.py::TestSensorRecording.test_imu`, `API/test_sensor_recording.py::TestSensorRecording.test_radar`, `API/test_sensor_recording.py::TestSensorRecording.test_rgb`, `API/test_sensor_recording.py::TestSensorRecording.test_depth`, `API/test_sensor_recording.py::TestSensorRecording.test_instance_segmentation`, `API/test_sensor_recording.py::TestSensorRecording.test_semantic_segmentation`, +20 more
+- **timeout**: 2 tests: `API/test_apply_textures.py::TestApplyTextures.test_apply_textures`, `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation`
 - **TypeError: 'NoneType' object is not subscriptable**: 1 tests: `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison`
 - **assertion: AssertionError: 'Unknown error while trying to spawn actor' is not false**: 1 tests: `ported/smoke/test_props_loading.py::TestPropsLoading.test_spawn_loaded_props`
 - **assertion: AssertionError: 0 != 3 :**: 1 tests: `ported/smoke/test_sensor_tick_time.py::TestSensorTickTime.test_sensor_tick_time`
 - **assertion: AssertionError: 10 != 0 :**: 1 tests: `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode`
-- **assertion: AssertionError: 4631741 != 4631742 : Something has failed with the apply_batch_sync. These frames should be equal: 4631741 4631742**: 1 tests: `ported/smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync`
 - **assertion: AssertionError: None is not true**: 1 tests: `ported/smoke/test_blueprint.py::TestBlueprintLibrary.test_blueprint_ids`
 - **assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff`
 - **assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction`
 - **assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]**: 1 tests: `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision`
-- **timeout**: 1 tests: `API/test_apply_textures.py::TestApplyTextures.test_apply_textures`
+- **crash: SIGABRT**: 1 tests: `API/prop_control.py::<script>`
 
 ### the test server's content (maps, blueprints), not typesafe_carla (2 causes, 3 tests)
 
@@ -303,18 +297,18 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `smoke/test_replay_no_actor_aliasing.py::TestReplayNoActorAliasing.test_replayed_actors_have_clean_state` | pass | compile | pass | does not compile: no module named 'tempfile' |
 | `smoke/test_traffic_manager_large_vehicle.py::TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_traffic_manager_sync_step.py::TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive` | error | compile | pass | TypeError: 'CustomV2XMessage' object is not subscriptable (#85) |
-| `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length` | error | compile | pass | TypeError: 'CustomV2XMessage' object is not subscriptable (#85) |
+| `smoke/test_v2x.py::TestV2X.test_custom_v2x_send_and_receive` | pass | compile | pass | does not compile: no module named 'array' |
+| `smoke/test_v2x.py::TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length` | pass | compile | pass | does not compile: no module named 'array' |
 | `smoke/test_v2x.py::TestV2X.test_v2x_cam_generation` | pass | compile | pass | does not compile: no module named 'array' |
 | `smoke/test_v2x.py::TestV2X.test_v2i_infrastructure_sensor_without_owner` | pass | compile | pass | does not compile: no module named 'array' |
 | `smoke/test_vehicle_telemetry.py::TestVehicleTelemetry.test_get_telemetry_data_shape_and_values` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_walker_bounding_box.py::TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `smoke/test_walker_navigation.py::TestWalkerNavigation.test_walker_ai_controller_routes_without_crash` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `API/prop_control.py::<script>` | error | compile | error | blueprint `sensor.camera.rgb` has no attribute `chromatic_aberration_intensity` on this server (official also fails, differently: RuntimeError: std::exception) |
+| `API/prop_control.py::<script>` | error | compile | crash | blueprint `sensor.camera.rgb` has no attribute `chromatic_aberration_intensity` on this server (official also fails, differently: crash: SIGABRT) |
 | `API/spawn_actor.py::<script>` | error | compile | error | fails with the official module too: a script that needs command-line arguments (API/Tests.md documents them) |
 | `API/test_apply_textures.py::TestApplyTextures.test_apply_textures` | pass | compile | timeout | does not compile: no module named 'argparse' |
 | `API/test_no_rendering_mode.py::TestNoRenderingMode.test_no_rendering_mode` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
-| `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation` | pass | compile | pass | does not compile: no module named 'argparse' |
+| `API/test_semantic_segmentation.py::TestSemanticSegmentation.test_semantic_segmentation` | pass | compile | timeout | does not compile: no module named 'argparse' |
 | `API/test_sensor_recording.py::TestSensorRecording.test_gnss` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
 | `API/test_sensor_recording.py::TestSensorRecording.test_imu` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
 | `API/test_sensor_recording.py::TestSensorRecording.test_radar` | error | compile | error | load_world('Town10HD_Opt') exceeds the client's default 5 s timeout on this server (it takes ~8 s; the official module fails the same way) |
@@ -358,17 +352,17 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_tm_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_location_to_geo_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_north_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_location_to_geo_and_back` | fail | compile | pass | geo round trip keeps double precision where the official module rounds to float32 (differs by up to ~0.5 at millions of metres) (#81) |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_location_to_geo_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_utm_south_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_location_to_geo_and_back` | fail | compile | pass | geo round trip keeps double precision where the official module rounds to float32 (differs by up to ~0.5 at millions of metres) (#81) |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_location_to_geo_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_webmerc_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
-| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back` | fail | compile | pass | geo round trip keeps double precision where the official module rounds to float32 (differs by up to ~0.5 at millions of metres) (#81) |
+| `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_location_to_geo_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_geoconversion.py::TestGeoLocationConversion.test_lcc_geo_to_location_and_back` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_lidar.py::TestSyncLidar.test_lidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
 | `ported/smoke/test_lidar.py::TestSyncLidar.test_semlidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
 | `ported/smoke/test_lidar.py::TestASyncLidar.test_lidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
 | `ported/smoke/test_lidar.py::TestASyncLidar.test_semlidar_point_count` | pass | compile | pass | does not compile: no module named 'enum' |
-| `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | error | compile | error | sensor data did not arrive: callbacks run at dispatch points (World.tick, wait_for_tick, dispatch_sensor_callbacks), not on LibCarla's threads (#86) (official also fails, differently: TypeError: 'NoneType' object is not subscriptable) |
+| `ported/smoke/test_lidar.py::TestCompareLidars.test_lidar_comparison` | pass | compile | error | does not compile: no module named 'enum' |
 | `ported/smoke/test_map.py::TestMap.test_reload_world` | error | compile | error | fails with the official module too: RuntimeError: std::exception |
 | `ported/smoke/test_map.py::TestMap.test_load_all_maps` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_props_loading.py::TestPropsLoading.test_spawn_loaded_props` | fail | compile | fail | fails with the official module too: assertion: AssertionError: 'Unknown error while trying to spawn actor' is not false |
@@ -378,17 +372,17 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
 | `ported/smoke/test_spawnpoints.py::TestSpawnpoints.test_spawn_points` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/smoke/test_sync.py::TestSynchronousMode.test_reloading_map` | error | compile | error | fails with the official module too: RuntimeError: std::exception |
 | `ported/smoke/test_sync.py::TestSynchronousMode.test_sensor_transform_on_synchronous_mode` | pass | compile | fail | does not compile: no module named 'queue' |
-| `ported/smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync` | pass | compile | fail | does not compile: no module named 'queue' |
-| `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control` | error | compile | not run | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
-| `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control` | error | compile | not run | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
-| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction` | error | compile | fail | missing `carla.command.ApplyVehiclePhysicsControl` (#79) (official also fails, differently: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]) |
-| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
-| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
-| `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision` | error | compile | fail | missing `carla.command.ApplyVehiclePhysicsControl` (#79) (official also fails, differently: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]) |
-| `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff` | error | compile | fail | missing `carla.command.ApplyVehiclePhysicsControl` (#79) (official also fails, differently: assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]) |
-| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
-| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
-| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false` | error | compile | pass | missing `carla.command.ApplyVehiclePhysicsControl` (#79) |
+| `ported/smoke/test_sync.py::TestSynchronousMode.test_apply_batch_sync` | pass | compile | pass | does not compile: no module named 'queue' |
+| `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_single_physics_control` | error | compile | not run | TypeError: unsupported operand type(s) for -: '_carla.B_VehiclePhysicsControl' and '_carla.B_VehiclePhysicsControl' |
+| `ported/smoke/test_vehicle_physics.py::TestApplyVehiclePhysics.test_multiple_physics_control` | error | compile | not run | TypeError: unsupported operand type(s) for -: '_carla.B_VehiclePhysicsControl' and '_carla.B_VehiclePhysicsControl' |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_zero_friction` | fail | compile | fail | fails with the official module too: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764] |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_volume` | pass | compile | pass | does not compile: no module named 'enum' |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleFriction.test_vehicle_friction_values` | pass | compile | pass | does not compile: no module named 'enum' |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_wheel_collision` | error | compile | fail | TypeError: int() argument must be a string, a bytes-like object or a real number, not 'ActorAttribute' (official also fails, differently: assertion: AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]) |
+| `ported/smoke/test_vehicle_physics.py::TestVehicleTireConfig.test_vehicle_tire_long_stiff` | error | compile | fail | TypeError: int() argument must be a string, a bytes-like object or a real number, not 'ActorAttribute' (official also fails, differently: assertion: AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]) |
+| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_default` | pass | compile | pass | does not compile: no module named 'enum' |
+| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_true` | pass | compile | pass | does not compile: no module named 'enum' |
+| `ported/smoke/test_vehicle_physics.py::TestStickyControl.test_false` | pass | compile | pass | does not compile: no module named 'enum' |
 | `ported/smoke/test_world.py::TestWorld.test_fixed_delta_seconds` | pass | compile | pass | does not compile: 'SmokeTest' object has no attribute 'testing_address' |
 | `ported/test_vehicle_physics.py::<script>` | pass | compile | pass | does not compile: no module named 'argparse' |
 
