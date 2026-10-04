@@ -7,13 +7,16 @@ data late, on a worker thread (`tsc_mock_set_delivery_delay_ms`, issue #86),
 as LibCarla's streaming threads can.
 
 Needs the package built and up to date (`python -m tools.pycarla`, ~15 min),
-or TSC_UPSTREAM_BUILD_PYCARLA=1 to build it.
+or TSC_UPSTREAM_BUILD_PYCARLA=1 to build it; CI's mock job builds (and
+caches) it, so these run there. Mock backend only (its delivery-delay hook,
+and a world without a server).
 """
 
 from __future__ import annotations
 
 import os
 import subprocess
+import time
 
 import pytest
 
@@ -91,7 +94,103 @@ def test_callbacks_run_on_a_background_thread(pycarla):
     assert stderr.count("ValueError: boom") >= 2, stderr
 
 
-def test_exit_with_the_dispatcher_waiting(pycarla):
-    """The dispatcher is a daemon thread blocked in native code without the
-    GIL: it never keeps the process alive."""
-    _run_ok(pycarla, "carla.Client('localhost', 2000).get_world()\nprint('OK')\n", timeout=30)
+_SETUP = """
+import ctypes, queue, threading, time
+ctypes.CDLL(os.environ['TYPESAFE_CARLA_LIB']).tsc_mock_set_delivery_delay_ms(ctypes.c_uint32(%d))
+world = carla.Client('localhost', 2000).get_world()
+lib = world.get_blueprint_library()
+vehicle = world.get_actors()[0]
+main = threading.get_ident()
+def sensor(type_id='sensor.other.gnss'):
+    return world.spawn_actor(lib.find(type_id), carla.Transform(), attach_to=vehicle)
+"""
+
+
+def test_import_starts_no_thread(pycarla):
+    """The dispatcher starts at the first callback registration, not at import."""
+    _run_ok(pycarla, _SETUP % 0 + """
+assert threading.active_count() == 1, threading.enumerate()
+g = sensor()
+g.listen(lambda data: None)
+assert [t.name for t in threading.enumerate()] == ['MainThread', 'carla-callbacks']
+g.stop(); g.destroy()
+print('OK')
+""")
+
+
+def test_on_tick_runs_on_the_background_thread(pycarla):
+    _run_ok(pycarla, _SETUP % 50 + """
+q = queue.Queue()
+world.on_tick(lambda snapshot: q.put((snapshot.frame, threading.get_ident())))
+for _ in range(3):
+    frame = world.tick()
+    got, thread = q.get(timeout=10)
+    while got < frame:  # (snapshots of earlier frames may still be queued)
+        got, thread = q.get(timeout=10)
+    assert got == frame and thread != main, (got, frame)
+print('OK')
+""")
+
+
+def test_no_callback_after_stop_returns(pycarla):
+    _run_ok(pycarla, _SETUP % 20 + """
+calls = []
+g = sensor()
+g.listen(lambda data: calls.append(data.frame))
+for _ in range(5):
+    world.tick()
+time.sleep(0.2)
+g.stop()
+stopped = len(calls)
+assert stopped > 0
+for _ in range(5):
+    world.tick()  # data keeps arriving for the stopped stream
+time.sleep(0.5)
+assert len(calls) == stopped, (stopped, calls)
+g.destroy()
+print('OK')
+""")
+
+
+def test_prompt_exit_with_a_listener(pycarla):
+    """The dispatcher is a daemon thread, stopped at exit: the process ends at
+    once, without the 1 s wait timeout or a hang."""
+    started = time.monotonic()
+    _run_ok(pycarla, _SETUP % 0 + """
+g = sensor()
+g.listen(lambda data: None)
+world.tick()
+print('OK')
+""", timeout=30)
+    assert time.monotonic() - started < 5
+
+
+def test_forked_child_gets_callbacks(pycarla):
+    """A forked child has no dispatcher thread: it starts its own, and both
+    processes keep receiving callbacks."""
+    _run_ok(pycarla, _SETUP % 0 + """
+q = queue.Queue()
+g = sensor()
+g.listen(lambda data: q.put(data.frame))
+world.tick()
+q.get(timeout=10)
+pid = os.fork()
+if pid == 0:
+    ok = False
+    try:
+        for _ in range(20):  # (Codon allocates on both threads of the child)
+            frame = world.tick()
+            got = q.get(timeout=10)
+            while got < frame:
+                got = q.get(timeout=10)
+        ok = True
+    finally:
+        os._exit(0 if ok else 3)
+_, status = os.waitpid(pid, 0)
+assert os.WEXITSTATUS(status) == 0, status
+frame = world.tick()
+got = q.get(timeout=10)
+while got < frame:
+    got = q.get(timeout=10)
+print('OK')
+""")

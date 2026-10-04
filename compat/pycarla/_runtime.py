@@ -321,7 +321,7 @@ def install(g: dict) -> None:
     g["CarlaObject"] = CarlaObject
     global _ACTOR
     _ACTOR = g.get("Actor")
-    _start_dispatcher(g)
+    _setup_dispatcher(g)
 
 
 # --- Issue #89: sensor callbacks on a background thread -----------------------
@@ -331,58 +331,150 @@ def install(g: dict) -> None:
 # (the GIL serializes calls; a lock held across a GIL-releasing callback would
 # deadlock), and a daemon thread runs dispatch_callbacks() whenever the native
 # queue signal changes, waiting for it through ctypes without the GIL.
+#
+# The thread starts at the first callback registration (listen,
+# listen_to_gbuffer, on_tick), so importing carla stays single-threaded, and is
+# restarted in a forked child. If it cannot register with Codon's collector,
+# callbacks stay at typesafe_carla's dispatch points (World.tick(), ...).
 
 _DISPATCH_WAIT = 1.0  # seconds; only bounds a missed wake-up
+_REGISTERING = ("listen", "listen_to_gbuffer", "on_tick")
+_hooks = None       # (g, count, wait, notify), once install() found #86's hooks
+_dispatcher = None  # the running dispatcher: (pid, thread, stopping event)
+_failed = False     # the thread could not attach: dispatch points stay on
 
 
-def _start_dispatcher(g: dict) -> None:
-    import atexit
+def _setup_dispatcher(g: dict) -> None:
+    """Prepares the dispatcher (started by _ensure_dispatcher), and makes the
+    registering methods start it."""
+    global _hooks
     import ctypes
-    import threading
-    import time
 
-    names = ("set_auto_dispatch", "dispatch_callbacks", "attach_current_thread",
-             "detach_current_thread")
+    names = ("set_auto_dispatch", "auto_dispatch", "dispatch_callbacks",
+             "attach_current_thread", "detach_current_thread")
     if any(_SPEC["functions"].get(n, {}).get("fn") is None for n in names):
         return  # a typesafe_carla without #86's hooks: callbacks stay at the dispatch points
-    lib = ctypes.CDLL(os.environ["TYPESAFE_CARLA_LIB"])
-    if not hasattr(lib, "tsc_queue_signal_wait"):
-        return  # a native library older than ABI 4.7
-    count, wait, notify = lib.tsc_queue_signal_count, lib.tsc_queue_signal_wait, lib.tsc_queue_signal_notify
+    try:
+        lib = ctypes.CDLL(os.environ.get("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so"))
+        count, wait, notify = lib.tsc_queue_signal_count, lib.tsc_queue_signal_wait, lib.tsc_queue_signal_notify
+    except (OSError, AttributeError):
+        return  # `import carla` must not fail over this: dispatch points stay on
     count.argtypes = [ctypes.POINTER(ctypes.c_uint64)]
     wait.argtypes = [ctypes.c_uint64, ctypes.c_double, ctypes.POINTER(ctypes.c_uint64)]
     notify.argtypes = []
     count.restype = wait.restype = notify.restype = ctypes.c_int
-    g["set_auto_dispatch"](False, False)  # enabled=False, lock=False (see above)
-    dispatch, attach, detach = (g["dispatch_callbacks"], g["attach_current_thread"],
-                                g["detach_current_thread"])
-    stopping = threading.Event()
+    _hooks = (g, count, wait, notify)
+    for cls in {v for v in g.values() if isinstance(v, type) and issubclass(v, CarlaObject)}:
+        for name in _REGISTERING:
+            if name in cls.__dict__:
+                setattr(cls, name, _starting(cls.__dict__[name]))
+    os.register_at_fork(before=_before_fork, after_in_parent=_after_fork,
+                        after_in_child=_after_fork)
+
+
+def _starting(method):
+    def registering(*args, **kwargs):
+        _ensure_dispatcher()
+        return method(*args, **kwargs)
+    registering.__name__ = registering.__qualname__ = method.__name__
+    return registering
+
+
+def _ensure_dispatcher() -> None:
+    """Starts the dispatcher thread, unless it runs, failed, or another copy of
+    this package dispatches (the dispatch points are already off)."""
+    global _dispatcher, _failed
+    import ctypes
+    import threading
+    import time
+
+    if _hooks is None or _failed:
+        return
+    if _dispatcher is not None and _dispatcher[0] == os.getpid() and _dispatcher[1].is_alive():
+        return
+    g, count, wait, notify = _hooks
+    if _dispatcher is None and not g["auto_dispatch"]():
+        return  # another dispatcher (a second copy of the package) delivers
+    stopping, attached, go = threading.Event(), threading.Event(), threading.Event()
+    ok = []
 
     def loop() -> None:
-        attached = attach()  # Codon's collector must know the thread before it runs Codon code
-        seen, out = ctypes.c_uint64(), ctypes.c_uint64()
-        while not stopping.is_set():
-            if count(ctypes.byref(seen)) != 0:  # the signal failed: poll instead
-                time.sleep(_DISPATCH_WAIT)
-                seen.value = 0
-            try:
-                dispatch()
-            except Exception:  # a callback's own errors are printed by _callback
-                traceback.print_exc()
-            wait(seen.value, _DISPATCH_WAIT, ctypes.byref(out))
-        if attached:
-            detach()
-
-    def stop() -> None:
-        # Before finalization: a daemon thread still in a callback (printing,
-        # say) would abort the process. Wait at most 2 s, as typesafe_carla's own thread.
-        stopping.set()
-        notify()
-        thread.join(2.0)
-        if thread.is_alive():
-            print("carla: a sensor callback was still running 2 s after the program ended",
-                  file=sys.stderr)
+        # Codon's collector must know the thread before it runs Codon code.
+        try:
+            ok.append(bool(g["attach_current_thread"]()))
+        except Exception:
+            ok.append(False)
+        attached.set()
+        if not ok[0]:
+            return
+        try:
+            go.wait()
+            seen, out = ctypes.c_uint64(), ctypes.c_uint64()
+            while not stopping.is_set():
+                if count(ctypes.byref(seen)) != 0:  # the signal failed: poll instead
+                    time.sleep(_DISPATCH_WAIT)
+                    seen.value = 0
+                try:
+                    g["dispatch_callbacks"]()
+                except Exception:  # a callback's own errors are printed by _callback
+                    traceback.print_exc()
+                if wait(seen.value, _DISPATCH_WAIT, ctypes.byref(out)) != 0:
+                    time.sleep(_DISPATCH_WAIT)
+        finally:
+            g["detach_current_thread"]()
 
     thread = threading.Thread(target=loop, name="carla-callbacks", daemon=True)
     thread.start()
-    atexit.register(stop)
+    attached.wait()
+    if not ok[0]:
+        _failed = True
+        g["set_auto_dispatch"](True)
+        print("carla: the callback thread could not register with Codon's garbage collector; "
+              "callbacks run at World.tick() and the other dispatch points", file=sys.stderr)
+        return
+    g["set_auto_dispatch"](False, False)  # enabled=False, lock=False (see above)
+    first = _dispatcher is None
+    _dispatcher = (os.getpid(), thread, stopping)
+    go.set()
+    if first:
+        import atexit
+        atexit.register(_stop_dispatcher)
+
+
+def _stop_dispatcher(why: str = "the program ended") -> bool:
+    """Stops the dispatcher thread (it detaches from Codon's collector); waits
+    at most 2 s for a callback in progress, as typesafe_carla's own thread.
+    Returns whether one was running."""
+    if _dispatcher is None or _dispatcher[0] != os.getpid() or not _dispatcher[1].is_alive():
+        return False
+    _, thread, stopping = _dispatcher
+    stopping.set()
+    _hooks[3]()  # notify: wake the wait
+    thread.join(2.0)
+    if thread.is_alive():
+        print(f"carla: a sensor callback was still running 2 s after {why}", file=sys.stderr)
+    return True
+
+
+_restart_after_fork = False
+
+
+def _before_fork() -> None:
+    """The thread is stopped across a fork: Codon's collector would otherwise
+    keep it registered in the child, where it does not exist, and the child's
+    next collection would wait for it forever."""
+    global _restart_after_fork
+    _restart_after_fork = _stop_dispatcher("fork() was called")
+
+
+def _after_fork() -> None:
+    """Parent and child: a new thread, if one ran before the fork (the
+    listeners are still registered)."""
+    global _dispatcher, _restart_after_fork
+    if not _restart_after_fork:
+        return
+    _restart_after_fork = False
+    _dispatcher = (-1,) + _dispatcher[1:]  # stopped: _ensure_dispatcher starts another
+    _ensure_dispatcher()
+    if _dispatcher[0] != os.getpid():
+        _hooks[0]["set_auto_dispatch"](True)  # no thread: the dispatch points deliver

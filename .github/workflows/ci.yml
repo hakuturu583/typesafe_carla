@@ -42,8 +42,26 @@ jobs:
       - name: uv sync (locked)
         run: uv sync --frozen
       - run: uv run typesafe-codon info
+      # tools/pycarla against the mock, for tests/test_pycarla.py (issue #89:
+      # callbacks on a background thread) and the cpython-mode unit tests:
+      # built by pytest on a miss (~15 min), cached by what it is made from.
+      - name: Restore the pycarla build (mock)
+        id: pycarla
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/pycarla
+          key: pycarla-mock-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python }}-${{ hashFiles('codon/**', 'tools/pycarla.py', 'compat/pycarla/**', 'toolchain/**', 'native/**') }}
       - name: Compile-pass, compile-fail, runtime and launcher tests
+        env:
+          TSC_PYCARLA_DIR: ${{ runner.temp }}/pycarla
+          TSC_UPSTREAM_BUILD_PYCARLA: "1"
         run: uv run pytest -v
+      - name: Save the pycarla build (mock)
+        if: github.event_name != 'pull_request' && steps.pycarla.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/pycarla
+          key: ${{ steps.pycarla.outputs.cache-primary-key }}
       # The binding spec (bindings/*.yaml) against the mock's LibCarla mirror.
       # libclang finds clang's builtin headers through the runner's clang.
       - name: Binding spec vs mock headers
