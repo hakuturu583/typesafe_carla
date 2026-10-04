@@ -44,7 +44,7 @@ from ._ffi import (Handle, CString, CSensorDataInfo, CImage, CLidar, CLidarPoint
                    tsc_sensor_data_as_optical_flow, tsc_optical_flow_color_coded, take_string,
                    TSC_DVS_EVENT_SIZE, TSC_INVALID_ARGUMENT, TSC_ERROR)
 from .errors import _check, CarlaError, _normalize_index
-from .geometry import Location, Transform, Vector3D, _location_arg, _Owned
+from .geometry import Location, Transform, Vector3D, _location_arg, _Owned, _raw_vector
 from ._fmt import fmt_f, fmt_f32, fmt_b01, fmt_fields
 from .blueprint import Color
 from .actor import Actor, _make_actor
@@ -459,7 +459,8 @@ class LidarMeasurement(_ArrayMeasurement[CLidarPoint]):
         return _save_point_cloud(self.data, path)
 
     def _item(self, p: CLidarPoint) -> LidarDetection:
-        return LidarDetection(_Owned(Location(float(p.x), float(p.y), float(p.z))), float(p.intensity))
+        return LidarDetection(_Owned(_raw_vector(Location, float(p.x), float(p.y), float(p.z))),
+                              float(p.intensity))
 
     def _element(self, d: LidarDetection) -> CLidarPoint:
         return CLidarPoint(float32(d.point.x), float32(d.point.y), float32(d.point.z), float32(d.intensity))
@@ -523,7 +524,7 @@ class SemanticLidarMeasurement(_ArrayMeasurement[CSemanticLidarDetection]):
         return _save_point_cloud(self.data, path)
 
     def _item(self, p: CSemanticLidarDetection) -> SemanticLidarDetection:
-        return SemanticLidarDetection(_Owned(Location(float(p.x), float(p.y), float(p.z))),
+        return SemanticLidarDetection(_Owned(_raw_vector(Location, float(p.x), float(p.y), float(p.z))),
                                       float(p.cos_inc_angle), int(p.object_idx),
                                       int(p.object_tag))
 

@@ -1,0 +1,9 @@
+# Issue #85: a key the Python API's dict does not have is a compile error.
+# expect-error: CustomV2XBytes has no key "Size" (the Python API's dict has "DataSize", "MaxDataSize", "Bytes")
+import typesafe_carla as carla
+
+def size(sensor: carla.Sensor) -> int:
+    return sensor.wait_for_data(1.0).as_custom_v2x_event()[0].get()["Message"]["Message"]["Size"]
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(size(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()))

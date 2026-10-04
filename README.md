@@ -48,7 +48,7 @@ Milestones (design section 43):
 | Waypoint | `id`, `transform`, `road_id`, `section_id`, `lane_id`, `s`, `is_junction`, `is_intersection`, `junction_id`, `lane_width`, `lane_type`, `lane_change` (`LaneChange`), `left_lane_marking` / `right_lane_marking` (→ `Optional[LaneMarking]`: `LaneMarkingType`, `LaneMarkingColor`), `is_rht`, `next`, `previous`, `next_until_lane_end`, `previous_until_lane_start`, `get_left_lane` / `get_right_lane` / `get_junction` (→ `Optional`), `get_landmarks`, `get_landmarks_of_type` |
 | Landmark | every field of the Python API (`id`, `name`, `type`, `road_id`, `s`, `t`, `distance`, `orientation` (`LandmarkOrientation`), `h_offset`, `pitch`, `roll`, `is_dynamic`, ...), `waypoint` (→ `Optional[Waypoint]`), `get_lane_validities`; `LandmarkType` |
 | Snapshots | `WorldSnapshot` (`id`, `frame` / `frame_count`, `timestamp`, `elapsed_seconds`, `delta_seconds`, `platform_timestamp`, `find` → `Optional`, `has_actor`, indexing, iteration), `ActorSnapshot`, `Timestamp` (`frame` / `frame_count`) |
-| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`, or on the callback thread: `carla.start_callback_thread()` / `stop_callback_thread()` / `callback_thread_running()`, issue #86), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`, `enable_for_ros` / `disable_for_ros` / `is_enabled_for_ros`, `listen_to_gbuffer` / `is_listening_gbuffer` / `stop_gbuffer` (`GBufferTextureID`; issue #33); `SensorData` (`frame`, `frame_number`, `timestamp`, `transform`) with checked `as_image()` / `as_lidar()` / `as_semantic_lidar()` / `as_radar()` / `as_gnss()` / `as_imu()` / `as_collision()` / `as_obstacle()` / `as_lane_invasion()` / `as_dvs()` / `as_optical_flow()`; `Image` (`raw_data` → read-only `RawData` view, zero-copy `raw_data_ptr()`, indexing and iteration → `Color`, `pixel`, `convert(ColorConverter)`, `save_to_disk(path, ColorConverter)` as PNG), `ColorConverter` (`Raw`, `Depth`, `LogarithmicDepth`, `CityScapesPalette`), `LidarMeasurement` (`raw_data`, zero-copy `raw_data_ptr()` / `raw_points()`, iteration, `get_point_count`, `save_to_disk` as PLY), `SemanticLidarMeasurement` / `SemanticLidarDetection`, `RadarMeasurement` / `RadarDetection`, `DVSEventArray` / `DVSEvent` (`to_image`, `to_array`, `to_array_x/y/t/pol`), `OpticalFlowImage` / `OpticalFlowPixel` (`get_color_coded_flow` → `FakeImage`) — all zero-copy views of LibCarla's buffers; `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` / `ObstacleDetectionEvent` (`actor`, `other_actor` → `Optional[Actor]`, `distance`), `LaneInvasionEvent` (`crossed_lane_markings` → `List[LaneMarking]`, `actor`), `LaneInvasionSensor`, `ServerSideSensor`, `ClientSideSensor`, `LaneMarking` / `LaneMarkingType` / `LaneMarkingColor` / `LaneChange`; V2X (issue #42, LibCarla ue5-dev only): `Sensor.send(CustomV2XBytes)` / `send(str)`, `as_cam_event()` → `CAMEvent` (`get_message_count`, indexing, iteration → `CAMMessage`: `power`, `get()` → typed `CAM`), `as_custom_v2x_event()` → `CustomV2XEvent` (→ `CustomV2XData`: `power`, `get()` → `CustomV2XMessage`), `CustomV2XBytes` (`get_string` / `set_string` / `get_bytes` / `set_bytes` / `data_size` / `max_data_size`) |
+| Sensors | `Actor.as_sensor()` (checked), `Sensor.listen(callback)` (dispatched on the program's thread at `tick` / `wait_for_tick` / `carla.dispatch_sensor_callbacks()`, or on the callback thread: `carla.start_callback_thread()` / `stop_callback_thread()` / `callback_thread_running()`, issue #86), `Sensor.listen(queue_size)` / `stop` / `destroy` / `poll` (→ `Optional[SensorData]`) / `wait_for_data` / `has_callback` / `pending_count` / `dropped_count`, `enable_for_ros` / `disable_for_ros` / `is_enabled_for_ros`, `listen_to_gbuffer` / `is_listening_gbuffer` / `stop_gbuffer` (`GBufferTextureID`; issue #33); `SensorData` (`frame`, `frame_number`, `timestamp`, `transform`) with checked `as_image()` / `as_lidar()` / `as_semantic_lidar()` / `as_radar()` / `as_gnss()` / `as_imu()` / `as_collision()` / `as_obstacle()` / `as_lane_invasion()` / `as_dvs()` / `as_optical_flow()`; `Image` (`raw_data` → read-only `RawData` view, zero-copy `raw_data_ptr()`, indexing and iteration → `Color`, `pixel`, `convert(ColorConverter)`, `save_to_disk(path, ColorConverter)` as PNG), `ColorConverter` (`Raw`, `Depth`, `LogarithmicDepth`, `CityScapesPalette`), `LidarMeasurement` (`raw_data`, zero-copy `raw_data_ptr()` / `raw_points()`, iteration, `get_point_count`, `save_to_disk` as PLY), `SemanticLidarMeasurement` / `SemanticLidarDetection`, `RadarMeasurement` / `RadarDetection`, `DVSEventArray` / `DVSEvent` (`to_image`, `to_array`, `to_array_x/y/t/pol`), `OpticalFlowImage` / `OpticalFlowPixel` (`get_color_coded_flow` → `FakeImage`) — all zero-copy views of LibCarla's buffers; `GnssMeasurement`, `IMUMeasurement`, `CollisionEvent` / `ObstacleDetectionEvent` (`actor`, `other_actor` → `Optional[Actor]`, `distance`), `LaneInvasionEvent` (`crossed_lane_markings` → `List[LaneMarking]`, `actor`), `LaneInvasionSensor`, `ServerSideSensor`, `ClientSideSensor`, `LaneMarking` / `LaneMarkingType` / `LaneMarkingColor` / `LaneChange`; V2X (issue #42, LibCarla ue5-dev only): `Sensor.send(CustomV2XBytes)` / `send(str)`, `as_cam_event()` → `CAMEvent` (`get_message_count`, indexing, iteration → `CAMMessage`: `power`, `get()` → typed `CAM`), `as_custom_v2x_event()` → `CustomV2XEvent` (→ `CustomV2XData`: `power`, `get()` → `CustomV2XMessage`), `CustomV2XBytes` (`get_string` / `set_string` / `get_bytes` / `set_bytes` / `data_size` / `max_data_size` / `get`); the Python API's dict keys on every `get()` result, resolved at compile time (`get()["Message"]["Message"]["DataSize"]`, issue #85) |
 | Batch commands | `carla.command.SpawnActor(...).then(...)`, `FutureActor`, `DestroyActor`, `ApplyVehicleControl`, `ApplyWalkerControl`, `ApplyTransform`, `ApplyLocation`, `ApplyTargetVelocity`, `ApplyTargetAngularVelocity`, `ApplyImpulse`, `ApplyForce`, `ApplyAngularImpulse`, `ApplyTorque`, `SetAutopilot`, `SetSimulatePhysics`, `SetEnableGravity`, `SetVehicleLightState`, `SetTrafficLightState`, `ApplyVehicleAckermannControl`, `ShowDebugTelemetry`, `ApplyVehiclePhysicsControl`, `ApplyWalkerState`; `CommandResponse` |
 | Blueprints | `BlueprintLibrary` (`find`, `filter`, `filter_by_attribute`, indexing, iteration), `ActorBlueprint` (`id`, `tags`, `has_tag`, `match_tags`, `has_attribute`, `get_attribute`, `set_attribute`, `len()` and iteration over its attributes), `ActorAttribute` (typed `as_bool/as_int/as_float/as_str/as_color`, `recommended_values`) |
 | Values | `TextureColor`, `TextureFloatColor`, `FloatColor`, `MaterialParameter`, `CityObjectLabel`, `ActorState` (issue #19), `MapLayer`, `EnvironmentObject`, `LabelledPoint` (issue #21), `Location`, `Rotation` (`get_forward_vector` / `get_right_vector` / `get_up_vector`, `get_normalized`), `Transform` (`get_forward_vector` / `get_right_vector` / `get_up_vector`, `get_matrix`, `get_inverse_matrix`, `transform` (a point or a list of points, in place), `transform_vector`), `Vector2D` (`length`, `squared_length`, `make_unit_vector`), `Vector3D`, `Velocity`, `AngularVelocity`, `Acceleration`, `Quaternion`, `BoundingBox` (`contains`, `get_local_vertices`, `get_world_vertices`), `VehicleControl`, `VehiclePhysicsControl` and `WheelPhysicsControl` (all fields: curves, gear ratios, wheels), `WorldSettings` (every LibCarla field, including `max_culling_distance`, `deterministic_ragdolls`, `tile_stream_distance`, `actor_active_distance`, `spectator_as_ego`), `Color`, `VehicleAckermannControl`, `AckermannControllerSettings`, `VehicleTelemetryData`, `WheelTelemetryData`, `WalkerBoneControlIn` / `WalkerBoneControlOut`, `bone_transform` / `bone_transform_out`; enumerations `VehicleDoor`, `VehicleWheelLocation`, `VehicleFailureState`, `AttachmentType`; constants `GBufferTextureID` |
@@ -640,34 +640,40 @@ Deliberate differences, all in favour of static checking:
 * **`WheelPhysicsControl.velocity` is a `Vector3D`.** LibCarla and the Python
   API store it as a `Location`; positions (`location`, `old_location`,
   `center_of_mass`) stay `Location`.
-* **Float precision.** Values cross into LibCarla as float32, as they do in
-  the Python API, so `get_control().throttle` after setting `0.2` is
-  `0.2000000029802322`. Arithmetic on `Vector3D`, `Location`, `Velocity`,
-  `AngularVelocity`, `Acceleration` and `Vector2D` runs in double precision
-  here and in float32 in the Python API. Results can differ in the last
-  digits, and so can `==` on them, which compares in float32 as LibCarla
-  does: `Vector3D(-81.2, 0, 0) + Vector3D(78.6634, 0, 0) ==
-  Vector3D(-81.2 + 78.6634, 0, 0)` is True here and False in Python. Near
-  the edges they can differ outright:
-  `get_vector_angle` clamps the cosine to [-1, 1], so nearly parallel vectors
-  give 0 rather than NaN. In `make_unit_vector`, Python computes the squared
-  length in float32: with an `epsilon` below the vector's true length, a
-  vector whose squared length underflows to 0 (components below about
-  1e-23) comes back unchanged in Python but as a unit vector here, and one
-  just above that is normalized imprecisely in Python (`(1e-22, 0, 0)` gives
-  x≈1.0097 there, 1.0 here); a vector with a component above about 1.8e19
-  becomes a zero vector in Python (the squared length overflows), but a
-  unit vector here. `make_unit_vector(epsilon)` otherwise behaves as
-  LibCarla's `MakeUnitVector` on `Vector2D`, `Vector3D` and `Location`: a
-  vector of length <= `epsilon` (default `2.384185791015625e-07`, i.e.
-  2 * FLT_EPSILON) is returned unchanged.
+* **Float precision (issue #81).** As in LibCarla and the Python API,
+  `Vector3D`, `Location`, `Velocity`, `AngularVelocity`, `Acceleration`,
+  `Vector2D`, `Rotation` and `Quaternion` store float32: each field is
+  rounded to float32 on construction, on assignment and for every arithmetic
+  result, so `Location(0.1).x` is `0.10000000149011612`,
+  `Location(16777217).x` is `16777216.0` and `Vector3D(1e30) * 1e10` is
+  `inf`. The fields are Codon `float`s holding float32 values; reading them
+  costs nothing and the C ABI is unchanged. `+ - * /` (the scalar rounded to
+  float32 first, as LibCarla's `float` parameter), `length`,
+  `squared_length`, `dot`, `cross`, `distance*`, `make_unit_vector` and
+  `get_vector_angle`, and `Quaternion`'s `length`, `inverse`,
+  `unit_quaternion`, `*` and basis vectors, compute step by step in float32,
+  as LibCarla, and give the Python API's results bit for bit
+  (tests/compatibility/arithmetic_cases). `Quaternion(rotation)`,
+  `Quaternion.rotator`, `Rotation.get_normalized`, `Transform.transform` and
+  `transform_vector` use other formulas or double intermediates and round
+  only the result, so they can differ from the Python API in the low bits,
+  more for components near zero (issue #90). Double fields stay double, as
+  in LibCarla:
+  `GeoLocation`, the geo projections, `GeoEllipsoid`, `GeoOffsetTransform`
+  and `WorldSettings`' time steps. Other value types with `float` fields in
+  LibCarla (the controls, the physics controls, `WeatherParameters`, ...)
+  still store the double you set: they become float32 when sent to the
+  server, so `get_control().throttle` after setting `0.2` is
+  `0.2000000029802322`, and `==` compares them in float32.
 
 * **`==` / `!=` (issue #70)** follow LibCarla's `operator==` on every value
   type the Python API compares. Float fields compare exactly *in float32*, as
   LibCarla stores them: `Location(0.1) == Location(0.1 + 1e-12)` is `True`
-  although the doubles kept here differ. Double fields (`GeoLocation`, the geo
-  projections, `GeoEllipsoid`, `GeoOffsetTransform`, and `WorldSettings`'
-  `fixed_delta_seconds` and `max_substep_delta_time`) compare exactly. As in
+  (both store the same float32), as is `VehicleControl(throttle=0.1) ==
+  VehicleControl(throttle=0.1 + 1e-12)` although the doubles kept there
+  differ. Double fields (`GeoLocation`, the geo projections, `GeoEllipsoid`,
+  `GeoOffsetTransform`, and `WorldSettings`' `fixed_delta_seconds` and
+  `max_substep_delta_time`) compare exactly. As in
   LibCarla, some types compare less than every field. `Rotation`s are also
   equal when each pair of angles has `|a| + |b| == 180`, so
   `Rotation(90, 90, 90) == Rotation(-90, -90, -90)`. `Color` ignores alpha.
@@ -751,8 +757,8 @@ Deliberate differences, all in favour of static checking:
     0.10.0"); no measurement is ever `SensorDataType.CAM` / `CustomV2X`.
     A CARLA 0.10.0 server has no `sensor.other.v2x*` blueprints at all.
     `CustomV2XBytes` is a plain value and works with both.
-  - `CAMMessage.get()` returns a typed `CAM`, not the Python API's nested
-    dict. It holds the same content: the header (`ItsPduHeader`), the
+  - `CAMMessage.get()` returns a typed `CAM`, where the Python API returns a
+    nested dict (the dict keys work too; see below). It holds the same content: the header (`ItsPduHeader`), the
     generation time, the station type, the reference position (with the
     altitude, which the Python API drops), and the containers of LibCarla's
     `LibITS.h` as `Optional`s: `basic_vehicle_container_high_frequency`
@@ -766,15 +772,42 @@ Deliberate differences, all in favour of static checking:
     display strings ("Passenger Car", "CAM"). This is the whole CAM that
     LibCarla carries; there is no further ITS tree (DENM etc.) to bind.
     The power is `CAMMessage.power`, not part of `get()`. An empty path
-    history is `[]` (the Python API gives `None`). `get()` returns the
-    stored object each time, where the Python API builds a new dict per
-    call. `CustomV2XData.get()` likewise returns a `CustomV2XMessage`
+    history is `[]` (the Python API gives `None`). As the Python API builds
+    a new dict per call, `get()` returns a new snapshot each time: changing
+    one result (or `power`) afterwards does not affect earlier or later
+    `get()` results. `CustomV2XData.get()` likewise returns a `CustomV2XMessage`
     (`header`, `data`: `CustomV2XBytes`).
+  - **The Python API's dict keys work on the typed results** (issue #85), so
+    `event[0].get()["Message"]["Message"]["DataSize"]` (upstream
+    `smoke/test_v2x.py`) ports unchanged. Each literal key is resolved at
+    compile time and has its own static type, mirroring the dict of
+    `PythonAPI/carla/src/V2XData.cpp` level by level: `get()` has `"Power"`
+    and `"Message"`; `["Message"]` has `"Header"` (`"Protocol Version"`,
+    `"Message ID"`, `"Station ID"`) and `"Message"`: for a custom message
+    `"DataSize"`, `"MaxDataSize"`, `"Bytes"`, for a CAM `"Generation Delta
+    Time"` and `"CAM Parameters"` with the Python API's containers and key
+    names (its spelling `"Position Confidence Eliipse"` and `"Performance
+    class"` included). As in the dict, enumerations are the display strings
+    (`"CUSTOM"`, `"Passenger Car"`, `"Unavailable"`), a value the dict holds
+    as `None` is an `Optional` (`"Acceleration Control"`, an empty `"Path
+    History"`), and a key the dict leaves out (the container that is not
+    present, an absent `"Expiry Time"`) raises `KeyError`. `"Bytes"` is a
+    `str` of the raw bytes (Codon's `b"..."` literal is a `str` too, so
+    `payload["Bytes"] == b"hello v2x"` compiles and holds). An unknown key
+    (`"Altitude"`, which the dict lacks) is a compile error listing the
+    dict's keys, and so is a computed (non-literal) key: use the typed
+    attributes for those. Check a `None`-valued key with `is None` before
+    indexing into it: `hf["Steering Wheel Angle"]["Value"]` compiles (Codon
+    unwraps the `Optional` implicitly) but fails at run time when the value
+    is absent. The levels are views of one `get()` snapshot (no copy). This
+    is statically checked, so it is not a compatibility path and does not
+    warn.
   - `CustomV2XBytes.get_bytes()` / `set_bytes()` use `List[int]` (Codon has
     no `bytes`); `set_bytes` rejects values outside [0, 255] with
     `CarlaError`. `data_size` can be set within [0, 100] only (the Python
     API accepts any uint8 and then reads past the 100-byte buffer).
-    `CustomV2XBytes.get()` (a dict of the same three values) is not bound.
+    `CustomV2XBytes.get()` returns the object itself, which takes the
+    dict's `"DataSize"` / `"MaxDataSize"` / `"Bytes"` keys.
   - `Sensor.send` also takes a `str` (sent as `set_string` would store it).
     As in LibCarla, sending through a server-side sensor that is not
     `sensor.other.v2x_custom` only logs a warning; the client-side

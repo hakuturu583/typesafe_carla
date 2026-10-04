@@ -4,8 +4,9 @@
 #     cam = world.spawn_actor(lib.find("sensor.other.v2x"), t, attach_to=car).as_sensor()
 #     event = cam.wait_for_data(1.0).as_cam_event()
 #     for message in event:                 # CAMMessage
-#         cam_t = message.get()             # typed CAM, not a dict
+#         cam_t = message.get()             # typed CAM
 #         print(message.power, cam_t.header.station_id, cam_t.reference_position.latitude)
+#         print(cam_t["Message"]["Header"]["Station ID"])  # the Python API's dict keys
 #
 #     radio = world.spawn_actor(lib.find("sensor.other.v2x_custom"), t, attach_to=car).as_sensor()
 #     payload = carla.CustomV2XBytes()
@@ -23,7 +24,8 @@
 # the same content (plus the altitude, which the Python API leaves out): the
 # ETSI ITS containers of LibCarla's LibITS.h, with snake_case field names,
 # raw ETSI codes and units (latitude in 0.1 microdegrees, speed in cm/s, ...)
-# and Optional for the optional fields and containers.
+# and Optional for the optional fields and containers. It also takes the dict's
+# literal keys (issue #85; see the end of this file).
 
 from ._ffi import (CItsHeader, CItsValue, CItsReferencePosition, CCamBasicVehicleHf, CCamMessage,
                    CItsProtectedZone, CItsPathPoint, CCustomV2XData,
@@ -222,8 +224,12 @@ class CAM:
     basic_vehicle_container_high_frequency: Optional[BasicVehicleContainerHighFrequency]
     protected_communication_zones_rsu: Optional[List[ProtectedCommunicationZone]]
     basic_vehicle_container_low_frequency: Optional[BasicVehicleContainerLowFrequency]
+    _power: float  # the receive power: get()["Power"]
 
-    def __init__(self, data: SensorData, index: int, c: CCamMessage):
+    def __init__(self, c: CCamMessage, zones: List[CItsProtectedZone],
+                 points: List[CItsPathPoint], power: float):
+        """A new CAM from LibCarla's values (each CAMMessage.get() builds one)."""
+        self._power = power
         self.header = ItsPduHeader._from_c(c.header)
         self.generation_delta_time = c.generation_delta_time
         self.station_type = c.station_type
@@ -236,13 +242,9 @@ class CAM:
             self.basic_vehicle_container_high_frequency = BasicVehicleContainerHighFrequency(
                 c.basic_vehicle)
         elif hf == TSC_CAM_HF_RSU:
-            zones = _its_list(tsc_cam_event_get_protected_zones, data, index,
-                              TSC_CAM_MAX_PROTECTED_ZONES, CItsProtectedZone)
             self.protected_communication_zones_rsu = [ProtectedCommunicationZone(z)
                                                       for z in zones]
         if int(c.has_low_frequency) != 0:
-            points = _its_list(tsc_cam_event_get_path_history, data, index,
-                               TSC_CAM_MAX_PATH_POINTS, CItsPathPoint)
             self.basic_vehicle_container_low_frequency = BasicVehicleContainerLowFrequency(
                 c.vehicle_role, c.exterior_lights, [PathPoint(p) for p in points])
 
@@ -253,21 +255,26 @@ class CAM:
 class CAMMessage:
     """One received CAM (LibCarla's CAMData) and its receive power."""
     power: float  # dBm
-    _cam: CAM
+    _c: CCamMessage  # LibCarla's values, copied out of the measurement
+    _zones: List[CItsProtectedZone]
+    _points: List[CItsPathPoint]
 
-    def __init__(self, power: float, cam: CAM):
+    def __init__(self, power: float, c: CCamMessage, zones: List[CItsProtectedZone],
+                 points: List[CItsPathPoint]):
         self.power = power
-        self._cam = cam
+        self._c = c
+        self._zones = zones
+        self._points = points
 
     def get(self) -> CAM:
-        """The message. The Python API builds a new dict (that also holds the
-        power) on each call; this returns the same stored CAM object, so
-        changes to it are seen by later get() calls."""
-        return self._cam
+        """The message, with the current power: a new CAM on each call, as the
+        Python API builds a new dict, so changing one does not affect the
+        message or other get() results."""
+        return CAM(self._c, self._zones, self._points, self.power)
 
     def __repr__(self) -> str:
-        return (f"CAMData(power={fmt_f32(self.power)}, stationId={self._cam.header.station_id}, "
-                f"messageId={self._cam.header.message_id})")
+        return (f"CAMData(power={fmt_f32(self.power)}, stationId={self._c.header.station_id}, "
+                f"messageId={self._c.header.message_id})")
 
 class _V2XEvent(_Measurement):
     """The messages a V2X sensor received in one tick. Indexing reads
@@ -305,7 +312,16 @@ class CAMEvent(_V2XEvent):
     def _message(self, i: int) -> CAMMessage:
         out = Ptr[CCamMessage](1)
         _check(tsc_cam_event_get_message(self.data._h.ptr, i, out))
-        return CAMMessage(float(out[0].power), CAM(self.data, i, out[0]))
+        c = out[0]
+        zones = List[CItsProtectedZone]()
+        if int(c.high_frequency_present) == TSC_CAM_HF_RSU:
+            zones = _its_list(tsc_cam_event_get_protected_zones, self.data, i,
+                              TSC_CAM_MAX_PROTECTED_ZONES, CItsProtectedZone)
+        points = List[CItsPathPoint]()
+        if int(c.has_low_frequency) != 0:
+            points = _its_list(tsc_cam_event_get_path_history, self.data, i,
+                               TSC_CAM_MAX_PATH_POINTS, CItsPathPoint)
+        return CAMMessage(float(c.power), c, zones, points)
 
 class CustomV2XBytes:
     """LibCarla's rpc::CustomV2XBytes: up to max_data_size() (100) bytes, the
@@ -337,6 +353,12 @@ class CustomV2XBytes:
 
     def max_data_size(self) -> int:
         return TSC_CUSTOM_V2X_MAX_DATA_SIZE
+
+    def _copy(self) -> CustomV2XBytes:
+        other = CustomV2XBytes()
+        str.memcpy(other._bytes, self._bytes, TSC_CUSTOM_V2X_MAX_DATA_SIZE)
+        other._size = self._size
+        return other
 
     def _assign(self, n: int):
         self._size = n
@@ -382,10 +404,12 @@ class CustomV2XMessage:
     """A custom V2X message (LibITS's CustomV2XM): CustomV2XData.get()."""
     header: ItsPduHeader
     data: CustomV2XBytes
+    _power: float  # the receive power: get()["Power"] (set by CustomV2XData.get())
 
     def __init__(self, header: ItsPduHeader, data: CustomV2XBytes):
         self.header = header
         self.data = data
+        self._power = 0.0
 
     def __repr__(self) -> str:
         return f"CustomV2XMessage(header={self.header}, data={self.data})"
@@ -394,21 +418,27 @@ class CustomV2XData:
     """One received custom V2X message (LibCarla's CustomV2XData) and its
     receive power."""
     power: float  # dBm
-    _message: CustomV2XMessage
+    _header: CItsHeader
+    _payload: CustomV2XBytes  # never handed out: get() copies it
 
-    def __init__(self, power: float, message: CustomV2XMessage):
+    def __init__(self, power: float, header: CItsHeader, payload: CustomV2XBytes):
         self.power = power
-        self._message = message
+        self._header = header
+        self._payload = payload
 
     def get(self) -> CustomV2XMessage:
-        """The message. The Python API builds a new dict (that also holds the
-        power) on each call; this returns the same stored object."""
-        return self._message
+        """The message, with the current power: a new CustomV2XMessage (with
+        its own copy of the payload) on each call, as the Python API builds a
+        new dict, so changing one does not affect the message or other get()
+        results."""
+        message = CustomV2XMessage(ItsPduHeader._from_c(self._header), self._payload._copy())
+        message._power = self.power
+        return message
 
     def __repr__(self) -> str:
         return (f"CustomV2XData(power={fmt_f32(self.power)}, "
-                f"stationId={self._message.header.station_id}, "
-                f"messageId={self._message.header.message_id}, data={self._message.data})")
+                f"stationId={self._header.station_id}, "
+                f"messageId={self._header.message_id}, data={self._payload})")
 
 class CustomV2XEvent(_V2XEvent):
     """The custom messages a sensor.other.v2x_custom received in one tick."""
@@ -420,8 +450,7 @@ class CustomV2XEvent(_V2XEvent):
         _check(tsc_custom_v2x_event_get_message(self.data._h.ptr, i, out, payload._bytes,
                                                 TSC_CUSTOM_V2X_MAX_DATA_SIZE))
         payload._size = int(out[0].data_size)
-        return CustomV2XData(float(out[0].power),
-                             CustomV2XMessage(ItsPduHeader._from_c(out[0].header), payload))
+        return CustomV2XData(float(out[0].power), out[0].header, payload)
 
 @extend
 class SensorData:
@@ -458,3 +487,450 @@ class Sensor:
         payload = CustomV2XBytes()
         payload.set_string(message)
         self.send(payload)
+
+# --- The Python API's dict paths (issue #85) -----------------------------------
+#
+# The Python API's CAMMessage.get() / CustomV2XData.get() / CustomV2XBytes.get()
+# return nested dicts (PythonAPI/carla/src/V2XData.cpp), so ported code reads
+#
+#     payload = event[0].get()["Message"]["Message"]
+#     payload["DataSize"]; payload["MaxDataSize"]; payload["Bytes"]
+#
+# The typed results take the same literal keys. Each key is resolved at compile
+# time and has its own static type, mirroring the dict's value: the official
+# display strings for enumerations ("CAM", "Passenger Car", "Unavailable"),
+# None (an Optional) for a value the dict holds as None, and KeyError for a key
+# the dict leaves out (a container that is not present). "Bytes" is a str of
+# the raw bytes (Codon's b"..." literal is a str too). The levels without a
+# typed counterpart are the views below; they share the typed objects (each
+# get() returns a new snapshot, as the Python API's new dict). Keys
+# the dict lacks (the altitude, for instance) are compile errors: use the
+# typed attributes for those.
+
+def _literal_key_only(where: Static[str]):
+    # (No braces in these messages: Codon formats compile errors with fmt.)
+    compile_error(where + "[key] needs a literal string key, resolved at compile time (as in "
+                  "x[\"Key\"]); for a computed key, use the typed attributes instead")
+
+def _unknown_key(where: Static[str], key: Static[str], keys: Static[str]):
+    compile_error(where + " has no key \"" + key + "\" (the Python API's dict has " + keys + ")")
+
+def _required(value, key: str):
+    """An Optional field's value. The Python API's dict leaves the key out when
+    the field is None, so that is a KeyError, as the dict."""
+    if value is None:
+        raise KeyError(key)
+    return value.__val__()
+
+# The display strings of V2XData.cpp (LibITS.h codes; the default is the
+# Python API's fallback).
+_MESSAGE_IDS = {0: "CUSTOM", 1: "DENM", 2: "CAM", 3: "POI", 4: "SPAT", 5: "MAP", 6: "IVI",
+                7: "EV_RSR"}
+_STATION_TYPES = {0: "Unknown", 1: "Pedestrian", 2: "Cyclist", 3: "Moped", 4: "Motorcycle",
+                  5: "Passenger Car", 6: "Bus", 7: "Light Truck", 8: "HeavyTruck", 9: "Trailer",
+                  10: "Special Vehicle", 11: "Tram", 15: "Road Side Unit"}
+_SEMI_AXIS = {1: "Semi Axis Length One Centimeter", 4094: "Semi Axis Length Out Of Range"}
+_SEMI_ORIENTATION = {0: "Heading wgs84 North", 900: "Heading wgs84 East",
+                     1800: "Heading wgs84 South", 2700: "Heading wgs84 West"}
+_HEADING_CONFIDENCE = {1: "Equal or With in Zero Point One Degree",
+                       10: "Equal or With in One Degree", 126: "Out of Range"}
+_SPEED_CONFIDENCE = {1: "Equal or With in One Centimeter per Sec",
+                     100: "Equal or With in One Meter per Sec", 126: "Out of Range"}
+_VEHICLE_LENGTH_CONFIDENCE = {0: "No Trailer Present", 1: "Trailer Present With Known Length",
+                              2: "Trailer Present With Unknown Length",
+                              3: "Trailer Presence Is Unknown"}
+_ACCELERATION_CONFIDENCE = {1: "Point One Meter Per Sec Squared", 101: "Out Of Range"}
+_CURVATURE_CONFIDENCE = {0: "One Per Meter 0_00002", 1: "One Per Meter 0_0001",
+                         2: "One Per Meter 0_0005", 3: "One Per Meter 0_002",
+                         4: "One Per Meter 0_01", 5: "One Per Meter 0_1", 6: "Out Of Range"}
+_YAW_RATE_CONFIDENCE = {0: "degSec 000_01", 1: "degSec 000_05", 2: "degSec 000_10",
+                        3: "degSec 001_00", 4: "degSec 005_00", 5: "degSec 010_00",
+                        6: "degSec 100_00", 7: "Out Of Range"}
+_STEERING_WHEEL_CONFIDENCE = {1: "Equal or With in 1.5 degree", 126: "Out of Range"}
+_VEHICLE_ROLES = {1: "Public Transport", 2: "Special Transport", 3: "Dangerous Goods",
+                  4: "Road Work", 5: "Rescue", 6: "Emergency", 7: "Safety Car", 8: "Agriculture",
+                  9: "Commercial", 10: "Military", 11: "Road Operator", 12: "Taxi",
+                  13: "Reserved 1", 14: "Reserved 2", 15: "Reserved 3"}
+
+@tuple
+class _ValueConfidenceDict:
+    """A "Value"/"Confidence" dict: the confidence as its display string."""
+    value: int
+    confidence: str
+
+    def __getitem__(self, key: str):
+        _literal_key_only("the \"Value\"/\"Confidence\" dict")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Value":
+            return self.value
+        elif key == "Confidence":
+            return self.confidence
+        else:
+            _unknown_key("the \"Value\"/\"Confidence\" dict", key, "\"Value\", \"Confidence\"")
+
+def _confidence(v: ValueConfidence, names: Dict[int, str]) -> _ValueConfidenceDict:
+    return _ValueConfidenceDict(v.value, names.get(v.confidence, "Unavailable"))
+
+def _opt_confidence(v: Optional[ValueConfidence],
+                    names: Dict[int, str]) -> Optional[_ValueConfidenceDict]:
+    if v is None:
+        return None
+    return _confidence(v, names)
+
+@extend
+class ItsPduHeader:
+    def __getitem__(self, key: str):
+        _literal_key_only("ItsPduHeader (\"Header\")")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Protocol Version":
+            return self.protocol_version
+        elif key == "Message ID":
+            return _MESSAGE_IDS.get(self.message_id, "Not Found")
+        elif key == "Station ID":
+            return self.station_id
+        else:
+            _unknown_key("ItsPduHeader (\"Header\")", key,
+                         "\"Protocol Version\", \"Message ID\", \"Station ID\"")
+
+@extend
+class CustomV2XBytes:
+    def get(self) -> CustomV2XBytes:
+        """The Python API's dict of DataSize, MaxDataSize and Bytes: this object
+        itself, indexable with those keys."""
+        return self
+
+    def __getitem__(self, key: str):
+        _literal_key_only("CustomV2XBytes")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "DataSize":
+            return self.data_size
+        elif key == "MaxDataSize":
+            return self.max_data_size()
+        elif key == "Bytes":
+            return self.get_string()  # the raw bytes (the Python API's bytes)
+        else:
+            _unknown_key("CustomV2XBytes", key, "\"DataSize\", \"MaxDataSize\", \"Bytes\"")
+
+@tuple
+class _Pdu[M, where: Static[str]]:
+    """get()["Message"] of both messages: {"Header", "Message"}."""
+    header: ItsPduHeader
+    message: M
+
+    def __getitem__(self, key: str):
+        _literal_key_only(where)
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Header":
+            return self.header
+        elif key == "Message":
+            return self.message
+        else:
+            _unknown_key(where, key, "\"Header\", \"Message\"")
+
+@extend
+class CustomV2XMessage:
+    def __getitem__(self, key: str):
+        _literal_key_only("CustomV2XData.get()")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Power":
+            return self._power
+        elif key == "Message":
+            return _Pdu[CustomV2XBytes, "CustomV2XData.get()[\"Message\"]"](self.header,
+                                                                            self.data)
+        else:
+            _unknown_key("CustomV2XData.get()", key, "\"Power\", \"Message\"")
+
+@tuple
+class _PositionConfidenceEllipse:
+    """["Reference Position"]["Position Confidence Eliipse"] (the Python API's spelling)."""
+    position: ReferencePosition
+
+    def __getitem__(self, key: str):
+        _literal_key_only("\"Position Confidence Eliipse\"")
+
+    def __getitem__(self, key: Static[str]):
+        p = self.position
+        if key == "Semi Major Confidence":
+            return _SEMI_AXIS.get(p.semi_major_confidence, "Semi Axis Length Unavailable")
+        elif key == "Semi Minor Confidence":
+            return _SEMI_AXIS.get(p.semi_minor_confidence, "Semi Axis Length Unavailable")
+        elif key == "Semi Major Orientation":
+            return _SEMI_ORIENTATION.get(p.semi_major_orientation, "Heading Unavailable")
+        else:
+            _unknown_key("\"Position Confidence Eliipse\"", key,
+                         "\"Semi Major Confidence\", \"Semi Minor Confidence\", "
+                         "\"Semi Major Orientation\"")
+
+@extend
+class ReferencePosition:
+    def __getitem__(self, key: str):
+        _literal_key_only("ReferencePosition (\"Reference Position\")")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Latitude":
+            return self.latitude
+        elif key == "Longitude":
+            return self.longitude
+        elif key == "Position Confidence Eliipse":
+            return _PositionConfidenceEllipse(self)
+        else:
+            _unknown_key("ReferencePosition (\"Reference Position\")", key,
+                         "\"Latitude\", \"Longitude\", \"Position Confidence Eliipse\"; "
+                         "the altitude is .altitude")
+
+@extend
+class CenDsrcTollingZone:
+    def __getitem__(self, key: str):
+        _literal_key_only("CenDsrcTollingZone (\"Cen DSRC Tolling Zone\")")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Protected Zone Latitude":
+            return self.protected_zone_latitude
+        elif key == "Protected Zone Longitude":
+            return self.protected_zone_longitude
+        elif key == "Cen DSRC Tolling Zone ID":
+            return _required(self.cen_dsrc_tolling_zone_id, key)
+        else:
+            _unknown_key("CenDsrcTollingZone (\"Cen DSRC Tolling Zone\")", key,
+                         "\"Protected Zone Latitude\", \"Protected Zone Longitude\", "
+                         "\"Cen DSRC Tolling Zone ID\"")
+
+@extend
+class BasicVehicleContainerHighFrequency:
+    def __getitem__(self, key: str):
+        _literal_key_only("BasicVehicleContainerHighFrequency")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Heading":
+            return _confidence(self.heading, _HEADING_CONFIDENCE)
+        elif key == "Speed":
+            return _confidence(self.speed, _SPEED_CONFIDENCE)
+        elif key == "Drive Direction":
+            return self.drive_direction
+        elif key == "Vehicle Length":
+            return _confidence(self.vehicle_length, _VEHICLE_LENGTH_CONFIDENCE)
+        elif key == "Vehicle Width":
+            return self.vehicle_width
+        elif key == "Longitudinal Acceleration":
+            return _confidence(self.longitudinal_acceleration, _ACCELERATION_CONFIDENCE)
+        elif key == "Curvature":
+            return _confidence(self.curvature, _CURVATURE_CONFIDENCE)
+        elif key == "Curvature Calculation Mode":
+            return self.curvature_calculation_mode
+        elif key == "Yaw Rate":
+            return _confidence(self.yaw_rate, _YAW_RATE_CONFIDENCE)
+        elif key == "Acceleration Control":
+            return self.acceleration_control
+        elif key == "Lane Position":
+            return self.lane_position
+        elif key == "Steering Wheel Angle":
+            return _opt_confidence(self.steering_wheel_angle, _STEERING_WHEEL_CONFIDENCE)
+        elif key == "Lateral Acceleration":
+            return _opt_confidence(self.lateral_acceleration, _ACCELERATION_CONFIDENCE)
+        elif key == "Vertical Acceleration":
+            return _opt_confidence(self.vertical_acceleration, _ACCELERATION_CONFIDENCE)
+        elif key == "Performance class":
+            return self.performance_class
+        elif key == "Cen DSRC Tolling Zone":
+            return self.cen_dsrc_tolling_zone
+        else:
+            _unknown_key("BasicVehicleContainerHighFrequency", key,
+                         "\"Heading\", \"Speed\", \"Drive Direction\", \"Vehicle Length\", "
+                         "\"Vehicle Width\", \"Longitudinal Acceleration\", \"Curvature\", "
+                         "\"Curvature Calculation Mode\", \"Yaw Rate\", \"Acceleration Control\", "
+                         "\"Lane Position\", \"Steering Wheel Angle\", \"Lateral Acceleration\", "
+                         "\"Vertical Acceleration\", \"Performance class\", "
+                         "\"Cen DSRC Tolling Zone\"")
+
+@extend
+class ProtectedCommunicationZone:
+    def __getitem__(self, key: str):
+        _literal_key_only("ProtectedCommunicationZone")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Protected Zone Type":
+            return self.protected_zone_type
+        elif key == "Expiry Time":
+            return _required(self.expiry_time, key)
+        elif key == "Protected Zone Latitude":
+            return self.protected_zone_latitude
+        elif key == "Protected Zone Longitude":
+            return self.protected_zone_longitude
+        elif key == "Protected Zone ID":
+            return _required(self.protected_zone_id, key)
+        elif key == "Protected Zone Radius":
+            return _required(self.protected_zone_radius, key)
+        else:
+            _unknown_key("ProtectedCommunicationZone", key,
+                         "\"Protected Zone Type\", \"Expiry Time\", \"Protected Zone Latitude\", "
+                         "\"Protected Zone Longitude\", \"Protected Zone ID\", "
+                         "\"Protected Zone Radius\"")
+
+@extend
+class PathPoint:
+    def __getitem__(self, key: str):
+        _literal_key_only("PathPoint")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Delta Latitude":
+            return self.delta_latitude
+        elif key == "Delta Longitude":
+            return self.delta_longitude
+        elif key == "Delta Altitude":
+            return self.delta_altitude
+        elif key == "Delta Time":
+            return self.path_delta_time
+        else:
+            _unknown_key("PathPoint", key, "\"Delta Latitude\", \"Delta Longitude\", "
+                         "\"Delta Altitude\", \"Delta Time\"")
+
+@extend
+class BasicVehicleContainerLowFrequency:
+    def __getitem__(self, key: str):
+        _literal_key_only("BasicVehicleContainerLowFrequency")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Vehicle Role":
+            return _VEHICLE_ROLES.get(self.vehicle_role, "Default")
+        elif key == "Exterior Light":
+            return self.exterior_lights
+        elif key == "Path History":
+            # None when empty, as the Python API (the attribute gives []).
+            history: Optional[List[PathPoint]] = None
+            if len(self.path_history) != 0:
+                history = self.path_history
+            return history
+        else:
+            _unknown_key("BasicVehicleContainerLowFrequency", key,
+                         "\"Vehicle Role\", \"Exterior Light\", \"Path History\"")
+
+@tuple
+class _RSUContainerHighFrequency:
+    """["High Frequency Container"]["RSU Container High Frequency"]."""
+    zones: List[ProtectedCommunicationZone]
+
+    def __getitem__(self, key: str):
+        _literal_key_only("\"RSU Container High Frequency\"")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Protected Communication Zone":
+            return self.zones
+        else:
+            _unknown_key("\"RSU Container High Frequency\"", key,
+                         "\"Protected Communication Zone\"")
+
+@tuple
+class _CAMHighFrequencyContainer:
+    """["CAM Parameters"]["High Frequency Container"]."""
+    cam: CAM
+
+    def __getitem__(self, key: str):
+        _literal_key_only("\"High Frequency Container\"")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "High Frequency Container Present":
+            if self.cam.basic_vehicle_container_high_frequency is not None:
+                return "Basic Vehicle Container High Frequency"
+            if self.cam.protected_communication_zones_rsu is not None:
+                return "RSU Container High Frequency"
+            return "No container present"
+        elif key == "Basic Vehicle Container High Frequency":
+            return _required(self.cam.basic_vehicle_container_high_frequency, key)
+        elif key == "RSU Container High Frequency":
+            zones = _required(self.cam.protected_communication_zones_rsu, key)
+            return _RSUContainerHighFrequency(zones)
+        else:
+            _unknown_key("\"High Frequency Container\"", key,
+                         "\"High Frequency Container Present\", "
+                         "\"Basic Vehicle Container High Frequency\", "
+                         "\"RSU Container High Frequency\"")
+
+@tuple
+class _CAMLowFrequencyContainer:
+    """["CAM Parameters"]["Low Frequency Container"]."""
+    cam: CAM
+
+    def __getitem__(self, key: str):
+        _literal_key_only("\"Low Frequency Container\"")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Low Frequency Container Present":
+            if self.cam.basic_vehicle_container_low_frequency is not None:
+                return "Basic Vehicle Container Low Frequency"
+            return "No Container Present"
+        elif key == "Basic Vehicle Low Frequency":
+            return _required(self.cam.basic_vehicle_container_low_frequency, key)
+        else:
+            _unknown_key("\"Low Frequency Container\"", key,
+                         "\"Low Frequency Container Present\", \"Basic Vehicle Low Frequency\"")
+
+@tuple
+class _CAMBasicContainer:
+    """["CAM Parameters"]["Basic Container"]."""
+    cam: CAM
+
+    def __getitem__(self, key: str):
+        _literal_key_only("\"Basic Container\"")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Station Type":
+            return _STATION_TYPES.get(self.cam.station_type, "Unknown")
+        elif key == "Reference Position":
+            return self.cam.reference_position
+        else:
+            _unknown_key("\"Basic Container\"", key, "\"Station Type\", \"Reference Position\"")
+
+@tuple
+class _CAMParameters:
+    """CAMMessage.get()["Message"]["Message"]["CAM Parameters"]."""
+    cam: CAM
+
+    def __getitem__(self, key: str):
+        _literal_key_only("\"CAM Parameters\"")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Basic Container":
+            return _CAMBasicContainer(self.cam)
+        elif key == "High Frequency Container":
+            return _CAMHighFrequencyContainer(self.cam)
+        elif key == "Low Frequency Container":
+            return _CAMLowFrequencyContainer(self.cam)
+        else:
+            _unknown_key("\"CAM Parameters\"", key, "\"Basic Container\", "
+                         "\"High Frequency Container\", \"Low Frequency Container\"")
+
+@tuple
+class _CAMCoopAwareness:
+    """CAMMessage.get()["Message"]["Message"]."""
+    cam: CAM
+
+    def __getitem__(self, key: str):
+        _literal_key_only("CAMMessage.get()[\"Message\"][\"Message\"]")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Generation Delta Time":
+            return self.cam.generation_delta_time
+        elif key == "CAM Parameters":
+            return _CAMParameters(self.cam)
+        else:
+            _unknown_key("CAMMessage.get()[\"Message\"][\"Message\"]", key,
+                         "\"Generation Delta Time\", \"CAM Parameters\"")
+
+@extend
+class CAM:
+    def __getitem__(self, key: str):
+        _literal_key_only("CAMMessage.get()")
+
+    def __getitem__(self, key: Static[str]):
+        if key == "Power":
+            return self._power
+        elif key == "Message":
+            return _Pdu[_CAMCoopAwareness, "CAMMessage.get()[\"Message\"]"](
+                self.header, _CAMCoopAwareness(self))
+        else:
+            _unknown_key("CAMMessage.get()", key, "\"Power\", \"Message\"")

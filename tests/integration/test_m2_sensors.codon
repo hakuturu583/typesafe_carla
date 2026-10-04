@@ -91,8 +91,19 @@ try:
     reading = imu.wait_for_data(10.0).as_imu()
     print("imu", reading)
     assert 0.0 <= reading.compass <= 7.0
-    # At rest the accelerometer measures gravity.
+    # At rest the accelerometer measures gravity, along +z. The first frames
+    # after the spawn include the landing transient (issue #92), so tick until
+    # the vehicle is still (gyroscope near zero) and the reading is in band.
+    for _ in range(40):
+        if (reading.gyroscope.length() < 0.1
+                and 7.0 < reading.accelerometer.length() < 12.5):
+            break
+        world.tick()
+        reading = imu.wait_for_data(10.0).as_imu()
+    print("imu at rest", reading)
+    assert reading.gyroscope.length() < 0.1, reading.gyroscope
     assert 7.0 < reading.accelerometer.length() < 12.5, reading.accelerometer
+    assert reading.accelerometer.z > 7.0, reading.accelerometer
 
     # Drive into the parked car until the collision sensor reports it.
     ego.apply_control(carla.VehicleControl(throttle=1.0))

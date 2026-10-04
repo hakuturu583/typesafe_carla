@@ -3,7 +3,8 @@
 import typesafe_carla as carla
 
 def close(a: float, b: float) -> bool:
-    return abs(a - b) < 1e-9
+    """Within float32 precision: the values are float32, as LibCarla's (issue #81)."""
+    return abs(a - b) <= 1e-6 * max(1.0, abs(b))
 
 a = carla.Location(1.0, 2.0, 3.0)
 b = carla.Location(4.0, 6.0, 3.0)
@@ -32,7 +33,7 @@ assert d.length() == 5.0 and d.squared_length() == 25.0
 assert a.dot(v) == 1.0 and v.dot(a) == 1.0 and a.dot(b) == 25.0
 assert carla.Vector3D(1.0, 0.0, 0.0).cross(carla.Location(0.0, 1.0, 0.0)) == carla.Vector3D(0.0, 0.0, 1.0)
 u = d.make_unit_vector()
-assert type(u).__name__ == "Vector3D" and close(u.x, 0.6) and close(u.y, 0.8) and u.z == 0.0
+assert type(u).__name__ == "Vector3D" and u.x == 0.6000000238418579 and u.y == 0.800000011920929 and u.z == 0.0
 assert carla.Vector3D().make_unit_vector() == carla.Vector3D()  # as CARLA 0.10.0
 # Issue #40: epsilon (default 2 * FLT_EPSILON); a vector of length <= epsilon
 # comes back unchanged, as in LibCarla's MakeUnitVector.
@@ -50,11 +51,11 @@ assert a.distance(b) == 5.0 and b.distance(a) == 5.0 and a.distance_squared(b) =
 assert carla.Location(0.0, 0.0, 7.0).distance_2d(carla.Location(3.0, 4.0, 0.0)) == 5.0
 assert carla.Location(0.0, 0.0, 7.0).distance_squared_2d(carla.Location(3.0, 4.0, 0.0)) == 25.0
 assert v.distance(a) == a.distance(v)
-assert close(v.get_vector_angle(carla.Location(0.0, 2.0, 0.0)), 1.5707963267948966)
+assert v.get_vector_angle(carla.Location(0.0, 2.0, 0.0)) == 1.5707963705062866  # float32, as official
 assert v.get_vector_angle(v) == 0.0
 from math import isnan
 assert isnan(v.get_vector_angle(carla.Vector3D()))  # as CARLA 0.10.0
-assert close(a.get_vector_angle(carla.Vector3D(0.0, 2.0, 0.0)), 1.0068536854342678)
+assert a.get_vector_angle(carla.Vector3D(0.0, 2.0, 0.0)) == 1.006853699684143
 
 # A Location is usable as a Vector3D value.
 as_v: carla.Vector3D = a
@@ -202,7 +203,7 @@ assert a.distance(location=b) == 5.0 and a.distance(vector=b) == 5.0
 assert d.distance(vector=carla.Vector3D()) == 5.0 and a.distance_2d(vector=b) == 5.0
 assert a.distance_squared(vector=b) == 25.0 and a.dot(vector=b) == a.dot(b)
 assert v.cross(vector=carla.Vector3D(0.0, 1.0, 0.0)) == carla.Vector3D(0.0, 0.0, 1.0)
-assert close(v.get_vector_angle(vector=carla.Vector3D(0.0, 2.0, 0.0)), 1.5707963267948966)
+assert v.get_vector_angle(vector=carla.Vector3D(0.0, 2.0, 0.0)) == 1.5707963705062866
 turn = carla.Transform(carla.Location(5.0, 0.0, 0.0), carla.Rotation(yaw=90.0))
 kv = carla.Vector3D(1.0, 0.0, 0.0)
 turn.transform_vector(in_point=kv)

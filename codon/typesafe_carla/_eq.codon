@@ -4,6 +4,11 @@
 # Location(0.1 + 1e-12), as in the Python API). Double fields (geo
 # parameters, GeoLocation, WorldSettings' time steps) compare exactly.
 
+def _f32(x: float) -> float:
+    """x rounded to float32, as a C++ `float` field stores it (issue #81):
+    out-of-range values give +-inf, NaN stays NaN. Two instructions."""
+    return float(float32(x))
+
 def _f32_eq(a: float, b: float) -> bool:
     """a == b as LibCarla compares a float field: exactly, in float32."""
     return float32(a) == float32(b)

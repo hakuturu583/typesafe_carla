@@ -4,7 +4,8 @@ from ._ffi import (CVector2D, CVector3D, CRotation, CTransform, CBoundingBox,
                    tsc_transform_get_matrix, tsc_transform_get_inverse_matrix)
 from ._strict import compat_shortcut
 from .errors import _check
-from ._eq import _f32_eq, _fields_eq
+from ._eq import _f32, _fields_eq
+from math import sqrt
 from ._fmt import fmt_fields
 
 # 2 * FLT_EPSILON: LibCarla's default threshold for a zero-length vector.
@@ -15,10 +16,15 @@ class Vector3D:
 
     Location derives from it, as in the CARLA Python API, so a Location is
     accepted wherever a Vector3D is.
+
+    float32, as LibCarla's `float` fields (issue #81): x, y and z hold float32
+    values (in a Codon float), rounded on construction, on assignment and for
+    every arithmetic result, so `Vector3D(0.1).x` is 0.10000000149011612 and
+    results match the Python API bit for bit.
     """
-    x: float
-    y: float
-    z: float
+    _x: float
+    _y: float
+    _z: float
 
     # Methods that take another vector use a generic parameter converted by
     # _upcast_vector: a Vector3D or a Location (or anything else, which fails
@@ -29,43 +35,72 @@ class Vector3D:
     # and overloads across the hierarchy are dispatched as virtual overrides.
 
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
-        self.x = x
-        self.y = y
-        self.z = z
+        self._x = _f32(x)
+        self._y = _f32(y)
+        self._z = _f32(z)
 
     def __init__(self, v: Vector3D):
         """A copy of `v` (a Vector3D or a Location), as Vector3D(location) in Python."""
-        self.x = v.x
-        self.y = v.y
-        self.z = v.z
+        self._x = v._x
+        self._y = v._y
+        self._z = v._z
+
+    @property
+    def x(self) -> float:
+        return self._x
+
+    @x.setter
+    def x(self, v: float):
+        self._x = _f32(v)
+
+    @property
+    def y(self) -> float:
+        return self._y
+
+    @y.setter
+    def y(self, v: float):
+        self._y = _f32(v)
+
+    @property
+    def z(self) -> float:
+        return self._z
+
+    @z.setter
+    def z(self, v: float):
+        self._z = _f32(v)
+
+    # The methods compute as LibCarla does, in float32: a single + - * / or
+    # sqrt in double on float32 operands, rounded to float32, is exactly the
+    # float32 operation, so each step is rounded with _f32.
 
     def length(self) -> float:
-        return self.squared_length() ** 0.5
+        return _f32(sqrt(self.squared_length()))
 
     def squared_length(self) -> float:
-        return self.x * self.x + self.y * self.y + self.z * self.z
+        return _dot3(self._x, self._y, self._z, self._x, self._y, self._z)
 
     def dot(self, vector) -> float:
-        vector = _upcast_vector(vector)
-        return self.x * vector.x + self.y * vector.y + self.z * vector.z
+        o = _upcast_vector(vector)
+        return _dot3(self._x, self._y, self._z, o._x, o._y, o._z)
 
     def dot_2d(self, vector) -> float:
-        vector = _upcast_vector(vector)
-        return self.x * vector.x + self.y * vector.y
+        o = _upcast_vector(vector)
+        return _dot2(self._x, self._y, o._x, o._y)
 
     def cross(self, vector) -> Vector3D:
-        vector = _upcast_vector(vector)
-        return Vector3D(self.y * vector.z - self.z * vector.y,
-                        self.z * vector.x - self.x * vector.z,
-                        self.x * vector.y - self.y * vector.x)
+        o = _upcast_vector(vector)
+        return Vector3D(_f32(self._y * o._z) - _f32(self._z * o._y),
+                        _f32(self._z * o._x) - _f32(self._x * o._z),
+                        _f32(self._x * o._y) - _f32(self._y * o._x))
 
     def make_unit_vector(self, epsilon: float = _UNIT_EPSILON) -> Vector3D:
         """This vector scaled to length 1; one of length <= epsilon is returned
         unchanged (as in LibCarla ue5-dev and its Python API)."""
         n = self.length()
-        if n <= max(epsilon, 0.0):
-            return Vector3D(self.x, self.y, self.z)
-        return Vector3D(self.x / n, self.y / n, self.z / n)
+        if n <= max(_f32(epsilon), 0.0):
+            return Vector3D(self)
+        k = _f32(1.0 / n)
+        return Vector3D(self._x * k, self._y * k, self._z * k)
 
     def distance(self, vector = None, location = None) -> float:
         """Takes `vector` (Vector3D.distance's official name) or `location`
@@ -74,47 +109,47 @@ class Vector3D:
         if isinstance(vector, Optional[NoneType]) == isinstance(location, Optional[NoneType]):
             compile_error("distance() takes exactly one argument: vector or location")
         if isinstance(location, Optional[NoneType]):
-            return self.distance_squared(vector) ** 0.5
-        return self.distance_squared(location) ** 0.5
+            return _f32(sqrt(self.distance_squared(vector)))
+        return _f32(sqrt(self.distance_squared(location)))
 
     def distance_squared(self, vector) -> float:
-        vector = _upcast_vector(vector)
-        dx = self.x - vector.x
-        dy = self.y - vector.y
-        dz = self.z - vector.z
-        return dx * dx + dy * dy + dz * dz
+        o = _upcast_vector(vector)
+        dx = _f32(o._x - self._x)
+        dy = _f32(o._y - self._y)
+        dz = _f32(o._z - self._z)
+        return _dot3(dx, dy, dz, dx, dy, dz)
 
     def distance_2d(self, vector) -> float:
-        return self.distance_squared_2d(vector) ** 0.5
+        return _f32(sqrt(self.distance_squared_2d(vector)))
 
     def distance_squared_2d(self, vector) -> float:
-        vector = _upcast_vector(vector)
-        dx = self.x - vector.x
-        dy = self.y - vector.y
-        return dx * dx + dy * dy
+        o = _upcast_vector(vector)
+        dx = _f32(o._x - self._x)
+        dy = _f32(o._y - self._y)
+        return _dot2(dx, dy, dx, dy)
 
     def get_vector_angle(self, vector) -> float:
-        """The angle to `vector`, in radians (NaN if either is zero, as in CARLA 0.10.0)."""
+        """The angle to `vector`, in radians, as LibCarla's Math::GetVectorAngle
+        (float32): NaN if either is zero, or if rounding puts the cosine of
+        nearly parallel vectors outside [-1, 1]."""
         vector = _upcast_vector(vector)
-        from math import acos, nan
-        n = self.length() * vector.length()
-        if n == 0.0:
-            return nan
-        c = self.dot(vector) / n
-        return acos(max(-1.0, min(1.0, c)))
+        from math import acos
+        # acos in float32 (libm acosf, as std::acos(float)); not double acos rounded.
+        return float(acos(float32(self.dot(vector) / _f32(self.length() * vector.length()))))
 
     # Arithmetic, as the official module (Location and the other subclasses
     # inherit it): binary operators give a Vector3D; `+=`, `-=`, `*=` work in
     # place and keep the left operand's type. No `/=`: `v /= k` rebinds `v` to
     # the Vector3D `v / k`, so on a subclass variable it is a compile error.
+    # The scalar is a C++ `float` in LibCarla, so it is rounded first.
 
     def __add__(self, other) -> Vector3D:
         o = _upcast_vector(other)
-        return Vector3D(self.x + o.x, self.y + o.y, self.z + o.z)
+        return Vector3D(self._x + o._x, self._y + o._y, self._z + o._z)
 
     def __sub__(self, other) -> Vector3D:
         o = _upcast_vector(other)
-        return Vector3D(self.x - o.x, self.y - o.y, self.z - o.z)
+        return Vector3D(self._x - o._x, self._y - o._y, self._z - o._z)
 
     def __iadd__(self, other):
         _add_into(self, other, 1.0)
@@ -125,7 +160,8 @@ class Vector3D:
         return self
 
     def __mul__(self, k: float) -> Vector3D:
-        return Vector3D(self.x * k, self.y * k, self.z * k)
+        k = _f32(k)
+        return Vector3D(self._x * k, self._y * k, self._z * k)
 
     def __rmul__(self, k: float) -> Vector3D:
         return self * k
@@ -135,19 +171,21 @@ class Vector3D:
         return self
 
     def __truediv__(self, k: float) -> Vector3D:
-        return Vector3D(self.x / k, self.y / k, self.z / k)
+        k = _f32(k)
+        return Vector3D(self._x / k, self._y / k, self._z / k)
 
     def __rtruediv__(self, k: float) -> Vector3D:
         """`v / k`, as LibCarla's operator/(float, Vector3D) (not k / x)."""
         return self / k
 
     def __abs__(self) -> Vector3D:
-        return Vector3D(abs(self.x), abs(self.y), abs(self.z))
+        return Vector3D(abs(self._x), abs(self._y), abs(self._z))
 
     def __eq__(self, other) -> bool:
-        """Exact in float32, as LibCarla (a Location and a Vector3D compare too)."""
-        other = _upcast_vector(other)
-        return _f32_eq(self.x, other.x) and _f32_eq(self.y, other.y) and _f32_eq(self.z, other.z)
+        """Exact, as LibCarla (the fields are float32; a Location and a
+        Vector3D compare too)."""
+        o = _upcast_vector(other)
+        return self._x == o._x and self._y == o._y and self._z == o._z
 
     def __ne__(self, other) -> bool:
         return not (self == other)
@@ -156,72 +194,113 @@ class Vector3D:
         return fmt_fields("Vector3D", self)
 
     def _to_c(self) -> CVector3D:
-        return CVector3D(self.x, self.y, self.z)
+        return CVector3D(self._x, self._y, self._z)
 
     @staticmethod
     def _from_c(v: CVector3D) -> Vector3D:
-        return Vector3D(v.x, v.y, v.z)
+        return _raw_vector(Vector3D, v.x, v.y, v.z)
+
+def _raw_vector(T: type, x: float, y: float, z: float) -> T:
+    """A T of the Vector3D family from LibCarla data, stored as is: the C ABI
+    carries LibCarla's float32 values (widened), so no rounding is needed."""
+    r = T.__new__()
+    r._x = x
+    r._y = y
+    r._z = z
+    return r
+
+def _dot2(ax: float, ay: float, bx: float, by: float) -> float:
+    """ax*bx + ay*by in float32, as LibCarla evaluates it (left to right)."""
+    return _f32(_f32(ax * bx) + _f32(ay * by))
+
+def _sum4(a: float, b: float, c: float, d: float) -> float:
+    """((a + b) + c) + d in float32 (a..d float32 values)."""
+    return _f32(_f32(_f32(a + b) + c) + d)
+
+def _dot3(ax: float, ay: float, az: float, bx: float, by: float, bz: float) -> float:
+    return _f32(_dot2(ax, ay, bx, by) + _f32(az * bz))
 
 class Vector2D:
-    x: float
-    y: float
+    """A 2D vector, as carla.Vector2D: float32 fields, as Vector3D's."""
+    _x: float
+    _y: float
 
     def __init__(self, x: float = 0.0, y: float = 0.0):
-        self.x = x
-        self.y = y
+        self._x = _f32(x)
+        self._y = _f32(y)
+
+    @property
+    def x(self) -> float:
+        return self._x
+
+    @x.setter
+    def x(self, v: float):
+        self._x = _f32(v)
+
+    @property
+    def y(self) -> float:
+        return self._y
+
+    @y.setter
+    def y(self, v: float):
+        self._y = _f32(v)
 
     def squared_length(self) -> float:
-        return self.x * self.x + self.y * self.y
+        return _dot2(self._x, self._y, self._x, self._y)
 
     def length(self) -> float:
-        return self.squared_length() ** 0.5
+        return _f32(sqrt(self.squared_length()))
 
     def make_unit_vector(self, epsilon: float = _UNIT_EPSILON) -> Vector2D:
         """This vector scaled to length 1; one of length <= epsilon is returned
         unchanged (as in LibCarla ue5-dev and its Python API)."""
         n = self.length()
-        if n <= max(epsilon, 0.0):
-            return Vector2D(self.x, self.y)
-        return Vector2D(self.x / n, self.y / n)
+        if n <= max(_f32(epsilon), 0.0):
+            return Vector2D(self._x, self._y)
+        k = _f32(1.0 / n)
+        return Vector2D(self._x * k, self._y * k)
 
-    # Arithmetic with another Vector2D and scalars, as Vector3D's.
+    # Arithmetic with another Vector2D and scalars, as Vector3D's (float32).
 
     def __add__(self, other: Vector2D) -> Vector2D:
-        return Vector2D(self.x + other.x, self.y + other.y)
+        return Vector2D(self._x + other._x, self._y + other._y)
 
     def __sub__(self, other: Vector2D) -> Vector2D:
-        return Vector2D(self.x - other.x, self.y - other.y)
+        return Vector2D(self._x - other._x, self._y - other._y)
 
     def __iadd__(self, other: Vector2D) -> Vector2D:
-        self.x += other.x
-        self.y += other.y
+        self.x = self._x + other._x
+        self.y = self._y + other._y
         return self
 
     def __isub__(self, other: Vector2D) -> Vector2D:
-        self.x -= other.x
-        self.y -= other.y
+        self.x = self._x - other._x
+        self.y = self._y - other._y
         return self
 
     def __mul__(self, k: float) -> Vector2D:
-        return Vector2D(self.x * k, self.y * k)
+        k = _f32(k)
+        return Vector2D(self._x * k, self._y * k)
 
     def __rmul__(self, k: float) -> Vector2D:
         return self * k
 
     def __imul__(self, k: float) -> Vector2D:
-        self.x *= k
-        self.y *= k
+        k = _f32(k)
+        self.x = self._x * k
+        self.y = self._y * k
         return self
 
     def __truediv__(self, k: float) -> Vector2D:
-        return Vector2D(self.x / k, self.y / k)
+        k = _f32(k)
+        return Vector2D(self._x / k, self._y / k)
 
     def __rtruediv__(self, k: float) -> Vector2D:
         return self / k
 
     def __eq__(self, other: Vector2D) -> bool:
-        """Exact in float32, as LibCarla."""
-        return _fields_eq(self, other)
+        """Exact, as LibCarla (float32 fields)."""
+        return self._x == other._x and self._y == other._y
 
     def __ne__(self, other: Vector2D) -> bool:
         return not (self == other)
@@ -230,11 +309,14 @@ class Vector2D:
         return fmt_fields("Vector2D", self)
 
     def _to_c(self) -> CVector2D:
-        return CVector2D(self.x, self.y)
+        return CVector2D(self._x, self._y)
 
     @staticmethod
     def _from_c(v: CVector2D) -> Vector2D:
-        return Vector2D(v.x, v.y)
+        r = Vector2D.__new__()
+        r._x = v.x  # LibCarla's float32 values: stored as is
+        r._y = v.y
+        return r
 
 class Location(Vector3D):
     """A point in world space, in meters.
@@ -252,16 +334,15 @@ class Location(Vector3D):
         super().__init__(x, y, z)
 
     def __init__(self, v: Vector3D):
-        super().__init__(v.x, v.y, v.z)
+        super().__init__(v)
 
     @staticmethod
     def from_vector(v) -> Location:
         """v: Vector3D or Location (generic, so late-inferred arguments bind)."""
-        o = _upcast_vector(v)
-        return Location(o.x, o.y, o.z)
+        return Location(_upcast_vector(v))
 
     def as_vector(self) -> Vector3D:
-        return Vector3D(self.x, self.y, self.z)
+        return Vector3D(self)
 
     def __repr__(self) -> str:
         return fmt_fields("Location", self)
@@ -282,7 +363,7 @@ class Location(Vector3D):
 
     @staticmethod
     def _from_c(v: CVector3D) -> Location:
-        return Location(v.x, v.y, v.z)
+        return _raw_vector(Location, v.x, v.y, v.z)
 
 class Velocity(Vector3D):
     """A linear velocity in m/s, as carla.Velocity: a Vector3D (its arithmetic
@@ -292,7 +373,7 @@ class Velocity(Vector3D):
         super().__init__(x, y, z)
 
     def __init__(self, rhs: Vector3D):
-        super().__init__(rhs.x, rhs.y, rhs.z)
+        super().__init__(rhs)
 
     def __repr__(self) -> str:
         return fmt_fields("Velocity", self)
@@ -317,7 +398,7 @@ class AngularVelocity(Vector3D):
         super().__init__(x, y, z)
 
     def __init__(self, rhs: Vector3D):
-        super().__init__(rhs.x, rhs.y, rhs.z)
+        super().__init__(rhs)
 
     def __repr__(self) -> str:
         return fmt_fields("AngularVelocity", self)
@@ -342,7 +423,7 @@ class Acceleration(Vector3D):
         super().__init__(x, y, z)
 
     def __init__(self, rhs: Vector3D):
-        super().__init__(rhs.x, rhs.y, rhs.z)
+        super().__init__(rhs)
 
     def __repr__(self) -> str:
         return fmt_fields("Acceleration", self)
@@ -416,14 +497,15 @@ def _vector_or(v, default: Vector3D, what: Literal[str]) -> Vector3D:
 def _add_into(v, other, sign: float):
     """v += sign * other, in place (the in-place operators of the family)."""
     o = _upcast_vector(other)
-    v.x += sign * o.x
-    v.y += sign * o.y
-    v.z += sign * o.z
+    v.x = v._x + sign * o._x
+    v.y = v._y + sign * o._y
+    v.z = v._z + sign * o._z
 
 def _scale_into(v, k: float):
-    v.x *= k
-    v.y *= k
-    v.z *= k
+    k = _f32(k)  # a C++ float in LibCarla
+    v.x = v._x * k
+    v.y = v._y * k
+    v.z = v._z * k
 
 def _upcast_vector(v) -> Vector3D:
     """`v` as a Vector3D: a Vector3D, a subclass, or an Optional of one
@@ -486,15 +568,40 @@ def _upcast_location(v: Location) -> Location:
     return v
 
 class Rotation:
-    """Orientation in degrees (Unreal convention: pitch, yaw, roll)."""
-    pitch: float
-    yaw: float
-    roll: float
+    """Orientation in degrees (Unreal convention: pitch, yaw, roll); float32
+    fields, as Vector3D's."""
+    _pitch: float
+    _yaw: float
+    _roll: float
 
     def __init__(self, pitch: float = 0.0, yaw: float = 0.0, roll: float = 0.0):
-        self.pitch = pitch
-        self.yaw = yaw
-        self.roll = roll
+        self._pitch = _f32(pitch)
+        self._yaw = _f32(yaw)
+        self._roll = _f32(roll)
+
+    @property
+    def pitch(self) -> float:
+        return self._pitch
+
+    @pitch.setter
+    def pitch(self, v: float):
+        self._pitch = _f32(v)
+
+    @property
+    def yaw(self) -> float:
+        return self._yaw
+
+    @yaw.setter
+    def yaw(self, v: float):
+        self._yaw = _f32(v)
+
+    @property
+    def roll(self) -> float:
+        return self._roll
+
+    @roll.setter
+    def roll(self, v: float):
+        self._roll = _f32(v)
 
     # The basis vectors are the columns of LibCarla's rotation matrix: CARLA
     # 0.10.0 and ue5-dev differ in the sign of the pitch and roll terms, and
@@ -523,12 +630,13 @@ class Rotation:
         """As LibCarla's Rotation::operator== (float32): equal angles, or, as
         Unreal compares normalized rotators, every pair of angles with
         |a| + |b| == 180 (so Rotation(90, 90, 90) == Rotation(-90, -90, -90))."""
-        p, y, r = float32(self.pitch), float32(self.yaw), float32(self.roll)
-        op, oy, orr = float32(other.pitch), float32(other.yaw), float32(other.roll)
+        p, y, r = self._pitch, self._yaw, self._roll
+        op, oy, orr = other._pitch, other._yaw, other._roll
         if p == op and y == oy and r == orr:
             return True
-        h = float32(180.0)
-        return abs(p) + abs(op) == h and abs(y) + abs(oy) == h and abs(r) + abs(orr) == h
+        # The sums in float32, as LibCarla.
+        return (_f32(abs(p) + abs(op)) == 180.0 and _f32(abs(y) + abs(oy)) == 180.0 and
+                _f32(abs(r) + abs(orr)) == 180.0)
 
     def __ne__(self, other: Rotation) -> bool:
         return not (self == other)
@@ -537,18 +645,26 @@ class Rotation:
         return fmt_fields("Rotation", self)
 
     def _to_c(self) -> CRotation:
-        return CRotation(self.pitch, self.yaw, self.roll)
+        return CRotation(self._pitch, self._yaw, self._roll)
 
     @staticmethod
     def _from_c(r: CRotation) -> Rotation:
-        return Rotation(r.pitch, r.yaw, r.roll)
+        return _raw_rotation(r.pitch, r.yaw, r.roll)
+
+def _raw_rotation(pitch: float, yaw: float, roll: float) -> Rotation:
+    """A Rotation of float32 values (LibCarla's, or a copy), stored as is."""
+    r = Rotation.__new__()
+    r._pitch = pitch
+    r._yaw = yaw
+    r._roll = roll
+    return r
 
 def _rotation_or(r: Optional[Rotation]) -> Rotation:
     """A copy of `r`, or Rotation() for None."""
     if r is None:
         return Rotation()
     else:
-        return Rotation(r.pitch, r.yaw, r.roll)
+        return _raw_rotation(r._pitch, r._yaw, r._roll)
 
 def _normalize_angle(a: float) -> float:
     from math import trunc
@@ -802,16 +918,49 @@ class Quaternion:
     so with a LibCarla 0.10.0 build they can differ from Rotation's for a
     non-zero pitch or roll (see Rotation.get_forward_vector).
     """
-    x: float
-    y: float
-    z: float
-    w: float
+    _x: float
+    _y: float
+    _z: float
+    _w: float
 
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0, w: float = 1.0):
-        self.x = x
-        self.y = y
-        self.z = z
-        self.w = w
+        """float32 fields, as Vector3D's (LibCarla ue5-dev's are `float`)."""
+        self._x = _f32(x)
+        self._y = _f32(y)
+        self._z = _f32(z)
+        self._w = _f32(w)
+
+    @property
+    def x(self) -> float:
+        return self._x
+
+    @x.setter
+    def x(self, v: float):
+        self._x = _f32(v)
+
+    @property
+    def y(self) -> float:
+        return self._y
+
+    @y.setter
+    def y(self, v: float):
+        self._y = _f32(v)
+
+    @property
+    def z(self) -> float:
+        return self._z
+
+    @z.setter
+    def z(self, v: float):
+        self._z = _f32(v)
+
+    @property
+    def w(self) -> float:
+        return self._w
+
+    @w.setter
+    def w(self, v: float):
+        self._w = _f32(v)
 
     def __init__(self, rotation: Rotation):
         from math import cos, sin, radians
@@ -821,10 +970,10 @@ class Quaternion:
         cy, sy = cos(hy), sin(hy)
         cp, sp = cos(hp), sin(hp)
         cr, sr = cos(hr), sin(hr)
-        self.w = cy * cp * cr + sy * sp * sr
-        self.x = cy * cp * sr - sy * sp * cr
-        self.y = cy * sp * cr + sy * cp * sr
-        self.z = sy * cp * cr - cy * sp * sr
+        self._w = _f32(cy * cp * cr + sy * sp * sr)
+        self._x = _f32(cy * cp * sr - sy * sp * cr)
+        self._y = _f32(cy * sp * cr + sy * cp * sr)
+        self._z = _f32(sy * cp * cr - cy * sp * sr)
 
     def rotator(self) -> Rotation:
         """Back to a Rotation (inverse of Quaternion(rotation))."""
@@ -836,14 +985,23 @@ class Quaternion:
         yaw = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
         return Rotation(degrees(pitch), degrees(-yaw), degrees(-roll))
 
+    # The methods below follow LibCarla ue5-dev's Quaternion.h formula by
+    # formula, in float32 (each step rounded with _f32, left to right).
+
     def _rotated(self, vx: float, vy: float, vz: float) -> Vector3D:
         # CARLA's left-handed vector -> right-handed (negate y), rotate by
-        # q v q* (Rodrigues form), and back.
-        q = Vector3D(self.x, self.y, self.z)
-        v = Vector3D(vx, -vy, vz)
-        t = 2.0 * q.cross(v)
-        r = v + self.w * t + q.cross(t)
-        return Vector3D(r.x, -r.y, r.z)
+        # q v q* (Rodrigues form, Quaternion::RotatedVector), and back.
+        x, y, z, w = self._x, self._y, self._z, self._w
+        vy = -vy
+        tx = 2.0 * _f32(_f32(y * vz) - _f32(z * vy))  # 2 * f: exact
+        ty = 2.0 * _f32(_f32(z * vx) - _f32(x * vz))
+        tz = 2.0 * _f32(_f32(x * vy) - _f32(y * vx))
+        cx = _f32(_f32(y * tz) - _f32(z * ty))
+        cy = _f32(_f32(z * tx) - _f32(x * tz))
+        cz = _f32(_f32(x * ty) - _f32(y * tx))
+        return Vector3D(_f32(vx + _f32(w * tx)) + cx,
+                        -_f32(_f32(vy + _f32(w * ty)) + cy),
+                        _f32(vz + _f32(w * tz)) + cz)
 
     def get_forward_vector(self) -> Vector3D:
         return self._rotated(1.0, 0.0, 0.0)
@@ -855,34 +1013,42 @@ class Quaternion:
         return self._rotated(0.0, 0.0, 1.0)
 
     def conjugate(self) -> Quaternion:
-        return Quaternion(-self.x, -self.y, -self.z, self.w)
+        return Quaternion(-self._x, -self._y, -self._z, self._w)
+
+    def _norm2(self) -> float:
+        """x*x + y*y + z*z + w*w in float32."""
+        x, y, z, w = self._x, self._y, self._z, self._w
+        return _sum4(_f32(x * x), _f32(y * y), _f32(z * z), _f32(w * w))
 
     def inverse(self) -> Quaternion:
         """The inverse; the identity for a zero quaternion (as LibCarla)."""
-        n2 = self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w
+        n2 = self._norm2()
         if n2 <= 0.0:
             return Quaternion()
-        k = 1.0 / n2
-        return Quaternion(-self.x * k, -self.y * k, -self.z * k, self.w * k)
+        k = _f32(1.0 / n2)
+        return Quaternion(-self._x * k, -self._y * k, -self._z * k, self._w * k)
 
     def length(self) -> float:
-        return (self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w) ** 0.5
+        return _f32(sqrt(self._norm2()))
 
     def unit_quaternion(self) -> Quaternion:
         """This quaternion scaled to length 1; the identity for a zero quaternion."""
         n = self.length()
         if n <= 0.0:
             return Quaternion()
-        k = 1.0 / n
-        return Quaternion(self.x * k, self.y * k, self.z * k, self.w * k)
+        k = _f32(1.0 / n)
+        return Quaternion(self._x * k, self._y * k, self._z * k, self._w * k)
 
     def __mul__(self, rhs: Quaternion) -> Quaternion:
         """The Hamilton product self * rhs."""
+        x, y, z, w = self._x, self._y, self._z, self._w
+        rx, ry, rz, rw = rhs._x, rhs._y, rhs._z, rhs._w
+        # A subtracted product is added negated (exact).
         return Quaternion(
-            self.w * rhs.x + self.x * rhs.w + self.y * rhs.z - self.z * rhs.y,
-            self.w * rhs.y - self.x * rhs.z + self.y * rhs.w + self.z * rhs.x,
-            self.w * rhs.z + self.x * rhs.y - self.y * rhs.x + self.z * rhs.w,
-            self.w * rhs.w - self.x * rhs.x - self.y * rhs.y - self.z * rhs.z)
+            _sum4(_f32(w * rx), _f32(x * rw), _f32(y * rz), -_f32(z * ry)),
+            _sum4(_f32(w * ry), -_f32(x * rz), _f32(y * rw), _f32(z * rx)),
+            _sum4(_f32(w * rz), _f32(x * ry), -_f32(y * rx), _f32(z * rw)),
+            _sum4(_f32(w * rw), -_f32(x * rx), -_f32(y * ry), -_f32(z * rz)))
 
     def __eq__(self, other: Quaternion) -> bool:
         """Exact in float32, as LibCarla."""
