@@ -321,3 +321,56 @@ def install(g: dict) -> None:
     g["CarlaObject"] = CarlaObject
     global _ACTOR
     _ACTOR = g.get("Actor")
+    _start_dispatcher(g)
+
+
+# --- Issue #89: sensor callbacks on a background thread -----------------------
+#
+# CARLA's Python API runs a sensor's listen() callback on a LibCarla thread as
+# soon as the data arrives, so a program may tick and then block on its own
+# queue. typesafe_carla's default runs callbacks at its dispatch points
+# (World.tick(), ...); its own callback thread would call Python without the
+# GIL. So, as #86's design prescribes for a wrapper (docs/design.md, "External
+# dispatchers"), the dispatch points are turned off, unlocked (the GIL
+# serializes every call; a lock held across a Python callback that releases
+# the GIL would deadlock), and a daemon Python thread delivers: it reads the
+# native queue signal, runs dispatch_callbacks(), then waits for the signal
+# through ctypes, which releases the GIL while it blocks.
+
+_DISPATCH_WAIT = 1.0  # seconds; only bounds a missed wake-up
+
+
+def _start_dispatcher(g: dict) -> None:
+    import ctypes
+    import threading
+    import time
+
+    names = ("set_auto_dispatch", "dispatch_callbacks", "attach_current_thread")
+    if any(_SPEC["functions"].get(n, {}).get("fn") is None for n in names):
+        return  # a typesafe_carla without #86's hooks: callbacks stay at the dispatch points
+    lib = ctypes.CDLL(os.environ["TYPESAFE_CARLA_LIB"])
+    if not hasattr(lib, "tsc_queue_signal_wait"):
+        return  # a native library older than ABI 4.7
+    count, wait = lib.tsc_queue_signal_count, lib.tsc_queue_signal_wait
+    count.argtypes = [ctypes.POINTER(ctypes.c_uint64)]
+    wait.argtypes = [ctypes.c_uint64, ctypes.c_double, ctypes.POINTER(ctypes.c_uint64)]
+    count.restype = wait.restype = ctypes.c_int
+    g["set_auto_dispatch"](False, False)  # enabled=False, lock=False (see above)
+    dispatch, attach = g["dispatch_callbacks"], g["attach_current_thread"]
+
+    def loop() -> None:
+        attach()  # Codon's collector must know the thread before it runs Codon code
+        seen, out = ctypes.c_uint64(), ctypes.c_uint64()
+        while True:
+            if count(ctypes.byref(seen)) != 0:  # the signal failed: poll instead
+                time.sleep(_DISPATCH_WAIT)
+                seen.value = 0
+            try:
+                dispatch()
+            except Exception:  # a callback's own errors are printed by _callback
+                traceback.print_exc()
+            wait(seen.value, _DISPATCH_WAIT, ctypes.byref(out))
+
+    # A daemon: it never keeps the process alive, and holds no lock of the
+    # program's while it waits (in native code, without the GIL).
+    threading.Thread(target=loop, name="carla-callbacks", daemon=True).start()

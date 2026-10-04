@@ -181,7 +181,13 @@ Python's `ast`), with no per-class code:
   Python classes mirroring the CARLA Python API, built from the generated
   `_spec.json`. They give the class hierarchy (`isinstance(v, carla.Actor)`),
   the enumerations, `carla.command`, callbacks receiving wrapped objects, and
-  errors as RuntimeError.
+  errors as RuntimeError. As in CARLA's Python API, `listen` / `on_tick`
+  callbacks run on a background thread as soon as their data arrives (issue
+  #89): at import the runtime turns typesafe_carla's dispatch points off
+  (`set_auto_dispatch(False, lock=False)`; the GIL serializes the calls) and
+  starts a daemon thread that runs `dispatch_callbacks()` whenever the native
+  queue signal changes, waiting for it through ctypes without the GIL. An
+  exception in a callback is printed and delivery goes on.
 
 A member the generator cannot wrap raises
 `NotImplementedError("pycarla: <Class>.<member> not wrapped: <reason>")`, and
