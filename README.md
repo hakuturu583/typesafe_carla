@@ -561,7 +561,8 @@ Deliberate differences, all in favour of static checking:
   stream in arrival order; `stop()` / `destroy()` / `listen()` wait for the
   callback in progress, so no callback of the stream starts after they
   return (do not make a callback wait for the main thread while it may be
-  stopping a sensor: deadlock); an exception in a callback is printed to
+  stopping a sensor: deadlock; and do not listen/stop a sensor from a
+  callback while the main thread destroys it); an exception in a callback is printed to
   stderr and delivery goes on.
 
   **Codon has no GIL, so callbacks race with the main thread.** Every access
@@ -606,7 +607,10 @@ Deliberate differences, all in favour of static checking:
   `carla.wait_queue_signal(seen, timeout)`; the registry is then locked as
   with the callback thread. A thread not created by Codon (e.g. a CPython
   thread) calls `carla.attach_current_thread()` first. pycarla, serialized
-  by the GIL, passes `set_auto_dispatch(False, lock=False)`.
+  by the GIL, passes `set_auto_dispatch(False, lock=False)`: then `stop()`
+  does not wait for a callback already running, and
+  `start_callback_thread()` / `TYPESAFE_CARLA_CALLBACK_THREAD` are refused
+  or ignored.
 * **`TrafficLight` is not statically a `TrafficSign`.** In the Python API
   `carla.TrafficLight` derives from `carla.TrafficSign`. Here both derive from
   `Actor` (see [Codon limitation 9](#codon-limitations-found-while-building-this)):

@@ -668,10 +668,18 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   `stop`, `listen_to_gbuffer`, `stop_gbuffer`, `poll`, `pending_count`,
   `dropped_count`, `is_listening`, `is_listening_gbuffer`, `on_tick` /
   `remove_on_tick`) holds one lock. Once `stop()` returns no callback of
-  that stream starts. The lock is not held across server round trips:
-  `destroy()` and `apply_batch(_sync)` lock only their registry steps (the
-  G-buffer stops before, the unregistration after), so a slow RPC does not
-  stall delivery. `wait_for_data()` blocks, so it is not locked either.
+  that stream starts. `destroy()` and `apply_batch(_sync)` do not hold the
+  lock across their own RPC: they lock only their registry steps (the
+  G-buffer stops before, the unregistration after), so a slow destroy or
+  tick does not stall delivery. Some locked steps still make a server round
+  trip under the lock: `listen()`, `listen_to_gbuffer()`, `stop_gbuffer()`
+  and those G-buffer stops ask the server for the stream token
+  (`get_sensor_token` / `get_gbuffer_token`). That only delays delivery: it
+  cannot deadlock, because LibCarla's IO threads never take the lock (they
+  only push into queues). One window remains: between a destroy's RPC and
+  its unregistration a callback may still run, so a callback must not
+  `listen()` or `stop()` a sensor that the program's thread is destroying.
+  `wait_for_data()` blocks, so it is not locked either.
   Underneath, the shim keeps each sensor handle's queue pointers behind a
   mutex and hands readers their own reference (`tsc_sensor::get_queue`), so
   even a wait that overlaps a re-`listen()` from a callback stays memory
@@ -715,6 +723,13 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   block on the lock while holding the GIL (deadlock). The wrapper therefore
   passes `set_auto_dispatch(False, lock=False)`; the GIL, held across each
   call into Codon, already keeps its calls from overlapping the program's.
+  The guarantees are weaker there: `stop()` prevents new callbacks of the
+  stream but does not wait for one already running (it may have released
+  the GIL), and nothing is safe if a thread calls in without the GIL. Once
+  the dispatch points are off, `start_callback_thread()` raises and
+  `TYPESAFE_CARLA_CALLBACK_THREAD` no longer applies, so the environment
+  cannot start a Codon thread that would run Python callbacks without the
+  GIL.
 
 The callback type is `Callable[[SensorData], None]`. Functions, bound methods,
 lambdas and closures are all accepted (Codon 0.19 cannot convert a capturing
@@ -778,10 +793,12 @@ Rules:
 * FFI state must be thread-safe.
 * `tsc_last_error` must be thread-local.
 * sensor queues must support producer/consumer access.
-* Codon callbacks never run on LibCarla threads. The optional callback
-  thread (section 15, issue #86) is the only other thread that enters Codon
-  code; it is created through the GC and serialized with the program's
-  stream operations by one lock.
+* Codon callbacks never run on LibCarla threads. The only other threads
+  that enter Codon code are the optional callback thread (section 15, issue
+  #86), created through the GC, and an external dispatcher thread
+  (`set_auto_dispatch(False)`), registered with `attach_current_thread()`
+  unless Codon made it. Both are serialized with the program's stream
+  operations by one lock (or, with `lock=False`, by CPython's GIL).
 * no global Python interpreter lock exists or should be introduced.
 * the core library must not initialize CPython.
 

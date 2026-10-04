@@ -325,3 +325,32 @@ def test_callback_thread_stuck_at_exit_warns(launcher, tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.split() == ["callback", "OK"], result.stdout
     assert "a callback was still running 2 s after the program ended" in result.stderr
+
+
+_EXTERNAL_DISPATCHER_PROGRAM = """
+import typesafe_carla as carla
+world = carla.Client("localhost", 2000).get_world()
+lib = world.get_blueprint_library()
+carla.set_auto_dispatch(False, lock=False)  # as pycarla, under the GIL
+g = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform()).as_sensor()
+g.listen(lambda data: None)
+print(carla.callback_thread_running())  # the variable no longer applies
+try:
+    carla.start_callback_thread()
+    print("started")
+except carla.CarlaError as e:
+    print("refused" if "external dispatcher" in e.message else e.message)
+carla.set_auto_dispatch(True)
+g.destroy()
+print("OK")
+"""
+
+
+def test_callback_thread_not_started_beside_unlocked_dispatcher(launcher, tmp_path):
+    """Issue #86: after set_auto_dispatch(False, lock=False) (pycarla), neither
+    TYPESAFE_CARLA_CALLBACK_THREAD nor start_callback_thread() starts a Codon
+    thread, which would run Python callbacks without the GIL."""
+    result = launcher("run", _program(tmp_path, _EXTERNAL_DISPATCHER_PROGRAM),
+                      env={"TYPESAFE_CARLA_CALLBACK_THREAD": "1"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.split() == ["False", "refused", "OK"], result.stdout

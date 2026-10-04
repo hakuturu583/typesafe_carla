@@ -15,9 +15,12 @@
 # keeps them per client (Simulator), across load_world. This
 # small module lets actor.codon reach the registry without importing
 # sensor.codon. It is not thread-safe by itself: register, stop and dispatch
-# from one thread (the program's main thread). The exception is the callback
-# thread (issue #86, start_callback_thread()): while it runs, every registry
-# operation and every delivery holds one lock, _lock.
+# from one thread (the program's main thread). The exceptions (issue #86) are
+# the callback thread (start_callback_thread()) and an external dispatcher
+# thread (set_auto_dispatch(False)), which also run Codon code: while either
+# may run, every registry operation and every delivery holds one lock, _lock
+# (except with set_auto_dispatch(False, lock=False), for callers serialized
+# by CPython's GIL).
 
 from ._ffi import (tsc_sensor_gbuffer_poll, tsc_sensor_gbuffer_pending_count,
                    tsc_sensor_stop_gbuffer)
@@ -425,14 +428,24 @@ def set_auto_dispatch(enabled: bool, lock: bool = True):
 
     With False, the registry and every delivered item are locked as with
     the callback thread, so that dispatcher may run beside the program's
-    thread. lock=False skips that, for a caller that already serializes
-    every call into typesafe_carla: CPython's GIL, where a lock held across a
-    Python callback (which may release the GIL) would deadlock. Call it
-    while no other thread uses typesafe_carla (before starting the
-    dispatcher, after stopping it)."""
-    global _auto_dispatch, _external_lock
+    thread, with the same guarantee: once stop() returns, no callback of the
+    stream runs, not even one in progress.
+
+    lock=False skips the lock, for a caller that already serializes every
+    call into typesafe_carla: CPython's GIL, where a lock held across a
+    Python callback (which may release the GIL) would deadlock. Then the
+    guarantees are weaker: stop() / destroy() prevent new callbacks of the
+    stream, but do not wait for one already running (it may have released
+    the GIL); and nothing is safe if any thread calls in without holding the
+    GIL. While the dispatch points are off, start_callback_thread() raises
+    (the dispatcher was chosen) and TYPESAFE_CARLA_CALLBACK_THREAD no longer
+    applies. Call it while no other thread uses typesafe_carla (before
+    starting the dispatcher, after stopping it)."""
+    global _auto_dispatch, _external_lock, _autostart_pending
     _auto_dispatch = enabled
     _external_lock = lock
+    if not enabled:
+        _autostart_pending = False  # an external dispatcher was chosen
 
 def auto_dispatch() -> bool:
     """See set_auto_dispatch()."""
@@ -601,16 +614,27 @@ def start_callback_thread():
     Off by default: callbacks then run at the dispatch points, on the
     program's thread. TYPESAFE_CARLA_CALLBACK_THREAD=1 starts it at the first
     callback registration (listen(callback), listen_to_gbuffer, on_tick);
-    an explicit start or stop overrides that. Raises CarlaError from a
-    callback being dispatched on the program's thread. It is stopped at
+    an explicit start or stop overrides that. Raises CarlaError while
+    dispatch_callbacks() runs (e.g. from a callback at a dispatch point) and
+    after set_auto_dispatch(False, lock=False). Do not listen() or stop() a
+    sensor from a callback while the program's thread destroys it: destroy()
+    unregisters it only after the server answered. It is stopped at
     program exit; stop_callback_thread() stops it earlier."""
     global _threaded, _thread_stop, _thread_id, _atexit_registered, _autostart_pending
     global _thread_joinable
     if _threaded:
         _autostart_pending = False
         return
+    if not _auto_dispatch and not _external_lock:
+        # An unlocked external dispatcher (pycarla, under the GIL): a Codon
+        # thread would run its callbacks without the GIL and race with it.
+        raise CarlaError("start_callback_thread(): an external dispatcher was chosen "
+                         "(set_auto_dispatch(False, lock=False)); call "
+                         "set_auto_dispatch(True) first")
     if _dispatching:  # the dispatch in progress would race with the thread
-        raise CarlaError("start_callback_thread() cannot be called from a callback")
+        raise CarlaError("start_callback_thread() cannot be called while "
+                         "dispatch_callbacks() runs (from a callback, or beside an "
+                         "external dispatcher)")
     _autostart_pending = False
     _join_thread()  # one that stopped by itself
     _thread_stop = False
