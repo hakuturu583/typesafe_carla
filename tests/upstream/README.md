@@ -181,7 +181,27 @@ Python's `ast`), with no per-class code:
   Python classes mirroring the CARLA Python API, built from the generated
   `_spec.json`. They give the class hierarchy (`isinstance(v, carla.Actor)`),
   the enumerations, `carla.command`, callbacks receiving wrapped objects, and
-  errors as RuntimeError.
+  errors as RuntimeError. Instances take arbitrary attributes, as
+  Boost.Python's do, but each access builds a new wrapper (as in
+  Boost.Python), so an attribute set on one wrapper (`t.location.foo = 1`) is
+  not visible through another (`t.location.foo` again). As in CARLA's Python API, `listen` / `on_tick`
+  callbacks run on a background thread as soon as their data arrives (issue
+  #89). At the first callback registration (`listen`, `listen_to_gbuffer`,
+  `on_tick`; importing `carla` starts no thread) the runtime starts a daemon
+  thread, which registers with Codon's collector, then turns typesafe_carla's
+  dispatch points off (`set_auto_dispatch(False, lock=False)`; the GIL
+  serializes the calls) and runs `dispatch_callbacks()` whenever the native
+  queue signal changes, waiting for it through ctypes without the GIL. An
+  exception in a callback is printed and delivery goes on. A forked child
+  gets its own thread; if the thread cannot register, the dispatch points stay
+  on. At exit it stops, waiting at most 2 s for a running callback.
+  One difference from the official module remains: the extension holds the
+  GIL during each call into typesafe_carla, so callbacks cannot run *during*
+  a blocking call (`tick()`, `wait_for_tick()`, `load_world()`); they run
+  between the program's calls, e.g. while it blocks on its own queue.
+
+  tests/test_pycarla.py checks this against the mock (built `carla` package
+  needed; CI's mock job builds and caches it).
 
 A member the generator cannot wrap raises
 `NotImplementedError("pycarla: <Class>.<member> not wrapped: <reason>")`, and

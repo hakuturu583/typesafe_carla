@@ -522,35 +522,56 @@ def _required(value, key: str):
         raise KeyError(key)
     return value.__val__()
 
-# The display strings of V2XData.cpp (LibITS.h codes; the default is the
-# Python API's fallback).
-_MESSAGE_IDS = {0: "CUSTOM", 1: "DENM", 2: "CAM", 3: "POI", 4: "SPAT", 5: "MAP", 6: "IVI",
-                7: "EV_RSR"}
-_STATION_TYPES = {0: "Unknown", 1: "Pedestrian", 2: "Cyclist", 3: "Moped", 4: "Motorcycle",
-                  5: "Passenger Car", 6: "Bus", 7: "Light Truck", 8: "HeavyTruck", 9: "Trailer",
-                  10: "Special Vehicle", 11: "Tram", 15: "Road Side Unit"}
-_SEMI_AXIS = {1: "Semi Axis Length One Centimeter", 4094: "Semi Axis Length Out Of Range"}
-_SEMI_ORIENTATION = {0: "Heading wgs84 North", 900: "Heading wgs84 East",
-                     1800: "Heading wgs84 South", 2700: "Heading wgs84 West"}
-_HEADING_CONFIDENCE = {1: "Equal or With in Zero Point One Degree",
-                       10: "Equal or With in One Degree", 126: "Out of Range"}
-_SPEED_CONFIDENCE = {1: "Equal or With in One Centimeter per Sec",
-                     100: "Equal or With in One Meter per Sec", 126: "Out of Range"}
-_VEHICLE_LENGTH_CONFIDENCE = {0: "No Trailer Present", 1: "Trailer Present With Known Length",
-                              2: "Trailer Present With Unknown Length",
-                              3: "Trailer Presence Is Unknown"}
-_ACCELERATION_CONFIDENCE = {1: "Point One Meter Per Sec Squared", 101: "Out Of Range"}
-_CURVATURE_CONFIDENCE = {0: "One Per Meter 0_00002", 1: "One Per Meter 0_0001",
-                         2: "One Per Meter 0_0005", 3: "One Per Meter 0_002",
-                         4: "One Per Meter 0_01", 5: "One Per Meter 0_1", 6: "Out Of Range"}
-_YAW_RATE_CONFIDENCE = {0: "degSec 000_01", 1: "degSec 000_05", 2: "degSec 000_10",
-                        3: "degSec 001_00", 4: "degSec 005_00", 5: "degSec 010_00",
-                        6: "degSec 100_00", 7: "Out Of Range"}
-_STEERING_WHEEL_CONFIDENCE = {1: "Equal or With in 1.5 degree", 126: "Out of Range"}
-_VEHICLE_ROLES = {1: "Public Transport", 2: "Special Transport", 3: "Dangerous Goods",
-                  4: "Road Work", 5: "Rescue", 6: "Emergency", 7: "Safety Car", 8: "Agriculture",
-                  9: "Commercial", 10: "Military", 11: "Road Operator", 12: "Taxi",
-                  13: "Reserved 1", 14: "Reserved 2", 15: "Reserved 3"}
+# The display strings of V2XData.cpp (LibITS.h codes), as (code, name) pairs.
+# Functions returning constant tuples, not module-level dicts: under pycarla
+# (`codon build --pyext`), get() crashed in Dict._kh_get reading such a dict
+# global (issue #101). These need no module state and allocate nothing.
+def _name(table, code: int, default: str) -> str:
+    """The display string of `code` in `table`; `default` is the Python API's
+    fallback."""
+    for k, v in table:
+        if k == code:
+            return v
+    return default
+
+def _MESSAGE_IDS():
+    return ((0, "CUSTOM"), (1, "DENM"), (2, "CAM"), (3, "POI"), (4, "SPAT"), (5, "MAP"),
+            (6, "IVI"), (7, "EV_RSR"))
+def _STATION_TYPES():
+    return ((0, "Unknown"), (1, "Pedestrian"), (2, "Cyclist"), (3, "Moped"), (4, "Motorcycle"),
+            (5, "Passenger Car"), (6, "Bus"), (7, "Light Truck"), (8, "HeavyTruck"),
+            (9, "Trailer"), (10, "Special Vehicle"), (11, "Tram"), (15, "Road Side Unit"))
+def _SEMI_AXIS():
+    return ((1, "Semi Axis Length One Centimeter"), (4094, "Semi Axis Length Out Of Range"))
+def _SEMI_ORIENTATION():
+    return ((0, "Heading wgs84 North"), (900, "Heading wgs84 East"),
+            (1800, "Heading wgs84 South"), (2700, "Heading wgs84 West"))
+def _HEADING_CONFIDENCE():
+    return ((1, "Equal or With in Zero Point One Degree"), (10, "Equal or With in One Degree"),
+            (126, "Out of Range"))
+def _SPEED_CONFIDENCE():
+    return ((1, "Equal or With in One Centimeter per Sec"),
+            (100, "Equal or With in One Meter per Sec"), (126, "Out of Range"))
+def _VEHICLE_LENGTH_CONFIDENCE():
+    return ((0, "No Trailer Present"), (1, "Trailer Present With Known Length"),
+            (2, "Trailer Present With Unknown Length"), (3, "Trailer Presence Is Unknown"))
+def _ACCELERATION_CONFIDENCE():
+    return ((1, "Point One Meter Per Sec Squared"), (101, "Out Of Range"))
+def _CURVATURE_CONFIDENCE():
+    return ((0, "One Per Meter 0_00002"), (1, "One Per Meter 0_0001"), (2, "One Per Meter 0_0005"),
+            (3, "One Per Meter 0_002"), (4, "One Per Meter 0_01"), (5, "One Per Meter 0_1"),
+            (6, "Out Of Range"))
+def _YAW_RATE_CONFIDENCE():
+    return ((0, "degSec 000_01"), (1, "degSec 000_05"), (2, "degSec 000_10"),
+            (3, "degSec 001_00"), (4, "degSec 005_00"), (5, "degSec 010_00"),
+            (6, "degSec 100_00"), (7, "Out Of Range"))
+def _STEERING_WHEEL_CONFIDENCE():
+    return ((1, "Equal or With in 1.5 degree"), (126, "Out of Range"))
+def _VEHICLE_ROLES():
+    return ((1, "Public Transport"), (2, "Special Transport"), (3, "Dangerous Goods"),
+            (4, "Road Work"), (5, "Rescue"), (6, "Emergency"), (7, "Safety Car"),
+            (8, "Agriculture"), (9, "Commercial"), (10, "Military"), (11, "Road Operator"),
+            (12, "Taxi"), (13, "Reserved 1"), (14, "Reserved 2"), (15, "Reserved 3"))
 
 @tuple
 class _ValueConfidenceDict:
@@ -569,11 +590,10 @@ class _ValueConfidenceDict:
         else:
             _unknown_key("the \"Value\"/\"Confidence\" dict", key, "\"Value\", \"Confidence\"")
 
-def _confidence(v: ValueConfidence, names: Dict[int, str]) -> _ValueConfidenceDict:
-    return _ValueConfidenceDict(v.value, names.get(v.confidence, "Unavailable"))
+def _confidence(v: ValueConfidence, names) -> _ValueConfidenceDict:
+    return _ValueConfidenceDict(v.value, _name(names, v.confidence, "Unavailable"))
 
-def _opt_confidence(v: Optional[ValueConfidence],
-                    names: Dict[int, str]) -> Optional[_ValueConfidenceDict]:
+def _opt_confidence(v: Optional[ValueConfidence], names) -> Optional[_ValueConfidenceDict]:
     if v is None:
         return None
     return _confidence(v, names)
@@ -587,7 +607,7 @@ class ItsPduHeader:
         if key == "Protocol Version":
             return self.protocol_version
         elif key == "Message ID":
-            return _MESSAGE_IDS.get(self.message_id, "Not Found")
+            return _name(_MESSAGE_IDS(), self.message_id, "Not Found")
         elif key == "Station ID":
             return self.station_id
         else:
@@ -656,11 +676,11 @@ class _PositionConfidenceEllipse:
     def __getitem__(self, key: Static[str]):
         p = self.position
         if key == "Semi Major Confidence":
-            return _SEMI_AXIS.get(p.semi_major_confidence, "Semi Axis Length Unavailable")
+            return _name(_SEMI_AXIS(), p.semi_major_confidence, "Semi Axis Length Unavailable")
         elif key == "Semi Minor Confidence":
-            return _SEMI_AXIS.get(p.semi_minor_confidence, "Semi Axis Length Unavailable")
+            return _name(_SEMI_AXIS(), p.semi_minor_confidence, "Semi Axis Length Unavailable")
         elif key == "Semi Major Orientation":
-            return _SEMI_ORIENTATION.get(p.semi_major_orientation, "Heading Unavailable")
+            return _name(_SEMI_ORIENTATION(), p.semi_major_orientation, "Heading Unavailable")
         else:
             _unknown_key("\"Position Confidence Eliipse\"", key,
                          "\"Semi Major Confidence\", \"Semi Minor Confidence\", "
@@ -707,33 +727,33 @@ class BasicVehicleContainerHighFrequency:
 
     def __getitem__(self, key: Static[str]):
         if key == "Heading":
-            return _confidence(self.heading, _HEADING_CONFIDENCE)
+            return _confidence(self.heading, _HEADING_CONFIDENCE())
         elif key == "Speed":
-            return _confidence(self.speed, _SPEED_CONFIDENCE)
+            return _confidence(self.speed, _SPEED_CONFIDENCE())
         elif key == "Drive Direction":
             return self.drive_direction
         elif key == "Vehicle Length":
-            return _confidence(self.vehicle_length, _VEHICLE_LENGTH_CONFIDENCE)
+            return _confidence(self.vehicle_length, _VEHICLE_LENGTH_CONFIDENCE())
         elif key == "Vehicle Width":
             return self.vehicle_width
         elif key == "Longitudinal Acceleration":
-            return _confidence(self.longitudinal_acceleration, _ACCELERATION_CONFIDENCE)
+            return _confidence(self.longitudinal_acceleration, _ACCELERATION_CONFIDENCE())
         elif key == "Curvature":
-            return _confidence(self.curvature, _CURVATURE_CONFIDENCE)
+            return _confidence(self.curvature, _CURVATURE_CONFIDENCE())
         elif key == "Curvature Calculation Mode":
             return self.curvature_calculation_mode
         elif key == "Yaw Rate":
-            return _confidence(self.yaw_rate, _YAW_RATE_CONFIDENCE)
+            return _confidence(self.yaw_rate, _YAW_RATE_CONFIDENCE())
         elif key == "Acceleration Control":
             return self.acceleration_control
         elif key == "Lane Position":
             return self.lane_position
         elif key == "Steering Wheel Angle":
-            return _opt_confidence(self.steering_wheel_angle, _STEERING_WHEEL_CONFIDENCE)
+            return _opt_confidence(self.steering_wheel_angle, _STEERING_WHEEL_CONFIDENCE())
         elif key == "Lateral Acceleration":
-            return _opt_confidence(self.lateral_acceleration, _ACCELERATION_CONFIDENCE)
+            return _opt_confidence(self.lateral_acceleration, _ACCELERATION_CONFIDENCE())
         elif key == "Vertical Acceleration":
-            return _opt_confidence(self.vertical_acceleration, _ACCELERATION_CONFIDENCE)
+            return _opt_confidence(self.vertical_acceleration, _ACCELERATION_CONFIDENCE())
         elif key == "Performance class":
             return self.performance_class
         elif key == "Cen DSRC Tolling Zone":
@@ -796,7 +816,7 @@ class BasicVehicleContainerLowFrequency:
 
     def __getitem__(self, key: Static[str]):
         if key == "Vehicle Role":
-            return _VEHICLE_ROLES.get(self.vehicle_role, "Default")
+            return _name(_VEHICLE_ROLES(), self.vehicle_role, "Default")
         elif key == "Exterior Light":
             return self.exterior_lights
         elif key == "Path History":
@@ -879,7 +899,7 @@ class _CAMBasicContainer:
 
     def __getitem__(self, key: Static[str]):
         if key == "Station Type":
-            return _STATION_TYPES.get(self.cam.station_type, "Unknown")
+            return _name(_STATION_TYPES(), self.cam.station_type, "Unknown")
         elif key == "Reference Position":
             return self.cam.reference_position
         else:
