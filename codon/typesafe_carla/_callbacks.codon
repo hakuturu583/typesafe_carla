@@ -4,7 +4,9 @@
 # LibCarla's threads only fill native queues (one per sensor, one per tick
 # callback). Callbacks run on the program's thread, at the dispatch points
 # (World.tick(), World.wait_for_tick(), Client.apply_batch(_sync)(do_tick=True))
-# and in dispatch_callbacks() / dispatch_sensor_callbacks().
+# and in dispatch_callbacks() / dispatch_sensor_callbacks(); or, after
+# start_callback_thread() (issue #86), on one background thread as soon as
+# LibCarla queues their data.
 #
 # Sensor callbacks are keyed by actor id and stream (the measurements, or one
 # G-buffer texture of Sensor.listen_to_gbuffer, issue #33), so destroying a
@@ -12,8 +14,13 @@
 # DestroyActor) drops its callbacks; tick callbacks by (client, LibCarla callback id), as LibCarla
 # keeps them per client (Simulator), across load_world. This
 # small module lets actor.codon reach the registry without importing
-# sensor.codon. It is not thread-safe: register, stop and dispatch from one
-# thread (the program's main thread).
+# sensor.codon. It is not thread-safe by itself: register, stop and dispatch
+# from one thread (the program's main thread). The exceptions (issue #86) are
+# the callback thread (start_callback_thread()) and an external dispatcher
+# thread (set_auto_dispatch(False)), which also run Codon code: while either
+# may run, every registry operation and every delivery holds one lock, _lock
+# (except with set_auto_dispatch(False, lock=False), for callers serialized
+# by CPython's GIL).
 
 from ._ffi import (tsc_sensor_gbuffer_poll, tsc_sensor_gbuffer_pending_count,
                    tsc_sensor_stop_gbuffer)
@@ -21,7 +28,24 @@ from ._ffi import (Handle, tsc_sensor_poll, tsc_sensor_pending_count, tsc_sensor
                    tsc_tick_listener_poll, tsc_tick_listener_pending_count,
                    tsc_tick_listener_stop, tsc_tick_listener_wait_for_frame,
                    tsc_world_get_client_token)
-from .errors import _check
+from ._ffi import tsc_queue_signal_count, tsc_queue_signal_wait, tsc_queue_signal_notify
+from .errors import _check, CarlaError, TimeoutError
+from ._ffi import last_error
+import threading
+import os
+
+# Issue #86: the callback thread. Codon 0.19's threading module has locks but
+# no threads, so it is a raw pthread created through the GC (GC_pthread_create
+# registers it with the collector, which must scan its stack).
+from C import GC_pthread_create(Ptr[u64], cobj, cobj, cobj) -> i32
+from C import GC_pthread_join(u64, Ptr[cobj]) -> i32
+from C import pthread_self() -> u64
+from C import atexit(cobj) -> i32
+# For threads that Codon did not create (e.g. a CPython thread of a wrapper).
+from C import GC_get_stack_base(cobj) -> i32
+from C import GC_register_my_thread(cobj) -> i32
+from C import GC_unregister_my_thread() -> i32
+from C import GC_thread_is_registered() -> i32
 
 class _Listener:
     actor_id: int  # the sensor actor; -1 for a tick callback
@@ -48,14 +72,103 @@ class _Listener:
 
 _listeners = List[_Listener]()  # in registration order
 _dispatching = False
+_auto_dispatch = True  # whether the dispatch points (World.tick(), ...) dispatch
+
+# The callback thread (issue #86). _threaded is set and cleared only on the
+# thread that starts and stops it, so a _Locked block sees one value on entry
+# and exit.
+_threaded = False  # the callback thread runs: registry and deliveries take _lock
+_thread_stop = False  # asks the callback thread to exit
+_thread_id = u64(0)
+_atexit_registered = False
+_autostart = os.getenv("TYPESAFE_CARLA_CALLBACK_THREAD", "") not in ("", "0")
+# The environment variable starts the thread once, at the first callback
+# registration; an explicit start_callback_thread() / stop_callback_thread()
+# clears it, so it never undoes the program's own choice.
+_autostart_pending = _autostart
+_thread_joinable = False  # a thread was created and not joined yet
+_external_lock = True  # set_auto_dispatch(False, lock=...)
+
+# _lock, recursive by hand (_holder, _depth), serializes the registry and the
+# deliveries. _gate makes it fair: a thread passes the gate before it waits
+# for _lock and holds the gate while it waits, so the callback thread, which
+# re-takes _lock for every item, cannot starve the program's stop() or
+# destroy(). A thread that already holds _lock never touches the gate, so no
+# thread waits for the gate while holding _lock (no deadlock).
+_lock = threading.Lock()
+_gate = threading.Lock()
+_holder = u64(0)  # the thread holding _lock, 0 if none
+_depth = 0
+
+def _acquire(timeout: float = -1.0) -> bool:
+    """Takes _lock (recursively); with timeout >= 0, gives up after that
+    many seconds in all (gate and lock)."""
+    import time
+    global _holder, _depth
+    me = pthread_self()
+    if _holder == me:  # only this thread writes its own id
+        _depth += 1
+        return True
+    deadline = time.time() + timeout
+    if not _gate.acquire(True, timeout):
+        return False
+    ok = _lock.acquire(True, max(deadline - time.time(), 0.0) if timeout >= 0.0 else -1.0)
+    _gate.release()
+    if ok:
+        _holder = me
+        _depth = 1
+    return ok
+
+def _release():
+    global _holder, _depth
+    _depth -= 1
+    if _depth == 0:
+        _holder = u64(0)
+        _lock.release()
+
+def _locking() -> bool:
+    """Whether another thread may deliver callbacks: the callback thread, or
+    an external dispatcher (set_auto_dispatch(False), unless lock=False)."""
+    return _threaded or (not _auto_dispatch and _external_lock)
+
+class _Locked:
+    """`with _Locked():` holds _lock while another thread may deliver
+    callbacks (_locking(); a no-op otherwise). Every registry operation,
+    every delivered item, and every public operation that reads or changes a
+    sensor's streams (listen, stop, poll, pending_count, ...) runs inside
+    one, so they never interleave."""
+    held: bool
+
+    def __init__(self):
+        self.held = False
+
+    def __enter__(self):
+        if _locking():
+            _acquire()
+            self.held = True
+
+    def __exit__(self):
+        if self.held:
+            self.held = False
+            _release()
+
+def _maybe_autostart():
+    """TYPESAFE_CARLA_CALLBACK_THREAD=1: starts the callback thread at the
+    first callback registration (Sensor.listen(callback), listen_to_gbuffer,
+    World.on_tick), unless the program started or stopped it itself. Not
+    from a callback being dispatched (it would race with that dispatch):
+    then at the next registration."""
+    if _autostart_pending and not _threaded and not _dispatching:
+        start_callback_thread()
 
 def _find_callback(actor_id: int, gbuffer: int = -1) -> int:
     """The sensor stream's listener: the measurements, or a G-buffer texture."""
-    for i in range(len(_listeners)):
-        l = _listeners[i]
-        if not l.tick and l.actor_id == actor_id and l.gbuffer == gbuffer:
-            return i
-    return -1
+    with _Locked():
+        for i in range(len(_listeners)):
+            l = _listeners[i]
+            if not l.tick and l.actor_id == actor_id and l.gbuffer == gbuffer:
+                return i
+        return -1
 
 def _find_tick_callback(client_token: int, callback_id: int) -> int:
     for i in range(len(_listeners)):
@@ -110,7 +223,8 @@ def _discard_pending(h: Handle, gbuffer: int = -1):
 
 def _remove(i: int):
     """Unregisters _listeners[i]: stops its stream and discards what it has
-    not received (best effort: the stream may already be gone)."""
+    not received (best effort: the stream may already be gone). The caller
+    holds _Locked."""
     listener = _listeners.pop(i)
     listener.active = False
     if listener.tick:
@@ -124,67 +238,75 @@ def _unregister_stream(actor_id: int, gbuffer: int = -1) -> bool:
     """Drops the callback of one stream of this sensor actor (its measurements,
     or a G-buffer texture), if any: stops the stream and discards what it has
     not received. Returns whether there was one."""
-    if len(_listeners) == 0:
-        return False
-    i = _find_callback(actor_id, gbuffer)
-    if i < 0:
-        return False
-    _remove(i)
-    return True
+    with _Locked():
+        if len(_listeners) == 0:
+            return False
+        i = _find_callback(actor_id, gbuffer)
+        if i < 0:
+            return False
+        _remove(i)
+        return True
 
 def _unregister_callback(actor_id: int) -> bool:
     """Drops every callback of this sensor actor (it has been destroyed): its
     measurements and any G-buffer textures left (_stop_gbuffers should have
     run before the destroy). Returns whether there was one."""
-    found = False
-    i = 0
-    while i < len(_listeners):
-        if not _listeners[i].tick and _listeners[i].actor_id == actor_id:
-            _remove(i)
-            found = True
-        else:
-            i += 1
-    return found
+    with _Locked():
+        found = False
+        i = 0
+        while i < len(_listeners):
+            if not _listeners[i].tick and _listeners[i].actor_id == actor_id:
+                _remove(i)
+                found = True
+            else:
+                i += 1
+        return found
 
 def _stop_gbuffers(actor_id: int):
     """Stops and drops this sensor actor's G-buffer callbacks. Call it BEFORE
     destroying the actor: LibCarla's StopGBuffer asks the server for the
     stream token first, which fails once the actor is gone, and the stream
     would then never be unsubscribed (its client keeps reconnecting)."""
-    i = 0
-    while i < len(_listeners):
-        l = _listeners[i]
-        if not l.tick and l.actor_id == actor_id and l.gbuffer >= 0:
-            _remove(i)
-        else:
-            i += 1
+    with _Locked():
+        i = 0
+        while i < len(_listeners):
+            l = _listeners[i]
+            if not l.tick and l.actor_id == actor_id and l.gbuffer >= 0:
+                _remove(i)
+            else:
+                i += 1
 
 def _register_callback(actor_id: int, handle: Handle, callback: Callable[[cobj], None],
                        gbuffer: int = -1):
-    _unregister_stream(actor_id, gbuffer)
-    _listeners.append(_Listener(actor_id, False, 0, 0, handle, callback, gbuffer))
+    with _Locked():
+        _unregister_stream(actor_id, gbuffer)
+        _listeners.append(_Listener(actor_id, False, 0, 0, handle, callback, gbuffer))
 
 def _register_tick_callback(client_token: int, callback_id: int, handle: Handle,
                             callback: Callable[[cobj], None]):
-    _listeners.append(_Listener(-1, True, client_token, callback_id, handle, callback))
+    with _Locked():
+        _listeners.append(_Listener(-1, True, client_token, callback_id, handle, callback))
 
 def _unregister_tick_callback(client_token: int, callback_id: int) -> bool:
     """Removes a World.on_tick callback and drops its queued snapshots.
     Returns whether there was one."""
-    i = _find_tick_callback(client_token, callback_id)
-    if i < 0:
-        return False
-    _remove(i)
-    return True
+    with _Locked():
+        i = _find_tick_callback(client_token, callback_id)
+        if i < 0:
+            return False
+        _remove(i)
+        return True
 
 def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
     """Waits (up to `seconds` in all) until every on_tick callback of the
     world's client has received the snapshot of `frame`. LibCarla publishes a
     tick before it runs the OnTick callbacks, so World.tick() can return
     first; this makes the dispatch that follows deliver that frame. On
-    timeout the snapshot is delivered at a later dispatch point instead."""
+    timeout the snapshot is delivered at a later dispatch point instead.
+    Does nothing when the dispatch points do not dispatch (the callback
+    thread, or set_auto_dispatch(False)): nothing would follow to deliver it."""
     import time
-    if not any(l.tick for l in _listeners):
+    if _threaded or not _auto_dispatch or not any(l.tick for l in _listeners):
         return
     token = Ptr[u64](1)
     _check(tsc_world_get_client_token(world_ptr, token))
@@ -195,17 +317,31 @@ def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
             left = max(deadline - time.time(), 0.0)
             _check(tsc_tick_listener_wait_for_frame(l.handle.ptr, u64(frame), left, reached))
 
-def _deliver(listener: _Listener) -> int:
-    """Delivers what was queued when the listener's turn began, in arrival order."""
+def _deliver(listener: _Listener, on_thread: bool = False) -> int:
+    """Delivers what was queued when the listener's turn began, in arrival
+    order, one item at a time under _Locked: a stop() (or any other
+    unregistration), which takes it too, keeps any further callback of the
+    stream from starting once it returns. on_thread: the callback thread,
+    which also stops on _thread_stop and reports a callback's exception
+    instead of propagating it."""
     count = 0
-    for _ in range(_pending(listener)):
+    n = 0
+    with _Locked():
         if not listener.active:
-            break
-        p = _pop_item(listener)
-        if p == cobj():
-            break
-        count += 1
-        listener.callback(p)
+            return 0
+        n = _pending(listener)
+    for _ in range(n):
+        with _Locked():
+            if not listener.active or (on_thread and _thread_stop):
+                break
+            p = _pop_item(listener)
+            if p == cobj():
+                break
+            count += 1
+            if on_thread:
+                _call_reporting(listener, p)
+            else:
+                listener.callback(p)
     return count
 
 def dispatch_callbacks() -> int:
@@ -226,6 +362,10 @@ def dispatch_callbacks() -> int:
     or to deliver data that arrived after a tick returned. Call it from one
     thread only.
 
+    While the callback thread runs (start_callback_thread()), that thread
+    delivers everything: this returns 0 at once, and so do the dispatch
+    points.
+
     If a callback raises, the pass still visits every other callback, then the
     first exception propagates to the caller (e.g. out of World.tick(), after
     the simulation has advanced); later exceptions of the same pass are
@@ -234,10 +374,14 @@ def dispatch_callbacks() -> int:
     that ticks) does nothing and returns 0.
     """
     global _dispatching
-    if _dispatching or len(_listeners) == 0:
+    if _threaded:
         return 0
-    _dispatching = True
-    snapshot = list(_listeners)  # callbacks may stop or listen
+    snapshot = List[_Listener]()
+    with _Locked():
+        if _dispatching or len(_listeners) == 0:
+            return 0
+        _dispatching = True
+        snapshot = list(_listeners)  # callbacks may stop or listen
     count = 0
     k = 0
     finished = False
@@ -257,10 +401,272 @@ def dispatch_callbacks() -> int:
                         _deliver(snapshot[j])
                     except:
                         pass
-        _dispatching = False
+        with _Locked():
+            _dispatching = False
     return count
 
 def dispatch_sensor_callbacks() -> int:
     """The same as dispatch_callbacks() (the name from before World.on_tick):
     it runs the World.on_tick callbacks too."""
     return dispatch_callbacks()
+
+def _dispatch_point() -> int:
+    """What World.tick(), wait_for_tick() and apply_batch(_sync)(do_tick=True)
+    run after the tick: dispatch_callbacks(), unless set_auto_dispatch(False)
+    (an external dispatcher delivers) or the callback thread runs."""
+    if not _auto_dispatch:
+        return 0
+    return dispatch_callbacks()
+
+def set_auto_dispatch(enabled: bool, lock: bool = True):
+    """Whether World.tick(), World.wait_for_tick() and
+    Client.apply_batch(_sync)(..., do_tick=True) run the queued callbacks
+    (True, the default). With False only dispatch_callbacks() runs them: for
+    a program (or a wrapper, such as a CPython binding) that runs its own
+    dispatcher thread calling dispatch_callbacks(), so callbacks never run
+    inside a tick.
+
+    With False, the registry and every delivered item are locked as with
+    the callback thread, so that dispatcher may run beside the program's
+    thread, with the same guarantee: once stop() returns, no callback of the
+    stream runs, not even one in progress.
+
+    lock=False skips the lock, for a caller that already serializes every
+    call into typesafe_carla: CPython's GIL, where a lock held across a
+    Python callback (which may release the GIL) would deadlock. Then the
+    guarantees are weaker: stop() / destroy() prevent new callbacks of the
+    stream, but do not wait for one already running (it may have released
+    the GIL); and nothing is safe if any thread calls in without holding the
+    GIL. While the dispatch points are off, start_callback_thread() raises
+    (the dispatcher was chosen) and TYPESAFE_CARLA_CALLBACK_THREAD no longer
+    applies. Call it while no other thread uses typesafe_carla (before
+    starting the dispatcher, after stopping it)."""
+    global _auto_dispatch, _external_lock, _autostart_pending
+    _auto_dispatch = enabled
+    _external_lock = lock
+    if not enabled:
+        _autostart_pending = False  # an external dispatcher was chosen
+
+def auto_dispatch() -> bool:
+    """See set_auto_dispatch()."""
+    return _auto_dispatch
+
+# --- Issue #86: the callback thread -------------------------------------------
+
+def queue_signal_count() -> int:
+    """A process-wide counter that LibCarla's threads increment whenever they
+    queue a measurement or world snapshot (any sensor, polling or callback
+    mode, and any tick listener). For an external dispatcher: read it, call
+    dispatch_callbacks(), then wait_queue_signal(count, timeout)."""
+    out = Ptr[u64](1)
+    _check(tsc_queue_signal_count(out))
+    return int(out[0])
+
+def wait_queue_signal(seen: int, timeout: float) -> int:
+    """Blocks up to `timeout` seconds until queue_signal_count() differs from
+    `seen` (at once if it already does); returns the count. A timeout is not
+    an error. Touches no Codon or Python state while it blocks."""
+    out = Ptr[u64](1)
+    _check(tsc_queue_signal_wait(u64(seen), timeout, out))
+    return int(out[0])
+
+def attach_current_thread() -> bool:
+    """Registers the calling thread with Codon's garbage collector, which
+    must know every thread that runs Codon code (it scans their stacks).
+    Threads made by Codon and the program's main thread already are; call
+    this first on a thread made elsewhere that calls into typesafe_carla,
+    e.g. a CPython thread of a wrapper running dispatch_callbacks(). Returns
+    False if the thread was already registered (or its stack cannot be
+    found). Allocates nothing before registering."""
+    if GC_thread_is_registered() != i32(0):
+        return False
+    base = __array__[cobj](4)  # GC_stack_base, on the stack
+    if GC_get_stack_base(base.ptr.as_byte()) != i32(0):
+        return False  # cannot find the thread's stack: not registered
+    return GC_register_my_thread(base.ptr.as_byte()) == i32(0)
+
+def detach_current_thread():
+    """Undoes attach_current_thread() before such a thread exits. Call it only
+    where attach_current_thread() returned True, after the thread's last call
+    into typesafe_carla."""
+    GC_unregister_my_thread()
+
+def _on_callback_thread() -> bool:
+    return _threaded and pthread_self() == _thread_id
+
+def _report(kind: str, message: str):
+    """An exception escaped a callback on the callback thread (or the thread
+    failed). As LibCarla's Python binding, print it and keep delivering."""
+    import sys
+    sys.stderr.write("typesafe_carla: callback thread: " + kind + ": " + message + "\n")
+    sys.stderr.flush()
+
+def _call_reporting(listener: _Listener, p: cobj):
+    """Runs the callback; an exception is reported, not propagated. Codon
+    exceptions have no catchable hierarchy, so the common ones are named."""
+    try:
+        listener.callback(p)
+    except CarlaError as e:
+        _report("CarlaError", e.message)
+    except TimeoutError as e:
+        _report("TimeoutError", e.message)
+    except IndexError as e:
+        _report("IndexError", e.message)
+    except KeyError as e:
+        _report("KeyError", e.message)
+    except ValueError as e:
+        _report("ValueError", e.message)
+    except AssertionError as e:
+        _report("AssertionError", e.message)
+    except ZeroDivisionError as e:
+        _report("ZeroDivisionError", e.message)
+    except:
+        _report("exception in a callback", "(its type is not one reported by name)")
+
+def _thread_pass():
+    snapshot = List[_Listener]()
+    with _Locked():
+        snapshot = list(_listeners)
+    for l in snapshot:
+        if _thread_stop:
+            return
+        if not l.active:
+            continue
+        try:
+            _deliver(l, True)
+        except CarlaError as e:  # polling the native queue failed
+            _report("CarlaError", e.message)
+        except:
+            _report("exception", "(while polling a queue)")
+
+def _thread_main(arg: cobj) -> cobj:
+    """The callback thread: drain, then block until LibCarla queues more."""
+    global _thread_id, _threaded
+    _thread_id = pthread_self()  # also set by the creator, maybe after this runs
+    seq = Ptr[u64](1)
+    failed = False
+    while not _thread_stop:
+        if tsc_queue_signal_count(seq) != i32(0):
+            failed = True
+            break
+        seen = seq[0]
+        _thread_pass()
+        if _thread_stop:
+            break
+        # The timeout only bounds a missed wake-up; pushes wake it at once.
+        if tsc_queue_signal_wait(seen, 1.0, seq) != i32(0):
+            failed = True
+            break
+    if failed:
+        _report("stopped", "the queue signal failed (" + last_error() +
+                "); callbacks run at the dispatch points again")
+        with _Locked():  # no stream operation is in progress
+            _threaded = False
+    return cobj()
+
+def _join_thread():
+    global _thread_joinable
+    if _thread_joinable:
+        _thread_joinable = False
+        GC_pthread_join(_thread_id, Ptr[cobj](1))
+
+def _stop_at_exit() -> None:
+    """atexit: stop the callback thread before static destructors run. If a
+    callback does not return within 2 s, warn and exit anyway: _thread_stop
+    keeps any further callback from starting."""
+    global _thread_stop
+    if not _threaded or _on_callback_thread():
+        return
+    _thread_stop = True
+    tsc_queue_signal_notify()
+    if _acquire(2.0):
+        _release()
+        _join_thread()
+    else:
+        import sys
+        sys.stderr.write("typesafe_carla: warning: a callback was still running 2 s after "
+                         "the program ended; exiting without waiting for it\n")
+        sys.stderr.flush()
+
+def start_callback_thread():
+    """Starts the callback thread (issue #86): a background thread that runs
+    the sensor (Sensor.listen, listen_to_gbuffer) and World.on_tick callbacks
+    as soon as LibCarla queues their data, as the CARLA Python API does on
+    its streaming threads. The program's thread may then block (e.g. wait on
+    its own queue after World.tick()) and still receive data. Idempotent: a
+    call while it runs (also from a callback on it) does nothing.
+
+    While it runs:
+    - every callback runs on it, one at a time, never inside World.tick()
+      etc.; dispatch_callbacks() returns 0;
+    - callbacks run concurrently with the program's thread: every access to
+      data they share with it, reads included, must hold one
+      threading.Lock, as Codon has no GIL;
+    - per stream, items arrive in order; streams are visited in
+      registration order;
+    - listen/stop/destroy (and the other stream operations) wait for the
+      callback in progress, so once stop() returns no further callback of
+      that stream starts. Do not make a callback wait for the program's
+      thread while it may be stopping or destroying a sensor (deadlock);
+    - an exception from a callback is printed to stderr and the thread goes
+      on (the Python API's behaviour), instead of propagating.
+
+    Off by default: callbacks then run at the dispatch points, on the
+    program's thread. TYPESAFE_CARLA_CALLBACK_THREAD=1 starts it at the first
+    callback registration (listen(callback), listen_to_gbuffer, on_tick);
+    an explicit start or stop overrides that. Raises CarlaError while
+    dispatch_callbacks() runs (e.g. from a callback at a dispatch point) and
+    after set_auto_dispatch(False, lock=False). Do not listen() or stop() a
+    sensor from a callback while the program's thread destroys it: destroy()
+    unregisters it only after the server answered. It is stopped at
+    program exit; stop_callback_thread() stops it earlier."""
+    global _threaded, _thread_stop, _thread_id, _atexit_registered, _autostart_pending
+    global _thread_joinable
+    if _threaded:
+        _autostart_pending = False
+        return
+    if not _auto_dispatch and not _external_lock:
+        # An unlocked external dispatcher (pycarla, under the GIL): a Codon
+        # thread would run its callbacks without the GIL and race with it.
+        raise CarlaError("start_callback_thread(): an external dispatcher was chosen "
+                         "(set_auto_dispatch(False, lock=False)); call "
+                         "set_auto_dispatch(True) first")
+    if _dispatching:  # the dispatch in progress would race with the thread
+        raise CarlaError("start_callback_thread() cannot be called while "
+                         "dispatch_callbacks() runs (from a callback, or beside an "
+                         "external dispatcher)")
+    _autostart_pending = False
+    _join_thread()  # one that stopped by itself
+    _thread_stop = False
+    _threaded = True  # before the thread exists: it must see the locked mode
+    tid = Ptr[u64](1)
+    if GC_pthread_create(tid, cobj(), _thread_main(...).F.T.__raw__(), cobj()) != i32(0):
+        _threaded = False
+        raise CarlaError("start_callback_thread(): could not create the thread")
+    _thread_id = tid[0]
+    _thread_joinable = True
+    if not _atexit_registered:
+        _atexit_registered = True
+        atexit(_stop_at_exit(...).F.T.__raw__())
+
+def stop_callback_thread():
+    """Stops the callback thread, waiting for the callback in progress; then
+    callbacks run at the dispatch points again (undelivered data is kept for
+    them). Idempotent; also cancels TYPESAFE_CARLA_CALLBACK_THREAD. Raises
+    CarlaError from a callback on that thread."""
+    global _threaded, _thread_stop, _autostart_pending
+    _autostart_pending = False
+    if not _threaded:
+        _join_thread()
+        return
+    if _on_callback_thread():
+        raise CarlaError("stop_callback_thread() cannot be called from a callback")
+    _thread_stop = True
+    tsc_queue_signal_notify()
+    _join_thread()
+    _threaded = False
+    _thread_stop = False
+
+def callback_thread_running() -> bool:
+    """Whether the callback thread runs (start_callback_thread())."""
+    return _threaded

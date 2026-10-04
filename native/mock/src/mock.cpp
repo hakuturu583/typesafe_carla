@@ -6,12 +6,16 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <cstdlib>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <thread>
 
 namespace carla {
 namespace client {
@@ -76,6 +80,67 @@ struct ActorData {
 };
 
 using Delivery = std::function<void()>;  // run after the episode lock is released
+
+// Issue #86: how long after a tick the measurements and OnTick snapshots are
+// delivered (tsc_mock_set_delivery_delay_ms). 0, the default, delivers them in
+// the ticking call, before it returns. Otherwise one worker thread delivers
+// them, in tick order, after the delay, as LibCarla's streaming threads do:
+// a real server's data can arrive after World::Tick has returned.
+std::atomic<uint32_t> g_delivery_delay_ms{0};
+
+class DeliveryWorker {
+ public:
+  void post(std::vector<Delivery> batch, std::chrono::milliseconds delay) {
+    {
+      std::lock_guard<std::mutex> lock(_mutex);
+      if (!_started) {
+        std::thread([this] { run(); }).detach();  // lives until the process exits
+        _started = true;
+      }
+      _batches.push_back({std::chrono::steady_clock::now() + delay, std::move(batch)});
+    }
+    _ready.notify_one();
+  }
+
+ private:
+  struct Batch {
+    std::chrono::steady_clock::time_point due;
+    std::vector<Delivery> deliveries;
+  };
+
+  void run() {
+    std::unique_lock<std::mutex> lock(_mutex);
+    for (;;) {
+      _ready.wait(lock, [this] { return !_batches.empty(); });
+      const auto due = _batches.front().due;
+      if (std::chrono::steady_clock::now() < due) {
+        _ready.wait_until(lock, due);
+        continue;  // re-check: the front is the earliest (same delay, FIFO)
+      }
+      Batch batch = std::move(_batches.front());
+      _batches.pop_front();
+      lock.unlock();
+      for (auto &delivery : batch.deliveries) delivery();
+      lock.lock();
+    }
+  }
+
+  std::mutex _mutex;
+  std::condition_variable _ready;
+  std::deque<Batch> _batches;
+  bool _started = false;
+};
+
+// Runs a tick's deliveries now, or on the delivery worker (issue #86).
+void Deliver(std::vector<Delivery> deliveries) {
+  const uint32_t delay = g_delivery_delay_ms;
+  if (delay == 0) {
+    for (auto &delivery : deliveries) delivery();
+    return;
+  }
+  static DeliveryWorker *worker = new DeliveryWorker();  // never destroyed
+  worker->post(std::move(deliveries), std::chrono::milliseconds(delay));
+}
 
 rpc::VehiclePhysicsControl DefaultPhysics() {
   rpc::VehiclePhysicsControl pc;
@@ -837,7 +902,7 @@ uint64_t World::Tick(time_duration) {
     deliveries = _episode->StepLocked();
     frame = _episode->frame;
   }
-  for (auto &d : deliveries) d();
+  mock::Deliver(std::move(deliveries));
   return frame;
 }
 
@@ -859,7 +924,7 @@ WorldSnapshot World::WaitForTick(time_duration timeout) const {
     deliveries = _episode->StepLocked();
     snapshot = _episode->SnapshotLocked();
   }
-  for (auto &d : deliveries) d();
+  mock::Deliver(std::move(deliveries));
   return *snapshot;
 }
 
@@ -1202,7 +1267,7 @@ std::vector<rpc::CommandResponse> Client::ApplyBatchSync(std::vector<rpc::Comman
     }
     if (do_tick_cue) deliveries = episode->StepLocked();
   }
-  for (auto &d : deliveries) d();
+  mock::Deliver(std::move(deliveries));
   return responses;
 }
 
@@ -2701,6 +2766,9 @@ extern "C" size_t tsc_mock_last_worker_threads(void) {
   return carla::client::g_last_worker_threads;
 }
 extern "C" uint16_t tsc_mock_last_map_layers(void) { return carla::client::g_last_map_layers; }
+extern "C" void tsc_mock_set_delivery_delay_ms(uint32_t milliseconds) {
+  carla::client::mock::g_delivery_delay_ms = milliseconds;
+}
 extern "C" size_t tsc_mock_gbuffer_subscriptions(void) {
   return carla::client::g_gbuffer_subscriptions;
 }

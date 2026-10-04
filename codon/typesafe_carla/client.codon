@@ -19,7 +19,7 @@ from .errors import _check, _check_port, CarlaError, _is_actor_id
 from .world import World
 from .geometry import Transform
 from .world_queries import MapLayer, _map_layer
-from ._callbacks import dispatch_callbacks, _unregister_callback, _stop_gbuffers
+from ._callbacks import _dispatch_point, _unregister_callback, _stop_gbuffers
 from .command import Command, CommandResponse, _flatten, _responses, _DESTROY_ACTOR
 
 class OpendriveGenerationParameters:
@@ -158,14 +158,14 @@ class Client:
     def apply_batch(self, commands: List[Command], do_tick: bool = False):
         """Sends all commands in one RPC without waiting for their results."""
         records, n = _flatten(commands)
-        _stop_destroyed_gbuffers(commands)
+        _stop_destroyed_gbuffers(commands)  # registry steps lock themselves (#86)
         _check(tsc_client_apply_batch(self._h.ptr, records, n, i32(int(do_tick))))
         # No responses: assume every DestroyActor succeeds.
         for c in commands:
             if c._type == _DESTROY_ACTOR:
                 _unregister_callback(c._actor_id)
         if do_tick:
-            dispatch_callbacks()  # after sending; this call does not wait for the server
+            _dispatch_point()  # after sending; this call does not wait for the server
 
     def apply_batch_sync(self, commands: List[Command],
                          do_tick: bool = False) -> List[CommandResponse]:
@@ -175,10 +175,10 @@ class Client:
         set here is registered with the Traffic Manager, like the Python API.
         """
         records, n = _flatten(commands)
-        _stop_destroyed_gbuffers(commands)
         top = len(commands)
         buf = Ptr[CCommandResponse](top if top > 0 else 1)
         count = Ptr[int](1)
+        _stop_destroyed_gbuffers(commands)  # registry steps lock themselves (#86)
         _check(tsc_client_apply_batch_sync(self._h.ptr, records, n, i32(int(do_tick)), buf, top,
                                            count))
         responses = _responses(buf, count[0])
@@ -186,7 +186,7 @@ class Client:
             if commands[i]._type == _DESTROY_ACTOR and not responses[i].has_error():
                 _unregister_callback(commands[i]._actor_id)
         if do_tick:
-            dispatch_callbacks()
+            _dispatch_point()
         return responses
 
     def generate_opendrive_world(self, opendrive: str,

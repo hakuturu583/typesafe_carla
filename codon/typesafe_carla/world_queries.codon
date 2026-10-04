@@ -35,7 +35,7 @@ from .snapshot import WorldSnapshot
 from .world import World
 from .labels import CityObjectLabel
 from .texture import TextureColor, TextureFloatColor
-from ._callbacks import _register_tick_callback, _unregister_tick_callback
+from ._callbacks import _register_tick_callback, _unregister_tick_callback, _maybe_autostart
 
 class _MapLayer(_IntEnum):
     """Map layer bit flags (rpc::MapLayer); combine with |."""
@@ -350,6 +350,7 @@ class World:
         if size < 0:
             raise CarlaError("queue_size must be 0 (unbounded) or positive", TSC_INVALID_ARGUMENT)
         cb: Callable[[cobj], None] = _TickThunk(callback).run
+        _maybe_autostart()  # TYPESAFE_CARLA_CALLBACK_THREAD=1
         out = Ptr[cobj](1)
         _check(tsc_world_on_tick(self._h.ptr, size, out))
         listener = Handle(out[0])

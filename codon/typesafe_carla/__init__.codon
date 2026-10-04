@@ -36,7 +36,10 @@ from .v2x import (CAMEvent, CAMMessage, CAM, ItsPduHeader, ValueConfidence, Refe
                   BasicVehicleContainerHighFrequency, BasicVehicleContainerLowFrequency,
                   CenDsrcTollingZone, ProtectedCommunicationZone, PathPoint, CustomV2XEvent,
                   CustomV2XData, CustomV2XMessage, CustomV2XBytes)
-from ._callbacks import dispatch_callbacks
+from ._callbacks import (dispatch_callbacks, start_callback_thread, stop_callback_thread,
+                         callback_thread_running, set_auto_dispatch, auto_dispatch,
+                         queue_signal_count, wait_queue_signal, attach_current_thread,
+                         detach_current_thread)
 from .client import Client, OpendriveGenerationParameters
 from .walker import (Walker, WalkerAIController, WalkerBoneControlIn, WalkerBoneControlOut,
                      bone_transform, bone_transform_out)

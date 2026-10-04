@@ -11,10 +11,12 @@ namespace data = carla::sensor::data;
 
 namespace {
 
-SensorQueue &queue_of(tsc_sensor_t *s) {
-  auto &h = sensor_handle(s);
-  if (h.queue == nullptr) fail(TSC_ERROR, "sensor is not listening; call listen() first");
-  return *h.queue;
+// A reference to the measurements' queue: it stays valid while the caller
+// uses it, even if another thread listens again meanwhile.
+std::shared_ptr<SensorQueue> queue_of(tsc_sensor_t *s) {
+  auto queue = sensor_handle(s).get_queue();
+  if (queue == nullptr) fail(TSC_ERROR, "sensor is not listening; call listen() first");
+  return queue;
 }
 
 // A new queue that listen(callback) feeds. The callback runs on LibCarla
@@ -32,8 +34,8 @@ tsc_sensor_data *pop_handle(SensorQueue *queue) {
   return item == nullptr ? nullptr : new tsc_sensor_data(std::move(item));
 }
 
-SensorQueue *gbuffer_queue_of(tsc_sensor_t *s, uint32_t gbuffer_id) {
-  return sensor_handle(s).gbuffer_queues[check_gbuffer_id(gbuffer_id)].get();
+std::shared_ptr<SensorQueue> gbuffer_queue_of(tsc_sensor_t *s, uint32_t gbuffer_id) {
+  return sensor_handle(s).get_queue(static_cast<int>(check_gbuffer_id(gbuffer_id)));
 }
 
 // Calls f with the measurement as the first of Ts that it is, or fails with
@@ -309,7 +311,7 @@ tsc_status_t tsc_sensor_listen(tsc_sensor_t *sensor, size_t queue_capacity) {
     // LibCarla does not replace an existing subscription: a second Listen()
     // would leave an orphaned stream that Stop() cannot reach. Stop first.
     if (s.IsListening()) s.Stop();
-    h.queue = listen_into_queue(queue_capacity, [&](auto cb) { s.Listen(std::move(cb)); });
+    h.set_queue(listen_into_queue(queue_capacity, [&](auto cb) { s.Listen(std::move(cb)); }));
   });
 }
 
@@ -336,8 +338,9 @@ tsc_status_t tsc_sensor_listen_to_gbuffer(tsc_sensor_t *sensor, uint32_t gbuffer
     }
     // As tsc_sensor_listen: never leave an orphaned subscription behind.
     if (s.IsListeningGBuffer(id)) s.StopGBuffer(id);
-    h.gbuffer_queues[id] =
-        listen_into_queue(queue_capacity, [&](auto cb) { listen_to_gbuffer(s, id, std::move(cb)); });
+    h.set_queue(
+        listen_into_queue(queue_capacity, [&](auto cb) { listen_to_gbuffer(s, id, std::move(cb)); }),
+        static_cast<int>(id));
   });
 }
 
@@ -345,33 +348,33 @@ tsc_status_t tsc_sensor_gbuffer_pending_count(tsc_sensor_t *sensor, uint32_t gbu
                                               size_t *out) {
   return TSC_GUARD({
     require_ptr(out, "out");
-    const SensorQueue *queue = gbuffer_queue_of(sensor, gbuffer_id);
+    const auto queue = gbuffer_queue_of(sensor, gbuffer_id);
     *out = queue == nullptr ? 0 : queue->size();
   });
 }
 
 tsc_status_t tsc_sensor_gbuffer_poll(tsc_sensor_t *sensor, uint32_t gbuffer_id,
                                      tsc_sensor_data_t **out) {
-  return new_handle(__func__, out, [&] { return pop_handle(gbuffer_queue_of(sensor, gbuffer_id)); });
+  return new_handle(__func__, out, [&] { return pop_handle(gbuffer_queue_of(sensor, gbuffer_id).get()); });
 }
 
 tsc_status_t tsc_sensor_dropped_count(tsc_sensor_t *sensor, uint64_t *out) {
-  return TSC_GUARD({ *require_ptr(out, "out") = queue_of(sensor).dropped(); });
+  return TSC_GUARD({ *require_ptr(out, "out") = queue_of(sensor)->dropped(); });
 }
 
 tsc_status_t tsc_sensor_pending_count(tsc_sensor_t *sensor, size_t *out) {
-  return TSC_GUARD({ *require_ptr(out, "out") = queue_of(sensor).size(); });
+  return TSC_GUARD({ *require_ptr(out, "out") = queue_of(sensor)->size(); });
 }
 
 tsc_status_t tsc_sensor_poll(tsc_sensor_t *sensor, tsc_sensor_data_t **out) {
-  return new_handle(__func__, out, [&] { return pop_handle(&queue_of(sensor)); });
+  return new_handle(__func__, out, [&] { return pop_handle(queue_of(sensor).get()); });
 }
 
 tsc_status_t tsc_sensor_wait_for_data(tsc_sensor_t *sensor, double timeout_seconds,
                                       tsc_sensor_data_t **out) {
   return new_handle(__func__, out, [&]() {
     const auto timeout = std::chrono::milliseconds(seconds_to_duration(timeout_seconds).milliseconds());
-    auto item = queue_of(sensor).wait(timeout);
+    auto item = queue_of(sensor)->wait(timeout);
     if (item == nullptr) {
       fail(TSC_TIMEOUT, "no sensor data within " + std::to_string(timeout_seconds) + " s");
     }
