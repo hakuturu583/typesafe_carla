@@ -1,7 +1,7 @@
 # Issue #77: arithmetic across the Vector3D family (Vector3D, Location,
 # Velocity, AngularVelocity, Acceleration) and Vector2D, as the official module:
 # result types, values and in-place updates of every combination.
-from ..compatibility.arithmetic_cases import arithmetic_cases
+from ..compatibility.arithmetic_cases import arithmetic_cases, check_cases
 import typesafe_carla as carla
 
 # tests/compatibility/arithmetic_cases.py run with the official module
@@ -18,19 +18,11 @@ TYPESAFE_ITRUEDIV = "/=:Vector3D(6,-9,16),Vector3D(48,-72,128),C,C,C,C,C,C,C,C,V
 assert OFFICIAL_ITRUEDIV in OFFICIAL
 expected = OFFICIAL.replace(OFFICIAL_ITRUEDIV, TYPESAFE_ITRUEDIV)
 
-got = arithmetic_cases()
-if got != expected:
-    a = got.split(";")
-    b = expected.split(";")
-    for i in range(min(len(a), len(b))):
-        if a[i] != b[i]:
-            print("typesafe_carla " + a[i] + "\n!= official " + b[i])
-assert got == expected
+check_cases(arithmetic_cases(), expected)
 
 def test_equality():
     # #70's == on arithmetic results: these cases are True in the official
-    # module too. Not in general: the arithmetic runs in double here and in
-    # float32 there, so the low bits can differ (README, "Float precision").
+    # module too (the arithmetic is float32 in both, issue #81).
     V, L = carla.Vector3D, carla.Location
     assert V(0.1, 0.2, 0.3) + V(0.7, 0.0, 0.0) == V(0.8, 0.2, 0.3)
     assert L(1.0, 2.0, 3.0) + V(0.5, 0.5, 0.5) == L(1.5, 2.5, 3.5)

@@ -574,34 +574,40 @@ Deliberate differences, all in favour of static checking:
 * **`WheelPhysicsControl.velocity` is a `Vector3D`.** LibCarla and the Python
   API store it as a `Location`; positions (`location`, `old_location`,
   `center_of_mass`) stay `Location`.
-* **Float precision.** Values cross into LibCarla as float32, as they do in
-  the Python API, so `get_control().throttle` after setting `0.2` is
-  `0.2000000029802322`. Arithmetic on `Vector3D`, `Location`, `Velocity`,
-  `AngularVelocity`, `Acceleration` and `Vector2D` runs in double precision
-  here and in float32 in the Python API. Results can differ in the last
-  digits, and so can `==` on them, which compares in float32 as LibCarla
-  does: `Vector3D(-81.2, 0, 0) + Vector3D(78.6634, 0, 0) ==
-  Vector3D(-81.2 + 78.6634, 0, 0)` is True here and False in Python. Near
-  the edges they can differ outright:
-  `get_vector_angle` clamps the cosine to [-1, 1], so nearly parallel vectors
-  give 0 rather than NaN. In `make_unit_vector`, Python computes the squared
-  length in float32: with an `epsilon` below the vector's true length, a
-  vector whose squared length underflows to 0 (components below about
-  1e-23) comes back unchanged in Python but as a unit vector here, and one
-  just above that is normalized imprecisely in Python (`(1e-22, 0, 0)` gives
-  x≈1.0097 there, 1.0 here); a vector with a component above about 1.8e19
-  becomes a zero vector in Python (the squared length overflows), but a
-  unit vector here. `make_unit_vector(epsilon)` otherwise behaves as
-  LibCarla's `MakeUnitVector` on `Vector2D`, `Vector3D` and `Location`: a
-  vector of length <= `epsilon` (default `2.384185791015625e-07`, i.e.
-  2 * FLT_EPSILON) is returned unchanged.
+* **Float precision (issue #81).** As in LibCarla and the Python API,
+  `Vector3D`, `Location`, `Velocity`, `AngularVelocity`, `Acceleration`,
+  `Vector2D`, `Rotation` and `Quaternion` store float32: each field is
+  rounded to float32 on construction, on assignment and for every arithmetic
+  result, so `Location(0.1).x` is `0.10000000149011612`,
+  `Location(16777217).x` is `16777216.0` and `Vector3D(1e30) * 1e10` is
+  `inf`. The fields are Codon `float`s holding float32 values; reading them
+  costs nothing and the C ABI is unchanged. `+ - * /` (the scalar rounded to
+  float32 first, as LibCarla's `float` parameter), `length`,
+  `squared_length`, `dot`, `cross`, `distance*`, `make_unit_vector` and
+  `get_vector_angle`, and `Quaternion`'s `length`, `inverse`,
+  `unit_quaternion`, `*` and basis vectors, compute step by step in float32,
+  as LibCarla, and give the Python API's results bit for bit
+  (tests/compatibility/arithmetic_cases). `Quaternion(rotation)`,
+  `Quaternion.rotator`, `Rotation.get_normalized`, `Transform.transform` and
+  `transform_vector` use other formulas or double intermediates and round
+  only the result, so they can differ from the Python API in the low bits,
+  more for components near zero (issue #90). Double fields stay double, as
+  in LibCarla:
+  `GeoLocation`, the geo projections, `GeoEllipsoid`, `GeoOffsetTransform`
+  and `WorldSettings`' time steps. Other value types with `float` fields in
+  LibCarla (the controls, the physics controls, `WeatherParameters`, ...)
+  still store the double you set: they become float32 when sent to the
+  server, so `get_control().throttle` after setting `0.2` is
+  `0.2000000029802322`, and `==` compares them in float32.
 
 * **`==` / `!=` (issue #70)** follow LibCarla's `operator==` on every value
   type the Python API compares. Float fields compare exactly *in float32*, as
   LibCarla stores them: `Location(0.1) == Location(0.1 + 1e-12)` is `True`
-  although the doubles kept here differ. Double fields (`GeoLocation`, the geo
-  projections, `GeoEllipsoid`, `GeoOffsetTransform`, and `WorldSettings`'
-  `fixed_delta_seconds` and `max_substep_delta_time`) compare exactly. As in
+  (both store the same float32), as is `VehicleControl(throttle=0.1) ==
+  VehicleControl(throttle=0.1 + 1e-12)` although the doubles kept there
+  differ. Double fields (`GeoLocation`, the geo projections, `GeoEllipsoid`,
+  `GeoOffsetTransform`, and `WorldSettings`' `fixed_delta_seconds` and
+  `max_substep_delta_time`) compare exactly. As in
   LibCarla, some types compare less than every field. `Rotation`s are also
   equal when each pair of angles has `|a| + |b| == 180`, so
   `Rotation(90, 90, 90) == Rotation(-90, -90, -90)`. `Color` ignores alpha.
