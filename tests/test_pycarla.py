@@ -194,3 +194,44 @@ while got < frame:
     got = q.get(timeout=10)
 print('OK')
 """)
+
+
+_V2X = """
+other = world.spawn_actor(lib.find('vehicle.audi.tt'), carla.Transform(carla.Location(12.0, 0.0, 0.5)))
+q = queue.Queue()
+# Custom messages (smoke/test_v2x.py's path).
+sender, receiver = sensor('sensor.other.v2x_custom'), world.spawn_actor(
+    lib.find('sensor.other.v2x_custom'), carla.Transform(), attach_to=other)
+receiver.listen(lambda event: q.put([m.get() for m in event]))
+sender.send('hello v2x')
+world.tick()
+got = q.get(timeout=10)
+p = got[0]['Message']['Message']
+assert p == {'DataSize': 9, 'MaxDataSize': 100, 'Bytes': b'hello v2x'}, p
+header = got[0]['Message']['Header']
+assert header == {'Protocol Version': 2, 'Message ID': 'CUSTOM', 'Station ID': vehicle.id}, header
+assert got[0]['Power'] == 21.5, got[0]['Power']
+receiver.stop()
+# A CAM: the nested dict, display strings included.
+bp = lib.find('sensor.other.v2x')
+bp.set_attribute('fixed_rate', 'true')
+tx = world.spawn_actor(bp, carla.Transform(), attach_to=vehicle)
+rx = world.spawn_actor(bp, carla.Transform(), attach_to=other)
+rx.listen(lambda event: q.put([m.get() for m in event]))
+world.tick()
+cam = q.get(timeout=10)[0]
+assert cam['Message']['Header']['Message ID'] == 'CAM', cam
+basic = cam['Message']['Message']['CAM Parameters']['Basic Container']
+assert basic['Station Type'] == 'Passenger Car', basic
+assert set(basic['Reference Position']) == {'Latitude', 'Longitude', 'Position Confidence Eliipse'}
+rx.stop()
+print('OK')
+"""
+
+
+def test_v2x_get_returns_the_python_api_dicts(pycarla):
+    """Issue #101: get() of a received custom message and of a CAM builds the
+    Python API's nested dicts (the display-name tables used to be
+    uninitialised in the extension, and get() crashed)."""
+    _run_ok(pycarla, _SETUP % 0 + _V2X)
+
