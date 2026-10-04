@@ -295,6 +295,36 @@ uv run pytest tests/test_integration.py -s
 CARLA_PYTHON=/path/to/venv-with-carla/bin/python uv run python tests/compatibility/compare.py
 ```
 
+### CARLA's own PythonAPI tests
+
+CARLA's test suite (`PythonAPI/test`: `unit`, `smoke`, `API` and the
+top-level files; the few that need a map no ue5-dev package ships run as
+ports under `tests/upstream/ported`, and interactive scripts are skipped)
+runs against typesafe_carla, from the CARLA commit
+the native library was built from, in two modes:
+
+- **cpython**: the tests run unmodified under CPython, with `import carla`
+  being typesafe_carla built as a CPython extension (`tools/pycarla.py`,
+  `codon build --pyext`);
+- **codon**: the tests are converted mechanically and compiled with
+  `typesafe-codon`.
+
+[tests/upstream/expectations.yaml](tests/upstream/expectations.yaml)
+records the expected result per mode, CARLA ref and test. pytest and CI fail
+on an unexpected failure and on an unexpected pass, so that list only shrinks.
+[tests/upstream/GAPS.md](tests/upstream/GAPS.md) groups the failures by root
+cause, separating missing typesafe_carla features from harness and Codon
+limits. `unit` needs no server and runs in pytest and in CI: codon mode on
+every `libcarla` leg, cpython mode on one leg per CARLA ref. The others run
+only with `TSC_CARLA_PORT` set. See
+[tests/upstream/README.md](tests/upstream/README.md).
+
+```sh
+uv run python -m tools.upstream_tests --mode all --suite unit -v
+TSC_CARLA_HOST=127.0.0.1 TSC_CARLA_PORT=2000 TYPESAFE_CARLA_BUILD_DIR=build-carla \
+  uv run python -m tools.upstream_tests --mode all --suite smoke --suite API --suite top -j1 -v
+```
+
 ## Quick start (development)
 
 Requirements: Linux x86_64, a C++20 compiler (GCC ≥ 11; CI builds with the default GCC of
@@ -376,6 +406,10 @@ tests/native/              C ABI tests (ctest)
 tests/compile/pass|fail/   programs that must / must not compile
 tests/compile/strict_fail/ programs that compile only outside strict mode
 tests/unit/                Codon runtime tests against the mock backend
+tests/upstream/            CARLA's own PythonAPI tests: expectations, unittest shim
+tools/upstream_tests.py    runs those tests (cpython and codon modes), writes GAPS.md
+tools/pycarla.py           typesafe_carla as a CPython package (codon --pyext), for them
+compat/pycarla/            its Python runtime and pruned-overload cache
 examples/                  example programs
 ```
 

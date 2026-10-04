@@ -1,0 +1,556 @@
+{
+ "files": {
+  "unit/test_client.py": {
+   "file_error": "unit/test_client.py:12: no module named 'subprocess'",
+   "tests": {
+    "TestClient.test_client_version": [
+     "compile",
+     "unit/test_client.py:12: no module named 'subprocess'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "unit/test_transform.py": {
+   "file_error": null,
+   "tests": {
+    "TestLocation.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestLocation.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestRotation.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestRotation.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_values": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_print": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_translation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_rotation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_rotation_and_translation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_list_rotation_and_translation_location": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_list_rotation_and_translation_vector3d": [
+     "pass",
+     ""
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "unit/test_vehicle.py": {
+   "file_error": null,
+   "tests": {
+    "TestVehicleControl.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestVehicleControl.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestVehiclePhysicsControl.test_named_args": [
+     "compile",
+     "unit/test_vehicle.py:44: 'List[float]' does not match expected type 'List[int]'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_blueprint.py": {
+   "file_error": null,
+   "tests": {
+    "TestBlueprintLibrary.test_blueprint_ids": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_client.py": {
+   "file_error": null,
+   "tests": {
+    "TestClient.test_version": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_collision_determinism.py": {
+   "file_error": "smoke/test_collision_determinism.py:12: no module named 'filecmp'",
+   "tests": {
+    "TestCollisionDeterminism.test_two_cars": [
+     "compile",
+     "smoke/test_collision_determinism.py:12: no module named 'filecmp'"
+    ],
+    "TestCollisionDeterminism.test_three_cars": [
+     "compile",
+     "smoke/test_collision_determinism.py:12: no module named 'filecmp'"
+    ],
+    "TestCollisionDeterminism.test_car_bike": [
+     "compile",
+     "smoke/test_collision_determinism.py:12: no module named 'filecmp'"
+    ],
+    "TestCollisionDeterminism.test_car_walker": [
+     "compile",
+     "smoke/test_collision_determinism.py:12: no module named 'filecmp'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_collision_sensor.py": {
+   "file_error": null,
+   "tests": {
+    "TestCollisionSensor.test_single_car": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_determinism.py": {
+   "file_error": "smoke/test_determinism.py:7: cannot import name 'random' from 'numpy.__init__'",
+   "tests": {
+    "TestDeterminism.test_determ": [
+     "compile",
+     "smoke/test_determinism.py:7: cannot import name 'random' from 'numpy.__init__'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_lidar.py": {
+   "file_error": "smoke/test_lidar.py:14: no module named 'enum'",
+   "tests": {
+    "TestSyncLidar.test_lidar_point_count": [
+     "compile",
+     "smoke/test_lidar.py:14: no module named 'enum'"
+    ],
+    "TestSyncLidar.test_semlidar_point_count": [
+     "compile",
+     "smoke/test_lidar.py:14: no module named 'enum'"
+    ],
+    "TestASyncLidar.test_lidar_point_count": [
+     "compile",
+     "smoke/test_lidar.py:14: no module named 'enum'"
+    ],
+    "TestASyncLidar.test_semlidar_point_count": [
+     "compile",
+     "smoke/test_lidar.py:14: no module named 'enum'"
+    ],
+    "TestCompareLidars.test_lidar_comparison": [
+     "compile",
+     "smoke/test_lidar.py:14: no module named 'enum'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_map.py": {
+   "file_error": null,
+   "tests": {
+    "TestMap.test_reload_world": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ],
+    "TestMap.test_load_all_maps": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_props_loading.py": {
+   "file_error": null,
+   "tests": {
+    "TestPropsLoading.test_spawn_loaded_props": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_sensor_determinism.py": {
+   "file_error": "smoke/test_sensor_determinism.py:12: no module named 'filecmp'",
+   "tests": {
+    "TestSensorDeterminism.test_all_sensors": [
+     "compile",
+     "smoke/test_sensor_determinism.py:12: no module named 'filecmp'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_sensor_tick_time.py": {
+   "file_error": null,
+   "tests": {
+    "TestSensorTickTime.test_sensor_tick_time": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_snapshot.py": {
+   "file_error": null,
+   "tests": {
+    "TestSnapshot.test_spawn_points": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_spawnpoints.py": {
+   "file_error": null,
+   "tests": {
+    "TestSpawnpoints.test_spawn_points": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_streamming.py": {
+   "file_error": null,
+   "tests": {
+    "TestStreamming.test_multistream": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_sync.py": {
+   "file_error": "smoke/test_sync.py:14: no module named 'queue'",
+   "tests": {
+    "TestSynchronousMode.test_reloading_map": [
+     "compile",
+     "smoke/test_sync.py:14: no module named 'queue'"
+    ],
+    "TestSynchronousMode.test_sensor_transform_on_synchronous_mode": [
+     "compile",
+     "smoke/test_sync.py:14: no module named 'queue'"
+    ],
+    "TestSynchronousMode.test_apply_batch_sync": [
+     "compile",
+     "smoke/test_sync.py:14: no module named 'queue'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_vehicle_physics.py": {
+   "file_error": "smoke/test_vehicle_physics.py:14: no module named 'enum'",
+   "tests": {
+    "TestApplyVehiclePhysics.test_single_physics_control": [
+     "compile",
+     "smoke/test_vehicle_physics.py:14: no module named 'enum'"
+    ],
+    "TestApplyVehiclePhysics.test_multiple_physics_control": [
+     "compile",
+     "smoke/test_vehicle_physics.py:14: no module named 'enum'"
+    ],
+    "TestVehicleFriction.test_vehicle_zero_friction": [
+     "compile",
+     "smoke/test_vehicle_physics.py:14: no module named 'enum'"
+    ],
+    "TestVehicleFriction.test_vehicle_friction_volume": [
+     "compile",
+     "smoke/test_vehicle_physics.py:14: no module named 'enum'"
+    ],
+    "TestVehicleFriction.test_vehicle_friction_values": [
+     "compile",
+     "smoke/test_vehicle_physics.py:14: no module named 'enum'"
+    ],
+    "TestVehicleTireConfig.test_vehicle_wheel_collision": [
+     "compile",
+     "smoke/test_vehicle_physics.py:14: no module named 'enum'"
+    ],
+    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": [
+     "compile",
+     "smoke/test_vehicle_physics.py:14: no module named 'enum'"
+    ],
+    "TestStickyControl.test_default": [
+     "compile",
+     "smoke/test_vehicle_physics.py:14: no module named 'enum'"
+    ],
+    "TestStickyControl.test_true": [
+     "compile",
+     "smoke/test_vehicle_physics.py:14: no module named 'enum'"
+    ],
+    "TestStickyControl.test_false": [
+     "compile",
+     "smoke/test_vehicle_physics.py:14: no module named 'enum'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "smoke/test_world.py": {
+   "file_error": null,
+   "tests": {
+    "TestWorld.test_fixed_delta_seconds": [
+     "compile",
+     "smoke/__init__.py:28: 'SmokeTest' object has no attribute 'testing_address'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/prop_control.py": {
+   "file_error": "API/prop_control.py:68: no module named 'argparse'",
+   "tests": {
+    "<script>": [
+     "compile",
+     "API/prop_control.py:68: no module named 'argparse'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/spawn_actor.py": {
+   "file_error": "API/spawn_actor.py:8: no module named 'argparse'",
+   "tests": {
+    "<script>": [
+     "compile",
+     "API/spawn_actor.py:8: no module named 'argparse'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/test_apply_textures.py": {
+   "file_error": "API/test_apply_textures.py:14: no module named 'argparse'",
+   "tests": {
+    "TestApplyTextures.test_apply_textures": [
+     "compile",
+     "API/test_apply_textures.py:14: no module named 'argparse'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/test_collision.py": {
+   "file_error": "API/test_collision.py:5: no module named 'argparse'",
+   "tests": {
+    "TestCollision.test_collision_against_side_of_car": [
+     "compile",
+     "API/test_collision.py:5: no module named 'argparse'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/test_no_rendering_mode.py": {
+   "file_error": "API/test_no_rendering_mode.py:9: no module named 'glob'",
+   "tests": {
+    "TestNoRenderingMode.test_no_rendering_mode": [
+     "compile",
+     "API/test_no_rendering_mode.py:9: no module named 'glob'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/test_semantic_segmentation.py": {
+   "file_error": "API/test_semantic_segmentation.py:14: no module named 'argparse'",
+   "tests": {
+    "TestSemanticSegmentation.test_semantic_segmentation": [
+     "compile",
+     "API/test_semantic_segmentation.py:14: no module named 'argparse'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/test_sensor_recording.py": {
+   "file_error": "API/test_sensor_recording.py:9: no module named 'glob'",
+   "tests": {
+    "TestSensorRecording.test_gnss": [
+     "compile",
+     "API/test_sensor_recording.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_imu": [
+     "compile",
+     "API/test_sensor_recording.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_radar": [
+     "compile",
+     "API/test_sensor_recording.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_rgb": [
+     "compile",
+     "API/test_sensor_recording.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_depth": [
+     "compile",
+     "API/test_sensor_recording.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_instance_segmentation": [
+     "compile",
+     "API/test_sensor_recording.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_semantic_segmentation": [
+     "compile",
+     "API/test_sensor_recording.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_lidar": [
+     "compile",
+     "API/test_sensor_recording.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_semantic_lidar": [
+     "compile",
+     "API/test_sensor_recording.py:9: no module named 'glob'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/test_sensor_recording_fast.py": {
+   "file_error": "API/test_sensor_recording_fast.py:9: no module named 'glob'",
+   "tests": {
+    "TestSensorRecording.test_gnss": [
+     "compile",
+     "API/test_sensor_recording_fast.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_imu": [
+     "compile",
+     "API/test_sensor_recording_fast.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_radar": [
+     "compile",
+     "API/test_sensor_recording_fast.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_rgb": [
+     "compile",
+     "API/test_sensor_recording_fast.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_depth": [
+     "compile",
+     "API/test_sensor_recording_fast.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_instance_segmentation": [
+     "compile",
+     "API/test_sensor_recording_fast.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_semantic_segmentation": [
+     "compile",
+     "API/test_sensor_recording_fast.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_lidar": [
+     "compile",
+     "API/test_sensor_recording_fast.py:9: no module named 'glob'"
+    ],
+    "TestSensorRecording.test_semantic_lidar": [
+     "compile",
+     "API/test_sensor_recording_fast.py:9: no module named 'glob'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/test_spawn_vehicles.py": {
+   "file_error": null,
+   "tests": {
+    "TestVehiclesSpawnTest.test_vehicle_spawn": [
+     "not-run",
+     ""
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/test_spawn_walkers.py": {
+   "file_error": null,
+   "tests": {
+    "TestWalkersSpawn.test_walker_spawn": [
+     "not-run",
+     ""
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "API/test_sync_mode.py": {
+   "file_error": null,
+   "tests": {
+    "TestSyncMode.test_sync_mode_set_transform": [
+     "not-run",
+     ""
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "test_connection.py": {
+   "file_error": "test_connection.py:16: no module named 'argparse'",
+   "tests": {
+    "<script>": [
+     "compile",
+     "test_connection.py:16: no module named 'argparse'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "test_raycast_sensor.py": {
+   "file_error": "test_raycast_sensor.py:33: no module named 'argparse'",
+   "tests": {
+    "<script>": [
+     "compile",
+     "test_raycast_sensor.py:33: no module named 'argparse'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  },
+  "test_vehicle_physics.py": {
+   "file_error": "test_vehicle_physics.py:18: no module named 'argparse'",
+   "tests": {
+    "<script>": [
+     "compile",
+     "test_vehicle_physics.py:18: no module named 'argparse'"
+    ]
+   },
+   "sha": "ada75f920642e18cace0a9f85ecf9d4077ddb531",
+   "backend": "libcarla"
+  }
+ },
+ "ref": "0.10.0"
+}

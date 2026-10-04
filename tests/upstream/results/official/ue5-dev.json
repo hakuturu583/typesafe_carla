@@ -1,0 +1,1000 @@
+{
+ "files": {
+  "unit/test_boost_version.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestBoostInstallVersion.test_cmake_options_pins_correct_version": [
+     "pass",
+     ""
+    ],
+    "TestBoostInstallVersion.test_no_stale_boost_version_in_options": [
+     "pass",
+     ""
+    ],
+    "TestNumpyRequirementsCeiling.test_no_numpy_2_ceiling_in_requirements": [
+     "pass",
+     ""
+    ],
+    "TestCarlaImports.test_carla_imports": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "unit/test_client.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestClient.test_client_version": [
+     "error",
+     "subprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
+    ]
+   },
+   "traces": {
+    "TestClient.test_client_version": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/unit/test_client.py\", line 19, in test_client_version\n    out = check_output(['git', 'describe', '--tags', '--dirty', '--always', ])\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/subprocess.py\", line 421, in check_output\n    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/subprocess.py\", line 526, in run\n    raise CalledProcessError(retcode, process.args,\nsubprocess.CalledProcessError: Command '['git', 'describe', '--tags', '--dirty', '--always']' returned non-zero exit status 128."
+   }
+  },
+  "unit/test_lidar_smoke_helpers.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestLidarSmokeHelpers.test_get_current_detection_points_is_instance_method": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "unit/test_numpy_compat.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestPropControlDvsDtype.test_uses_bool_underscore": [
+     "pass",
+     ""
+    ],
+    "TestPropControlDvsDtype.test_no_bare_np_bool": [
+     "pass",
+     ""
+    ],
+    "TestPropControlDvsDtype.test_no_np_matrix": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "unit/test_transform.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestLocation.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestLocation.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestRotation.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestRotation.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestVector.test_make_unit_vector_3d_no_argument": [
+     "pass",
+     ""
+    ],
+    "TestVector.test_make_unit_vector_3d_epsilon_keyword": [
+     "pass",
+     ""
+    ],
+    "TestVector.test_make_unit_vector_3d_zero_length": [
+     "pass",
+     ""
+    ],
+    "TestVector.test_make_unit_vector_2d_no_argument": [
+     "pass",
+     ""
+    ],
+    "TestVector.test_make_unit_vector_2d_epsilon_keyword": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_values": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_print": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_translation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_rotation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_rotation_and_translation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_list_rotation_and_translation_location": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_list_rotation_and_translation_vector3d": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_offset_transform": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_offset_transform_translation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_offset_transform_rotation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_offset_transform_and_rotation": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_offset_transform_equality": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_offset_none": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_with_offset": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_offset_setter": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_equality": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_constructor_3_args": [
+     "pass",
+     ""
+    ],
+    "TestTransform.test_geo_projection_utm_constructor_3_args_positional": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "unit/test_vehicle.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestVehicleControl.test_default_values": [
+     "pass",
+     ""
+    ],
+    "TestVehicleControl.test_named_args": [
+     "pass",
+     ""
+    ],
+    "TestVehiclePhysicsControl.test_named_args": [
+     "error",
+     "AttributeError: 'VehiclePhysicsControl' object has no attribute 'moi'"
+    ]
+   },
+   "traces": {
+    "TestVehiclePhysicsControl.test_named_args": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/unit/test_vehicle.py\", line 81, in test_named_args\n    self.assertTrue(abs(pc.moi - 1) <= error)\nAttributeError: 'VehiclePhysicsControl' object has no attribute 'moi'"
+   }
+  },
+  "smoke/test_actor_introspection.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestActorIntrospection.test_vehicle_components": [
+     "pass",
+     ""
+    ],
+    "TestActorIntrospection.test_vehicle_sockets_consistent": [
+     "pass",
+     ""
+    ],
+    "TestActorIntrospection.test_walker_bones": [
+     "pass",
+     ""
+    ],
+    "TestActorIntrospection.test_component_not_found_raises": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_debug_clear.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestDebugClear.test_clear_debug_shape": [
+     "pass",
+     ""
+    ],
+    "TestDebugClear.test_clear_debug_string": [
+     "pass",
+     ""
+    ],
+    "TestDebugClear.test_clear_when_nothing_drawn": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_encoding_cameras.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestEncodingCameras.test_depth_camera_emits_stable_encoded_pixels": [
+     "pass",
+     ""
+    ],
+    "TestEncodingCameras.test_semantic_segmentation_emits_valid_labels": [
+     "pass",
+     ""
+    ],
+    "TestEncodingCameras.test_instance_segmentation_emits_unique_actor_ids": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_recorder.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestRecorder.test_record_replay_blueprint_id_round_trips": [
+     "pass",
+     ""
+    ],
+    "TestRecorder.test_record_survives_same_tick_actor_destroy": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_replay_no_actor_aliasing.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestReplayNoActorAliasing.test_replayed_actors_have_clean_state": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_traffic_manager_large_vehicle.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestTrafficManagerLargeVehicle.test_large_vehicle_autopilot_runs_without_nans": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_traffic_manager_sync_step.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestTrafficManagerSyncStep.test_synchronous_step_no_deadlock": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_v2x.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestV2X.test_custom_v2x_send_and_receive": [
+     "pass",
+     ""
+    ],
+    "TestV2X.test_custom_v2x_set_bytes_uses_buffer_byte_length": [
+     "pass",
+     ""
+    ],
+    "TestV2X.test_v2x_cam_generation": [
+     "pass",
+     ""
+    ],
+    "TestV2X.test_v2i_infrastructure_sensor_without_owner": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_vehicle_telemetry.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestVehicleTelemetry.test_get_telemetry_data_shape_and_values": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_walker_bounding_box.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestWalkerBoundingBox.test_walker_bounding_box_has_relative_offset": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "smoke/test_walker_navigation.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestWalkerNavigation.test_walker_ai_controller_routes_without_crash": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "API/prop_control.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "error",
+     "exit 1: RuntimeError: std::exception"
+    ]
+   },
+   "traces": {
+    "<script>": "  File \"API/prop_control.py\", line 1000, in game_loop\n    world = World(sim_world, hud, args)\n  File \"API/prop_control.py\", line 190, in __init__\n    self.restart()\n  File \"API/prop_control.py\", line 254, in restart\n    self.camera_manager = CameraManager(self.player, self.hud)\n  File \"API/prop_control.py\", line 873, in __init__\n    bp.set_attribute(attr_name, attr_value)\nRuntimeError: std::exception\nWARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 30976 (sensor.other.collision) \nWARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 30977 (sensor.other.gnss) \nWARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 30978 (sensor.other.imu)"
+   }
+  },
+  "API/spawn_actor.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "error",
+     "exit 2: spawn_actor.py: error: the following arguments are required: -b/--blueprint"
+    ]
+   },
+   "traces": {
+    "<script>": "usage: spawn_actor.py [-h] [--host HOST] [-p PORT] -b BLUEPRINT\n                      [-t TRANSFORM [TRANSFORM ...]] [--sync]\nspawn_actor.py: error: the following arguments are required: -b/--blueprint"
+   }
+  },
+  "API/test_apply_textures.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestApplyTextures.test_apply_textures": [
+     "timeout",
+     "timed out after 900 s"
+    ]
+   }
+  },
+  "API/test_no_rendering_mode.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestNoRenderingMode.test_no_rendering_mode": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   },
+   "traces": {
+    "TestNoRenderingMode.test_no_rendering_mode": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_no_rendering_mode.py\", line 1111, in test_no_rendering_mode\n    world.start(hud)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_no_rendering_mode.py\", line 754, in start\n    self.world = self.client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
+   }
+  },
+  "API/test_semantic_segmentation.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSemanticSegmentation.test_semantic_segmentation": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "API/test_sensor_recording.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSensorRecording.test_gnss": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_imu": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_radar": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_rgb": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_depth": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_instance_segmentation": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_semantic_segmentation": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_lidar": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_semantic_lidar": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   },
+   "traces": {
+    "TestSensorRecording.test_gnss": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 466, in test_gnss\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_imu": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 473, in test_imu\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_radar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 480, in test_radar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_rgb": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 487, in test_rgb\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_depth": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 495, in test_depth\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_instance_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 504, in test_instance_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_semantic_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 512, in test_semantic_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 520, in test_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_semantic_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 527, in test_semantic_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
+   }
+  },
+  "API/test_sensor_recording_fast.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSensorRecording.test_gnss": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_imu": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_radar": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_rgb": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_depth": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_instance_segmentation": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_semantic_segmentation": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_lidar": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSensorRecording.test_semantic_lidar": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   },
+   "traces": {
+    "TestSensorRecording.test_gnss": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 450, in test_gnss\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_imu": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 457, in test_imu\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_radar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 464, in test_radar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_rgb": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 471, in test_rgb\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_depth": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 479, in test_depth\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_instance_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 488, in test_instance_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_semantic_segmentation": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 496, in test_semantic_segmentation\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 504, in test_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception",
+    "TestSensorRecording.test_semantic_lidar": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 511, in test_semantic_lidar\n    scenario = Scenario(self)\n  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sensor_recording_fast.py\", line 50, in __init__\n    self.world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
+   }
+  },
+  "API/test_spawn_vehicles.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestVehiclesSpawnTest.test_vehicle_spawn": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   },
+   "traces": {
+    "TestVehiclesSpawnTest.test_vehicle_spawn": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_spawn_vehicles.py\", line 14, in test_vehicle_spawn\n    world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
+   }
+  },
+  "API/test_spawn_walkers.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestWalkersSpawn.test_walker_spawn": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   },
+   "traces": {
+    "TestWalkersSpawn.test_walker_spawn": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_spawn_walkers.py\", line 13, in test_walker_spawn\n    world = client.load_world('Town10HD_Opt')\nRuntimeError: std::exception"
+   }
+  },
+  "API/test_sync_mode.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSyncMode.test_sync_mode_set_transform": [
+     "fail",
+     "AssertionError: -64.64484405517578 != 141.0"
+    ]
+   },
+   "traces": {
+    "TestSyncMode.test_sync_mode_set_transform": "  File \"/mnt/sata_ssd/tsc-work/build-ue5srv/upstream-tests/0a5ce0d5b4952bd8294a163c12d49f197bdb2aba/PythonAPI/test/API/test_sync_mode.py\", line 56, in test_sync_mode_set_transform\n    self.assertEqual(transform.location.x, new_tran.location.x)\nAssertionError: -64.64484405517578 != 141.0"
+   }
+  },
+  "test_connection.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "test_ground_truth.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "error",
+     "exit 1: ModuleNotFoundError: No module named 'cv2'"
+    ]
+   },
+   "traces": {
+    "<script>": "  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/runpy.py\", line 289, in run_path\n    return _run_module_code(code, init_globals, run_name,\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/runpy.py\", line 96, in _run_module_code\n    _run_code(code, mod_globals, init_globals,\n  File \"/home/masaya/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"test_ground_truth.py\", line 11, in <module>\n    import cv2\nModuleNotFoundError: No module named 'cv2'"
+   }
+  },
+  "test_raycast_sensor.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "skip",
+     "an interactive script (a pygame loop; the official module also runs until the time-out)"
+    ]
+   }
+  },
+  "ported/API/test_collision.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestCollision.test_collision_against_side_of_car": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/smoke/test_blueprint.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestBlueprintLibrary.test_blueprint_ids": [
+     "fail",
+     "AssertionError: None is not true"
+    ]
+   },
+   "traces": {
+    "TestBlueprintLibrary.test_blueprint_ids": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_blueprint.py\", line 29, in test_blueprint_ids\n    self.assertTrue(rgx.match(bp.id))\nAssertionError: None is not true"
+   }
+  },
+  "ported/smoke/test_client.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestClient.test_version": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/smoke/test_collision_determinism.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestCollisionDeterminism.test_two_cars": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestCollisionDeterminism.test_three_cars": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestCollisionDeterminism.test_car_bike": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestCollisionDeterminism.test_car_walker": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   },
+   "traces": {
+    "TestCollisionDeterminism.test_two_cars": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 146, in init_scene\n    super(TwoCarsHighSpeedCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception",
+    "TestCollisionDeterminism.test_three_cars": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 180, in init_scene\n    super(ThreeCarsSlowSpeedCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception",
+    "TestCollisionDeterminism.test_car_bike": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 216, in init_scene\n    super(CarBikeCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception",
+    "TestCollisionDeterminism.test_car_walker": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 133, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 250, in init_scene\n    super(CarWalkerCollision, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 56, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_collision_determinism.py\", line 87, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception"
+   }
+  },
+  "ported/smoke/test_collision_sensor.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestCollisionSensor.test_single_car": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/smoke/test_determinism.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestDeterminism.test_determ": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   },
+   "traces": {
+    "TestDeterminism.test_determ": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_determinism.py\", line 127, in test_determ\n    self.client.reload_world(False)\nRuntimeError: std::exception"
+   }
+  },
+  "ported/smoke/test_geoconversion.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestGeoLocationConversion.test_geo_reference": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_geo_projection": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_location_to_geo_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_geo_to_location_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_zero_conversion": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_relative_offset_preserved": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_tm_location_to_geo_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_tm_geo_to_location_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_utm_north_location_to_geo_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_utm_north_geo_to_location_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_utm_south_location_to_geo_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_utm_south_geo_to_location_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_webmerc_location_to_geo_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_webmerc_geo_to_location_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_lcc_location_to_geo_and_back": [
+     "pass",
+     ""
+    ],
+    "TestGeoLocationConversion.test_lcc_geo_to_location_and_back": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/smoke/test_lidar.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSyncLidar.test_lidar_point_count": [
+     "pass",
+     ""
+    ],
+    "TestSyncLidar.test_semlidar_point_count": [
+     "pass",
+     ""
+    ],
+    "TestASyncLidar.test_lidar_point_count": [
+     "pass",
+     ""
+    ],
+    "TestASyncLidar.test_semlidar_point_count": [
+     "pass",
+     ""
+    ],
+    "TestCompareLidars.test_lidar_comparison": [
+     "error",
+     "TypeError: 'NoneType' object is not subscriptable"
+    ]
+   },
+   "traces": {
+    "TestCompareLidars.test_lidar_comparison": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_lidar.py\", line 232, in test_lidar_comparison\n    self.assertEqual(data_sem_lidar[0], data_lidar_nod[0], \"The frame numbers of LiDAR and SemLiDAR do not match.\")\nTypeError: 'NoneType' object is not subscriptable"
+   }
+  },
+  "ported/smoke/test_map.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestMap.test_reload_world": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestMap.test_load_all_maps": [
+     "pass",
+     ""
+    ]
+   },
+   "traces": {
+    "TestMap.test_reload_world": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_map.py\", line 24, in test_reload_world\n    world = self.client.reload_world()\nRuntimeError: std::exception"
+   }
+  },
+  "ported/smoke/test_props_loading.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestPropsLoading.test_spawn_loaded_props": [
+     "fail",
+     "AssertionError: 'Unknown error while trying to spawn actor' is not false"
+    ]
+   },
+   "traces": {
+    "TestPropsLoading.test_spawn_loaded_props": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_props_loading.py\", line 42, in test_spawn_loaded_props\n    self.assertFalse(response.error)\nAssertionError: 'Unknown error while trying to spawn actor' is not false"
+   }
+  },
+  "ported/smoke/test_sensor_determinism.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSensorDeterminism.test_all_sensors": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   },
+   "traces": {
+    "TestSensorDeterminism.test_all_sensors": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 139, in run_simulation\n    self.init_scene(prefix, run_settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 214, in init_scene\n    super(SpawnAllRaycastSensors, self).init_scene(prefix, settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 55, in init_scene\n    self.reload_world(settings, spectator_tr)\n  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_determinism.py\", line 95, in reload_world\n    self.client.reload_world(False)\nRuntimeError: std::exception"
+   }
+  },
+  "ported/smoke/test_sensor_tick_time.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSensorTickTime.test_sensor_tick_time": [
+     "fail",
+     "AssertionError: 0 != 3 :"
+    ]
+   },
+   "traces": {
+    "TestSensorTickTime.test_sensor_tick_time": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sensor_tick_time.py\", line 74, in test_sensor_tick_time\n    self.assertEqual(sensor.num_ticks, num_sensor_ticks,\nAssertionError: 0 != 3 : \n\n sensor.other.v2x_custom does not match tick count"
+   }
+  },
+  "ported/smoke/test_snapshot.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSnapshot.test_spawn_points": [
+     "error",
+     "RuntimeError: std::exception"
+    ]
+   },
+   "traces": {
+    "TestSnapshot.test_spawn_points": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_snapshot.py\", line 23, in test_spawn_points\n    self.world = self.client.reload_world()\nRuntimeError: std::exception"
+   }
+  },
+  "ported/smoke/test_spawnpoints.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSpawnpoints.test_spawn_points": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/smoke/test_streamming.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {}
+  },
+  "ported/smoke/test_sync.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestSynchronousMode.test_reloading_map": [
+     "error",
+     "RuntimeError: std::exception"
+    ],
+    "TestSynchronousMode.test_sensor_transform_on_synchronous_mode": [
+     "fail",
+     "AssertionError: 10 != 0 :"
+    ],
+    "TestSynchronousMode.test_apply_batch_sync": [
+     "fail",
+     "AssertionError: 4631741 != 4631742 : Something has failed with the apply_batch_sync. These frames should be equal: 4631741 4631742"
+    ]
+   },
+   "traces": {
+    "TestSynchronousMode.test_reloading_map": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sync.py\", line 37, in test_reloading_map\n    self.world = self.client.reload_world()\nRuntimeError: std::exception",
+    "TestSynchronousMode.test_sensor_transform_on_synchronous_mode": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sync.py\", line 119, in test_sensor_transform_on_synchronous_mode\n    self.assertEqual(\nAssertionError: 10 != 0 : \nQueue sensor.lidar.ray_castoversized",
+    "TestSynchronousMode.test_apply_batch_sync": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_sync.py\", line 180, in test_apply_batch_sync\n    self.assertEqual(a_t0, a_t1, \"Something has failed with the apply_batch_sync. These frames should be equal: %d %d\" % (a_t0, a_t1))\nAssertionError: 4631741 != 4631742 : Something has failed with the apply_batch_sync. These frames should be equal: 4631741 4631742"
+   }
+  },
+  "ported/smoke/test_vehicle_physics.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestVehicleFriction.test_vehicle_zero_friction": [
+     "fail",
+     "AssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]"
+    ],
+    "TestVehicleFriction.test_vehicle_friction_volume": [
+     "pass",
+     ""
+    ],
+    "TestVehicleFriction.test_vehicle_friction_values": [
+     "pass",
+     ""
+    ],
+    "TestVehicleTireConfig.test_vehicle_wheel_collision": [
+     "fail",
+     "AssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]"
+    ],
+    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": [
+     "fail",
+     "AssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]"
+    ],
+    "TestStickyControl.test_default": [
+     "pass",
+     ""
+    ],
+    "TestStickyControl.test_true": [
+     "pass",
+     ""
+    ],
+    "TestStickyControl.test_false": [
+     "pass",
+     ""
+    ]
+   },
+   "traces": {
+    "TestVehicleFriction.test_vehicle_zero_friction": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 265, in test_vehicle_zero_friction\n    self.fail(\"%s: Velocities are not equal after initialization. Ref: %.3f -> [%.3f, %.3f]\"\nAssertionError: vehicle.taxi.ford: Velocities are not equal after initialization. Ref: 27.778 -> [27.599, 27.764]",
+    "TestVehicleTireConfig.test_vehicle_wheel_collision": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 525, in test_vehicle_wheel_collision\n    self.fail(\"%s: Velocities are not equal after simulation. [%.3f, %.3f]\"\nAssertionError: vehicle.taxi.ford: Velocities are not equal after simulation. [-0.807, -2.364]",
+    "TestVehicleTireConfig.test_vehicle_tire_long_stiff": "  File \"/mnt/sata_ssd/tsc-work/wt-66/tests/upstream/ported/smoke/test_vehicle_physics.py\", line 589, in test_vehicle_tire_long_stiff\n    self.fail(\"%s: Longitudinal stiffness test failed, check that please. Veh00: [%f] Veh01: [%f]\"\nAssertionError: vehicle.firetruck.actors: Longitudinal stiffness test failed, check that please. Veh00: [29.732941] Veh01: [24.114944]"
+   }
+  },
+  "ported/smoke/test_world.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "TestWorld.test_fixed_delta_seconds": [
+     "pass",
+     ""
+    ]
+   }
+  },
+  "ported/test_vehicle_physics.py": {
+   "sha": "0a5ce0d5b4952bd8294a163c12d49f197bdb2aba",
+   "backend": "libcarla",
+   "file_error": null,
+   "tests": {
+    "<script>": [
+     "pass",
+     ""
+    ]
+   }
+  }
+ },
+ "ref": "ue5-dev"
+}

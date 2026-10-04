@@ -1,0 +1,61 @@
+# Ported from CARLA's PythonAPI/test/smoke/test_map.py at carla-simulator/carla@0a5ce0d5b4952bd8294a163c12d49f197bdb2aba
+# by tools/port_upstream_tests.py (typesafe_carla issue #80): the original needs a map
+# (Town03 / Town05 / Town01) that no ue5-dev package ships. Do not edit by hand:
+# change the rules there and regenerate. Changes:
+#   - test_load_all_maps also skips the maps in UNLOADABLE_MAPS (RoadgenCross), which the ue5-dev server lists but cannot load, with the official module too: its OpenDRIVE does not parse
+#   - otherwise copied so that `from . import SmokeTest` uses the ported base
+#
+# Copyright (c) 2026 Computer Vision Center (CVC) at the Universitat Autonoma de
+# Barcelona (UAB).
+#
+# This work is licensed under the terms of the MIT license.
+# For a copy, see <https://opensource.org/licenses/MIT>.
+
+import carla
+import random
+
+from . import SmokeTest, UNLOADABLE_MAPS
+import time
+
+class TestMap(SmokeTest):
+    def test_reload_world(self):
+        print("TestMap.test_reload_world")
+        map_name = self.client.get_world().get_map().name
+        world = self.client.reload_world()
+        self.assertEqual(map_name, world.get_map().name)
+
+    def test_load_all_maps(self):
+        print("TestMap.test_load_all_maps")
+        map_names = list(self.client.get_available_maps())
+        random.shuffle(map_names)
+        for map_name in map_names:
+            # ignore empty or large maps by now
+            if map_name != '/Game/Carla/Maps/BaseMap/BaseMap' and map_name != '/Game/Carla/Maps/Town11/Town11' and map_name != '/Game/Carla/Maps/Town12/Town12' \
+                    and map_name.split('/')[-1] not in UNLOADABLE_MAPS:
+                world = self.client.load_world(map_name)
+                # workaround: give time to UE4 to clean memory after loading (old assets)
+                time.sleep(5)
+                m = world.get_map()
+                self.assertEqual(map_name.split('/')[-1], m.name.split('/')[-1])
+                self._check_map(m)
+
+    def _check_map(self, m):
+        for spawn_point in m.get_spawn_points():
+            waypoint = m.get_waypoint(spawn_point.location, project_to_road=False)
+            self.assertIsNotNone(waypoint)
+        topology = m.get_topology()
+        self.assertGreater(len(topology), 0)
+        waypoints = list(m.generate_waypoints(2))
+        self.assertGreater(len(waypoints), 0)
+        random.shuffle(waypoints)
+        for waypoint in waypoints[:200]:
+            for _ in range(0, 20):
+                self.assertGreaterEqual(waypoint.lane_width, 0.0)
+                _ = waypoint.get_right_lane()
+                _ = waypoint.get_left_lane()
+                next_waypoints = waypoint.next(4)
+                if not next_waypoints:
+                    break
+                waypoint = random.choice(next_waypoints)
+        _ = m.transform_to_geolocation(carla.Location())
+        self.assertTrue(str(m.to_opendrive()))
