@@ -416,10 +416,15 @@ codon:
       TestBlueprintLibrary.test_blueprint_ids: 'xfail: ue5-dev ships blueprint id blueprint.trafficlightexample, which has two dot-separated parts, not the three the test expects (the official module fails the same way)'
     ported/smoke/test_client.py:
       TestClient.test_version: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
-    ported/smoke/test_collision_determinism.py: 'xfail: compile: ported/smoke/test_collision_determinism.py:19: no module named ''filecmp'''
+    ported/smoke/test_collision_determinism.py:
+      TestCollisionDeterminism.test_two_cars: 'xfail: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
+      TestCollisionDeterminism.test_three_cars: 'xfail: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
+      TestCollisionDeterminism.test_car_bike: 'xfail: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
+      TestCollisionDeterminism.test_car_walker: 'xfail: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
     ported/smoke/test_collision_sensor.py:
       TestCollisionSensor.test_single_car: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
-    ported/smoke/test_determinism.py: 'xfail: compile: ported/smoke/test_determinism.py:13: cannot import name ''random'' from ''numpy.__init__'''
+    ported/smoke/test_determinism.py:
+      TestDeterminism.test_determ: 'xfail: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
     ported/smoke/test_geoconversion.py:
       TestGeoLocationConversion.test_geo_reference: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
       TestGeoLocationConversion.test_geo_projection: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
@@ -443,7 +448,8 @@ codon:
       TestMap.test_load_all_maps: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
     ported/smoke/test_props_loading.py:
       TestPropsLoading.test_spawn_loaded_props: 'xfail: a static prop fails to spawn on ue5-dev (''Unknown error''; the official module fails the same way)'
-    ported/smoke/test_sensor_determinism.py: 'xfail: compile: ported/smoke/test_sensor_determinism.py:18: no module named ''filecmp'''
+    ported/smoke/test_sensor_determinism.py:
+      TestSensorDeterminism.test_all_sensors: 'xfail: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
     ported/smoke/test_sensor_tick_time.py:
       TestSensorTickTime.test_sensor_tick_time: 'xfail: sensors with sensor_tick deliver no data on this server (the official module fails the same way)'
     ported/smoke/test_snapshot.py:
@@ -452,8 +458,12 @@ codon:
       TestSpawnpoints.test_spawn_points: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
     ported/smoke/test_streamming.py:
       TestStreamming.test_multistream: 'skip: extra clients with wait_for_tick intermittently hang on this server (the official module timed out; a typesafe run passed)'
-    ported/smoke/test_sync.py: 'xfail: compile: ported/smoke/test_sync.py:21: no module named ''queue'''
-    ported/smoke/test_vehicle_physics.py: 'xfail: compile: ported/smoke/test_vehicle_physics.py:22: no module named ''enum'''
+    ported/smoke/test_sync.py:
+      TestSynchronousMode.test_reloading_map: 'xfail: needs reload_world, which fails on the ue5-dev server build (OpenDRIVE parse error; the official module too)'
+    ported/smoke/test_vehicle_physics.py:
+      TestVehicleFriction.test_vehicle_zero_friction: 'xfail: physics on this ue5-dev server: the official module fails it too, with vehicle.taxi.ford''s velocities after initialisation [27.599, 27.764] against the 27.778 reference'
+      TestVehicleTireConfig.test_vehicle_wheel_collision: 'xfail: physics on this ue5-dev server: the official module fails it too, with vehicle.taxi.ford''s two velocities after the simulation unequal, [-0.807, -2.364]'
+      TestVehicleTireConfig.test_vehicle_tire_long_stiff: 'xfail: physics on this ue5-dev server: the official module fails it too; two identical vehicle.firetruck.actors side by side at full throttle drive 29.73 m and 24.11 m (the test needs the second to go at least as far)'
     ported/smoke/test_world.py:
       TestWorld.test_fixed_delta_seconds: 'xfail: compile: ported/smoke/__init__.py:35: ''SmokeTest'' object has no attribute ''testing_address'''
     ported/test_vehicle_physics.py: 'xfail: compile: ported/test_vehicle_physics.py:25: no module named ''argparse'''

@@ -100,6 +100,9 @@ MEMORYVIEWS = ["RawData"]
 # command.codon resolves that at compile time). The wrapper takes the id as an
 # int; the runtime turns `<x>=` into `<x>_id=` and an Actor into its id.
 # A target in OPTIONAL_TARGETS may also be left out (SpawnActor's parent).
+# Keys of the Python API's V2X dicts whose value is bytes (typesafe_carla:
+# a str of the raw bytes).
+BYTES_KEYS = {"Bytes"}
 MISSING = "_MISSING"
 # Parameter names an exported function must not have: Codon's exporter
 # (wrap_multiple in python.codon) realizes the library call with the
@@ -149,13 +152,26 @@ class Cls:
     classvars: dict[str, str] = field(default_factory=dict)
 
 
+def _strip_class_generics(line: str) -> str:
+    """`class C[M, w: Static[str]]:` -> `class C:` (brackets may nest)."""
+    m = re.match(r"^class \w+\[", line)
+    if not m:
+        return line
+    depth, i = 0, m.end() - 1
+    for i in range(m.end() - 1, len(line)):
+        depth += {"[": 1, "]": -1}.get(line[i], 0)
+        if depth == 0:
+            break
+    return line[:m.end() - 1] + line[i + 1:]
+
+
 def _source(name: str) -> str:
     """A module's source, made parseable by Python's ast."""
     lines = []
     for line in (PACKAGE / f"{name}.codon").read_text().splitlines():
         if line.startswith("from C import"):
             line = ""
-        lines.append(re.sub(r"^(class \w+)\[[^\]]*\]", r"\1", line))
+        lines.append(_strip_class_generics(line))
     return "\n".join(lines)
 
 
@@ -246,9 +262,33 @@ class Inventory:
             if m not in SKIP_EXTEND_MODULES and node.name in self.classes:
                 self._members(self.classes[node.name], node, m)
         self.int_enums = self._int_enums(trees)
+        self.dict_views = self._dict_views(trees)
         self.public = [a.asname or a.name for node in trees["__init__"].body
                        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module != "_ffi"
                        for a in node.names]
+
+    @staticmethod
+    def _dict_views(trees: dict[str, ast.Module]) -> dict[str, tuple[str, list[str]]]:
+        """Classes standing for one of the Python API's dicts (V2X get(), issue
+        #85): a `__getitem__(self, key: Static[str])` comparing `key` with
+        literal strings. name -> (module, the keys, in order)."""
+        views: dict[str, tuple[str, list[str]]] = {}
+        for m, tree in trees.items():
+            for node in tree.body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                for f in node.body:
+                    if not (isinstance(f, ast.FunctionDef) and f.name == "__getitem__"
+                            and any(_unparse(a.annotation) == "Static[str]" for a in f.args.args)):
+                        continue
+                    key = next(a.arg for a in f.args.args if _unparse(a.annotation) == "Static[str]")
+                    keys = [c.comparators[0].value for c in ast.walk(f)
+                            if isinstance(c, ast.Compare) and isinstance(c.left, ast.Name)
+                            and c.left.id == key and isinstance(c.ops[0], ast.Eq)
+                            and isinstance(c.comparators[0], ast.Constant)
+                            and isinstance(c.comparators[0].value, str)]
+                    views[node.name] = (m, list(dict.fromkeys(keys)))
+        return views
 
     def _class(self, node: ast.ClassDef, module: str, decos: list[str]) -> Cls:
         c = Cls(node.name, module, "tuple" in decos, [ast.unparse(b) for b in node.bases])
@@ -628,13 +668,32 @@ class Gen:
         target = f"_L_{cls}.{name}" if kind == "static" else f"self.v.{name}"
         # (Special methods keep the instance call: `C.__repr__(x)` is a type's repr.)
         # (A `self: S` method is called on the instance too: S is inferred from it.)
+        # (An in-place operator is called through its class after all: on a
+        # class of a polymorphic hierarchy, an instance call of one without a
+        # return annotation "cannot typecheck". It returns `self`, the box, as
+        # the operator mutates and returns its left operand.)
+        inplace = re.fullmatch(r"__i(add|sub|mul|truediv|floordiv|mod|pow|and|or|xor|lshift|rshift)__", name)
         call = (f"_L_{cls}.{name}" if kind == "static" else
+                f"_L_{cls}.{name}(self.v" if inplace else
                 f"self.v.{name}(" if name.startswith("__") or fs[0].self_typed else f"_L_{cls}.{name}(self.v")
+
+        if name == "__getitem__" and cls in self.inv.dict_views:
+            # A dict view's literal keys, dispatched at run time (Gen.dict_views).
+            keys = self.inv.dict_views[cls][1]
+            body = "".join(f"if key == {k!r}:\n    return _anypy(self.v[{k!r}])\n" for k in keys)
+            emitted = self.fn(fname, selfp + [("key", "str", None)], body + "raise KeyError(key)")
+            entry = {"fn": fname if emitted else None, "kind": kind}
+            if not emitted:
+                entry["reason"] = self.stubs[f"{cls}.{name}"] = f"does not compile: {self.last_pruned}"
+            self.api_of(cls)["members"][key] = entry
+            return
 
         def body(f: Func, params, _) -> str:
             if kind == "setter":
                 return f"self.v.{name} = {params[0][0]}"
-            ret = self.conv(f.ret, "r")
+            # The Python API's get() of a V2X message is a dict (Gen.dict_views).
+            ret = ("r._tsc_py()" if name == "get" and f.ret in self.inv.dict_views
+                   else self.conv(f.ret, "r"))
             if kind == "property":
                 return f"r = {target}\nreturn {ret}"
             args = self.kwargs(params, f)
@@ -644,6 +703,8 @@ class Gen:
                 expr = f"{call}{args})"
             else:
                 expr = f"{call}{', ' + args if args else ''})"
+            if inplace:
+                return f"{expr}\nreturn self"
             return (f"{expr}\nreturn _pynone()" if f.ret == "None" or ret == "_pynone()"
                     else f"r = {expr}\nreturn {ret}")
 
@@ -844,6 +905,7 @@ class Gen:
         head += [f"import typesafe_carla.{m} as _M_{m}" for m in modules if m != "__init__"]
         head += [f"from typesafe_carla import {c} as _L_{c}" for c in self.public]
         head += [f"from typesafe_carla import {e} as _E_{e}" for e in EXCEPTIONS]
+        head += self.dict_views()
         for cls in self.public:
             self.klass(cls)
         self.conversions()
@@ -854,6 +916,26 @@ class Gen:
         self.body_start = len("\n".join(head) + "\n\n")
         self.text = self.assemble("\n".join(head) + "\n\n")
         return self.text
+
+    def dict_views(self) -> list[str]:
+        """The Python API's dicts (V2X get(), issue #85). typesafe_carla
+        resolves their literal keys at compile time (`key: Static[str]`), which
+        the exporter cannot export. Each such class gets `_tsc_py()`, building
+        the nested Python dict from those keys (a key whose value the API's
+        dict leaves out raises KeyError and is left out here too); `get()`
+        returns it, and a box's `[key]` reads one key."""
+        out = []
+        for name, (module, keys) in sorted(self.inv.dict_views.items()):
+            out.append(f"from typesafe_carla.{module} import {name}")
+            lines = [f"@extend\nclass {name}:", "    def _tsc_py(self) -> pyobj:",
+                     "        d = _pyo(_ipy.PyDict_New())"]
+            for k in keys:
+                conv = "_pybytes" if k in BYTES_KEYS else "_anypy"
+                lines += ["        try:", f"            d[{k!r}] = {conv}(self[{k!r}])",
+                          "        except KeyError:", "            pass"]
+            lines.append("        return d")
+            out.append("\n".join(lines))
+        return out
 
     def realize(self) -> None:
         """Realizes every library call the exported functions make, in a
@@ -951,6 +1033,26 @@ class Ptr:
         return self.as_byte()
     def __from_py__(o: Ptr[byte]) -> Ptr[T]:
         return Ptr[T](o)
+
+def _pybytes(s: str) -> pyobj:
+    """Python bytes of a str's raw bytes (through builtins.bytes: a
+    `from C import PyBytes_FromStringAndSize` here crashes the compiler)."""
+    return pyobj._import("builtins")._getattr("bytes")([int(s.ptr[i]) for i in range(s.len)])
+
+def _anypy(x) -> pyobj:
+    """A dict view's value (see Gen.dict_views) as a Python object."""
+    if isinstance(x, NoneType):
+        return _pynone()
+    elif isinstance(x, Optional):
+        if x is None:
+            return _pynone()
+        return _anypy(x.__val__())
+    elif hasattr(x, "_tsc_py"):
+        return x._tsc_py()
+    elif isinstance(x, List):
+        return _pyo([_anypy(e) for e in x].__to_py__())
+    else:
+        return _pyo(x.__to_py__())
 
 class _PyCallback:
     """A Python callable, called by the library with its own objects
