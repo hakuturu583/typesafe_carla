@@ -1,0 +1,107 @@
+# Issue #85: the V2X results take the Python API's dict keys, each resolved at
+# compile time to its own static type. Every key path, with explicit types.
+# strict
+import typesafe_carla as carla
+
+def custom_paths(message: carla.CustomV2XData) -> int:
+    d = message.get()
+    power: float = d["Power"]
+    header: carla.ItsPduHeader = d["Message"]["Header"]
+    version: int = header["Protocol Version"]
+    message_id: str = header["Message ID"]
+    station: int = header["Station ID"]
+    payload: carla.CustomV2XBytes = d["Message"]["Message"]
+    size: int = payload["DataSize"]
+    max_size: int = payload["MaxDataSize"]
+    raw: str = payload["Bytes"]
+    same: bool = payload["Bytes"] == b"hello v2x"  # the upstream test's comparison
+    again: int = payload.get()["DataSize"]
+    return int(power) + version + len(message_id) + station + size + max_size + len(raw) + \
+        int(same) + again
+
+def value(v) -> int:  # a {"Value", "Confidence"} level
+    n: int = v["Value"]
+    c: str = v["Confidence"]
+    return n + len(c)
+
+def optional_value(v) -> int:  # Optional: None where the Python API's dict holds None
+    if v is None:
+        return 0
+    return value(v)
+
+def cam_paths(message: carla.CAMMessage) -> int:
+    d = message.get()
+    power: float = d["Power"]
+    header: carla.ItsPduHeader = d["Message"]["Header"]
+    coop = d["Message"]["Message"]
+    generation: int = coop["Generation Delta Time"]
+    params = coop["CAM Parameters"]
+
+    basic = params["Basic Container"]
+    station_type: str = basic["Station Type"]
+    ref: carla.ReferencePosition = basic["Reference Position"]
+    lat: int = ref["Latitude"]
+    lon: int = ref["Longitude"]
+    ellipse = ref["Position Confidence Eliipse"]
+    major: str = ellipse["Semi Major Confidence"]
+    minor: str = ellipse["Semi Minor Confidence"]
+    orientation: str = ellipse["Semi Major Orientation"]
+    total = int(power) + header["Station ID"] + generation + len(station_type) + lat + lon + \
+        len(major) + len(minor) + len(orientation)
+
+    hfc = params["High Frequency Container"]
+    present: str = hfc["High Frequency Container Present"]
+    total += len(present)
+    if present == "Basic Vehicle Container High Frequency":
+        hf: carla.BasicVehicleContainerHighFrequency = hfc["Basic Vehicle Container High Frequency"]
+        total += value(hf["Heading"]) + value(hf["Speed"]) + value(hf["Vehicle Length"])
+        total += value(hf["Longitudinal Acceleration"]) + value(hf["Curvature"])
+        total += value(hf["Yaw Rate"]) + optional_value(hf["Steering Wheel Angle"])
+        total += optional_value(hf["Lateral Acceleration"])
+        total += optional_value(hf["Vertical Acceleration"])
+        direction: int = hf["Drive Direction"]
+        width: int = hf["Vehicle Width"]
+        mode: int = hf["Curvature Calculation Mode"]
+        control: Optional[int] = hf["Acceleration Control"]
+        lane: Optional[int] = hf["Lane Position"]
+        performance: Optional[int] = hf["Performance class"]
+        zone: Optional[carla.CenDsrcTollingZone] = hf["Cen DSRC Tolling Zone"]
+        total += direction + width + mode + (control or 0) + (lane or 0) + (performance or 0)
+        if zone is not None:
+            total += zone["Protected Zone Latitude"] + zone["Protected Zone Longitude"]
+            zone_id: int = zone["Cen DSRC Tolling Zone ID"]  # KeyError when absent
+            total += zone_id
+    elif present == "RSU Container High Frequency":
+        zones: List[carla.ProtectedCommunicationZone] = \
+            hfc["RSU Container High Frequency"]["Protected Communication Zone"]
+        for z in zones:
+            total += z["Protected Zone Type"] + z["Protected Zone Latitude"]
+            total += z["Protected Zone Longitude"]
+            expiry: int = z["Expiry Time"]  # KeyError when absent, as the dict
+            zid: int = z["Protected Zone ID"]
+            radius: int = z["Protected Zone Radius"]
+            total += expiry + zid + radius
+
+    lfc = params["Low Frequency Container"]
+    lf_present: str = lfc["Low Frequency Container Present"]
+    total += len(lf_present)
+    if lf_present == "Basic Vehicle Container Low Frequency":
+        low: carla.BasicVehicleContainerLowFrequency = lfc["Basic Vehicle Low Frequency"]
+        role: str = low["Vehicle Role"]
+        lights: int = low["Exterior Light"]
+        history: Optional[List[carla.PathPoint]] = low["Path History"]
+        total += len(role) + lights
+        if history is not None:
+            for p in history:
+                dt: Optional[int] = p["Delta Time"]
+                total += p["Delta Latitude"] + p["Delta Longitude"] + p["Delta Altitude"]
+                total += dt or 0
+    return total
+
+def run(world: carla.World):
+    data = world.get_actors()[0].as_sensor().wait_for_data(1.0)
+    print(custom_paths(data.as_custom_v2x_event()[0]))
+    print(cam_paths(data.as_cam_event()[0]))
+
+# Compile-only: Codon type-checks a function only when it is called.
+run(carla.Client("localhost", 2000).get_world())

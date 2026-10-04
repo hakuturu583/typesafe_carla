@@ -26,7 +26,7 @@ from ._ffi import (CVector3D, tsc_traffic_manager_set_osm_mode,
 from .errors import _check, _check_port, CarlaError
 from .actor import Vehicle, TM_DEFAULT_PORT
 from .client import Client
-from .geometry import _location_arg
+from .geometry import _location_ref
 from .map import Waypoint, _take_list
 
 _PERCENTAGE_SPEED_DIFFERENCE = 1
@@ -191,7 +191,7 @@ class TrafficManager:
         n = len(path)
         buf = Ptr[CVector3D](n if n > 0 else 1)
         for i, p in enumerate(path):
-            buf[i] = _location_arg(p, "[tsc-compat] a Vector3D passed as a Location to TrafficManager.set_path")._to_c()
+            buf[i] = _location_ref(p, "[tsc-compat] a Vector3D passed as a Location to TrafficManager.set_path")._to_c()
         _check(tsc_traffic_manager_set_path(self._h.ptr, actor._h.ptr, buf, n,
                                             i32(int(empty_buffer))))
 

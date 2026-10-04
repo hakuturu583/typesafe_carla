@@ -1,0 +1,10 @@
+# Issue #85: CAMMessage.get() takes the Python API's dict keys; "Header" is
+# under get()["Message"], so it is an unknown key at the top level.
+# expect-error: CAMMessage.get() has no key "Header" (the Python API's dict has "Power", "Message")
+import typesafe_carla as carla
+
+def station(sensor: carla.Sensor) -> int:
+    return sensor.wait_for_data(1.0).as_cam_event()[0].get()["Header"]["Station ID"]
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(station(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor()))

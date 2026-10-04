@@ -28,6 +28,60 @@ def out(key: str, value: str):
     print(key + "=" + value)
 
 assert carla.backend() == "libcarla", "compare against a real server needs the libcarla backend"
+def v2x_dict_paths(world: carla.World, lib: carla.BlueprintLibrary) -> str:
+    """Issue #85: sends "hello v2x" between two vehicles' custom V2X sensors
+    (as upstream's smoke/test_v2x.py) and prints the first message's get()
+    dict paths."""
+    bp = lib.filter("vehicle.*")[0]
+    base = world.get_map().get_spawn_points()[-1]
+    first = world.spawn_actor(bp, base)
+    fwd = base.get_forward_vector()
+    found: Optional[carla.Actor] = None
+    for d in (12.0, 17.0, 22.0, 27.0):
+        found = world.try_spawn_actor(bp, carla.Transform(
+            carla.Location(base.location + carla.Location(x=fwd.x * d, y=fwd.y * d, z=0.3)),
+            base.rotation))
+        if found is not None:
+            break
+    if found is None:
+        first.destroy()
+        return "nospawn"
+    second = unwrap(found)
+    radio = lib.find("sensor.other.v2x_custom")
+    received = List[carla.CustomV2XData]()
+    def keep(data: carla.SensorData):
+        for m in data.as_custom_v2x_event():
+            received.append(m)
+    actors = [first, second]  # destroyed whatever fails below
+    try:
+        actors.append(world.spawn_actor(radio, carla.Transform(), attach_to=first))
+        sender = actors[-1].as_sensor()
+        actors.append(world.spawn_actor(radio, carla.Transform(), attach_to=second))
+        receiver = actors[-1].as_sensor()
+        receiver.listen(keep)
+        for _ in range(5):
+            world.tick()
+        for _ in range(20):
+            message = carla.CustomV2XBytes()
+            message.set_string("hello v2x")
+            sender.send(message)
+            world.tick()
+        for _ in range(5):
+            world.tick()
+        receiver.stop()
+    finally:
+        for a in reversed(actors):
+            a.destroy()
+    if len(received) == 0:
+        return "none"
+    d = received[0].get()
+    header = d["Message"]["Header"]
+    payload = d["Message"]["Message"]
+    return (str(payload["DataSize"]) + "," + str(payload["MaxDataSize"]) + "," +
+            payload["Bytes"] + "," + header["Message ID"] + "," +
+            str(header["Protocol Version"]) + "," + str(int(header["Station ID"] == first.id)) +
+            "," + str(int(d["Power"] == received[0].power)))
+
 client = carla.Client(host, port)
 client.set_timeout(20.0)
 out("server_version", client.get_server_version())
@@ -448,6 +502,15 @@ try:
         world.tick()
     out("constant_velocity", fmt(vehicle.get_velocity().length()))
     vehicle.disable_constant_velocity()
+    # Issue #85: the custom V2X message's get() dict paths, as upstream's
+    # smoke/test_v2x.py reads them. Needs a ue5-dev server and LibCarla.
+    if len(lib.filter("sensor.other.v2x_custom")) == 0:
+        out("i85_v2x_dict", "skip")
+    else:
+        try:
+            out("i85_v2x_dict", v2x_dict_paths(world, lib))
+        except carla.CarlaError as e:
+            out("i85_v2x_dict", "skip" if "is not available in LibCarla" in str(e) else "error")
 finally:
     world.apply_settings(original)
     out("destroyed", str(int(vehicle.destroy())))

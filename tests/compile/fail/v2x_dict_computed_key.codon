@@ -1,0 +1,10 @@
+# Issue #85: the dict keys are resolved at compile time, so a computed key is
+# a compile error that points to the typed attributes.
+# expect-error: CustomV2XBytes[key] needs a literal string key, resolved at compile time (as in x["Key"])
+import typesafe_carla as carla
+
+def field(sensor: carla.Sensor, key: str) -> int:
+    return sensor.wait_for_data(1.0).as_custom_v2x_event()[0].get()["Message"]["Message"][key]
+
+# Compile-only: Codon type-checks a function only when it is called.
+print(field(carla.Client("localhost", 2000).get_world().get_actors()[0].as_sensor(), "DataSize"))

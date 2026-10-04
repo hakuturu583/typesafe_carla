@@ -96,10 +96,11 @@ void write_wheel(const tsc_wheel_physics_control_t &src, carla::rpc::WheelPhysic
       checked_vector(src.lateral_slip_graph, src.lateral_slip_graph_size, "lateral_slip_graph");
 }
 
-// Overwrites every field the C ABI carries. Wheels are matched by index; the
+// Validates and overwrites every field the C ABI carries. Wheels are matched by index; the
 // caller has checked that the counts agree.
 void write_physics(const tsc_vehicle_physics_control_t &src,
                    carla::rpc::VehiclePhysicsControl &dst) {
+  if (!(src.mass > 0.0)) fail(TSC_INVALID_ARGUMENT, "mass must be positive");
   TSC_VEHICLE_FLOAT_FIELDS(TSC_WRITE_FLOAT)
   TSC_VEHICLE_BOOL_FIELDS(TSC_WRITE_BOOL)
   TSC_VEHICLE_U8_FIELDS(TSC_WRITE_U8)
@@ -110,6 +111,14 @@ void write_physics(const tsc_vehicle_physics_control_t &src,
 }
 
 }  // namespace
+
+carla::rpc::VehiclePhysicsControl tsc::to_carla(const tsc_vehicle_physics_control_t &c) {
+  require_array(c.wheels, c.wheel_count, "wheels");  // before sizing by wheel_count
+  carla::rpc::VehiclePhysicsControl pc;
+  pc.wheels.resize(c.wheel_count);
+  write_physics(c, pc);
+  return pc;
+}
 
 tsc_physics_control::tsc_physics_control(const carla::rpc::VehiclePhysicsControl &src)
     : tsc_handle(TSC_KIND_PHYSICS_CONTROL) {
@@ -159,7 +168,6 @@ tsc_status_t tsc_vehicle_apply_physics_control(tsc_vehicle_t *vehicle,
                                      " wheels but the vehicle has " +
                                      std::to_string(pc.wheels.size()));
     }
-    if (!(c.mass > 0.0)) fail(TSC_INVALID_ARGUMENT, "mass must be positive");
     write_physics(c, pc);
     v.ApplyPhysicsControl(pc);
   });

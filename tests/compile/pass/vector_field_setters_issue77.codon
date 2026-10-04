@@ -1,0 +1,24 @@
+# Issue #77: field setters convert as the Python API does: a Vector3D
+# assigned to a Location field (and a Location to a Vector3D field) is a
+# compatibility shortcut, with a warning (an error under --strict, see
+# strict_fail/field_itruediv.codon). Not `# strict`.
+import typesafe_carla as carla
+
+def assign(t: carla.Transform, b: carla.BoundingBox, w: carla.WalkerControl,
+           wheel: carla.WheelPhysicsControl, p: carla.VehiclePhysicsControl,
+           d: carla.LidarDetection, s: carla.SemanticLidarDetection):
+    t.location /= 2
+    t.location = carla.Vector3D(1.0, 1.0, 1.0)
+    b.location = t.location + b.extent
+    b.extent = t.location
+    w.direction = t.location
+    wheel.location = b.extent
+    wheel.old_location = b.extent
+    wheel.offset = t.location
+    p.center_of_mass = b.extent
+    p.inertia_tensor_scale = t.location
+    d.point = b.extent
+    s.point = b.extent
+
+assign(carla.Transform(), carla.BoundingBox(), carla.WalkerControl(), carla.WheelPhysicsControl(),
+       carla.VehiclePhysicsControl(), carla.LidarDetection(), carla.SemanticLidarDetection())
