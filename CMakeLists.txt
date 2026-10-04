@@ -71,6 +71,7 @@ add_library(typesafe_carla_ffi SHARED
   native/src/geo.cpp
   native/src/handle.cpp
   native/src/map.cpp
+  native/src/queue_signal.cpp
   native/src/sensor.cpp
   native/src/sensor_image.cpp
   native/src/snapshot.cpp

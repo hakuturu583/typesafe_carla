@@ -11,6 +11,11 @@
 
 namespace tsc {
 
+// Issue #86: counts every push into any ItemQueue and wakes the threads in
+// tsc_queue_signal_wait (a background callback dispatcher), so they block
+// instead of polling. Defined in queue_signal.cpp.
+void signal_queue_activity();
+
 // Items (shared pointers) waiting to be polled. Bounded (when full, the
 // oldest is dropped) unless the capacity is 0, which means unbounded.
 template <typename Item>
@@ -29,6 +34,7 @@ class ItemQueue {
       _items.push_back(std::move(item));
     }
     _ready.notify_one();
+    signal_queue_activity();
   }
 
   // The oldest item, waiting up to `timeout` for one; nullptr on timeout.

@@ -1,0 +1,19 @@
+# Issue #86: the callback thread and the dispatch switches.
+import typesafe_carla as carla
+
+def use(world: carla.World):
+    carla.start_callback_thread()
+    running: bool = carla.callback_thread_running()
+    carla.stop_callback_thread()
+    carla.set_auto_dispatch(False)
+    enabled: bool = carla.auto_dispatch()
+    carla.set_auto_dispatch(False, lock=False)
+    carla.set_auto_dispatch(True)
+    seen: int = carla.queue_signal_count()
+    now: int = carla.wait_queue_signal(seen, 0.0)
+    delivered: int = carla.dispatch_callbacks()
+    if carla.attach_current_thread():  # False: the main thread is registered
+        carla.detach_current_thread()
+    print(running, enabled, now, delivered, world.get_snapshot().frame)
+
+use(carla.Client("localhost", 2000).get_world())

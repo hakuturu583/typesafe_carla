@@ -229,3 +229,128 @@ def test_enum_names_and_values_match_the_official_module(launcher, tmp_path):
         ours[label] = {"names": {k: int(v) for k, v in (kv.split("=") for kv in names.split(","))},
                        "values": [int(v) for v in values.split(",")]}
     assert ours == official
+
+
+_AUTOSTART_PROGRAM = """
+import typesafe_carla as carla
+world = carla.Client("localhost", 2000).get_world()
+lib = world.get_blueprint_library()
+
+def gnss() -> carla.Sensor:
+    return world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform()).as_sensor()
+
+# Polling mode and reads never start it: only a callback registration does.
+p = gnss()
+p.listen()
+print(p.has_callback, p.pending_count, p.poll() is None, carla.callback_thread_running())
+g = gnss()
+g.listen(lambda data: None)
+print(carla.callback_thread_running())
+# An explicit stop wins: nothing restarts it, not even another registration.
+carla.stop_callback_thread()
+print(g.has_callback, g.is_listening, p.poll() is None, p.pending_count >= 0)
+p.listen()
+errors = List[str]()
+def cb(data: carla.SensorData):
+    try:
+        g.stop()  # inside a dispatch-point callback
+    except carla.CarlaError as e:
+        errors.append(e.message)
+g.listen(cb)
+tick_id = world.on_tick(lambda s: None)
+world.tick()
+print(carla.callback_thread_running(), errors, g.has_callback)
+world.remove_on_tick(tick_id)
+p.destroy()
+g.destroy()
+print("OK")
+"""
+
+_EXPLICIT_START_PROGRAM = """
+import typesafe_carla as carla
+world = carla.Client("localhost", 2000).get_world()
+lib = world.get_blueprint_library()
+carla.start_callback_thread()
+carla.stop_callback_thread()  # the program decided: the variable no longer applies
+g = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform()).as_sensor()
+g.listen(lambda data: None)
+print(carla.callback_thread_running())
+g.destroy()
+print("OK")
+"""
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("1", "False 0 True False True True True True True False [] False OK"),
+    ("0", "False 0 True False False True True True True False [] False OK"),
+    (None, "False 0 True False False True True True True False [] False OK")])
+def test_callback_thread_environment_variable(launcher, tmp_path, value, expected):
+    """Issue #86: TYPESAFE_CARLA_CALLBACK_THREAD=1 starts the callback thread
+    once, at the first callback registration; reads, polling mode and an
+    explicit stop never restart it. Unset or 0 keeps the dispatch points."""
+    result = launcher("run", _program(tmp_path, _AUTOSTART_PROGRAM),
+                      env={"TYPESAFE_CARLA_CALLBACK_THREAD": value or ""})  # "" = unset
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert " ".join(result.stdout.split()) == expected, result.stdout
+
+
+def test_callback_thread_explicit_choice_beats_environment(launcher, tmp_path):
+    result = launcher("run", _program(tmp_path, _EXPLICIT_START_PROGRAM),
+                      env={"TYPESAFE_CARLA_CALLBACK_THREAD": "1"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.split() == ["False", "OK"], result.stdout
+
+
+_STUCK_AT_EXIT_PROGRAM = """
+import time
+import typesafe_carla as carla
+world = carla.Client("localhost", 2000).get_world()
+lib = world.get_blueprint_library()
+carla.start_callback_thread()
+g = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform()).as_sensor()
+def cb(data: carla.SensorData):
+    print("callback")
+    time.sleep(4.0)
+g.listen(cb)
+world.tick()
+time.sleep(0.3)
+print("OK")
+"""
+
+
+def test_callback_thread_stuck_at_exit_warns(launcher, tmp_path):
+    """Issue #86: a callback still running 2 s after the program ended does
+    not hang the exit; it is reported."""
+    result = launcher("run", _program(tmp_path, _STUCK_AT_EXIT_PROGRAM))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.split() == ["callback", "OK"], result.stdout
+    assert "a callback was still running 2 s after the program ended" in result.stderr
+
+
+_EXTERNAL_DISPATCHER_PROGRAM = """
+import typesafe_carla as carla
+world = carla.Client("localhost", 2000).get_world()
+lib = world.get_blueprint_library()
+carla.set_auto_dispatch(False, lock=False)  # as pycarla, under the GIL
+g = world.spawn_actor(lib.find("sensor.other.gnss"), carla.Transform()).as_sensor()
+g.listen(lambda data: None)
+print(carla.callback_thread_running())  # the variable no longer applies
+try:
+    carla.start_callback_thread()
+    print("started")
+except carla.CarlaError as e:
+    print("refused" if "external dispatcher" in e.message else e.message)
+carla.set_auto_dispatch(True)
+g.destroy()
+print("OK")
+"""
+
+
+def test_callback_thread_not_started_beside_unlocked_dispatcher(launcher, tmp_path):
+    """Issue #86: after set_auto_dispatch(False, lock=False) (pycarla), neither
+    TYPESAFE_CARLA_CALLBACK_THREAD nor start_callback_thread() starts a Codon
+    thread, which would run Python callbacks without the GIL."""
+    result = launcher("run", _program(tmp_path, _EXTERNAL_DISPATCHER_PROGRAM),
+                      env={"TYPESAFE_CARLA_CALLBACK_THREAD": "1"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.split() == ["False", "refused", "OK"], result.stdout

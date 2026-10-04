@@ -16,7 +16,7 @@ from .actor import Actor, ActorList, _make_actor
 from .blueprint import ActorBlueprint, BlueprintLibrary
 from .map import Map
 from .snapshot import WorldSnapshot
-from ._callbacks import dispatch_callbacks, _await_tick_callbacks
+from ._callbacks import _dispatch_point, _await_tick_callbacks
 from ._fmt import fmt_g, fmt_g32, fmt_bool
 
 def _fixed_step(fixed: Optional[float]) -> float:
@@ -222,7 +222,8 @@ class World:
 
         Then runs the queued sensor and on_tick callbacks (dispatch_callbacks()),
         first waiting (within `seconds`) until the on_tick callbacks have
-        received this frame's snapshot.
+        received this frame's snapshot; neither while the callback thread runs
+        (start_callback_thread()) or after set_auto_dispatch(False).
         """
         import time
         start = time.time()
@@ -230,7 +231,7 @@ class World:
         _check(tsc_world_wait_for_tick(self._h.ptr, seconds, out))
         snapshot = WorldSnapshot(Handle(out[0]))
         _await_tick_callbacks(self._h.ptr, snapshot.frame, seconds - (time.time() - start))
-        dispatch_callbacks()
+        _dispatch_point()
         return snapshot
 
     def tick(self, seconds: float = 10.0) -> int:
@@ -238,7 +239,8 @@ class World:
 
         Then runs the queued sensor and on_tick callbacks (dispatch_callbacks()),
         first waiting (within `seconds`) until the on_tick callbacks have
-        received this frame's snapshot.
+        received this frame's snapshot; neither while the callback thread runs
+        (start_callback_thread()) or after set_auto_dispatch(False).
         """
         import time
         start = time.time()
@@ -246,7 +248,7 @@ class World:
         _check(tsc_world_tick(self._h.ptr, seconds, out))
         frame = int(out[0])
         _await_tick_callbacks(self._h.ptr, frame, seconds - (time.time() - start))
-        dispatch_callbacks()
+        _dispatch_point()
         return frame
 
     def get_settings(self) -> WorldSettings:

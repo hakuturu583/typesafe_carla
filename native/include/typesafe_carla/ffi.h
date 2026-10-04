@@ -68,9 +68,11 @@ extern "C" {
  *      and G-buffer streams (#33).
  * 4.5: V2X: tsc_sensor_send, CAM and custom V2X events (#42).
  * 4.6: batch commands APPLY_VEHICLE_PHYSICS_CONTROL and APPLY_WALKER_STATE;
- *      tsc_command_t.physics_control shares storage with blueprint (#79). */
+ *      tsc_command_t.physics_control shares storage with blueprint (#79).
+ * 4.7: tsc_queue_signal_count / _wait / _notify, for a background callback
+ *      dispatcher (#86). */
 #define TSC_ABI_VERSION_MAJOR 4
-#define TSC_ABI_VERSION_MINOR 6
+#define TSC_ABI_VERSION_MINOR 7
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -2277,6 +2279,25 @@ TSC_API tsc_status_t tsc_tick_listener_poll(tsc_tick_listener_t *listener,
                                             tsc_world_snapshot_t **out);
 /* Removes the registration and drops the queued snapshots. Idempotent. */
 TSC_API tsc_status_t tsc_tick_listener_stop(tsc_tick_listener_t *listener);
+
+/* ------------------------------------------------------------------------ */
+/* Issue #86: queue signal (ABI 4.7)                                        */
+/* ------------------------------------------------------------------------ */
+
+/* A process-wide counter of pushes into every sensor (and G-buffer) queue and
+ * tick-listener queue. LibCarla's threads increment it, so a background
+ * callback dispatcher can block until something was queued instead of
+ * polling: read the count, drain the queues, then wait for the count to change.
+ * It does not say which queue changed. */
+TSC_API tsc_status_t tsc_queue_signal_count(uint64_t *out);
+/* Waits up to timeout_seconds (finite, in [0, 1e9]) until the count differs
+ * from `seen`; returns at once if it already does. *out = the count when it
+ * returns (equal to `seen` on timeout, which is not an error). Holds no lock of
+ * the caller's: callers may release their own (e.g. a GIL) around it. */
+TSC_API tsc_status_t tsc_queue_signal_wait(uint64_t seen, double timeout_seconds,
+                                           uint64_t *out);
+/* Increments the count and wakes every waiter (e.g. to stop a dispatcher). */
+TSC_API tsc_status_t tsc_queue_signal_notify(void);
 
 #ifdef __cplusplus
 } /* extern "C" */
