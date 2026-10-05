@@ -305,7 +305,7 @@ def test_str_arguments_keep_nul(launcher, tmp_path):
     import shutil
     import sys
 
-    from typesafe_carla import pycarla, toolchain
+    from typesafe_carla import pycarla
 
     if shutil.which("cc") is None:
         pytest.skip("needs cc to link the extension")
@@ -321,10 +321,7 @@ def echo(s: str) -> str:
     result = launcher("build", "--pyext", "--relocation-model=pic", "--module", "nul",
                       "-o", str(obj), str(source))
     assert result.returncode == 0, result.stdout + result.stderr
-    libdirs = [str(d) for d in toolchain.find_codon().library_dirs()]
-    subprocess.run(["cc", "-shared", "-o", str(tmp_path / "nul.so"), str(obj),
-                    *[f"-L{d}" for d in libdirs], "-lcodonrt",
-                    *[f"-Wl,-rpath,{d}" for d in libdirs]], check=True)
+    pycarla.link(obj, tmp_path / "nul.so")
     program = r"""
 import nul
 assert nul.length('hi\x00z') == 4 and nul.echo('hi\x00z') == 'hi\x00z'

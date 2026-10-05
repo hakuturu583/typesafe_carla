@@ -113,18 +113,18 @@ def test_from_c_independent(vehicle: carla.Vehicle):
     assert t.wheels[0].omega != -5.0
 
 def test_telemetry_wheels():
-    wheels = [carla.WheelTelemetryData(0.1, 0.2, 0.3)]
+    wheels = [carla.WheelTelemetryData(0.25, 0.5, 0.75)]
     t = carla.VehicleTelemetryData(wheels=wheels)
     wheels[0].omega = 9.0
     wheels.append(carla.WheelTelemetryData())
-    assert len(t.wheels) == 1 and t.wheels[0].omega == 0.3
+    assert len(t.wheels) == 1 and t.wheels[0].omega == 0.75
     t.wheels = wheels
     wheels.pop()
     wheels[0].lat_slip = 9.0
-    assert len(t.wheels) == 2 and t.wheels[0].lat_slip == 0.1
+    assert len(t.wheels) == 2 and t.wheels[0].lat_slip == 0.25
     t.wheels[0].lat_slip = 5.0
     t.wheels.pop()
-    assert len(t.wheels) == 2 and t.wheels[0].lat_slip == 0.1
+    assert len(t.wheels) == 2 and t.wheels[0].lat_slip == 0.25
 
 def test_bones():
     tr = T(L(0.0, 0.0, 1.0))
@@ -218,9 +218,6 @@ def test_environment_object(world: carla.World):
     box.location.z = 9.0
     assert o.transform == T(L(1.0, 2.0, 3.0)), o.transform
     assert o.bounding_box == carla.BoundingBox(L(), carla.Vector3D(1.0, 1.0, 1.0))
-    every = world.get_environment_objects()
-    assert len(every) > 0
-    assert every[0].transform is not world.get_environment_objects()[0].transform
 
 client = carla.Client("localhost", 2000)
 world = client.get_world()

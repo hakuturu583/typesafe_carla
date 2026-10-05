@@ -1053,19 +1053,16 @@ STR_FROM_PY = '''
 class str:
     def __from_py__(s: Ptr[byte]) -> str:
         """A Python str (UTF-8) or bytes, NULs included (issue #99)."""
-        if _ipy._get_type(s) == _ipy.PyBytes_Type:
-            n = _ipy.PyBytes_Size(s)
-            p = Ptr[byte](n)
-            str.memcpy(p, _ipy.PyBytes_AsString(s), n)
-            return str(p, n)
-        utf8 = _ipy.PyUnicode_AsEncodedString(s, "utf-8".ptr, "strict".ptr)
-        if utf8 == Ptr[byte]():
+        encoded = _ipy._get_type(s) != _ipy.PyBytes_Type
+        b = _ipy.PyUnicode_AsEncodedString(s, "utf-8".ptr, "strict".ptr) if encoded else s
+        if b == Ptr[byte]():
             _ipy.pyobj.exc_check()  # raises the encoding error
             return ""
-        n = _ipy.PyBytes_Size(utf8)
+        n = _ipy.PyBytes_Size(b)
         p = Ptr[byte](n)
-        str.memcpy(p, _ipy.PyBytes_AsString(utf8), n)
-        _ipy.pyobj.decref(utf8)
+        str.memcpy(p, _ipy.PyBytes_AsString(b), n)
+        if encoded:
+            _ipy.pyobj.decref(b)
         return str(p, n)
 '''
 
@@ -1371,20 +1368,27 @@ def build(out: Path, env: dict[str, str] | None = None, package: str = PACKAGE_N
 
     `_carla.so` finds the Codon runtime through `rpath` (default: this
     toolchain's library directories)."""
-    from typesafe_carla import toolchain
-
     out.mkdir(parents=True, exist_ok=True)
     gen = compile_module(out, env, log=log, package=package, pruned_path=pruned_path)
-    libdirs = [str(d) for d in toolchain.find_codon().library_dirs()]
     pkg = out / "carla"
     pkg.mkdir(parents=True, exist_ok=True)
-    link = ["cc", "-shared", "-o", str(pkg / f"{MODULE}.so"), str(out / f"{MODULE}.o")]
-    link += [f"-L{d}" for d in libdirs] + ["-lcodonrt"]
-    link += [f"-Wl,-rpath,{d}" for d in (libdirs if rpath is None else rpath)]
-    subprocess.run(link, check=True)
+    link(out / f"{MODULE}.o", pkg / f"{MODULE}.so", rpath)
     write_package(pkg, gen)
     (out / STAMP).write_text(source_stamp(package, pruned_path) + "\n")
     return out
+
+
+def link(obj: Path, so: Path, rpath: list[str] | None = None) -> None:
+    """Links a `codon build --pyext` object into an extension module that
+    finds the Codon runtime through `rpath` (default: this toolchain's
+    library directories)."""
+    from typesafe_carla import toolchain
+
+    libdirs = [str(d) for d in toolchain.find_codon().library_dirs()]
+    cmd = ["cc", "-shared", "-o", str(so), str(obj)]
+    cmd += [f"-L{d}" for d in libdirs] + ["-lcodonrt"]
+    cmd += [f"-Wl,-rpath,{d}" for d in (libdirs if rpath is None else rpath)]
+    subprocess.run(cmd, check=True)
 
 
 def _native_library() -> Path:

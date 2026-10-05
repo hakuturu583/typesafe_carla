@@ -24,7 +24,7 @@ from .errors import _check, _i32, CarlaError
 from .map import _read_buffer
 from .geometry import Transform
 from .actor import Vehicle
-from ._eq import _f32, _fields_eq
+from ._eq import _f32, _fields_eq, _copies
 from ._fmt import fmt_fields
 from ._enum import _member_names, _member_values, _enum_repr
 
@@ -257,10 +257,11 @@ class AckermannControllerSettings:
                                            c.accel_ki, c.accel_kd)
 
 class WheelTelemetryData:
-    """One wheel of VehicleTelemetryData, as carla.WheelTelemetryData."""
-    lat_slip: float
-    long_slip: float
-    omega: float  # angular velocity
+    """One wheel of VehicleTelemetryData, as carla.WheelTelemetryData. The
+    fields are float32, as LibCarla's (issue #90)."""
+    _lat_slip: float
+    _long_slip: float
+    _omega: float  # angular velocity
 
     def __init__(self, lat_slip: float = 0.0, long_slip: float = 0.0, omega: float = 0.0):
         self.lat_slip = lat_slip
@@ -268,7 +269,31 @@ class WheelTelemetryData:
         self.omega = omega
 
     def _copy(self) -> WheelTelemetryData:
-        return WheelTelemetryData(self.lat_slip, self.long_slip, self.omega)
+        return WheelTelemetryData(self._lat_slip, self._long_slip, self._omega)
+
+    @property
+    def lat_slip(self) -> float:
+        return self._lat_slip
+
+    @lat_slip.setter
+    def lat_slip(self, v: float):
+        self._lat_slip = _f32(v)
+
+    @property
+    def long_slip(self) -> float:
+        return self._long_slip
+
+    @long_slip.setter
+    def long_slip(self, v: float):
+        self._long_slip = _f32(v)
+
+    @property
+    def omega(self) -> float:
+        return self._omega
+
+    @omega.setter
+    def omega(self, v: float):
+        self._omega = _f32(v)
 
     def __eq__(self, other: WheelTelemetryData) -> bool:
         return _fields_eq(self, other)
@@ -279,21 +304,16 @@ class WheelTelemetryData:
     def __repr__(self) -> str:
         return fmt_fields("WheelTelemetryData", self)
 
-def _telemetry_wheels_copy(wheels: List[WheelTelemetryData]) -> List[WheelTelemetryData]:
-    out = List[WheelTelemetryData](len(wheels))
-    for w in wheels:
-        out.append(w._copy())
-    return out
-
 class VehicleTelemetryData:
     """Vehicle.get_telemetry_data(), as carla.VehicleTelemetryData. wheels is a
     value, as in the Python API (issue #84): the constructor and the setter
-    store copies, and each read gives a new list of copies."""
-    speed: float  # forward speed, m/s
-    steer: float
-    throttle: float
-    brake: float
-    engine_rpm: float
+    store copies, and each read gives a new list of copies. The float fields
+    are float32, as LibCarla's (issue #90)."""
+    _speed: float  # forward speed, m/s
+    _steer: float
+    _throttle: float
+    _brake: float
+    _engine_rpm: float
     gear: int
     _wheels: List[WheelTelemetryData]
 
@@ -306,17 +326,57 @@ class VehicleTelemetryData:
         self.brake = brake
         self.engine_rpm = engine_rpm
         self.gear = gear
-        self._wheels = (_telemetry_wheels_copy(wheels) if wheels is not None
+        self._wheels = (_copies(wheels) if wheels is not None
                         else List[WheelTelemetryData]())
+
+    @property
+    def speed(self) -> float:
+        return self._speed
+
+    @speed.setter
+    def speed(self, v: float):
+        self._speed = _f32(v)
+
+    @property
+    def steer(self) -> float:
+        return self._steer
+
+    @steer.setter
+    def steer(self, v: float):
+        self._steer = _f32(v)
+
+    @property
+    def throttle(self) -> float:
+        return self._throttle
+
+    @throttle.setter
+    def throttle(self, v: float):
+        self._throttle = _f32(v)
+
+    @property
+    def brake(self) -> float:
+        return self._brake
+
+    @brake.setter
+    def brake(self, v: float):
+        self._brake = _f32(v)
+
+    @property
+    def engine_rpm(self) -> float:
+        return self._engine_rpm
+
+    @engine_rpm.setter
+    def engine_rpm(self, v: float):
+        self._engine_rpm = _f32(v)
 
     @property
     def wheels(self) -> List[WheelTelemetryData]:
         """A new list of copies, as the official getter (by value)."""
-        return _telemetry_wheels_copy(self._wheels)
+        return _copies(self._wheels)
 
     @wheels.setter
     def wheels(self, v: List[WheelTelemetryData]):
-        self._wheels = _telemetry_wheels_copy(v)
+        self._wheels = _copies(v)
 
     def __eq__(self, other: VehicleTelemetryData) -> bool:
         return _fields_eq(self, other)

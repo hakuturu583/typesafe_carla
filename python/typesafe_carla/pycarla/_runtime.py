@@ -243,9 +243,9 @@ def _known_keywords(spec: dict) -> frozenset:
 
 
 def _lenient(name: str, known: frozenset, kwargs: dict) -> dict:
-    unknown = sorted(k for k in kwargs if k not in known)
-    if not unknown:
+    if known.issuperset(kwargs):
         return kwargs
+    unknown = sorted(k for k in kwargs if k not in known)
     import warnings
     warnings.warn(f"carla.{name}(): ignoring unknown keyword arguments {unknown}, as CARLA's "
                   f"Python API does", stacklevel=3)

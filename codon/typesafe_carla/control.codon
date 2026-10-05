@@ -5,7 +5,7 @@ from ._ffi import (Handle, CVehicleControl, CWalkerControl, CVector2D, CVehicleP
                    CWheelPhysicsControl, tsc_vehicle_get_physics_control,
                    tsc_physics_control_view, tsc_vehicle_apply_physics_control)
 from .errors import _check, _u8, _i32
-from ._eq import _f32, _fields_eq
+from ._eq import _f32, _fields_eq, _copies
 from .geometry import (Location, Vector2D, Vector3D, _vector_or, _location_or, _vector_arg,
                        _location_arg, _Owned)
 from ._fmt import fmt_f32, fmt_g32, fmt_b01, fmt_list, fmt_fields
@@ -89,18 +89,11 @@ def _curve_from_c(data: Ptr[CVector2D], size: int) -> List[Vector2D]:
 def _ratios_from_c(data: Ptr[float], size: int) -> List[float]:
     return [data[i] for i in range(size)]
 
-def _curve_copy(curve: List[Vector2D]) -> List[Vector2D]:
-    """A new list of new points: the official module converts a list to a
-    std::vector<Vector2D> (and back) by value (issue #84)."""
-    out = List[Vector2D](len(curve))
-    for p in curve:
-        out.append(Vector2D(p._x, p._y))
-    return out
-
-def _ratios_copy(ratios: List[float]) -> List[float]:
+def _ratios_f32(ratios: List[float]) -> List[float]:
+    """A new list of the ratios in float32, as LibCarla's std::vector<float>."""
     out = List[float](len(ratios))
     for r in ratios:
-        out.append(r)
+        out.append(_f32(r))
     return out
 
 def _ratios_to_c(ratios: List[float]) -> Ptr[float]:
@@ -214,7 +207,7 @@ class WheelPhysicsControl:
         self.max_wheelspin_rotation = max_wheelspin_rotation
         self.external_torque_combine_method = external_torque_combine_method
         # A copy, as the official module converts the list to a std::vector.
-        self._lateral_slip_graph = (_curve_copy(lateral_slip_graph) if lateral_slip_graph is not None
+        self._lateral_slip_graph = (_copies(lateral_slip_graph) if lateral_slip_graph is not None
                                     else List[Vector2D]())
         self._suspension_axis = _vector_or(
             suspension_axis, Vector3D(0.0, 0.0, -1.0),
@@ -410,7 +403,7 @@ class WheelPhysicsControl:
     @lateral_slip_graph.setter
     def lateral_slip_graph(self, v: List[Vector2D]):
         """Stored as a copy (new list, new points), as the official module."""
-        self._lateral_slip_graph = _curve_copy(v)
+        self._lateral_slip_graph = _copies(v)
 
     @property
     def suspension_axis(self) -> Vector3D:
@@ -608,13 +601,6 @@ class WheelPhysicsControl:
         r._lateral_slip_graph = _curve_from_c(w.lateral_slip_graph, w.lateral_slip_graph_size)
         return r
 
-def _wheels_copy(wheels: List[WheelPhysicsControl]) -> List[WheelPhysicsControl]:
-    """A new list of deep-copied wheels, as the official module converts it."""
-    out = List[WheelPhysicsControl](len(wheels))
-    for w in wheels:
-        out.append(w._copy())
-    return out
-
 class VehiclePhysicsControl:
     """Every field of CARLA's VehiclePhysicsControl, with the Python API's names
     and LibCarla's defaults.
@@ -690,7 +676,7 @@ class VehiclePhysicsControl:
                  use_sweep_wheel_collision: bool = False):
         # The lists are stored as copies, as the official module converts them
         # to std::vectors (issue #84).
-        self._torque_curve = (_curve_copy(torque_curve) if torque_curve is not None
+        self._torque_curve = (_copies(torque_curve) if torque_curve is not None
                               else [Vector2D(0.0, 500.0), Vector2D(5000.0, 500.0)])
         self.max_torque = max_torque
         self.max_rpm = max_rpm
@@ -703,9 +689,9 @@ class VehiclePhysicsControl:
         self.use_automatic_gears = use_automatic_gears
         self.gear_change_time = gear_change_time
         self.final_ratio = final_ratio
-        self._forward_gear_ratios = (_ratios_copy(forward_gear_ratios) if forward_gear_ratios is not None
+        self._forward_gear_ratios = (_ratios_f32(forward_gear_ratios) if forward_gear_ratios is not None
                                      else [2.85, 2.02, 1.35, 1.0, 2.85, 2.02, 1.35, 1.0])
-        self._reverse_gear_ratios = (_ratios_copy(reverse_gear_ratios) if reverse_gear_ratios is not None
+        self._reverse_gear_ratios = (_ratios_f32(reverse_gear_ratios) if reverse_gear_ratios is not None
                                      else [2.86, 2.86])
         self.change_up_rpm = change_up_rpm
         self.change_down_rpm = change_down_rpm
@@ -724,61 +710,51 @@ class VehiclePhysicsControl:
             "[tsc-compat] a Location passed as a Vector3D to VehiclePhysicsControl(inertia_tensor_scale=...)")
         self.sleep_threshold = sleep_threshold
         self.sleep_slope_limit = sleep_slope_limit
-        self._steering_curve = (_curve_copy(steering_curve) if steering_curve is not None
+        self._steering_curve = (_copies(steering_curve) if steering_curve is not None
                                 else [Vector2D(0.0, 1.0), Vector2D(10.0, 0.5)])
-        self._wheels = (_wheels_copy(wheels) if wheels is not None
+        self._wheels = (_copies(wheels) if wheels is not None
                         else List[WheelPhysicsControl]())
         self.use_sweep_wheel_collision = use_sweep_wheel_collision
 
-    # The list properties, as the official add_property getters and setters:
-    # each read gives a new list of copies (a Boost.Python iterator over the
-    # std::vector, by value), each assignment stores a copy.
-
     @property
     def torque_curve(self) -> List[Vector2D]:
-        """A new list of copies: change it and assign it back."""
-        return _curve_copy(self._torque_curve)
+        return _copies(self._torque_curve)
 
     @torque_curve.setter
     def torque_curve(self, v: List[Vector2D]):
-        self._torque_curve = _curve_copy(v)
+        self._torque_curve = _copies(v)
 
     @property
     def forward_gear_ratios(self) -> List[float]:
-        """A new list: change it and assign it back."""
-        return _ratios_copy(self._forward_gear_ratios)
+        return self._forward_gear_ratios.copy()
 
     @forward_gear_ratios.setter
     def forward_gear_ratios(self, v: List[float]):
-        self._forward_gear_ratios = _ratios_copy(v)
+        self._forward_gear_ratios = _ratios_f32(v)
 
     @property
     def reverse_gear_ratios(self) -> List[float]:
-        """A new list: change it and assign it back."""
-        return _ratios_copy(self._reverse_gear_ratios)
+        return self._reverse_gear_ratios.copy()
 
     @reverse_gear_ratios.setter
     def reverse_gear_ratios(self, v: List[float]):
-        self._reverse_gear_ratios = _ratios_copy(v)
+        self._reverse_gear_ratios = _ratios_f32(v)
 
     @property
     def steering_curve(self) -> List[Vector2D]:
-        """A new list of copies: change it and assign it back."""
-        return _curve_copy(self._steering_curve)
+        return _copies(self._steering_curve)
 
     @steering_curve.setter
     def steering_curve(self, v: List[Vector2D]):
-        self._steering_curve = _curve_copy(v)
+        self._steering_curve = _copies(v)
 
     @property
     def wheels(self) -> List[WheelPhysicsControl]:
-        """A new list of copies (pc.wheels[0].wheel_radius = 40.0 changes only
-        the copy, as in the Python API): change it and assign it back."""
-        return _wheels_copy(self._wheels)
+        return _copies(self._wheels)
 
     @wheels.setter
     def wheels(self, v: List[WheelPhysicsControl]):
-        self._wheels = _wheels_copy(v)
+        self._wheels = _copies(v)
 
     @property
     def max_torque(self) -> float:
@@ -1037,40 +1013,6 @@ class VehiclePhysicsControl:
             self.sleep_threshold, self.sleep_slope_limit, self.center_of_mass._to_c(),
             self.inertia_tensor_scale._to_c(), _u8(self.differential_type, "differential_type"),
             i32(int(self.use_automatic_gears)), i32(int(self.use_sweep_wheel_collision)), i32(0))
-
-    def _copy(self) -> VehiclePhysicsControl:
-        """A deep copy: new lists, new wheels, new vectors (issue #84)."""
-        return VehiclePhysicsControl(
-            torque_curve=self._torque_curve,
-            max_torque=self.max_torque,
-            max_rpm=self.max_rpm,
-            idle_rpm=self.idle_rpm,
-            brake_effect=self.brake_effect,
-            rev_up_moi=self.rev_up_moi,
-            rev_down_rate=self.rev_down_rate,
-            differential_type=self.differential_type,
-            front_rear_split=self.front_rear_split,
-            use_automatic_gears=self.use_automatic_gears,
-            gear_change_time=self.gear_change_time,
-            final_ratio=self.final_ratio,
-            forward_gear_ratios=self._forward_gear_ratios,
-            reverse_gear_ratios=self._reverse_gear_ratios,
-            change_up_rpm=self.change_up_rpm,
-            change_down_rpm=self.change_down_rpm,
-            transmission_efficiency=self.transmission_efficiency,
-            mass=self.mass,
-            drag_coefficient=self.drag_coefficient,
-            center_of_mass=self._center_of_mass,
-            chassis_width=self.chassis_width,
-            chassis_height=self.chassis_height,
-            downforce_coefficient=self.downforce_coefficient,
-            drag_area=self.drag_area,
-            inertia_tensor_scale=self._inertia_tensor_scale,
-            sleep_threshold=self.sleep_threshold,
-            sleep_slope_limit=self.sleep_slope_limit,
-            steering_curve=self._steering_curve,
-            wheels=self._wheels,
-            use_sweep_wheel_collision=self.use_sweep_wheel_collision)
 
     @staticmethod
     def _from_c(c: CVehiclePhysicsControl) -> VehiclePhysicsControl:

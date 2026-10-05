@@ -43,5 +43,20 @@ def test_issue_table():
     assert str(carla.WalkerControl(speed=1e20)).endswith(
         "speed=100000002004087734272.000000, jump=False)")
 
+def test_telemetry_and_gear_ratios():
+    # Code review of #90: the telemetry records and the gear ratios are float32
+    # in LibCarla too (WheelTelemetryData/VehicleTelemetryData, std::vector<float>).
+    f = 0.10000000149011612
+    assert carla.VehicleTelemetryData(speed=0.1).speed == f
+    assert carla.WheelTelemetryData(omega=0.1).omega == f
+    t = carla.VehicleTelemetryData()
+    t.engine_rpm = 0.1
+    assert t.engine_rpm == f
+    pc = carla.VehiclePhysicsControl(forward_gear_ratios=[0.1])
+    assert pc.forward_gear_ratios == [f]
+    pc.reverse_gear_ratios = [0.1, 2.0]
+    assert pc.reverse_gear_ratios == [f, 2.0]
+
 test_issue_table()
+test_telemetry_and_gear_ratios()
 print("OK")

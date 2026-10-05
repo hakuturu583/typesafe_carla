@@ -225,6 +225,9 @@ class Vector2D:
     _x: float
     _y: float
 
+    def _copy(self) -> Vector2D:
+        return Vector2D(self._x, self._y)
+
     def __init__(self, x: float = 0.0, y: float = 0.0):
         self._x = _f32(x)
         self._y = _f32(y)
@@ -698,19 +701,15 @@ def _matrix(t: CTransform, inverse: bool) -> List[float]:
 # entries (LibCarla's own, from GetMatrix) are float32, and each product and
 # sum is rounded with _f32, left to right.
 
-def _row3(a: float, b: float, c: float, x: float, y: float, z: float) -> float:
-    """x * a + y * b + z * c in float32, as LibCarla's RotateVector rows."""
-    return _f32(_f32(_f32(x * a) + _f32(y * b)) + _f32(z * c))
-
 def _rotate(m: List[float], x: float, y: float, z: float) -> Tuple[float, float, float]:
     """Rotation::RotateVector: m's rotation part times (x, y, z)."""
-    return (_row3(m[0], m[1], m[2], x, y, z), _row3(m[4], m[5], m[6], x, y, z),
-            _row3(m[8], m[9], m[10], x, y, z))
+    return (_dot3(x, y, z, m[0], m[1], m[2]), _dot3(x, y, z, m[4], m[5], m[6]),
+            _dot3(x, y, z, m[8], m[9], m[10]))
 
 def _inverse_rotate(m: List[float], x: float, y: float, z: float) -> Tuple[float, float, float]:
     """Rotation::InverseRotateVector: the transpose of m's rotation part times (x, y, z)."""
-    return (_row3(m[0], m[4], m[8], x, y, z), _row3(m[1], m[5], m[9], x, y, z),
-            _row3(m[2], m[6], m[10], x, y, z))
+    return (_dot3(x, y, z, m[0], m[4], m[8]), _dot3(x, y, z, m[1], m[5], m[9]),
+            _dot3(x, y, z, m[2], m[6], m[10]))
 
 def _transform_point(m: List[float], x: float, y: float, z: float) -> Tuple[float, float, float]:
     """Transform::TransformPoint: rotate, then add the location (m's last column)."""
