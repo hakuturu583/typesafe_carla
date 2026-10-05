@@ -340,3 +340,27 @@ print('OK')
     run = subprocess.run([sys.executable, "-c", program], cwd=tmp_path,
                          capture_output=True, text=True, timeout=60)
     assert run.returncode == 0 and run.stdout.split() == ["OK"], run.stdout + run.stderr
+
+
+def test_actor_attribute_conversions(pycarla):
+    """Issue #102: int() / float() / bool() as the Python API's __int__ /
+    __float__ / __bool__ (As<int> / As<float> / As<bool>), raising
+    RuntimeError (CARLA's BadAttributeCast) for another attribute type."""
+    _run_ok(pycarla, """
+bp = carla.Client('localhost', 2000).get_world().get_blueprint_library().find('vehicle.lincoln.mkz_2020')
+def raises(f):
+    try:
+        f()
+    except RuntimeError:
+        return True
+    return False
+wheels = bp.get_attribute('number_of_wheels')
+assert int(wheels) == 4 and type(int(wheels)) is int
+assert raises(lambda: float(wheels)) and raises(lambda: bool(wheels))
+mass = bp.get_attribute('base_mass')
+assert float(mass) == 1500.0 and raises(lambda: int(mass))
+sticky = bp.get_attribute('sticky_control')
+assert bool(sticky) is True and raises(lambda: int(sticky))
+assert raises(lambda: 1 if bp.get_attribute('role_name') else 0)  # truthiness is bool()
+print('OK')
+""")

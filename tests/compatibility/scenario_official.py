@@ -599,6 +599,32 @@ out("i70_attr_equality", "".join([
     attr_eq(veh70, "role_name", lambda a: a == veh70.get_attribute("role_name")),
     attr_eq(veh70, "role_name", lambda a: a == a.as_int()),
 ]))
+# Issue #102: int() / float() / bool() and truthiness (__int__ / __float__ /
+# __bool__ as As<int> / As<float> / As<bool>). Per case: the value (a float
+# in thousandths, a bool as 1/0), E if it raised, M if the attribute is missing.
+def attr_conv(bp, name, f):
+    if not bp.has_attribute(name):
+        return "M"
+    try:
+        return f(bp.get_attribute(name))
+    except Exception:
+        return "E"
+
+
+out("i102_attr_conversions", ",".join([
+    attr_conv(veh70, "number_of_wheels", lambda a: str(int(a))),
+    attr_conv(veh70, "number_of_wheels", lambda a: str(int(round(float(a) * 1000)))),
+    attr_conv(veh70, "number_of_wheels", lambda a: "1" if bool(a) else "0"),
+    attr_conv(veh70, "sticky_control", lambda a: "1" if bool(a) else "0"),
+    attr_conv(veh70, "sticky_control", lambda a: "1" if a else "0"),
+    attr_conv(veh70, "sticky_control", lambda a: str(int(a))),
+    attr_conv(cam70, "fov", lambda a: str(int(round(float(a) * 1000)))),
+    attr_conv(cam70, "fov", lambda a: str(int(a))),
+    attr_conv(cam70, "image_size_x", lambda a: str(int(a))),
+    attr_conv(veh70, "role_name", lambda a: "1" if a else "0"),
+    attr_conv(veh70, "role_name", lambda a: str(int(a))),
+    attr_conv(veh70, "color", lambda a: str(int(round(float(a) * 1000)))),
+]))
 sys.stdout.flush()
 # Issue #71: str() in the Python API's format, for server objects.
 m71 = world.get_map()

@@ -114,6 +114,20 @@ class ActorAttribute:
         self._expect(ActorAttributeType.String)
         return self._value
 
+    # int() / float() / bool() as the official Python API, whose binding
+    # defines __int__, __float__ and __bool__ (and __nonzero__) as
+    # As<int>, As<float> and As<bool>: each reads the attribute as that type
+    # and raises CarlaError on any other type. So `if attr:` raises for an
+    # attribute that is not a Bool (test an Optional with `is None`).
+    def __int__(self) -> int:
+        return self.as_int()
+
+    def __float__(self) -> float:
+        return self.as_float()
+
+    def __bool__(self) -> bool:
+        return self.as_bool()
+
     def as_color(self) -> Color:
         self._expect(ActorAttributeType.RGBColor)
         parts = self._value.split(",")

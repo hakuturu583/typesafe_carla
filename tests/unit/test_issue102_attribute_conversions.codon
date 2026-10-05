@@ -1,0 +1,55 @@
+# Issue #102: int() / float() / bool() on an ActorAttribute, as the official
+# Python API's __int__ / __float__ / __bool__ (As<int> / As<float> /
+# As<bool>): the matching type converts, any other raises CarlaError.
+import typesafe_carla as carla
+
+def raises(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError:
+        return True
+    return False
+
+client = carla.Client("localhost", 2000)
+bp = client.get_world().get_blueprint_library().find("vehicle.lincoln.mkz_2020")
+
+wheels = bp.get_attribute("number_of_wheels")
+assert int(wheels) == wheels.as_int() and int(wheels) == 4
+assert raises(lambda: float(wheels)) and raises(lambda: bool(wheels))
+
+mass = bp.get_attribute("base_mass")
+assert float(mass) == mass.as_float() and float(mass) == 1500.0
+assert raises(lambda: int(mass)) and raises(lambda: bool(mass))
+
+sticky = bp.get_attribute("sticky_control")
+assert bool(sticky) is True and bool(sticky) == sticky.as_bool()
+assert raises(lambda: int(sticky)) and raises(lambda: float(sticky))
+
+# Truthiness is bool(): as the official module, `if attr:` reads it as a bool.
+def truthy(a: carla.ActorAttribute) -> bool:
+    if a:
+        return True
+    return False
+
+assert truthy(sticky)
+assert not truthy(carla.ActorAttribute("b", carla.ActorAttributeType.Bool, False, "False"))
+assert raises(lambda: truthy(wheels))
+assert raises(lambda: bool(carla.ActorAttribute("b", carla.ActorAttributeType.Bool, False, "yes")))
+
+role = bp.get_attribute("role_name")
+assert raises(lambda: int(role)) and raises(lambda: float(role)) and raises(lambda: bool(role))
+color = bp.get_attribute("color")
+assert raises(lambda: int(color)) and raises(lambda: float(color)) and raises(lambda: bool(color))
+
+# A raised CarlaError carries the type error code, as as_int() does.
+try:
+    _ = int(mass)
+    assert False
+except carla.CarlaError as e:
+    assert "not int" in str(e), str(e)
+
+# An Optional attribute is tested with `is None`; its value with bool().
+maybe: Optional[carla.ActorAttribute] = wheels
+assert maybe is not None and int(unwrap(maybe)) == 4
+
+print("OK")
