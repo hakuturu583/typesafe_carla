@@ -850,7 +850,7 @@ def pycarla_dir(build: bool = True) -> Path | None:
             return out
         if not build:
             return None
-        print(f"building the carla CPython package in {out} (tools/pycarla, ~15 min) ...", flush=True)
+        print(f"building the carla CPython package in {out} (tools/pycarla, 15-50 min) ...", flush=True)
         pycarla.build(out)
     return out
 

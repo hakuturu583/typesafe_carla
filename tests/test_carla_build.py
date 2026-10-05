@@ -2,7 +2,7 @@
 loaded from (typesafe_carla.carla_build), and the package itself.
 
 The package tests need a build of `typesafe_carla.carla` (`typesafe-codon
-pycarla`, ~15 min): they run when TSC_PYCARLA_LIBRARY_DIR names one (it is
+pycarla`, 15-50 min): they run when TSC_PYCARLA_LIBRARY_DIR names one (it is
 used as TYPESAFE_CARLA_PYCARLA_DIR) and are skipped otherwise.
 """
 
