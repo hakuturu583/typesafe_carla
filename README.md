@@ -764,9 +764,11 @@ Deliberate differences, all in favour of static checking:
   construction and on assignment as the official module does:
   `VehicleControl(throttle=0.1).throttle` is `0.10000000149011612`. The
   lists `VehiclePhysicsControl.forward_gear_ratios` and
-  `reverse_gear_ratios` are plain Codon lists, changed in place: their
-  elements keep the doubles you put there and become float32 when sent to
-  the server (the official 0.10.0 module cannot read them at all). Records
+  `reverse_gear_ratios` are values (issue #84): each read gives a new list,
+  so `pc.forward_gear_ratios[0] = 3.0` changes only that copy. Read the
+  list, change it and assign it back; the constructor and the setter store
+  its elements as float32 (the official 0.10.0 module cannot read these
+  lists at all). Records
   only read from the server (measurements, telemetry, `Landmark`, ...)
   already hold LibCarla's float32 values.
 
