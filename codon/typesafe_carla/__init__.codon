@@ -57,7 +57,7 @@ from .light_manager import LightManager, Light, LightGroup, LightState
 import typesafe_carla._actor_compat  # Actor gets the subclass methods (Python API compatibility)
 import typesafe_carla.command as command
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 def abi_version() -> Tuple[int, int]:
     v = int(tsc_abi_version())
