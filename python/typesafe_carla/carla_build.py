@@ -125,7 +125,7 @@ def _stderr(msg: str) -> None:
 def make_prebuilt(dest: Path, log=_stderr) -> Path:
     """Builds the package for a wheel into `dest` (tools/add_pycarla_to_wheel.py):
     keyed by prebuilt_stamp(), linked to find the Codon runtime relative to
-    itself. Run it with the typesafe-carla and toolchain the wheel is
+    itself, and compiled for any x86-64 CPU (not the build machine's). Run it with the typesafe-carla and toolchain the wheel is
     installed with."""
     import tempfile
 
@@ -138,7 +138,7 @@ def make_prebuilt(dest: Path, log=_stderr) -> Path:
             shutil.copyfile(pycarla.PRUNED, pruned)
         log(f"typesafe_carla.carla: building the prebuilt package (15-50 min) in {out} ...")
         pycarla.build(out, package=pycarla.LIBRARY_PACKAGE, pruned_path=pruned, log=log,
-                      rpath=[PREBUILT_RPATH])
+                      rpath=[PREBUILT_RPATH], portable=True)
         if dest.exists():
             shutil.rmtree(dest)
         dest.mkdir(parents=True)

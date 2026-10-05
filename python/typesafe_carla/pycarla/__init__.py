@@ -1193,9 +1193,13 @@ def _culprits(stderr: str, gen: Gen) -> dict[str, str]:
     return out
 
 
-def _compile(source: Path, output: Path, env: dict[str, str] | None) -> subprocess.CompletedProcess:
+def _compile(source: Path, output: Path, env: dict[str, str] | None,
+             portable: bool = False) -> subprocess.CompletedProcess:
+    """`portable`: code for any x86-64 CPU. Codon targets the build machine's
+    CPU by default (AVX-512 on one, SIGILL on a CPU without it)."""
     output.unlink(missing_ok=True)
-    return typesafe_codon("build", "--pyext", "--relocation-model=pic", "--module", MODULE,
+    flags = ["--disable-native"] if portable else []
+    return typesafe_codon("build", "--pyext", "--relocation-model=pic", *flags, "--module", MODULE,
                           "-o", str(output), str(source),
                           env={"TYPESAFE_CARLA_COMPAT_WARNINGS": "0", **(env or {})})
 
@@ -1266,14 +1270,14 @@ def probe_shards() -> int:
 
 def compile_module(out: Path, env: dict[str, str] | None = None, log=print,
                    shards: int | None = None, package: str = PACKAGE_NAME,
-                   pruned_path: Path = PRUNED) -> Gen:
+                   pruned_path: Path = PRUNED, portable: bool = False) -> Gen:
     """Generates and compiles `_carla.o`, pruning variants that do not compile.
 
     An untyped library parameter is exported as one overload per type it may
     take (GENERIC_PARAMS); a combination the library rejects (its own
     compile-time checks) is a compile error. Such variants are dropped,
     recorded in `pruned_path` (pruned.json), and the module is compiled again
-    (sharded type checks find several per round).
+    (sharded type checks find several per round). `portable`: see _compile.
     """
     pruned = json.loads(pruned_path.read_text()) if pruned_path.is_file() else {}
     for key, msg in pruned.items():
@@ -1281,7 +1285,7 @@ def compile_module(out: Path, env: dict[str, str] | None = None, log=print,
     obj = out / f"{MODULE}.o"
     for _ in range(200):
         source, gen = generate(out, pruned, package)
-        result = _compile(source, obj, env)
+        result = _compile(source, obj, env, portable)
         if result.returncode == 0 and obj.is_file():
             return gen
         culprits = _culprits(result.stderr, gen)
@@ -1363,13 +1367,16 @@ def is_current(out: Path, package: str = PACKAGE_NAME, pruned_path: Path = PRUNE
 
 
 def build(out: Path, env: dict[str, str] | None = None, package: str = PACKAGE_NAME,
-          pruned_path: Path = PRUNED, log=print, rpath: list[str] | None = None) -> Path:
+          pruned_path: Path = PRUNED, log=print, rpath: list[str] | None = None,
+          portable: bool = False) -> Path:
     """Builds the package into `out/carla` (imported as `package`); returns `out`.
 
     `_carla.so` finds the Codon runtime through `rpath` (default: this
-    toolchain's library directories)."""
+    toolchain's library directories). `portable` builds it for any x86-64
+    CPU rather than this machine's (a build to distribute)."""
     out.mkdir(parents=True, exist_ok=True)
-    gen = compile_module(out, env, log=log, package=package, pruned_path=pruned_path)
+    gen = compile_module(out, env, log=log, package=package, pruned_path=pruned_path,
+                         portable=portable)
     pkg = out / "carla"
     pkg.mkdir(parents=True, exist_ok=True)
     link(out / f"{MODULE}.o", pkg / f"{MODULE}.so", rpath)
