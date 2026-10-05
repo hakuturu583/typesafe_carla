@@ -17,7 +17,9 @@ assert len(pc.wheels) == 4
 pc.mass = pc.mass + 250.0
 pc.torque_curve = [carla.Vector2D(0.0, 400.0), carla.Vector2D(6000.0, 300.0)]
 pc.forward_gear_ratios = [3.0, 2.0, 1.0]
-pc.wheels[2].wheel_radius = 41.5
+wheels = pc.wheels  # a copy (issue #84): change it, then assign it back
+wheels[2].wheel_radius = 41.5
+pc.wheels = wheels
 command = carla.command.ApplyVehiclePhysicsControl(vehicle.id, pc)
 assert str(command).startswith("command.ApplyVehiclePhysicsControl(")
 pc.mass = 1.0  # the command holds a copy

@@ -210,7 +210,7 @@ Notes on Milestone 2:
 - `World.spawn_actor(..., attach_to=...)` accepts any actor subclass (e.g. a `Vehicle`) or an `Optional` of one, and rejects non-actors at compile time.
 
 Notes on Milestone 1:
-- **Physics control.** `VehiclePhysicsControl` and `WheelPhysicsControl` have every field of LibCarla UE5's `rpc::VehiclePhysicsControl` / `rpc::WheelPhysicsControl` (identical in 0.10.0 and ue5-dev), with the Python API's names and LibCarla's defaults: the torque and steering curves and each wheel's `lateral_slip_graph` (`List[Vector2D]`), `forward_gear_ratios` / `reverse_gear_ratios` (`List[float]`; the official 0.10.0 Python API cannot read or set these), the engine, transmission, chassis and suspension scalars, and the `uint8_t` codes (`differential_type`, `axle_type`, ...) as `int` in [0, 255]. The lists are plain Codon lists, so `pc.wheels[0].wheel_radius = 40.0` changes `pc` in place. `apply_physics_control` reads the vehicle's current control and overwrites every field, so fields a newer LibCarla adds keep the server's values; the wheel count must match the vehicle's. CARLA 0.10.0 applies changes a few frames later, ignores per-wheel fields such as `max_brake_torque`, `max_steer_angle`, `wheel_radius` and `cornering_stiffness`, and puts two default keys in front of every curve it is given (so each apply grows `torque_curve` and `steering_curve` by two points), all exactly as the official Python API reads back.
+- **Physics control.** `VehiclePhysicsControl` and `WheelPhysicsControl` have every field of LibCarla UE5's `rpc::VehiclePhysicsControl` / `rpc::WheelPhysicsControl` (identical in 0.10.0 and ue5-dev), with the Python API's names and LibCarla's defaults: the torque and steering curves and each wheel's `lateral_slip_graph` (`List[Vector2D]`), `forward_gear_ratios` / `reverse_gear_ratios` (`List[float]`; the official 0.10.0 Python API cannot read or set these), the engine, transmission, chassis and suspension scalars, and the `uint8_t` codes (`differential_type`, `axle_type`, ...) as `int` in [0, 255]. The list fields are values, as in the Python API: `pc.wheels`, `pc.torque_curve`, ... return a new list of copies on each read, so change the list and assign it back (`wheels = pc.wheels; wheels[0].wheel_radius = 40.0; pc.wheels = wheels`); `pc.wheels[0].wheel_radius = 40.0` changes only a copy. `apply_physics_control` reads the vehicle's current control and overwrites every field, so fields a newer LibCarla adds keep the server's values; the wheel count must match the vehicle's. CARLA 0.10.0 applies changes a few frames later, ignores per-wheel fields such as `max_brake_torque`, `max_steer_angle`, `wheel_radius` and `cornering_stiffness`, and puts two default keys in front of every curve it is given (so each apply grows `torque_curve` and `steering_curve` by two points), all exactly as the official Python API reads back.
 - **Batch commands.** As in the Python API, a command's actor (and `SpawnActor`'s parent) is an `Actor` of any kind or its id, given positionally or by the official keywords `actor_id=` / `actor=` (`parent_id=` / `parent=`); passing both, or neither, is a compile error. An `Optional` actor such as `world.get_actor(id)` is accepted too and raises `CarlaError` when it is `None` at run time; a literal `None` (on which the official 0.10.0 module crashes), an `Optional[int]` or any other type is a compile error. Unlike the official overloads, either keyword takes either form (`actor_id=vehicle` works). Every constructor returns one `Command` type, so one list can mix command kinds. `SetAutopilot` in `apply_batch_sync` also registers the vehicle with the Traffic Manager, like the Python API. `ApplyVehiclePhysicsControl` copies the control when the command is made and sends all of it; unlike `Vehicle.apply_physics_control()`, it cannot check the wheel count against the vehicle's.
 
 ### Supported CARLA versions
@@ -582,8 +582,16 @@ Deliberate differences, all in favour of static checking:
   (`ActorSnapshot.get_velocity()`, `Light.location`, `Landmark.transform`,
   `IMUMeasurement.accelerometer`, ...). Field getters return the stored value,
   as the Python API's do, so `t.location.x = 1` and `t.location += v` change
-  `t`. Lists are not covered: a list field (`VehiclePhysicsControl.wheels`,
-  `torque_curve`, ...) is shared with the list it was set from.
+  `t`. List fields are values too (issue #84): the constructor and the
+  setter store a copy of the list and of each element, so changing the list
+  afterwards leaves the object alone. Their getters follow the Python API:
+  `VehiclePhysicsControl`'s lists, `WalkerBoneControlIn/Out.bone_transforms`
+  and `VehicleTelemetryData.wheels` return a new list of copies on each read
+  (change it and assign it back), while `WheelPhysicsControl.lateral_slip_graph`
+  returns the stored list, as a field. Commands copy their control when they
+  are made (`ApplyVehicleControl`, `ApplyWalkerControl`,
+  `ApplyVehicleAckermannControl`, `ApplyVehiclePhysicsControl`), and
+  `EnvironmentObject(...)` copies its transform and bounding box.
 * **`get_landmarks_of_type(distance, type)`**: pass the type by position.
   Codon 0.19 cannot compile these methods with a parameter named `type`, so
   it is `landmark_type` (as in `Map.get_all_landmarks_of_type`).

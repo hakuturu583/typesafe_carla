@@ -53,6 +53,12 @@ class _MapLayer(_IntEnum):
 
 MapLayer = _MapLayer()
 
+def _copy_transform(t: Transform) -> Transform:
+    return t._copy()
+
+def _copy_box(b: BoundingBox) -> BoundingBox:
+    return b._copy()
+
 class EnvironmentObject:
     """A static object of the level (a plain value)."""
     id: int  # LibCarla's uint64 id, bit-for-bit (large ids read as negative ints)
@@ -65,11 +71,25 @@ class EnvironmentObject:
                  type: int):
         self.id = id
         self.name = name
-        # Stored as given (fresh from LibCarla): `bounding_box._copy()` here
-        # fails to compile in Codon 0.19 ("int takes 0 generics").
-        self._transform = transform
-        self._bounding_box = bounding_box
+        # Copies, as the official module stores C++ values (issue #84). Called
+        # here directly, `transform._copy()` fails to compile in Codon 0.19
+        # ("int takes 0 generics": the parameter `type` shadows the builtin
+        # while _copy is realized), so module-level helpers make the copies.
+        self._transform = _copy_transform(transform)
+        self._bounding_box = _copy_box(bounding_box)
         self.type = type
+
+    @staticmethod
+    def _fresh(id: int, name: str, transform: Transform, bounding_box: BoundingBox,
+               label: int) -> EnvironmentObject:
+        """Built directly from values fresh from LibCarla: no copies needed."""
+        o = EnvironmentObject.__new__()
+        o.id = id
+        o.name = name
+        o._transform = transform
+        o._bounding_box = bounding_box
+        o.type = label
+        return o
 
     @property
     def transform(self) -> Transform:
@@ -223,7 +243,7 @@ class World:
                                 object_type: int = CityObjectLabel.Any) -> List[EnvironmentObject]:
         out = Ptr[CEnvironmentObjectList](1)
         _check(tsc_world_get_environment_objects(self._h.ptr, _u8(object_type, "object_type"), out))
-        return take_list(out, lambda o: EnvironmentObject(
+        return take_list(out, lambda o: EnvironmentObject._fresh(
             int(o.id), copy_string(o.name), Transform._from_c(o.transform),
             BoundingBox._from_c(o.bounding_box), int(o.type)), tsc_environment_object_list_free)
 

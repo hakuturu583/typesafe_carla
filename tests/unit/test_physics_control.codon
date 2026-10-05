@@ -48,11 +48,18 @@ pc.center_of_mass = carla.Location(0.25, 0.0, -0.5)    # Location
 pc.inertia_tensor_scale = carla.Vector3D(1.5, 1.0, 0.5)  # Vector3D
 pc.torque_curve = [carla.Vector2D(0.0, 400.0), carla.Vector2D(2500.0, 600.0),
                    carla.Vector2D(6000.0, 350.0)]      # curve, resized
-pc.steering_curve.append(carla.Vector2D(30.0, 0.25))   # curve, in place
+# The list getters return copies, as in the Python API (issue #84): change
+# the list, then assign it back.
+steering = pc.steering_curve
+steering.append(carla.Vector2D(30.0, 0.25))
+pc.steering_curve = steering                           # curve, appended
 pc.forward_gear_ratios = [4.0, 2.5, 1.5, 1.0, 0.75]    # gear ratios, resized
-pc.forward_gear_ratios[1] = 2.25                       # one gear
+gears = pc.forward_gear_ratios
+gears[1] = 2.25
+pc.forward_gear_ratios = gears                         # one gear
 pc.reverse_gear_ratios = List[float]()                 # emptied
-w = pc.wheels[1]
+wheels = pc.wheels
+w = wheels[1]
 w.wheel_radius = 35.5                                  # wheel float, in place
 w.abs_enabled = True                                   # wheel bool
 w.sweep_type = 2                                       # wheel uint8_t code
@@ -60,7 +67,8 @@ w.suspension_smoothing = 4                             # wheel int
 w.suspension_axis = carla.Vector3D(0.0, 0.0, -0.5)     # wheel Vector3D
 w.location = carla.Location(1.0, 2.0, 3.0)             # wheel Location
 w.lateral_slip_graph = [carla.Vector2D(1.0, 0.5)]      # wheel curve
-pc.wheels[3].max_brake_torque = 2500.0
+wheels[3].max_brake_torque = 2500.0
+pc.wheels = wheels
 vehicle.apply_physics_control(pc)
 
 again = vehicle.get_physics_control()
@@ -92,20 +100,44 @@ def rejected(bad: carla.VehiclePhysicsControl, needle: str) -> bool:
         return True
     return False
 
-bad = vehicle.get_physics_control()
-bad.wheels.pop()
-assert rejected(bad, "wheels")
+def bad_wheels(f: Callable[[List[carla.WheelPhysicsControl]], None]) -> carla.VehiclePhysicsControl:
+    """The vehicle's control with its wheels changed by f (the getter copies)."""
+    p = vehicle.get_physics_control()
+    wheels = p.wheels
+    f(wheels)
+    p.wheels = wheels
+    return p
+
+def pop_wheel(ws: List[carla.WheelPhysicsControl]):
+    ws.pop()
+
+def bad_axle(ws: List[carla.WheelPhysicsControl]):
+    ws[0].axle_type = -1
+
+def bad_sweep(ws: List[carla.WheelPhysicsControl]):
+    ws[0].sweep_shape = 2**32 + 1
+
+def bad_index(ws: List[carla.WheelPhysicsControl]):
+    ws[0].wheel_index = 2**32 + 1
+
+def bad_smoothing(ws: List[carla.WheelPhysicsControl]):
+    ws[2].suspension_smoothing = -(2**32 + 1)
+
+def bad_radius(ws: List[carla.WheelPhysicsControl]):
+    ws[0].wheel_radius = -1e300
+
+assert rejected(bad_wheels(pop_wheel), "wheels")
 bad = vehicle.get_physics_control()
 bad.differential_type = 256
 assert rejected(bad, "differential_type")
-bad = vehicle.get_physics_control()
-bad.wheels[0].axle_type = -1
-assert rejected(bad, "axle_type")
+assert rejected(bad_wheels(bad_axle), "axle_type")
 bad = vehicle.get_physics_control()
 bad.mass = 0.0
 assert rejected(bad, "mass")
 bad = vehicle.get_physics_control()
-bad.torque_curve[0] = carla.Vector2D(float("nan"), 1.0)
+curve = bad.torque_curve
+curve[0] = carla.Vector2D(float("nan"), 1.0)
+bad.torque_curve = curve
 assert rejected(bad, "torque_curve")
 # Codon ints are 64-bit: values are range-checked before narrowing to int32,
 # so 2**32 + 1 is not silently applied as 1.
@@ -113,24 +145,16 @@ big = 2**32 + 1
 bad = vehicle.get_physics_control()
 bad.differential_type = big
 assert rejected(bad, "differential_type")
-bad = vehicle.get_physics_control()
-bad.wheels[0].sweep_shape = big
-assert rejected(bad, "sweep_shape")
-bad = vehicle.get_physics_control()
-bad.wheels[0].wheel_index = big
-assert rejected(bad, "wheel_index")
-bad = vehicle.get_physics_control()
-bad.wheels[2].suspension_smoothing = -big
-assert rejected(bad, "suspension_smoothing")
+assert rejected(bad_wheels(bad_sweep), "sweep_shape")
+assert rejected(bad_wheels(bad_index), "wheel_index")
+assert rejected(bad_wheels(bad_smoothing), "suspension_smoothing")
 # Finite doubles beyond float32 range would become inf in LibCarla.
 bad = vehicle.get_physics_control()
 bad.mass = 1e39
 assert rejected(bad, "mass")
+assert rejected(bad_wheels(bad_radius), "wheel_radius")
 bad = vehicle.get_physics_control()
-bad.wheels[0].wheel_radius = -1e300
-assert rejected(bad, "wheel_radius")
-bad = vehicle.get_physics_control()
-bad.forward_gear_ratios[0] = 1e39
+bad.forward_gear_ratios = [1e39] + bad.forward_gear_ratios[1:]
 assert rejected(bad, "forward_gear_ratios")
 assert vehicle.get_physics_control() == pc
 
@@ -166,10 +190,11 @@ u.torque_curve = [carla.Vector2D(28.0, 29.0)]
 u.steering_curve = [carla.Vector2D(30.0, 31.0), carla.Vector2D(32.0, 33.0)]
 u.forward_gear_ratios = [34.0, 35.0, 36.0]
 u.reverse_gear_ratios = [37.0]
-for i in range(len(u.wheels)):
+u_wheels = u.wheels
+for i in range(len(u_wheels)):
     b = 100.0 * float(i + 1)
     k = 10 * (i + 1)
-    w = u.wheels[i]
+    w = u_wheels[i]
     w.axle_type = k + 1
     w.external_torque_combine_method = k + 2
     w.sweep_shape = k + 3
@@ -208,6 +233,7 @@ for i in range(len(u.wheels)):
     w.max_brake_torque = b + 36.0
     w.max_hand_brake_torque = b + 37.0
     w.lateral_slip_graph = [carla.Vector2D(b + 38.0, b + 39.0)]
+u.wheels = u_wheels
 vehicle.apply_physics_control(u)
 assert vehicle.get_physics_control() == u
 

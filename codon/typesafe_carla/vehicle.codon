@@ -179,6 +179,9 @@ class WheelTelemetryData:
         self.long_slip = long_slip
         self.omega = omega
 
+    def _copy(self) -> WheelTelemetryData:
+        return WheelTelemetryData(self.lat_slip, self.long_slip, self.omega)
+
     def __eq__(self, other: WheelTelemetryData) -> bool:
         return _fields_eq(self, other)
 
@@ -188,15 +191,23 @@ class WheelTelemetryData:
     def __repr__(self) -> str:
         return fmt_fields("WheelTelemetryData", self)
 
+def _telemetry_wheels_copy(wheels: List[WheelTelemetryData]) -> List[WheelTelemetryData]:
+    out = List[WheelTelemetryData](len(wheels))
+    for w in wheels:
+        out.append(w._copy())
+    return out
+
 class VehicleTelemetryData:
-    """Vehicle.get_telemetry_data(), as carla.VehicleTelemetryData."""
+    """Vehicle.get_telemetry_data(), as carla.VehicleTelemetryData. wheels is a
+    value, as in the Python API (issue #84): the constructor and the setter
+    store copies, and each read gives a new list of copies."""
     speed: float  # forward speed, m/s
     steer: float
     throttle: float
     brake: float
     engine_rpm: float
     gear: int
-    wheels: List[WheelTelemetryData]
+    _wheels: List[WheelTelemetryData]
 
     def __init__(self, speed: float = 0.0, steer: float = 0.0, throttle: float = 0.0,
                  brake: float = 0.0, engine_rpm: float = 0.0, gear: int = 0,
@@ -207,7 +218,17 @@ class VehicleTelemetryData:
         self.brake = brake
         self.engine_rpm = engine_rpm
         self.gear = gear
-        self.wheels = wheels if wheels is not None else List[WheelTelemetryData]()
+        self._wheels = (_telemetry_wheels_copy(wheels) if wheels is not None
+                        else List[WheelTelemetryData]())
+
+    @property
+    def wheels(self) -> List[WheelTelemetryData]:
+        """A new list of copies, as the official getter (by value)."""
+        return _telemetry_wheels_copy(self._wheels)
+
+    @wheels.setter
+    def wheels(self, v: List[WheelTelemetryData]):
+        self._wheels = _telemetry_wheels_copy(v)
 
     def __eq__(self, other: VehicleTelemetryData) -> bool:
         return _fields_eq(self, other)
@@ -259,10 +280,12 @@ class Vehicle:
         wheels, n = _read_buffer(lambda h, buf, cap, count: tsc_vehicle_get_telemetry_data(
             h, out, buf, cap, count), self._h.ptr, CWheelTelemetryData, 8)
         c = out[0]
-        return VehicleTelemetryData(
-            c.speed, c.steer, c.throttle, c.brake, c.engine_rpm, int(c.gear),
-            [WheelTelemetryData(wheels[i].lat_slip, wheels[i].long_slip, wheels[i].omega)
-             for i in range(n)])
+        result = VehicleTelemetryData(c.speed, c.steer, c.throttle, c.brake, c.engine_rpm,
+                                      int(c.gear))
+        # Fresh wheels: stored as they are, not copied again.
+        result._wheels = [WheelTelemetryData(wheels[i].lat_slip, wheels[i].long_slip,
+                                             wheels[i].omega) for i in range(n)]
+        return result
 
     def get_wheel_steer_angle(self, wheel_location: VehicleWheelLocation) -> float:
         """The wheel's physics steering angle, degrees."""

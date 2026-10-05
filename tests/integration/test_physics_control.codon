@@ -53,14 +53,18 @@ try:
     gear0 = pc.forward_gear_ratios[0] + 0.5
     pc.mass = mass
     pc.torque_curve = curve
-    pc.forward_gear_ratios[0] = gear0
-    w0 = pc.wheels[0]
+    gears = pc.forward_gear_ratios  # the list getters copy (issue #84)
+    gears[0] = gear0
+    pc.forward_gear_ratios = gears
+    wheels = pc.wheels
+    w0 = wheels[0]
     steer = w0.max_steer_angle - 10.0
     radius = w0.wheel_radius + 1.0
     stiffness = w0.cornering_stiffness + 100.0
     w0.max_steer_angle = steer
     w0.wheel_radius = radius
     w0.cornering_stiffness = stiffness
+    pc.wheels = wheels
     car.apply_physics_control(pc)
     for _ in range(20):  # the server applies physics changes a few frames later
         world.wait_for_tick(10.0)

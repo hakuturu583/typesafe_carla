@@ -122,11 +122,14 @@ client.apply_batch_sync([carla.command.DestroyActor(spawned[0].actor_id)])
 pc = vb.get_physics_control()
 assert len(pc.wheels) == 4 and pc.mass == 1500.0
 pc.mass = 2100.0
-pc.wheels[0].max_steer_angle = 55.0
+wheels = pc.wheels  # a copy (issue #84): change it, then assign it back
+wheels[0].max_steer_angle = 55.0
+pc.wheels = wheels
 vb.apply_physics_control(pc)
 again = vb.get_physics_control()
 assert again.mass == 2100.0 and again.wheels[0].max_steer_angle == 55.0
-pc.wheels.pop()
+wheels.pop()
+pc.wheels = wheels
 raised = False
 try:
     vb.apply_physics_control(pc)
