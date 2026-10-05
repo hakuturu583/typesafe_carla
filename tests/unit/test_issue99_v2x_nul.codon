@@ -1,0 +1,62 @@
+# Issue #99: CustomV2XBytes.set_string copies len(s) bytes, up to
+# max_data_size(), embedded NULs included, as CARLA's Python API (and as
+# set_bytes). get_string and ["Bytes"] give them back whole.
+import typesafe_carla as carla
+
+def from_bytes(values: List[int]) -> carla.CustomV2XBytes:
+    b = carla.CustomV2XBytes()
+    b.set_bytes(values)
+    return b
+
+def from_string(s: str) -> carla.CustomV2XBytes:
+    b = carla.CustomV2XBytes()
+    b.set_string(s)
+    return b
+
+def test_set_string_keeps_nul():
+    s = from_string("hi\x00z")
+    expected = from_bytes([104, 105, 0, 122])
+    assert s.data_size == 4 and s.get()["DataSize"] == 4
+    assert s == expected and s.get_bytes() == expected.get_bytes()
+    assert s.get_string() == "hi\x00z" and len(s.get_string()) == 4
+    assert s.get()["Bytes"] == expected.get()["Bytes"] == "hi\x00z"
+    # Leading, trailing and only NULs.
+    assert from_string("\x00ab") == from_bytes([0, 97, 98])
+    assert from_string("ab\x00") == from_bytes([97, 98, 0])
+    assert from_string("\x00") == from_bytes([0]) and from_string("\x00").data_size == 1
+
+def test_set_string_cuts_at_max_data_size():
+    s = "\x00a" * 60  # 120 bytes: cut to 100, NULs and all
+    b = from_string(s)
+    assert b.data_size == 100
+    assert b == from_bytes([0, 97] * 50)
+    assert b.get_string() == "\x00a" * 50
+
+def test_send_keeps_nul():
+    """Sensor.send(str) goes through set_string."""
+    world = carla.Client("localhost", 2000).get_world()
+    lib = world.get_blueprint_library()
+    vehicle = world.get_actors()[0].as_vehicle()
+    other = world.spawn_actor(lib.find("vehicle.audi.tt"),
+                              carla.Transform(carla.Location(12.0, 0.0, 0.5))).as_vehicle()
+    sender = world.spawn_actor(lib.find("sensor.other.v2x_custom"), carla.Transform(),
+                               attach_to=vehicle).as_sensor()
+    receiver = world.spawn_actor(lib.find("sensor.other.v2x_custom"), carla.Transform(),
+                                 attach_to=other).as_sensor()
+    receiver.listen()
+    sender.listen()
+    world.tick()
+    sender.send("hi\x00z")
+    world.tick()
+    event = receiver.wait_for_data(1.0).as_custom_v2x_event()
+    assert len(event) == 1
+    payload = event[0].get().data
+    assert payload == from_bytes([104, 105, 0, 122]), str(payload)
+    receiver.destroy()
+    sender.destroy()
+    other.destroy()
+
+test_set_string_keeps_nul()
+test_set_string_cuts_at_max_data_size()
+test_send_keeps_nul()
+print("OK")

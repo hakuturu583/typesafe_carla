@@ -328,7 +328,8 @@ class CustomV2XBytes:
     payload of Sensor.send and of a CustomV2XEvent message.
 
     set_string / set_bytes copy at most 100 bytes (the rest is cut, as in the
-    Python API) and zero the remainder. data_size may be set directly, within
+    Python API; set_string copies len(s) bytes, NULs included) and zero the
+    remainder. data_size may be set directly, within
     [0, 100] (the Python API takes any uint8 and then reads past the buffer)."""
     _bytes: Ptr[byte]  # always max_data_size() bytes
     _size: int

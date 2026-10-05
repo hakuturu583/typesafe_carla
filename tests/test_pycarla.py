@@ -270,3 +270,73 @@ for make in (lambda: carla.VehicleControl(throttle=0.5, bogus=1), lambda: carla.
         raise AssertionError('an unknown keyword was accepted')
 print('OK')
 """)
+
+
+def test_custom_v2x_set_string_keeps_nul(pycarla):
+    """Issue #99: set_string copies the whole str, NULs included, as CARLA's
+    Python API and as set_bytes; so does Sensor.send(str)."""
+    _run_ok(pycarla, _SETUP % 0 + """
+s, b = carla.CustomV2XBytes(), carla.CustomV2XBytes()
+s.set_string('hi\\x00z')
+b.set_bytes(b'hi\\x00z')
+assert s.get() == b.get() == {'DataSize': 4, 'MaxDataSize': 100, 'Bytes': b'hi\\x00z'}, s.get()
+assert s == b and s.data_size == 4 and s.get_string() == 'hi\\x00z'
+s.set_string('\\x00a' * 60)  # cut to 100 bytes
+b.set_bytes(b'\\x00a' * 50)
+assert s == b and s.data_size == 100
+other = world.spawn_actor(lib.find('vehicle.audi.tt'), carla.Transform(carla.Location(12.0, 0.0, 0.5)))
+q = queue.Queue()
+sender, receiver = sensor('sensor.other.v2x_custom'), world.spawn_actor(
+    lib.find('sensor.other.v2x_custom'), carla.Transform(), attach_to=other)
+receiver.listen(lambda event: q.put([m.get() for m in event]))
+sender.send('hi\\x00z')
+world.tick()
+got = q.get(timeout=10)
+assert got[0]['Message']['Message']['Bytes'] == b'hi\\x00z', got
+receiver.stop()
+print('OK')
+""")
+
+
+def test_str_arguments_keep_nul(launcher, tmp_path):
+    """Issue #99, without the full package: the generated module's
+    str.__from_py__ (pycarla.STR_FROM_PY) keeps a str's NULs, where Codon's
+    own stops at the first; bytes, UTF-8 and encoding errors are unchanged."""
+    import shutil
+    import sys
+
+    from typesafe_carla import pycarla, toolchain
+
+    if shutil.which("cc") is None:
+        pytest.skip("needs cc to link the extension")
+    source = tmp_path / "nul.codon"
+    source.write_text("import internal.python as _ipy\n" + pycarla.STR_FROM_PY + """
+def length(s: str) -> int:
+    return len(s)
+
+def echo(s: str) -> str:
+    return s
+""")
+    obj = tmp_path / "nul.o"
+    result = launcher("build", "--pyext", "--relocation-model=pic", "--module", "nul",
+                      "-o", str(obj), str(source))
+    assert result.returncode == 0, result.stdout + result.stderr
+    libdirs = [str(d) for d in toolchain.find_codon().library_dirs()]
+    subprocess.run(["cc", "-shared", "-o", str(tmp_path / "nul.so"), str(obj),
+                    *[f"-L{d}" for d in libdirs], "-lcodonrt",
+                    *[f"-Wl,-rpath,{d}" for d in libdirs]], check=True)
+    program = r"""
+import nul
+assert nul.length('hi\x00z') == 4 and nul.echo('hi\x00z') == 'hi\x00z'
+assert nul.length(b'hi\x00z') == 4 and nul.length('\u00e9') == 2
+assert nul.length('') == 0 and nul.length('\x00') == 1
+try:
+    nul.length('\ud800')  # not UTF-8: refused, as by Codon's own conversion
+    raise AssertionError('a lone surrogate was accepted')
+except TypeError:
+    pass
+print('OK')
+"""
+    run = subprocess.run([sys.executable, "-c", program], cwd=tmp_path,
+                         capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0 and run.stdout.split() == ["OK"], run.stdout + run.stderr
