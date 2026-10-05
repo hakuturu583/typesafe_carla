@@ -7,7 +7,7 @@
 
 The classes are typesafe_carla's (typesafe_carla.pycarla generates the
 bindings), not the `carla` package's. A released wheel carries them built;
-elsewhere the first import builds them (typesafe_carla.carla_build; 15-30
+elsewhere the first import builds them (typesafe_carla.carla_build; 15-50
 min, or ahead of time with `typesafe-codon pycarla`).
 """
 

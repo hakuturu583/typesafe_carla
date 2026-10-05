@@ -1,0 +1,10 @@
+# WalkerBoneControlOut.bone_transforms is read-only, as in the Python API
+# (issue #84: each read gives a new list of copies).
+# expect-error: 'WalkerBoneControlOut' object has no attribute 'bone_transforms'
+import typesafe_carla as carla
+
+def clear(walker: carla.Walker):
+    bones = walker.get_bones()
+    bones.bone_transforms = List[carla.bone_transform_out]()
+
+clear(carla.Client("localhost", 2000).get_world().get_actors()[0].as_walker())

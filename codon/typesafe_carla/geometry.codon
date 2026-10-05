@@ -225,6 +225,9 @@ class Vector2D:
     _x: float
     _y: float
 
+    def _copy(self) -> Vector2D:
+        return Vector2D(self._x, self._y)
+
     def __init__(self, x: float = 0.0, y: float = 0.0):
         self._x = _f32(x)
         self._y = _f32(y)
@@ -622,7 +625,8 @@ class Rotation:
         return Vector3D(m[c], m[4 + c], m[8 + c])
 
     def get_normalized(self) -> Rotation:
-        """Each angle mapped into [-180, 180), as LibCarla's Rotation::Normalize."""
+        """Each angle mapped into [-180, 180), as LibCarla's Rotation::Normalize
+        (in float32: Rotation(1e10).get_normalized().pitch is 0, not -80)."""
         return Rotation(_normalize_angle(self.pitch), _normalize_angle(self.yaw),
                         _normalize_angle(self.roll))
 
@@ -667,12 +671,19 @@ def _rotation_or(r: Optional[Rotation]) -> Rotation:
         return _raw_rotation(r._pitch, r._yaw, r._roll)
 
 def _normalize_angle(a: float) -> float:
-    from math import trunc
-    a = a - 360.0 * float(trunc(a / 360.0))
+    """LibCarla's Rotation::Normalize of one float32 angle, step by step in
+    float32: a - 360.0f * trunc(a / 360.0f), then +360 if negative, -360 if
+    at least 180."""
+    from math import copysign
+    q = _f32(a / 360.0)
+    # trunc(q) as C's, sign of zero included (a float32 of magnitude 2**24 or
+    # more is an integer; inf and NaN pass through).
+    t = copysign(float(int(q)), q) if abs(q) < 16777216.0 else q
+    a = _f32(a - _f32(360.0 * t))
     if a < 0.0:
-        a += 360.0
+        a = _f32(a + 360.0)
     if a >= 180.0:
-        a -= 360.0
+        a = _f32(a - 360.0)
     return a
 
 def _matrix(t: CTransform, inverse: bool) -> List[float]:
@@ -685,11 +696,25 @@ def _matrix(t: CTransform, inverse: bool) -> List[float]:
         _check(tsc_transform_get_matrix(__ptr__(t), out.ptr))
     return [out[i] for i in range(16)]
 
-def _apply(m: List[float], x: float, y: float, z: float, w: float) -> Tuple[float, float, float]:
-    """m (row major 4x4) times (x, y, z, w), the first three components."""
-    return (m[0] * x + m[1] * y + m[2] * z + m[3] * w,
-            m[4] * x + m[5] * y + m[6] * z + m[7] * w,
-            m[8] * x + m[9] * y + m[10] * z + m[11] * w)
+# LibCarla's Rotation::RotateVector / InverseRotateVector and
+# Transform::TransformPoint, in float32 as there (issue #90): the matrix
+# entries (LibCarla's own, from GetMatrix) are float32, and each product and
+# sum is rounded with _f32, left to right.
+
+def _rotate(m: List[float], x: float, y: float, z: float) -> Tuple[float, float, float]:
+    """Rotation::RotateVector: m's rotation part times (x, y, z)."""
+    return (_dot3(x, y, z, m[0], m[1], m[2]), _dot3(x, y, z, m[4], m[5], m[6]),
+            _dot3(x, y, z, m[8], m[9], m[10]))
+
+def _inverse_rotate(m: List[float], x: float, y: float, z: float) -> Tuple[float, float, float]:
+    """Rotation::InverseRotateVector: the transpose of m's rotation part times (x, y, z)."""
+    return (_dot3(x, y, z, m[0], m[4], m[8]), _dot3(x, y, z, m[1], m[5], m[9]),
+            _dot3(x, y, z, m[2], m[6], m[10]))
+
+def _transform_point(m: List[float], x: float, y: float, z: float) -> Tuple[float, float, float]:
+    """Transform::TransformPoint: rotate, then add the location (m's last column)."""
+    rx, ry, rz = _rotate(m, x, y, z)
+    return (_f32(rx + m[3]), _f32(ry + m[7]), _f32(rz + m[11]))
 
 def _rows(m: List[float]) -> List[List[float]]:
     return [[m[4 * r + c] for c in range(4)] for r in range(4)]
@@ -770,11 +795,11 @@ class Transform:
             m = _matrix(self._to_c(), False)
             for p in in_point:
                 q = _upcast_vector(p)
-                x, y, z = _apply(m, q.x, q.y, q.z, 1.0)
+                x, y, z = _transform_point(m, q.x, q.y, q.z)
                 _set_vector(p, x, y, z)
         else:
             q = _upcast_vector(in_point)
-            x, y, z = _apply(_matrix(self._to_c(), False), q.x, q.y, q.z, 1.0)
+            x, y, z = _transform_point(_matrix(self._to_c(), False), q.x, q.y, q.z)
             return _set_vector(in_point, x, y, z)
 
     def transform_vector(self, in_point):
@@ -785,7 +810,7 @@ class Transform:
             return self.transform_vector(unwrap(in_point))
         else:
             q = _vector_ref(in_point, "[tsc-compat] a Location passed as a Vector3D to Transform.transform_vector")
-            x, y, z = _apply(_matrix(self._to_c(), False), q.x, q.y, q.z, 0.0)
+            x, y, z = _rotate(_matrix(self._to_c(), False), q.x, q.y, q.z)
             _set_vector(in_point, x, y, z)
             return Vector3D(x, y, z)
 
@@ -869,23 +894,28 @@ class BoundingBox:
         transform `point` (box space to world; the official name). As in
         LibCarla, the box's own rotation is not applied."""
         p = _location_ref(world_point, "[tsc-compat] a Vector3D passed as a Location to BoundingBox.contains")
-        x, y, z = _apply(_matrix(point._to_c(), True), p.x, p.y, p.z, 1.0)
-        x -= self.location.x
-        y -= self.location.y
-        z -= self.location.z
+        # Transform::InverseTransformPoint (subtract, then rotate back), then
+        # subtract the box's location, in float32 as LibCarla.
+        l = point.location
+        x, y, z = _inverse_rotate(_matrix(point._to_c(), False), _f32(p.x - l.x),
+                                  _f32(p.y - l.y), _f32(p.z - l.z))
+        x = _f32(x - self.location.x)
+        y = _f32(y - self.location.y)
+        z = _f32(z - self.location.z)
         e = self.extent
         return (-e.x <= x <= e.x) and (-e.y <= y <= e.y) and (-e.z <= z <= e.z)
 
     def get_local_vertices(self) -> List[Location]:
         """The 8 corners in local space (the box rotated by its `rotation`),
         in LibCarla's order."""
+        # location + rotation.RotateVector(+-extent), in float32 as LibCarla.
         m = _matrix(CTransform(self.location._to_c(), self.rotation._to_c()), False)
         e = self.extent
         result = List[Location](8)
         for sx in (-1.0, 1.0):
             for sy in (-1.0, 1.0):
                 for sz in (-1.0, 1.0):
-                    x, y, z = _apply(m, sx * e.x, sy * e.y, sz * e.z, 1.0)
+                    x, y, z = _transform_point(m, sx * e.x, sy * e.y, sz * e.z)
                     result.append(Location(x, y, z))
         return result
 
@@ -894,7 +924,7 @@ class BoundingBox:
         m = _matrix(bbox_transform._to_c(), False)
         result = List[Location](8)
         for v in self.get_local_vertices():
-            x, y, z = _apply(m, v.x, v.y, v.z, 1.0)
+            x, y, z = _transform_point(m, v.x, v.y, v.z)
             result.append(Location(x, y, z))
         return result
 
@@ -908,6 +938,23 @@ class BoundingBox:
 
     def _to_c(self) -> CBoundingBox:
         return CBoundingBox(self.location._to_c(), self.extent._to_c(), self.rotation._to_c())
+
+# LibCarla's Math::ToRadians<double> / ToDegrees<double> factors.
+_RADIANS = 3.141592653589793 / 180.0
+_DEGREES = 180.0 / 3.141592653589793
+
+def _half_radians(deg: float) -> float:
+    """static_cast<float>(Math::ToRadians<double>(deg)) * 0.5f."""
+    return _f32(_f32(deg * _RADIANS) * 0.5)
+
+def _cosf(x: float) -> float:
+    """cosf of a float32 value, as LibCarla's std::cos(float)."""
+    from math import cos
+    return float(cos(float32(x)))
+
+def _sinf(x: float) -> float:
+    from math import sin
+    return float(sin(float32(x)))
 
 class Quaternion:
     """A rotation as a unit quaternion (x, y, z, w), as carla.Quaternion.
@@ -963,27 +1010,33 @@ class Quaternion:
         self._w = _f32(v)
 
     def __init__(self, rotation: Rotation):
-        from math import cos, sin, radians
-        hy = radians(-rotation.yaw) * 0.5
-        hp = radians(rotation.pitch) * 0.5
-        hr = radians(-rotation.roll) * 0.5
-        cy, sy = cos(hy), sin(hy)
-        cp, sp = cos(hp), sin(hp)
-        cr, sr = cos(hr), sin(hr)
-        self._w = _f32(cy * cp * cr + sy * sp * sr)
-        self._x = _f32(cy * cp * sr - sy * sp * cr)
-        self._y = _f32(cy * sp * cr + sy * cp * sr)
-        self._z = _f32(sy * cp * cr - cy * sp * sr)
+        """As LibCarla ue5-dev's Quaternion(Rotation), in float32: the half
+        angles through a double ToRadians, then cosf / sinf and float products."""
+        hy = _half_radians(-rotation._yaw)
+        hp = _half_radians(rotation._pitch)
+        hr = _half_radians(-rotation._roll)
+        cy, sy = _cosf(hy), _sinf(hy)
+        cp, sp = _cosf(hp), _sinf(hp)
+        cr, sr = _cosf(hr), _sinf(hr)
+        self._w = _f32(_f32(_f32(cy * cp) * cr) + _f32(_f32(sy * sp) * sr))
+        self._x = _f32(_f32(_f32(cy * cp) * sr) - _f32(_f32(sy * sp) * cr))
+        self._y = _f32(_f32(_f32(cy * sp) * cr) + _f32(_f32(sy * cp) * sr))
+        self._z = _f32(_f32(_f32(sy * cp) * cr) - _f32(_f32(cy * sp) * sr))
 
     def rotator(self) -> Rotation:
-        """Back to a Rotation (inverse of Quaternion(rotation))."""
-        from math import asin, atan2, degrees
-        x, y, z, w = self.x, self.y, self.z, self.w
-        sin_pitch = max(-1.0, min(1.0, 2.0 * (w * y - z * x)))
-        pitch = asin(sin_pitch)
-        roll = atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y))
-        yaw = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
-        return Rotation(degrees(pitch), degrees(-yaw), degrees(-roll))
+        """Back to a Rotation (inverse of Quaternion(rotation)), as LibCarla
+        ue5-dev's Quaternion::Rotator: float32 arithmetic, asinf / atan2f, and
+        the degrees through a double ToDegrees."""
+        from math import asin, atan2
+        x, y, z, w = self._x, self._y, self._z, self._w
+        sin_pitch = 2.0 * _f32(_f32(w * y) - _f32(z * x))  # 2 * f: exact
+        sin_pitch = 1.0 if sin_pitch > 1.0 else (-1.0 if sin_pitch < -1.0 else sin_pitch)
+        pitch = float(asin(float32(sin_pitch)))
+        roll = float(atan2(float32(2.0 * _f32(_f32(w * x) + _f32(y * z))),
+                           float32(1.0 - 2.0 * _f32(_f32(x * x) + _f32(y * y)))))
+        yaw = float(atan2(float32(2.0 * _f32(_f32(w * z) + _f32(x * y))),
+                          float32(1.0 - 2.0 * _f32(_f32(y * y) + _f32(z * z)))))
+        return Rotation(pitch * _DEGREES, -yaw * _DEGREES, -roll * _DEGREES)
 
     # The methods below follow LibCarla ue5-dev's Quaternion.h formula by
     # formula, in float32 (each step rounded with _f32, left to right).

@@ -6,7 +6,7 @@
 from ._enum import _IntEnum
 from ._ffi import CColor, CFloatColor, CTextureColor, CTextureFloatColor, TSC_INVALID_ARGUMENT
 from .errors import CarlaError
-from ._eq import _fields_eq
+from ._eq import _f32, _fields_eq
 from .blueprint import Color
 
 class _MaterialParameter(_IntEnum):
@@ -20,16 +20,48 @@ MaterialParameter = _MaterialParameter()
 
 class FloatColor:
     """A color with float components (rpc::FloatColor), as in TextureFloatColor."""
-    r: float
-    g: float
-    b: float
-    a: float
+    _r: float
+    _g: float
+    _b: float
+    _a: float
 
     def __init__(self, r: float = 0.0, g: float = 0.0, b: float = 0.0, a: float = 1.0):
         self.r = r
         self.g = g
         self.b = b
         self.a = a
+
+    @property
+    def r(self) -> float:
+        return self._r
+
+    @r.setter
+    def r(self, v: float):
+        self._r = _f32(v)
+
+    @property
+    def g(self) -> float:
+        return self._g
+
+    @g.setter
+    def g(self, v: float):
+        self._g = _f32(v)
+
+    @property
+    def b(self) -> float:
+        return self._b
+
+    @b.setter
+    def b(self, v: float):
+        self._b = _f32(v)
+
+    @property
+    def a(self) -> float:
+        return self._a
+
+    @a.setter
+    def a(self, v: float):
+        self._a = _f32(v)
 
     def __eq__(self, other: FloatColor) -> bool:
         """Exact in float32, as LibCarla."""

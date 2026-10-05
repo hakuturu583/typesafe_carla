@@ -24,7 +24,7 @@ from .errors import _check, _i32, CarlaError
 from .map import _read_buffer
 from .geometry import Transform
 from .actor import Vehicle
-from ._eq import _fields_eq
+from ._eq import _f32, _fields_eq, _copies
 from ._fmt import fmt_fields
 from ._enum import _member_names, _member_values, _enum_repr
 
@@ -104,11 +104,11 @@ class VehicleFailureState:
 class VehicleAckermannControl:
     """Target steering and speed for the server's Ackermann controller, as
     carla.VehicleAckermannControl. Values must be finite."""
-    steer: float  # rad
-    steer_speed: float  # rad/s
-    speed: float  # m/s
-    acceleration: float  # m/s^2
-    jerk: float  # m/s^3
+    _steer: float  # rad
+    _steer_speed: float  # rad/s
+    _speed: float  # m/s
+    _acceleration: float  # m/s^2
+    _jerk: float  # m/s^3
 
     def __init__(self, steer: float = 0.0, steer_speed: float = 0.0, speed: float = 0.0,
                  acceleration: float = 0.0, jerk: float = 0.0):
@@ -117,6 +117,46 @@ class VehicleAckermannControl:
         self.speed = speed
         self.acceleration = acceleration
         self.jerk = jerk
+
+    @property
+    def steer(self) -> float:
+        return self._steer
+
+    @steer.setter
+    def steer(self, v: float):
+        self._steer = _f32(v)
+
+    @property
+    def steer_speed(self) -> float:
+        return self._steer_speed
+
+    @steer_speed.setter
+    def steer_speed(self, v: float):
+        self._steer_speed = _f32(v)
+
+    @property
+    def speed(self) -> float:
+        return self._speed
+
+    @speed.setter
+    def speed(self, v: float):
+        self._speed = _f32(v)
+
+    @property
+    def acceleration(self) -> float:
+        return self._acceleration
+
+    @acceleration.setter
+    def acceleration(self, v: float):
+        self._acceleration = _f32(v)
+
+    @property
+    def jerk(self) -> float:
+        return self._jerk
+
+    @jerk.setter
+    def jerk(self, v: float):
+        self._jerk = _f32(v)
 
     def __eq__(self, other: VehicleAckermannControl) -> bool:
         return _fields_eq(self, other)
@@ -134,12 +174,12 @@ class VehicleAckermannControl:
 class AckermannControllerSettings:
     """PID gains of the server's Ackermann controller, as
     carla.AckermannControllerSettings. Values must be finite."""
-    speed_kp: float
-    speed_ki: float
-    speed_kd: float
-    accel_kp: float
-    accel_ki: float
-    accel_kd: float
+    _speed_kp: float
+    _speed_ki: float
+    _speed_kd: float
+    _accel_kp: float
+    _accel_ki: float
+    _accel_kd: float
 
     def __init__(self, speed_kp: float = 0.0, speed_ki: float = 0.0, speed_kd: float = 0.0,
                  accel_kp: float = 0.0, accel_ki: float = 0.0, accel_kd: float = 0.0):
@@ -149,6 +189,54 @@ class AckermannControllerSettings:
         self.accel_kp = accel_kp
         self.accel_ki = accel_ki
         self.accel_kd = accel_kd
+
+    @property
+    def speed_kp(self) -> float:
+        return self._speed_kp
+
+    @speed_kp.setter
+    def speed_kp(self, v: float):
+        self._speed_kp = _f32(v)
+
+    @property
+    def speed_ki(self) -> float:
+        return self._speed_ki
+
+    @speed_ki.setter
+    def speed_ki(self, v: float):
+        self._speed_ki = _f32(v)
+
+    @property
+    def speed_kd(self) -> float:
+        return self._speed_kd
+
+    @speed_kd.setter
+    def speed_kd(self, v: float):
+        self._speed_kd = _f32(v)
+
+    @property
+    def accel_kp(self) -> float:
+        return self._accel_kp
+
+    @accel_kp.setter
+    def accel_kp(self, v: float):
+        self._accel_kp = _f32(v)
+
+    @property
+    def accel_ki(self) -> float:
+        return self._accel_ki
+
+    @accel_ki.setter
+    def accel_ki(self, v: float):
+        self._accel_ki = _f32(v)
+
+    @property
+    def accel_kd(self) -> float:
+        return self._accel_kd
+
+    @accel_kd.setter
+    def accel_kd(self, v: float):
+        self._accel_kd = _f32(v)
 
     def __eq__(self, other: AckermannControllerSettings) -> bool:
         return _fields_eq(self, other)
@@ -169,15 +257,43 @@ class AckermannControllerSettings:
                                            c.accel_ki, c.accel_kd)
 
 class WheelTelemetryData:
-    """One wheel of VehicleTelemetryData, as carla.WheelTelemetryData."""
-    lat_slip: float
-    long_slip: float
-    omega: float  # angular velocity
+    """One wheel of VehicleTelemetryData, as carla.WheelTelemetryData. The
+    fields are float32, as LibCarla's (issue #90)."""
+    _lat_slip: float
+    _long_slip: float
+    _omega: float  # angular velocity
 
     def __init__(self, lat_slip: float = 0.0, long_slip: float = 0.0, omega: float = 0.0):
         self.lat_slip = lat_slip
         self.long_slip = long_slip
         self.omega = omega
+
+    def _copy(self) -> WheelTelemetryData:
+        return WheelTelemetryData(self._lat_slip, self._long_slip, self._omega)
+
+    @property
+    def lat_slip(self) -> float:
+        return self._lat_slip
+
+    @lat_slip.setter
+    def lat_slip(self, v: float):
+        self._lat_slip = _f32(v)
+
+    @property
+    def long_slip(self) -> float:
+        return self._long_slip
+
+    @long_slip.setter
+    def long_slip(self, v: float):
+        self._long_slip = _f32(v)
+
+    @property
+    def omega(self) -> float:
+        return self._omega
+
+    @omega.setter
+    def omega(self, v: float):
+        self._omega = _f32(v)
 
     def __eq__(self, other: WheelTelemetryData) -> bool:
         return _fields_eq(self, other)
@@ -189,14 +305,17 @@ class WheelTelemetryData:
         return fmt_fields("WheelTelemetryData", self)
 
 class VehicleTelemetryData:
-    """Vehicle.get_telemetry_data(), as carla.VehicleTelemetryData."""
-    speed: float  # forward speed, m/s
-    steer: float
-    throttle: float
-    brake: float
-    engine_rpm: float
+    """Vehicle.get_telemetry_data(), as carla.VehicleTelemetryData. wheels is a
+    value, as in the Python API (issue #84): the constructor and the setter
+    store copies, and each read gives a new list of copies. The float fields
+    are float32, as LibCarla's (issue #90)."""
+    _speed: float  # forward speed, m/s
+    _steer: float
+    _throttle: float
+    _brake: float
+    _engine_rpm: float
     gear: int
-    wheels: List[WheelTelemetryData]
+    _wheels: List[WheelTelemetryData]
 
     def __init__(self, speed: float = 0.0, steer: float = 0.0, throttle: float = 0.0,
                  brake: float = 0.0, engine_rpm: float = 0.0, gear: int = 0,
@@ -207,7 +326,57 @@ class VehicleTelemetryData:
         self.brake = brake
         self.engine_rpm = engine_rpm
         self.gear = gear
-        self.wheels = wheels if wheels is not None else List[WheelTelemetryData]()
+        self._wheels = (_copies(wheels) if wheels is not None
+                        else List[WheelTelemetryData]())
+
+    @property
+    def speed(self) -> float:
+        return self._speed
+
+    @speed.setter
+    def speed(self, v: float):
+        self._speed = _f32(v)
+
+    @property
+    def steer(self) -> float:
+        return self._steer
+
+    @steer.setter
+    def steer(self, v: float):
+        self._steer = _f32(v)
+
+    @property
+    def throttle(self) -> float:
+        return self._throttle
+
+    @throttle.setter
+    def throttle(self, v: float):
+        self._throttle = _f32(v)
+
+    @property
+    def brake(self) -> float:
+        return self._brake
+
+    @brake.setter
+    def brake(self, v: float):
+        self._brake = _f32(v)
+
+    @property
+    def engine_rpm(self) -> float:
+        return self._engine_rpm
+
+    @engine_rpm.setter
+    def engine_rpm(self, v: float):
+        self._engine_rpm = _f32(v)
+
+    @property
+    def wheels(self) -> List[WheelTelemetryData]:
+        """A new list of copies, as the official getter (by value)."""
+        return _copies(self._wheels)
+
+    @wheels.setter
+    def wheels(self, v: List[WheelTelemetryData]):
+        self._wheels = _copies(v)
 
     def __eq__(self, other: VehicleTelemetryData) -> bool:
         return _fields_eq(self, other)
@@ -259,10 +428,12 @@ class Vehicle:
         wheels, n = _read_buffer(lambda h, buf, cap, count: tsc_vehicle_get_telemetry_data(
             h, out, buf, cap, count), self._h.ptr, CWheelTelemetryData, 8)
         c = out[0]
-        return VehicleTelemetryData(
-            c.speed, c.steer, c.throttle, c.brake, c.engine_rpm, int(c.gear),
-            [WheelTelemetryData(wheels[i].lat_slip, wheels[i].long_slip, wheels[i].omega)
-             for i in range(n)])
+        result = VehicleTelemetryData(c.speed, c.steer, c.throttle, c.brake, c.engine_rpm,
+                                      int(c.gear))
+        # Fresh wheels: stored as they are, not copied again.
+        result._wheels = [WheelTelemetryData(wheels[i].lat_slip, wheels[i].long_slip,
+                                             wheels[i].omega) for i in range(n)]
+        return result
 
     def get_wheel_steer_angle(self, wheel_location: VehicleWheelLocation) -> float:
         """The wheel's physics steering angle, degrees."""

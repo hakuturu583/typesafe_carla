@@ -2,7 +2,7 @@
 loaded from (typesafe_carla.carla_build), and the package itself.
 
 The package tests need a build of `typesafe_carla.carla` (`typesafe-codon
-pycarla`, ~15 min): they run when TSC_PYCARLA_LIBRARY_DIR names one (it is
+pycarla`, 15-50 min): they run when TSC_PYCARLA_LIBRARY_DIR names one (it is
 used as TYPESAFE_CARLA_PYCARLA_DIR) and are skipped otherwise.
 """
 
@@ -167,3 +167,30 @@ def test_the_package_does_not_take_the_carla_name(library_build):
         "import typesafe_carla.carla as carla\n"
         "print('carla' in sys.modules, 'typesafe_carla.carla.command' in sys.modules)\n"))
     assert out.split() == ["False", "True"]
+
+
+def test_the_prebuilt_package_is_built_for_any_cpu(monkeypatch, tmp_path):
+    # Codon targets the build machine's CPU by default: a prebuilt package
+    # compiled on an AVX-512 machine dies with SIGILL on one without it.
+    seen = {}
+
+    def build(out, **kwargs):
+        seen.update(kwargs)
+        pkg = out / "carla"
+        pkg.mkdir(parents=True)
+        for name in (f"{pycarla.MODULE}.so", "_spec.json", "_runtime.py"):
+            (pkg / name).write_bytes(b"")
+        return out
+
+    monkeypatch.setattr(pycarla, "build", build)
+    carla_build.make_prebuilt(tmp_path / "_prebuilt", log=lambda *a: None)
+    assert seen["portable"] is True
+    assert seen["rpath"] == [carla_build.PREBUILT_RPATH]
+
+
+@pytest.mark.parametrize("portable", [False, True])
+def test_a_portable_compile_disables_native_code(monkeypatch, tmp_path, portable):
+    calls = []
+    monkeypatch.setattr(pycarla, "typesafe_codon", lambda *args, **kwargs: calls.append(args))
+    pycarla._compile(tmp_path / "m.codon", tmp_path / "m.o", None, portable)
+    assert ("--disable-native" in calls[0]) is portable

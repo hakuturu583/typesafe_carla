@@ -78,6 +78,13 @@ def main() -> int:
             needed = subprocess.run(["readelf", "-d", str(so)], capture_output=True, text=True).stdout
             if "libpython" in needed:
                 errors.append(f"{so} links libpython")
+            # Built for any x86-64 CPU: AVX registers mean it was compiled for
+            # the build machine's CPU and dies (SIGILL) on one without AVX-512.
+            asm = subprocess.run(["objdump", "-d", str(so)], capture_output=True, text=True)
+            if asm.returncode != 0:
+                errors.append(f"objdump -d {so} failed: {asm.stderr.strip()}")
+            elif "%ymm" in asm.stdout or "%zmm" in asm.stdout:
+                errors.append(f"{so} uses AVX instructions: not built portable (--disable-native)")
             print(f"pycarla  {carla_build.PREBUILT_DIR}")
     if backend == "libcarla":
         # Expects an installed wheel: a source-tree build dir (paths prefers

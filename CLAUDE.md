@@ -96,6 +96,10 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   `C` inherits from `B` read `A`'s fields at the wrong offset, and
   `super().__init__()` chains through both levels crash. Keep classes one
   level below `Actor` (`TrafficLight` and `TrafficSign` are siblings).
+- `codon build` compiles for the build machine's CPU (AVX-512 on one, SIGILL
+  on a CPU without it). A build to distribute (the wheel's prebuilt
+  `typesafe_carla.carla`) passes `--disable-native` (`pycarla.build(portable=True)`);
+  `check_wheel.py --pycarla` rejects AVX registers in it.
 - `-D` definitions are visible only in the main file, and `CODON_PATH` holds
   a single directory. The strict setting reaches the library through the
   launcher-generated `_tsc_build_config` module.

@@ -1,0 +1,24 @@
+# Issue #102: int() / float() / bool() on an ActorAttribute are typed int,
+# float and bool (as_int / as_float / as_bool).
+# strict
+import typesafe_carla as carla
+
+def take_int(n: int) -> int:
+    return n
+
+def take_float(x: float) -> float:
+    return x
+
+def take_bool(b: bool) -> bool:
+    return b
+
+def convert(a: carla.ActorAttribute, f: carla.ActorAttribute, b: carla.ActorAttribute) -> str:
+    n = take_int(int(a))
+    x = take_float(float(f))
+    y = take_bool(bool(b))
+    z = 1 if b else 0
+    return str(n) + str(x) + str(y) + str(z)
+
+print(convert(carla.ActorAttribute("n", carla.ActorAttributeType.Int, False, "4"),
+              carla.ActorAttribute("f", carla.ActorAttributeType.Float, False, "1.5"),
+              carla.ActorAttribute("b", carla.ActorAttributeType.Bool, False, "true")))

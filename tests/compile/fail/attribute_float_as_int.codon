@@ -1,0 +1,13 @@
+# float(attribute) is a float (the attribute's as_float()); it does not
+# narrow to an int parameter, unlike the Python API's untyped number.
+# expect-error: 'float' does not match expected type 'int'
+import typesafe_carla as carla
+
+def spawn_wheels(n: int) -> int:
+    return n
+
+def wheels(bp: carla.ActorBlueprint) -> int:
+    return spawn_wheels(float(bp.get_attribute("number_of_wheels")))
+
+lib = carla.Client("localhost", 2000).get_world().get_blueprint_library()
+print(wheels(lib.find("vehicle.tesla.model3")))

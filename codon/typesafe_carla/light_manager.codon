@@ -15,6 +15,7 @@ from ._ffi import (Handle, CLight, CLightList, CLightState, TSC_INVALID_ARGUMENT
                    tsc_light_manager_set_light_group, tsc_light_manager_set_light_state,
                    tsc_light_manager_set_day_night_cycle)
 from .errors import _check, CarlaError
+from ._eq import _f32
 from .geometry import Location
 from .blueprint import Color
 from .world import World
@@ -31,7 +32,7 @@ LightGroup = _LightGroup()
 
 class LightState:
     """A light's intensity (lumens), color, group (LightGroup) and on/off state."""
-    intensity: float
+    _intensity: float
     color: Color
     group: int
     active: bool
@@ -42,6 +43,14 @@ class LightState:
         self.color = color
         self.group = group
         self.active = active
+
+    @property
+    def intensity(self) -> float:
+        return self._intensity
+
+    @intensity.setter
+    def intensity(self, v: float):
+        self._intensity = _f32(v)
 
     @staticmethod
     def _from_c(s: CLightState) -> LightState:

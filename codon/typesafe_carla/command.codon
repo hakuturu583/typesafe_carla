@@ -206,7 +206,9 @@ def DestroyActor(actor_id = _MISSING, actor = _MISSING) -> Command:
 def ApplyVehicleControl(actor_id = _MISSING, control: VehicleControl = _MISSING,
                         actor = _MISSING) -> Command:
     c = Command(_APPLY_VEHICLE_CONTROL, _actor_arg(actor_id, actor))
-    c._control = control
+    # A copy, as the Python API takes the control by value (issue #84):
+    # later changes to `control` do not change the command.
+    c._control = control._copy()
     return c
 
 def ApplyTransform(actor_id = _MISSING, transform: Transform = _MISSING,
@@ -239,6 +241,8 @@ def SetSimulatePhysics(actor_id = _MISSING, enabled: bool = _MISSING, actor = _M
 def ApplyWalkerControl(actor_id = _MISSING, control: WalkerControl = _MISSING,
                        actor = _MISSING) -> Command:
     c = Command(_APPLY_WALKER_CONTROL, _actor_arg(actor_id, actor))
+    # Copied field by field (a new direction), as the Python API takes the
+    # control by value (issue #84).
     c._vector = Vector3D(control.direction)
     c._scalar = control.speed
     c._flag = int(control.jump)
@@ -300,7 +304,8 @@ def SetTrafficLightState(actor_id = _MISSING, state: int = _MISSING, actor = _MI
 def ApplyVehicleAckermannControl(actor_id = _MISSING, control: VehicleAckermannControl = _MISSING,
                                  actor = _MISSING) -> Command:
     c = Command(_APPLY_VEHICLE_ACKERMANN_CONTROL, _actor_arg(actor_id, actor))
-    # tsc_command_t carries the five values in vector and transform.location (ffi.h).
+    # tsc_command_t carries the five values in vector and transform.location
+    # (ffi.h): copied now, as the Python API takes the control by value.
     c._vector = Vector3D(control.steer, control.steer_speed, control.speed)
     c._transform = Transform(Location(control.acceleration, control.jerk, 0.0))
     return c

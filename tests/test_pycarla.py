@@ -245,3 +245,119 @@ loc.x = 5
 assert loc.x == 5 and 'x' not in vars(loc)  # a field still goes to the library
 print('OK')
 """)
+
+
+def test_physics_controls_ignore_unknown_keywords(pycarla):
+    """#93: as in CARLA's Python API (raw-kwargs constructors), the physics
+    controls drop keywords they do not know, here with a warning; every other
+    constructor rejects them with a TypeError, as Boost.Python's ArgumentError."""
+    _run_ok(pycarla, """
+import warnings
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter('always')
+    wheel = carla.WheelPhysicsControl(tire_friction=2, max_steer_angle=30, radius=10)
+    physics = carla.VehiclePhysicsControl(moi=1, use_gear_autobox=1, mass=1000)
+assert wheel.max_steer_angle == 30 and physics.mass == 1000
+assert not hasattr(wheel, 'tire_friction') and not hasattr(physics, 'moi')
+messages = [str(w.message) for w in caught]
+assert len(messages) == 2 and "['radius', 'tire_friction']" in messages[0], messages
+for make in (lambda: carla.VehicleControl(throttle=0.5, bogus=1), lambda: carla.Location(x=1, bogus=1)):
+    try:
+        make()
+    except TypeError:
+        pass
+    else:
+        raise AssertionError('an unknown keyword was accepted')
+print('OK')
+""")
+
+
+def test_custom_v2x_set_string_keeps_nul(pycarla):
+    """Issue #99: set_string copies the whole str, NULs included, as CARLA's
+    Python API and as set_bytes; so does Sensor.send(str)."""
+    _run_ok(pycarla, _SETUP % 0 + """
+s, b = carla.CustomV2XBytes(), carla.CustomV2XBytes()
+s.set_string('hi\\x00z')
+b.set_bytes(b'hi\\x00z')
+assert s.get() == b.get() == {'DataSize': 4, 'MaxDataSize': 100, 'Bytes': b'hi\\x00z'}, s.get()
+assert s == b and s.data_size == 4 and s.get_string() == 'hi\\x00z'
+s.set_string('\\x00a' * 60)  # cut to 100 bytes
+b.set_bytes(b'\\x00a' * 50)
+assert s == b and s.data_size == 100
+other = world.spawn_actor(lib.find('vehicle.audi.tt'), carla.Transform(carla.Location(12.0, 0.0, 0.5)))
+q = queue.Queue()
+sender, receiver = sensor('sensor.other.v2x_custom'), world.spawn_actor(
+    lib.find('sensor.other.v2x_custom'), carla.Transform(), attach_to=other)
+receiver.listen(lambda event: q.put([m.get() for m in event]))
+sender.send('hi\\x00z')
+world.tick()
+got = q.get(timeout=10)
+assert got[0]['Message']['Message']['Bytes'] == b'hi\\x00z', got
+receiver.stop()
+print('OK')
+""")
+
+
+def test_str_arguments_keep_nul(launcher, tmp_path):
+    """Issue #99, without the full package: the generated module's
+    str.__from_py__ (pycarla.STR_FROM_PY) keeps a str's NULs, where Codon's
+    own stops at the first; bytes, UTF-8 and encoding errors are unchanged."""
+    import shutil
+    import sys
+
+    from typesafe_carla import pycarla
+
+    if shutil.which("cc") is None:
+        pytest.skip("needs cc to link the extension")
+    source = tmp_path / "nul.codon"
+    source.write_text("import internal.python as _ipy\n" + pycarla.STR_FROM_PY + """
+def length(s: str) -> int:
+    return len(s)
+
+def echo(s: str) -> str:
+    return s
+""")
+    obj = tmp_path / "nul.o"
+    result = launcher("build", "--pyext", "--relocation-model=pic", "--module", "nul",
+                      "-o", str(obj), str(source))
+    assert result.returncode == 0, result.stdout + result.stderr
+    pycarla.link(obj, tmp_path / "nul.so")
+    program = r"""
+import nul
+assert nul.length('hi\x00z') == 4 and nul.echo('hi\x00z') == 'hi\x00z'
+assert nul.length(b'hi\x00z') == 4 and nul.length('\u00e9') == 2
+assert nul.length('') == 0 and nul.length('\x00') == 1
+try:
+    nul.length('\ud800')  # not UTF-8: refused, as by Codon's own conversion
+    raise AssertionError('a lone surrogate was accepted')
+except TypeError:
+    pass
+print('OK')
+"""
+    run = subprocess.run([sys.executable, "-c", program], cwd=tmp_path,
+                         capture_output=True, text=True, timeout=60)
+    assert run.returncode == 0 and run.stdout.split() == ["OK"], run.stdout + run.stderr
+
+
+def test_actor_attribute_conversions(pycarla):
+    """Issue #102: int() / float() / bool() as the Python API's __int__ /
+    __float__ / __bool__ (As<int> / As<float> / As<bool>), raising
+    RuntimeError (CARLA's BadAttributeCast) for another attribute type."""
+    _run_ok(pycarla, """
+bp = carla.Client('localhost', 2000).get_world().get_blueprint_library().find('vehicle.lincoln.mkz_2020')
+def raises(f):
+    try:
+        f()
+    except RuntimeError:
+        return True
+    return False
+wheels = bp.get_attribute('number_of_wheels')
+assert int(wheels) == 4 and type(int(wheels)) is int
+assert raises(lambda: float(wheels)) and raises(lambda: bool(wheels))
+mass = bp.get_attribute('base_mass')
+assert float(mass) == 1500.0 and raises(lambda: int(mass))
+sticky = bp.get_attribute('sticky_control')
+assert bool(sticky) is True and raises(lambda: int(sticky))
+assert raises(lambda: 1 if bp.get_attribute('role_name') else 0)  # truthiness is bool()
+print('OK')
+""")

@@ -18,7 +18,7 @@ from ._ffi import (Handle, CVector3D, CWalkerControl, TSC_KIND_WALKER,
                    tsc_walker_set_bones, tsc_walker_get_bones, tsc_bone_list_size,
                    tsc_bone_list_get)
 from .errors import _check
-from ._eq import _fields_eq
+from ._eq import _fields_eq, _copies
 from .geometry import Location, Transform, _location_ref
 from .control import WalkerControl
 from .actor import Actor
@@ -41,6 +41,9 @@ class bone_transform:
     @transform.setter
     def transform(self, v: Transform):
         self._transform = v._copy()
+
+    def _copy(self) -> bone_transform:
+        return bone_transform(self.name, self._transform)
 
     def __repr__(self) -> str:
         # The Python API prints the underlying std::pair: "(name,Transform(...))".
@@ -84,6 +87,9 @@ class bone_transform_out:
     def relative(self, v: Transform):
         self._relative = v._copy()
 
+    def _copy(self) -> bone_transform_out:
+        return bone_transform_out(self.name, self._world, self._component, self._relative)
+
     def __eq__(self, other: bone_transform_out) -> bool:
         """The name and the three transforms, as LibCarla."""
         return _fields_eq(self, other)
@@ -99,34 +105,53 @@ class WalkerBoneControlIn:
     """A custom pose for Walker.set_bones(), as carla.WalkerBoneControlIn.
 
     Built from bone_transform values or, as in the Python API, from
-    (name, Transform) pairs."""
-    bone_transforms: List[bone_transform]
+    (name, Transform) pairs. bone_transforms is a value, as in the Python API
+    (issue #84): the constructor and the setter store copies, and each read
+    gives a new list of copies (change it and assign it back)."""
+    _bone_transforms: List[bone_transform]
 
     def __init__(self):
-        self.bone_transforms = List[bone_transform]()
+        self._bone_transforms = List[bone_transform]()
 
     def __init__(self, bone_transforms: List[bone_transform]):
         # Copies, as the Python API converts the list to a std::vector.
-        self.bone_transforms = [bone_transform(b.name, b.transform) for b in bone_transforms]
+        self._bone_transforms = _copies(bone_transforms)
 
     def __init__(self, bone_transforms: List[Tuple[str, Transform]]):
-        self.bone_transforms = [bone_transform(name, t) for name, t in bone_transforms]
+        self._bone_transforms = [bone_transform(name, t) for name, t in bone_transforms]
+
+    @property
+    def bone_transforms(self) -> List[bone_transform]:
+        """A new list of copies, as the official getter (by value)."""
+        return _copies(self._bone_transforms)
+
+    @bone_transforms.setter
+    def bone_transforms(self, v: List[bone_transform]):
+        """Stored as a copy (new bones, new transforms), as the official setter."""
+        self._bone_transforms = _copies(v)
 
     def __repr__(self) -> str:
-        bones = "".join([f"(name={b.name}, transform={b.transform})" for b in self.bone_transforms])
+        bones = "".join([f"(name={b.name}, transform={b.transform})" for b in self._bone_transforms])
         return "WalkerBoneControlIn(bone_transforms(" + bones + "))"
 
 class WalkerBoneControlOut:
-    """Walker.get_bones(), as carla.WalkerBoneControlOut."""
-    bone_transforms: List[bone_transform_out]
+    """Walker.get_bones(), as carla.WalkerBoneControlOut. bone_transforms is
+    read-only, as in the Python API, and each read gives a new list of copies
+    (issue #84); the constructor stores a copy of its list."""
+    _bone_transforms: List[bone_transform_out]
 
     def __init__(self, bone_transforms: Optional[List[bone_transform_out]] = None):
-        self.bone_transforms = (bone_transforms if bone_transforms is not None
-                                else List[bone_transform_out]())
+        self._bone_transforms = (_copies(bone_transforms) if bone_transforms is not None
+                                 else List[bone_transform_out]())
+
+    @property
+    def bone_transforms(self) -> List[bone_transform_out]:
+        """A new list of copies, as the official getter (by value)."""
+        return _copies(self._bone_transforms)
 
     def __repr__(self) -> str:
         bones = "".join([f"(name={b.name}, world={b.world}, component={b.component}, "
-                         f"relative={b.relative})" for b in self.bone_transforms])
+                         f"relative={b.relative})" for b in self._bone_transforms])
         return "WalkerBoneControlOut(bone_transforms(" + bones + "))"
 
 class Walker(Actor):
@@ -166,14 +191,17 @@ class Walker(Actor):
             bone._relative = Transform._from_c(b[0].relative)
             result.append(bone)
         bones.release()
-        return WalkerBoneControlOut(result)
+        # Built directly: the bones are fresh, so they need no copies.
+        control = WalkerBoneControlOut.__new__()
+        control._bone_transforms = result
+        return control
 
     def set_bones(self, bones: WalkerBoneControlIn):
         """Sets the custom pose: each bone's transform relative to its parent."""
-        n = len(bones.bone_transforms)
+        n = len(bones._bone_transforms)
         buf = Ptr[CBoneTransform](n if n > 0 else 1)
         for i in range(n):
-            b = bones.bone_transforms[i]
+            b = bones._bone_transforms[i]
             buf[i] = CBoneTransform(b.name.ptr, b.name.len, b.transform._to_c())
         _check(tsc_walker_set_bones(self._h.ptr, buf, n))
 

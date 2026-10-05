@@ -3,27 +3,27 @@
 from ._ffi import (CWeather, tsc_world_get_weather, tsc_world_set_weather, tsc_weather_preset,
                    tsc_world_is_weather_enabled)
 from .errors import _check
-from ._eq import _fields_eq
+from ._eq import _f32, _fields_eq
 from ._fmt import fmt_fields
 from .world import World
 
 class WeatherParameters:
     """Weather of the simulation. Presets: the class attributes
     (WeatherParameters.ClearNoon, ...) or WeatherParameters.preset("ClearNoon")."""
-    cloudiness: float
-    precipitation: float
-    precipitation_deposits: float
-    wind_intensity: float
-    sun_azimuth_angle: float
-    sun_altitude_angle: float
-    fog_density: float
-    fog_distance: float
-    fog_falloff: float
-    wetness: float
-    scattering_intensity: float
-    mie_scattering_scale: float
-    rayleigh_scattering_scale: float
-    dust_storm: float
+    _cloudiness: float
+    _precipitation: float
+    _precipitation_deposits: float
+    _wind_intensity: float
+    _sun_azimuth_angle: float
+    _sun_altitude_angle: float
+    _fog_density: float
+    _fog_distance: float
+    _fog_falloff: float
+    _wetness: float
+    _scattering_intensity: float
+    _mie_scattering_scale: float
+    _rayleigh_scattering_scale: float
+    _dust_storm: float
 
     # LibCarla's 23 named presets (issue #33), read from the LibCarla the
     # library was built with. As in the Python API, each is one shared object:
@@ -75,6 +75,118 @@ class WeatherParameters:
         self.mie_scattering_scale = mie_scattering_scale
         self.rayleigh_scattering_scale = rayleigh_scattering_scale
         self.dust_storm = dust_storm
+
+    @property
+    def cloudiness(self) -> float:
+        return self._cloudiness
+
+    @cloudiness.setter
+    def cloudiness(self, v: float):
+        self._cloudiness = _f32(v)
+
+    @property
+    def precipitation(self) -> float:
+        return self._precipitation
+
+    @precipitation.setter
+    def precipitation(self, v: float):
+        self._precipitation = _f32(v)
+
+    @property
+    def precipitation_deposits(self) -> float:
+        return self._precipitation_deposits
+
+    @precipitation_deposits.setter
+    def precipitation_deposits(self, v: float):
+        self._precipitation_deposits = _f32(v)
+
+    @property
+    def wind_intensity(self) -> float:
+        return self._wind_intensity
+
+    @wind_intensity.setter
+    def wind_intensity(self, v: float):
+        self._wind_intensity = _f32(v)
+
+    @property
+    def sun_azimuth_angle(self) -> float:
+        return self._sun_azimuth_angle
+
+    @sun_azimuth_angle.setter
+    def sun_azimuth_angle(self, v: float):
+        self._sun_azimuth_angle = _f32(v)
+
+    @property
+    def sun_altitude_angle(self) -> float:
+        return self._sun_altitude_angle
+
+    @sun_altitude_angle.setter
+    def sun_altitude_angle(self, v: float):
+        self._sun_altitude_angle = _f32(v)
+
+    @property
+    def fog_density(self) -> float:
+        return self._fog_density
+
+    @fog_density.setter
+    def fog_density(self, v: float):
+        self._fog_density = _f32(v)
+
+    @property
+    def fog_distance(self) -> float:
+        return self._fog_distance
+
+    @fog_distance.setter
+    def fog_distance(self, v: float):
+        self._fog_distance = _f32(v)
+
+    @property
+    def fog_falloff(self) -> float:
+        return self._fog_falloff
+
+    @fog_falloff.setter
+    def fog_falloff(self, v: float):
+        self._fog_falloff = _f32(v)
+
+    @property
+    def wetness(self) -> float:
+        return self._wetness
+
+    @wetness.setter
+    def wetness(self, v: float):
+        self._wetness = _f32(v)
+
+    @property
+    def scattering_intensity(self) -> float:
+        return self._scattering_intensity
+
+    @scattering_intensity.setter
+    def scattering_intensity(self, v: float):
+        self._scattering_intensity = _f32(v)
+
+    @property
+    def mie_scattering_scale(self) -> float:
+        return self._mie_scattering_scale
+
+    @mie_scattering_scale.setter
+    def mie_scattering_scale(self, v: float):
+        self._mie_scattering_scale = _f32(v)
+
+    @property
+    def rayleigh_scattering_scale(self) -> float:
+        return self._rayleigh_scattering_scale
+
+    @rayleigh_scattering_scale.setter
+    def rayleigh_scattering_scale(self, v: float):
+        self._rayleigh_scattering_scale = _f32(v)
+
+    @property
+    def dust_storm(self) -> float:
+        return self._dust_storm
+
+    @dust_storm.setter
+    def dust_storm(self, v: float):
+        self._dust_storm = _f32(v)
 
     @staticmethod
     def preset(name: str) -> WeatherParameters:

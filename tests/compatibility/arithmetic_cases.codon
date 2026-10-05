@@ -1,7 +1,9 @@
 # Issue #77: arithmetic between the Vector3D family and Vector2D, as the
 # official module computes it. Mirrors arithmetic_cases.py (see its format).
 # Offline: no server needed. Used by tests/unit/test_issue77_arithmetic.codon
-# and (float32_cases, quaternion_cases, rounding_cases) tests/unit/test_issue81_float32.codon.
+# and (float32_cases, quaternion_cases, rounding_cases) tests/unit/test_issue81_float32.codon,
+# (field_rounding_cases, derived_cases, quaternion_rotation_cases)
+# tests/unit/test_issue90_float32.codon.
 #
 # A combination the official module rejects (a Vector2D with a Vector3D-family
 # operand) is a compile error here, so it is not written out: it gives "E",
@@ -194,4 +196,247 @@ def rounding_cases() -> str:
             set3.y, set2.y, carla.Rotation(x).pitch, rot.roll, carla.Quaternion(x).x, q.w,
             carla.Transform(carla.Location(0.0, 0.0, x)).location.z, t.location.z,
             carla.GeoLocation(x).latitude, geo.altitude)]))
+    return ";".join(out)
+
+# Issue #90, as arithmetic_cases.py's field_rounding_cases / derived_cases.
+FIELD_VALUES = (0.1, 16777217.0, 1e40, float("nan"), 1e-46, 2.0 / 3.0)
+
+def field_rounding_cases() -> str:
+    out = List[str]()
+    for x in FIELD_VALUES:
+        row = List[float]()
+        c0 = carla.VehicleControl(throttle=x, steer=x, brake=x)
+        s0 = carla.VehicleControl()
+        s0.throttle = x
+        s0.steer = x
+        s0.brake = x
+        row += [c0.throttle, c0.steer, c0.brake, s0.throttle, s0.steer, s0.brake]
+        c1 = carla.WalkerControl(speed=x)
+        s1 = carla.WalkerControl()
+        s1.speed = x
+        row += [c1.speed, s1.speed]
+        c2 = carla.VehicleAckermannControl(steer=x, steer_speed=x, speed=x, acceleration=x, jerk=x)
+        s2 = carla.VehicleAckermannControl()
+        s2.steer = x
+        s2.steer_speed = x
+        s2.speed = x
+        s2.acceleration = x
+        s2.jerk = x
+        row += [c2.steer, c2.steer_speed, c2.speed, c2.acceleration, c2.jerk, s2.steer,
+                s2.steer_speed, s2.speed, s2.acceleration, s2.jerk]
+        c3 = carla.AckermannControllerSettings(speed_kp=x, speed_ki=x, speed_kd=x, accel_kp=x,
+                                               accel_ki=x, accel_kd=x)
+        s3 = carla.AckermannControllerSettings()
+        s3.speed_kp = x
+        s3.speed_ki = x
+        s3.speed_kd = x
+        s3.accel_kp = x
+        s3.accel_ki = x
+        s3.accel_kd = x
+        row += [c3.speed_kp, c3.speed_ki, c3.speed_kd, c3.accel_kp, c3.accel_ki, c3.accel_kd,
+                s3.speed_kp, s3.speed_ki, s3.speed_kd, s3.accel_kp, s3.accel_ki, s3.accel_kd]
+        c4 = carla.VehiclePhysicsControl(max_torque=x, max_rpm=x, idle_rpm=x, brake_effect=x,
+                                         rev_up_moi=x, rev_down_rate=x, front_rear_split=x,
+                                         gear_change_time=x, final_ratio=x, change_up_rpm=x,
+                                         change_down_rpm=x, transmission_efficiency=x, mass=x,
+                                         drag_coefficient=x, chassis_width=x, chassis_height=x,
+                                         downforce_coefficient=x, drag_area=x, sleep_threshold=x,
+                                         sleep_slope_limit=x)
+        s4 = carla.VehiclePhysicsControl()
+        s4.max_torque = x
+        s4.max_rpm = x
+        s4.idle_rpm = x
+        s4.brake_effect = x
+        s4.rev_up_moi = x
+        s4.rev_down_rate = x
+        s4.front_rear_split = x
+        s4.gear_change_time = x
+        s4.final_ratio = x
+        s4.change_up_rpm = x
+        s4.change_down_rpm = x
+        s4.transmission_efficiency = x
+        s4.mass = x
+        s4.drag_coefficient = x
+        s4.chassis_width = x
+        s4.chassis_height = x
+        s4.downforce_coefficient = x
+        s4.drag_area = x
+        s4.sleep_threshold = x
+        s4.sleep_slope_limit = x
+        row += [c4.max_torque, c4.max_rpm, c4.idle_rpm, c4.brake_effect, c4.rev_up_moi,
+                c4.rev_down_rate, c4.front_rear_split, c4.gear_change_time, c4.final_ratio,
+                c4.change_up_rpm, c4.change_down_rpm, c4.transmission_efficiency, c4.mass,
+                c4.drag_coefficient, c4.chassis_width, c4.chassis_height, c4.downforce_coefficient,
+                c4.drag_area, c4.sleep_threshold, c4.sleep_slope_limit, s4.max_torque, s4.max_rpm,
+                s4.idle_rpm, s4.brake_effect, s4.rev_up_moi, s4.rev_down_rate, s4.front_rear_split,
+                s4.gear_change_time, s4.final_ratio, s4.change_up_rpm, s4.change_down_rpm,
+                s4.transmission_efficiency, s4.mass, s4.drag_coefficient, s4.chassis_width,
+                s4.chassis_height, s4.downforce_coefficient, s4.drag_area, s4.sleep_threshold,
+                s4.sleep_slope_limit]
+        c5 = carla.WheelPhysicsControl(wheel_radius=x, wheel_width=x, wheel_mass=x,
+                                       cornering_stiffness=x, friction_force_multiplier=x,
+                                       side_slip_modifier=x, slip_threshold=x, skid_threshold=x,
+                                       max_steer_angle=x, max_wheelspin_rotation=x,
+                                       suspension_max_raise=x, suspension_max_drop=x,
+                                       suspension_damping_ratio=x, wheel_load_ratio=x,
+                                       spring_rate=x, spring_preload=x, rollbar_scaling=x,
+                                       max_brake_torque=x, max_hand_brake_torque=x)
+        s5 = carla.WheelPhysicsControl()
+        s5.wheel_radius = x
+        s5.wheel_width = x
+        s5.wheel_mass = x
+        s5.cornering_stiffness = x
+        s5.friction_force_multiplier = x
+        s5.side_slip_modifier = x
+        s5.slip_threshold = x
+        s5.skid_threshold = x
+        s5.max_steer_angle = x
+        s5.max_wheelspin_rotation = x
+        s5.suspension_max_raise = x
+        s5.suspension_max_drop = x
+        s5.suspension_damping_ratio = x
+        s5.wheel_load_ratio = x
+        s5.spring_rate = x
+        s5.spring_preload = x
+        s5.rollbar_scaling = x
+        s5.max_brake_torque = x
+        s5.max_hand_brake_torque = x
+        row += [c5.wheel_radius, c5.wheel_width, c5.wheel_mass, c5.cornering_stiffness,
+                c5.friction_force_multiplier, c5.side_slip_modifier, c5.slip_threshold,
+                c5.skid_threshold, c5.max_steer_angle, c5.max_wheelspin_rotation,
+                c5.suspension_max_raise, c5.suspension_max_drop, c5.suspension_damping_ratio,
+                c5.wheel_load_ratio, c5.spring_rate, c5.spring_preload, c5.rollbar_scaling,
+                c5.max_brake_torque, c5.max_hand_brake_torque, s5.wheel_radius, s5.wheel_width,
+                s5.wheel_mass, s5.cornering_stiffness, s5.friction_force_multiplier,
+                s5.side_slip_modifier, s5.slip_threshold, s5.skid_threshold, s5.max_steer_angle,
+                s5.max_wheelspin_rotation, s5.suspension_max_raise, s5.suspension_max_drop,
+                s5.suspension_damping_ratio, s5.wheel_load_ratio, s5.spring_rate,
+                s5.spring_preload, s5.rollbar_scaling, s5.max_brake_torque,
+                s5.max_hand_brake_torque]
+        c6 = carla.WeatherParameters(cloudiness=x, precipitation=x, precipitation_deposits=x,
+                                     wind_intensity=x, sun_azimuth_angle=x, sun_altitude_angle=x,
+                                     fog_density=x, fog_distance=x, fog_falloff=x, wetness=x,
+                                     scattering_intensity=x, mie_scattering_scale=x,
+                                     rayleigh_scattering_scale=x, dust_storm=x)
+        s6 = carla.WeatherParameters()
+        s6.cloudiness = x
+        s6.precipitation = x
+        s6.precipitation_deposits = x
+        s6.wind_intensity = x
+        s6.sun_azimuth_angle = x
+        s6.sun_altitude_angle = x
+        s6.fog_density = x
+        s6.fog_distance = x
+        s6.fog_falloff = x
+        s6.wetness = x
+        s6.scattering_intensity = x
+        s6.mie_scattering_scale = x
+        s6.rayleigh_scattering_scale = x
+        s6.dust_storm = x
+        row += [c6.cloudiness, c6.precipitation, c6.precipitation_deposits, c6.wind_intensity,
+                c6.sun_azimuth_angle, c6.sun_altitude_angle, c6.fog_density, c6.fog_distance,
+                c6.fog_falloff, c6.wetness, c6.scattering_intensity, c6.mie_scattering_scale,
+                c6.rayleigh_scattering_scale, c6.dust_storm, s6.cloudiness, s6.precipitation,
+                s6.precipitation_deposits, s6.wind_intensity, s6.sun_azimuth_angle,
+                s6.sun_altitude_angle, s6.fog_density, s6.fog_distance, s6.fog_falloff, s6.wetness,
+                s6.scattering_intensity, s6.mie_scattering_scale, s6.rayleigh_scattering_scale,
+                s6.dust_storm]
+        c7 = carla.WorldSettings(max_culling_distance=x, tile_stream_distance=x,
+                                 actor_active_distance=x, max_substep_delta_time=x)
+        s7 = carla.WorldSettings()
+        s7.max_culling_distance = x
+        s7.tile_stream_distance = x
+        s7.actor_active_distance = x
+        s7.max_substep_delta_time = x
+        row += [c7.max_culling_distance, c7.tile_stream_distance, c7.actor_active_distance,
+                c7.max_substep_delta_time, s7.max_culling_distance, s7.tile_stream_distance,
+                s7.actor_active_distance, s7.max_substep_delta_time]
+        c8 = carla.FloatColor(r=x, g=x, b=x, a=x)
+        s8 = carla.FloatColor()
+        s8.r = x
+        s8.g = x
+        s8.b = x
+        s8.a = x
+        row += [c8.r, c8.g, c8.b, c8.a, s8.r, s8.g, s8.b, s8.a]
+        c9 = carla.OpticalFlowPixel(x=x, y=x)
+        s9 = carla.OpticalFlowPixel()
+        s9.x = x
+        s9.y = x
+        row += [c9.x, c9.y, s9.x, s9.y]
+        c10 = carla.LightState(intensity=x)
+        s10 = carla.LightState()
+        s10.intensity = x
+        row += [c10.intensity, s10.intensity]
+        s11 = carla.LidarDetection()
+        s11.intensity = x
+        row += [s11.intensity]
+        s12 = carla.SemanticLidarDetection()
+        s12.cos_inc_angle = x
+        row += [s12.cos_inc_angle]
+        s13 = carla.RadarDetection()
+        s13.velocity = x
+        s13.azimuth = x
+        s13.altitude = x
+        s13.depth = x
+        row += [s13.velocity, s13.azimuth, s13.altitude, s13.depth]
+
+        out.append("|".join([_g(v) for v in row]))
+    return ";".join(out)
+
+D_ROTATIONS = ((0.0, 30.0, 0.0), (0.0, -123.4, 0.0), (0.0, 0.1, 0.0), (10.0, 45.0, -20.0),
+               (-33.3, 271.7, 98.6), (89.9, 0.3, 179.9))
+D_LOCATIONS = ((10.5, -3.3, 0.7), (1e5, 2.5e5, -12.1))
+D_POINTS = ((1.0, 2.0, 3.0), (-81.2, 0.1, 3.3), (1e5, -2e4, 7.7), (0.3, -0.4, 1.2e10))
+D_ANGLES = (0.0, -0.0, 0.1, 180.0, -180.0, 179.99998, 359.99997, 360.0, 540.0, -540.5, 720.1,
+            -1e-30, 1e7 + 0.5, 123456789.0, 1e10, -1e10, 3.4e38, float("inf"), float("nan"))
+
+def derived_cases() -> str:
+    """The rotations in ue5-dev's sign convention, as the mock's (see rot() in
+    arithmetic_cases.py)."""
+    L, V = carla.Location, carla.Vector3D
+    out = List[str]()
+    for r in D_ROTATIONS:
+        ro = carla.Rotation(*r)
+        out.append("|".join([_gv(ro.get_forward_vector()), _gv(ro.get_right_vector()),
+                             _gv(ro.get_up_vector())]))
+        for loc in D_LOCATIONS:
+            t = carla.Transform(L(*loc), carla.Rotation(*r))
+            row = List[str]()
+            for p in D_POINTS:
+                a = L(*p)
+                t.transform(a)
+                b = V(*p)
+                t.transform_vector(b)
+                row += [_gv(a), _gv(b)]
+            pts = [L(*p) for p in D_POINTS]
+            t.transform(pts)
+            row += [_gv(q) for q in pts]
+            out.append("|".join(row))
+            bb = carla.BoundingBox()
+            bb.location = L(*loc)
+            bb.extent = V(2.4, 0.9, 1.7)
+            bb.rotation = carla.Rotation(*r)
+            row = [_gv(q) for q in bb.get_local_vertices()]
+            row += [_gv(q) for q in bb.get_world_vertices(t)]
+            row += ["1" if bb.contains(L(*p), t) else "0" for p in D_POINTS]
+            row += ["1" if bb.contains(q, t) else "0" for q in bb.get_world_vertices(t)]
+            out.append("|".join(row))
+    for a in D_ANGLES:
+        n = carla.Rotation(a, -a, 0.5 * a).get_normalized()
+        out.append(_g(n.pitch) + "," + _g(n.yaw) + "," + _g(n.roll))
+    return ";".join(out)
+
+Q_ROTATIONS = ((0.0, 0.0, 0.0), (10.0, 45.0, -20.0), (-33.3, 271.7, 98.6), (89.9, 0.3, 179.9),
+               (0.1, -0.1, 1e-3), (90.0, 0.0, 0.0), (-90.0, 180.0, -180.0), (1e7, 3.3, -721.5))
+
+def _gr(r: carla.Rotation) -> str:
+    return "(" + _g(r.pitch) + "," + _g(r.yaw) + "," + _g(r.roll) + ")"
+
+def quaternion_rotation_cases() -> str:
+    out = List[str]()
+    for r in Q_ROTATIONS:
+        q = carla.Quaternion(carla.Rotation(*r))
+        out.append(_gq(q) + "|" + _gr(q.rotator()))
+    for a in Q_VALUES:
+        out.append(_gr(carla.Quaternion(*a).rotator()))
     return ";".join(out)

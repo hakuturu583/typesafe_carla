@@ -1,0 +1,241 @@
+# Issue #84: list fields, control structs inside commands and EnvironmentObject
+# are values, as in the official module (C++ values behind Boost.Python). There
+# a list assigned to a std::vector field is converted (copied, element by
+# element), the add_property list getters (VehiclePhysicsControl's lists,
+# WalkerBoneControlIn/Out.bone_transforms, VehicleTelemetryData.wheels) return
+# a new list of copies on each read, WheelPhysicsControl.lateral_slip_graph is
+# def_readwrite (the stored vector, as #77's vector fields), and the command
+# constructors take the control by value. No official module is available
+# offline: the expectations follow PythonAPI/carla/src/Control.cpp and
+# Commands.cpp at ue5-dev.
+import typesafe_carla as carla
+
+V2 = carla.Vector2D
+T, L = carla.Transform, carla.Location
+
+def test_vehicle_physics_control_setters():
+    curve = [V2(0.0, 1.0), V2(1.0, 2.0)]
+    steering = [V2(0.0, 1.0)]
+    forward = [3.0, 2.0]
+    reverse = [1.5]
+    wheel = carla.WheelPhysicsControl(wheel_radius=30.0)
+    wheels = [wheel]
+    pc = carla.VehiclePhysicsControl(torque_curve=curve, steering_curve=steering,
+                                     forward_gear_ratios=forward, reverse_gear_ratios=reverse,
+                                     wheels=wheels)
+    # The constructor copies every list and every element.
+    curve.append(V2(2.0, 3.0))
+    curve[0].x = 9.0
+    steering[0].y = 9.0
+    forward[0] = 9.0
+    reverse.append(9.0)
+    wheels.append(carla.WheelPhysicsControl())
+    wheel.wheel_radius = 99.0
+    assert pc.torque_curve == [V2(0.0, 1.0), V2(1.0, 2.0)], pc.torque_curve
+    assert pc.steering_curve == [V2(0.0, 1.0)] and pc.forward_gear_ratios == [3.0, 2.0]
+    assert pc.reverse_gear_ratios == [1.5]
+    assert len(pc.wheels) == 1 and pc.wheels[0].wheel_radius == 30.0
+
+    # So do the setters.
+    pc.torque_curve = curve
+    pc.steering_curve = steering
+    pc.forward_gear_ratios = forward
+    pc.reverse_gear_ratios = reverse
+    pc.wheels = wheels
+    curve.pop()
+    curve[1].y = -1.0
+    steering[0].x = -1.0
+    forward[1] = -1.0
+    reverse.pop()
+    wheels.pop()
+    wheel.wheel_radius = 1.0
+    assert len(pc.torque_curve) == 3 and pc.torque_curve[1] == V2(1.0, 2.0)
+    assert pc.steering_curve == [V2(0.0, 9.0)] and pc.forward_gear_ratios == [9.0, 2.0]
+    assert pc.reverse_gear_ratios == [1.5, 9.0]
+    assert len(pc.wheels) == 2 and pc.wheels[0].wheel_radius == 99.0
+
+def test_vehicle_physics_control_getters():
+    pc = carla.VehiclePhysicsControl(wheels=[carla.WheelPhysicsControl()])
+    before = carla.VehiclePhysicsControl(wheels=[carla.WheelPhysicsControl()])
+    assert pc == before
+    # Each read is a new list of copies: changing it leaves pc alone.
+    pc.torque_curve.append(V2(7.0, 7.0))
+    pc.torque_curve[0].y = 1.0
+    pc.steering_curve[0].x = 5.0
+    pc.forward_gear_ratios[0] = 7.0
+    pc.reverse_gear_ratios.clear()
+    pc.wheels[0].wheel_radius = 77.0
+    pc.wheels[0].lateral_slip_graph.append(V2(1.0, 1.0))
+    pc.wheels.append(carla.WheelPhysicsControl())
+    assert pc == before, pc
+    assert pc.torque_curve is not pc.torque_curve
+    # Change a list, then assign it back (as with the Python API).
+    w = pc.wheels
+    w[0].wheel_radius = 77.0
+    pc.wheels = w
+    assert pc.wheels[0].wheel_radius == 77.0 and pc != before
+
+def test_wheel_lateral_slip_graph():
+    graph = [V2(0.0, 0.0), V2(5.0, 1.0)]
+    w = carla.WheelPhysicsControl(lateral_slip_graph=graph)
+    graph.append(V2(9.0, 9.0))  # the constructor copies
+    graph[0].x = 9.0
+    assert w.lateral_slip_graph == [V2(0.0, 0.0), V2(5.0, 1.0)]
+    w.lateral_slip_graph = graph  # so does the setter
+    graph.pop()
+    graph[1].y = -1.0
+    assert w.lateral_slip_graph == [V2(9.0, 0.0), V2(5.0, 1.0), V2(9.0, 9.0)]
+    # The getter gives the stored list, as the official def_readwrite.
+    w.lateral_slip_graph.pop()
+    w.lateral_slip_graph[0].x = 0.0
+    assert w.lateral_slip_graph == [V2(0.0, 0.0), V2(5.0, 1.0)]
+
+def test_wheel_copy_is_deep():
+    w = carla.WheelPhysicsControl(lateral_slip_graph=[V2(1.0, 1.0)])
+    pc = carla.VehiclePhysicsControl(wheels=[w])
+    w.offset.x = 5.0
+    w.location.y = 5.0
+    w.lateral_slip_graph[0].x = 5.0
+    got = pc.wheels[0]
+    assert got.offset == carla.Vector3D() and got.location == L()
+    assert got.lateral_slip_graph == [V2(1.0, 1.0)]
+
+def test_from_c_independent(vehicle: carla.Vehicle):
+    pc = vehicle.get_physics_control()
+    wheels = pc.wheels
+    wheels[0].max_steer_angle = 12.0
+    assert pc.wheels[0].max_steer_angle != 12.0
+    pc.wheels = wheels
+    vehicle.apply_physics_control(pc)
+    assert vehicle.get_physics_control().wheels[0].max_steer_angle == 12.0
+    t = vehicle.get_telemetry_data()
+    t.wheels[0].omega = -5.0
+    assert t.wheels[0].omega != -5.0
+
+def test_telemetry_wheels():
+    wheels = [carla.WheelTelemetryData(0.25, 0.5, 0.75)]
+    t = carla.VehicleTelemetryData(wheels=wheels)
+    wheels[0].omega = 9.0
+    wheels.append(carla.WheelTelemetryData())
+    assert len(t.wheels) == 1 and t.wheels[0].omega == 0.75
+    t.wheels = wheels
+    wheels.pop()
+    wheels[0].lat_slip = 9.0
+    assert len(t.wheels) == 2 and t.wheels[0].lat_slip == 0.25
+    t.wheels[0].lat_slip = 5.0
+    t.wheels.pop()
+    assert len(t.wheels) == 2 and t.wheels[0].lat_slip == 0.25
+
+def test_bones():
+    tr = T(L(0.0, 0.0, 1.0))
+    bone = carla.bone_transform("crl_hips__C", tr)
+    bones = [bone]
+    pose = carla.WalkerBoneControlIn(bones)
+    bone.transform.location.z = 9.0
+    bones.append(carla.bone_transform("crl_spine__C", tr))
+    assert len(pose.bone_transforms) == 1
+    assert pose.bone_transforms[0].transform.location.z == 1.0
+    pose.bone_transforms = bones  # the setter copies
+    bones.pop()
+    bones[0].name = "renamed"
+    bones[0].transform.location.z = 5.0
+    assert len(pose.bone_transforms) == 2 and pose.bone_transforms[0].name == "crl_hips__C"
+    assert pose.bone_transforms[0].transform.location.z == 9.0
+    pose.bone_transforms[0].transform.location.z = 3.0  # the getter copies
+    pose.bone_transforms.pop()
+    assert len(pose.bone_transforms) == 2
+    assert pose.bone_transforms[0].transform.location.z == 9.0
+    out_bone = carla.bone_transform_out("b", tr, tr, tr)
+    outs = [out_bone]
+    out = carla.WalkerBoneControlOut(outs)
+    out_bone.relative.location.z = 7.0
+    outs.append(out_bone)
+    assert len(out.bone_transforms) == 1 and out.bone_transforms[0].relative.location.z == 1.0
+    out.bone_transforms[0].world.location.x = 4.0
+    out.bone_transforms.clear()
+    assert len(out.bone_transforms) == 1 and out.bone_transforms[0].world.location.x == 0.0
+
+def test_walker_bones(walker: carla.Walker):
+    got = walker.get_bones()
+    n = len(got.bone_transforms)
+    assert n > 2
+    got.bone_transforms[1].relative.location.z = 42.0
+    got.bone_transforms.pop()
+    assert len(got.bone_transforms) == n
+    assert got.bone_transforms[1].relative.location.z != 42.0
+
+def test_commands(client: carla.Client, vehicle: carla.Vehicle, walker: carla.Walker):
+    control = carla.VehicleControl(throttle=0.25)
+    command = carla.command.ApplyVehicleControl(vehicle, control)
+    control.throttle = 1.0  # the command holds a copy
+    responses = client.apply_batch_sync([command])
+    assert not responses[0].has_error(), responses[0].error
+    assert abs(vehicle.get_control().throttle - 0.25) < 1e-6, vehicle.get_control()
+
+    wc = carla.WalkerControl(carla.Vector3D(0.0, 1.0, 0.0), 1.5)
+    wcommand = carla.command.ApplyWalkerControl(walker, wc)
+    wc.direction.y = -1.0
+    wc.direction = carla.Vector3D(1.0, 0.0, 0.0)
+    wc.speed = 3.0
+    responses = client.apply_batch_sync([wcommand])
+    assert not responses[0].has_error(), responses[0].error
+    got = walker.get_control()
+    assert got.speed == 1.5 and got.direction.y > 0.5, got
+
+    ack = carla.VehicleAckermannControl(steer=0.1, speed=2.0, jerk=0.5)
+    acommand = carla.command.ApplyVehicleAckermannControl(vehicle, ack)
+    ack.steer = 0.9
+    ack.speed = 9.0
+    ack.jerk = 9.0
+    # The values the command carries (ffi.h: steer, steer_speed, speed in
+    # vector; acceleration, jerk in transform.location).
+    assert acommand._vector == carla.Vector3D(0.1, 0.0, 2.0), acommand._vector
+    assert acommand._transform.location == L(0.0, 0.5, 0.0)
+    responses = client.apply_batch_sync([acommand])
+    assert not responses[0].has_error(), responses[0].error
+
+    pc = vehicle.get_physics_control()
+    pc.mass = 1234.0
+    wheels = pc.wheels
+    wheels[0].wheel_radius = 33.0
+    pc.wheels = wheels
+    pcommand = carla.command.ApplyVehiclePhysicsControl(vehicle, pc)
+    pc.mass = 1.0
+    wheels[0].wheel_radius = 1.0
+    pc.wheels = wheels
+    responses = client.apply_batch_sync([pcommand])
+    assert not responses[0].has_error(), responses[0].error
+    applied = vehicle.get_physics_control()
+    assert applied.mass == 1234.0 and abs(applied.wheels[0].wheel_radius - 33.0) < 1e-4
+
+def test_environment_object(world: carla.World):
+    tr = T(L(1.0, 2.0, 3.0))
+    box = carla.BoundingBox(L(), carla.Vector3D(1.0, 1.0, 1.0))
+    o = carla.EnvironmentObject(5, "x", tr, box, carla.CityObjectLabel.Buildings)
+    tr.location.x = 9.0
+    tr.rotation.yaw = 9.0
+    box.extent.x = 9.0
+    box.location.z = 9.0
+    assert o.transform == T(L(1.0, 2.0, 3.0)), o.transform
+    assert o.bounding_box == carla.BoundingBox(L(), carla.Vector3D(1.0, 1.0, 1.0))
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+lib = world.get_blueprint_library()
+points = world.get_map().get_spawn_points()
+vehicle = world.spawn_actor(lib.find("vehicle.audi.tt"), points[0]).as_vehicle()
+walker = world.spawn_actor(lib.find("walker.pedestrian.0001"), points[1]).as_walker()
+
+test_vehicle_physics_control_setters()
+test_vehicle_physics_control_getters()
+test_wheel_lateral_slip_graph()
+test_wheel_copy_is_deep()
+test_from_c_independent(vehicle)
+test_telemetry_wheels()
+test_bones()
+test_walker_bones(walker)
+test_commands(client, vehicle, walker)
+test_environment_object(world)
+vehicle.destroy()
+walker.destroy()
+print("OK")

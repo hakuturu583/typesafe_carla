@@ -41,7 +41,7 @@ cpython:
     unit/test_vehicle.py:
       TestVehicleControl.test_default_values: pass
       TestVehicleControl.test_named_args: pass
-      TestVehiclePhysicsControl.test_named_args: 'xfail: error: TypeError: could not find callable method ''WheelPhysicsControl__new'' for given arguments [] [''max_steer_angle'', ''radius'', ''tire_friction'']'
+      TestVehiclePhysicsControl.test_named_args: 'xfail: the test reads UE4-era fields (VehiclePhysicsControl.moi) that the constructor ignores, as with the official module (#93)'
   ue5-dev:
     unit/test_boost_version.py:
       TestBoostInstallVersion.test_cmake_options_pins_correct_version: pass
@@ -88,7 +88,7 @@ cpython:
     unit/test_vehicle.py:
       TestVehicleControl.test_default_values: pass
       TestVehicleControl.test_named_args: pass
-      TestVehiclePhysicsControl.test_named_args: 'xfail: error: TypeError: could not find callable method ''WheelPhysicsControl__new'' for given arguments [] [''max_steer_angle'', ''radius'', ''tire_friction'']'
+      TestVehiclePhysicsControl.test_named_args: 'xfail: the test reads UE4-era fields (VehiclePhysicsControl.moi) that the constructor ignores, as with the official module (#93)'
     smoke/test_actor_introspection.py:
       TestActorIntrospection.test_vehicle_components: pass
       TestActorIntrospection.test_vehicle_sockets_consistent: pass

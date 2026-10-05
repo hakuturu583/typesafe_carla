@@ -5,15 +5,15 @@ from ._ffi import (Handle, CVehicleControl, CWalkerControl, CVector2D, CVehicleP
                    CWheelPhysicsControl, tsc_vehicle_get_physics_control,
                    tsc_physics_control_view, tsc_vehicle_apply_physics_control)
 from .errors import _check, _u8, _i32
-from ._eq import _fields_eq
+from ._eq import _f32, _fields_eq, _copies
 from .geometry import (Location, Vector2D, Vector3D, _vector_or, _location_or, _vector_arg,
                        _location_arg, _Owned)
 from ._fmt import fmt_f32, fmt_g32, fmt_b01, fmt_list, fmt_fields
 
 class VehicleControl:
-    throttle: float  # [0, 1]
-    steer: float  # [-1, 1]
-    brake: float  # [0, 1]
+    _throttle: float  # [0, 1]
+    _steer: float  # [-1, 1]
+    _brake: float  # [0, 1]
     hand_brake: bool
     reverse: bool
     manual_gear_shift: bool
@@ -30,6 +30,30 @@ class VehicleControl:
         self.manual_gear_shift = manual_gear_shift
         self.gear = gear
 
+    @property
+    def throttle(self) -> float:
+        return self._throttle
+
+    @throttle.setter
+    def throttle(self, v: float):
+        self._throttle = _f32(v)
+
+    @property
+    def steer(self) -> float:
+        return self._steer
+
+    @steer.setter
+    def steer(self, v: float):
+        self._steer = _f32(v)
+
+    @property
+    def brake(self) -> float:
+        return self._brake
+
+    @brake.setter
+    def brake(self, v: float):
+        self._brake = _f32(v)
+
     def __eq__(self, other: VehicleControl) -> bool:
         return _fields_eq(self, other)
 
@@ -38,6 +62,10 @@ class VehicleControl:
 
     def __repr__(self) -> str:
         return fmt_fields("VehicleControl", self)
+
+    def _copy(self) -> VehicleControl:
+        return VehicleControl(self.throttle, self.steer, self.brake, self.hand_brake,
+                              self.reverse, self.manual_gear_shift, self.gear)
 
     def _to_c(self) -> CVehicleControl:
         return CVehicleControl(self.throttle, self.steer, self.brake, i32(int(self.hand_brake)),
@@ -61,6 +89,13 @@ def _curve_from_c(data: Ptr[CVector2D], size: int) -> List[Vector2D]:
 def _ratios_from_c(data: Ptr[float], size: int) -> List[float]:
     return [data[i] for i in range(size)]
 
+def _ratios_f32(ratios: List[float]) -> List[float]:
+    """A new list of the ratios in float32, as LibCarla's std::vector<float>."""
+    out = List[float](len(ratios))
+    for r in ratios:
+        out.append(_f32(r))
+    return out
+
 def _ratios_to_c(ratios: List[float]) -> Ptr[float]:
     out = Ptr[float](len(ratios))
     for i in range(len(ratios)):
@@ -74,38 +109,38 @@ class WheelPhysicsControl:
     """
     axle_type: int
     _offset: Vector3D
-    wheel_radius: float  # cm
-    wheel_width: float  # cm
-    wheel_mass: float  # kg
-    cornering_stiffness: float
-    friction_force_multiplier: float
-    side_slip_modifier: float
-    slip_threshold: float
-    skid_threshold: float
-    max_steer_angle: float  # degrees
+    _wheel_radius: float  # cm
+    _wheel_width: float  # cm
+    _wheel_mass: float  # kg
+    _cornering_stiffness: float
+    _friction_force_multiplier: float
+    _side_slip_modifier: float
+    _slip_threshold: float
+    _skid_threshold: float
+    _max_steer_angle: float  # degrees
     affected_by_steering: bool
     affected_by_brake: bool
     affected_by_handbrake: bool
     affected_by_engine: bool
     abs_enabled: bool
     traction_control_enabled: bool
-    max_wheelspin_rotation: float
+    _max_wheelspin_rotation: float
     external_torque_combine_method: int
-    lateral_slip_graph: List[Vector2D]
+    _lateral_slip_graph: List[Vector2D]
     _suspension_axis: Vector3D
     _suspension_force_offset: Vector3D
-    suspension_max_raise: float
-    suspension_max_drop: float
-    suspension_damping_ratio: float
-    wheel_load_ratio: float
-    spring_rate: float
-    spring_preload: float
+    _suspension_max_raise: float
+    _suspension_max_drop: float
+    _suspension_damping_ratio: float
+    _wheel_load_ratio: float
+    _spring_rate: float
+    _spring_preload: float
     suspension_smoothing: int
-    rollbar_scaling: float
+    _rollbar_scaling: float
     sweep_shape: int
     sweep_type: int
-    max_brake_torque: float  # Nm
-    max_hand_brake_torque: float  # Nm
+    _max_brake_torque: float  # Nm
+    _max_hand_brake_torque: float  # Nm
     wheel_index: int
     _location: Location
     _old_location: Location
@@ -171,8 +206,9 @@ class WheelPhysicsControl:
         self.traction_control_enabled = traction_control_enabled
         self.max_wheelspin_rotation = max_wheelspin_rotation
         self.external_torque_combine_method = external_torque_combine_method
-        self.lateral_slip_graph = (lateral_slip_graph if lateral_slip_graph is not None
-                                   else List[Vector2D]())
+        # A copy, as the official module converts the list to a std::vector.
+        self._lateral_slip_graph = (_copies(lateral_slip_graph) if lateral_slip_graph is not None
+                                    else List[Vector2D]())
         self._suspension_axis = _vector_or(
             suspension_axis, Vector3D(0.0, 0.0, -1.0),
             "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(suspension_axis=...)")
@@ -198,6 +234,158 @@ class WheelPhysicsControl:
         self._velocity = _vector_or(velocity, Vector3D(), "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl(velocity=...)")
 
     @property
+    def wheel_radius(self) -> float:
+        return self._wheel_radius
+
+    @wheel_radius.setter
+    def wheel_radius(self, v: float):
+        self._wheel_radius = _f32(v)
+
+    @property
+    def wheel_width(self) -> float:
+        return self._wheel_width
+
+    @wheel_width.setter
+    def wheel_width(self, v: float):
+        self._wheel_width = _f32(v)
+
+    @property
+    def wheel_mass(self) -> float:
+        return self._wheel_mass
+
+    @wheel_mass.setter
+    def wheel_mass(self, v: float):
+        self._wheel_mass = _f32(v)
+
+    @property
+    def cornering_stiffness(self) -> float:
+        return self._cornering_stiffness
+
+    @cornering_stiffness.setter
+    def cornering_stiffness(self, v: float):
+        self._cornering_stiffness = _f32(v)
+
+    @property
+    def friction_force_multiplier(self) -> float:
+        return self._friction_force_multiplier
+
+    @friction_force_multiplier.setter
+    def friction_force_multiplier(self, v: float):
+        self._friction_force_multiplier = _f32(v)
+
+    @property
+    def side_slip_modifier(self) -> float:
+        return self._side_slip_modifier
+
+    @side_slip_modifier.setter
+    def side_slip_modifier(self, v: float):
+        self._side_slip_modifier = _f32(v)
+
+    @property
+    def slip_threshold(self) -> float:
+        return self._slip_threshold
+
+    @slip_threshold.setter
+    def slip_threshold(self, v: float):
+        self._slip_threshold = _f32(v)
+
+    @property
+    def skid_threshold(self) -> float:
+        return self._skid_threshold
+
+    @skid_threshold.setter
+    def skid_threshold(self, v: float):
+        self._skid_threshold = _f32(v)
+
+    @property
+    def max_steer_angle(self) -> float:
+        return self._max_steer_angle
+
+    @max_steer_angle.setter
+    def max_steer_angle(self, v: float):
+        self._max_steer_angle = _f32(v)
+
+    @property
+    def max_wheelspin_rotation(self) -> float:
+        return self._max_wheelspin_rotation
+
+    @max_wheelspin_rotation.setter
+    def max_wheelspin_rotation(self, v: float):
+        self._max_wheelspin_rotation = _f32(v)
+
+    @property
+    def suspension_max_raise(self) -> float:
+        return self._suspension_max_raise
+
+    @suspension_max_raise.setter
+    def suspension_max_raise(self, v: float):
+        self._suspension_max_raise = _f32(v)
+
+    @property
+    def suspension_max_drop(self) -> float:
+        return self._suspension_max_drop
+
+    @suspension_max_drop.setter
+    def suspension_max_drop(self, v: float):
+        self._suspension_max_drop = _f32(v)
+
+    @property
+    def suspension_damping_ratio(self) -> float:
+        return self._suspension_damping_ratio
+
+    @suspension_damping_ratio.setter
+    def suspension_damping_ratio(self, v: float):
+        self._suspension_damping_ratio = _f32(v)
+
+    @property
+    def wheel_load_ratio(self) -> float:
+        return self._wheel_load_ratio
+
+    @wheel_load_ratio.setter
+    def wheel_load_ratio(self, v: float):
+        self._wheel_load_ratio = _f32(v)
+
+    @property
+    def spring_rate(self) -> float:
+        return self._spring_rate
+
+    @spring_rate.setter
+    def spring_rate(self, v: float):
+        self._spring_rate = _f32(v)
+
+    @property
+    def spring_preload(self) -> float:
+        return self._spring_preload
+
+    @spring_preload.setter
+    def spring_preload(self, v: float):
+        self._spring_preload = _f32(v)
+
+    @property
+    def rollbar_scaling(self) -> float:
+        return self._rollbar_scaling
+
+    @rollbar_scaling.setter
+    def rollbar_scaling(self, v: float):
+        self._rollbar_scaling = _f32(v)
+
+    @property
+    def max_brake_torque(self) -> float:
+        return self._max_brake_torque
+
+    @max_brake_torque.setter
+    def max_brake_torque(self, v: float):
+        self._max_brake_torque = _f32(v)
+
+    @property
+    def max_hand_brake_torque(self) -> float:
+        return self._max_hand_brake_torque
+
+    @max_hand_brake_torque.setter
+    def max_hand_brake_torque(self, v: float):
+        self._max_hand_brake_torque = _f32(v)
+
+    @property
     def offset(self) -> Vector3D:
         return self._offset
 
@@ -205,6 +393,17 @@ class WheelPhysicsControl:
     def offset(self, v):
         """v: Vector3D (a Location is accepted, as in the Python API); stored as a copy."""
         self._offset = _vector_arg(v, "[tsc-compat] a Location passed as a Vector3D to WheelPhysicsControl.offset")
+
+    @property
+    def lateral_slip_graph(self) -> List[Vector2D]:
+        """The stored list, as the official def_readwrite (a vector_of_vector2D
+        bound to the wheel): changes made in place change the wheel."""
+        return self._lateral_slip_graph
+
+    @lateral_slip_graph.setter
+    def lateral_slip_graph(self, v: List[Vector2D]):
+        """Stored as a copy (new list, new points), as the official module."""
+        self._lateral_slip_graph = _copies(v)
 
     @property
     def suspension_axis(self) -> Vector3D:
@@ -279,7 +478,7 @@ class WheelPhysicsControl:
                 ", traction_control_enabled=" + fmt_b01(self.traction_control_enabled) +
                 ", max_wheelspin_rotation=" + fmt_f32(self.max_wheelspin_rotation) +
                 ", external_torque_combine_method=" + str(self.external_torque_combine_method & 0xFF) +
-                ", lateral_slip_graph=" + fmt_list(self.lateral_slip_graph) +
+                ", lateral_slip_graph=" + fmt_list(self._lateral_slip_graph) +
                 ", suspension_axis=" + str(self.suspension_axis) +
                 ", suspension_force_offset=" + str(self.suspension_force_offset) +
                 ", suspension_max_raise=" + fmt_f32(self.suspension_max_raise) +
@@ -301,7 +500,7 @@ class WheelPhysicsControl:
 
     def _to_c(self, slip: Ptr[CVector2D]) -> CWheelPhysicsControl:
         """slip: lateral_slip_graph in C layout; it must outlive the C call."""
-        return CWheelPhysicsControl(slip, len(self.lateral_slip_graph), self.offset._to_c(),
+        return CWheelPhysicsControl(slip, len(self._lateral_slip_graph), self.offset._to_c(),
             self.suspension_axis._to_c(), self.suspension_force_offset._to_c(),
             self.location._to_c(), self.old_location._to_c(), self.velocity._to_c(),
             self.wheel_radius, self.wheel_width, self.wheel_mass, self.cornering_stiffness,
@@ -316,9 +515,51 @@ class WheelPhysicsControl:
             i32(int(self.affected_by_handbrake)), i32(int(self.affected_by_engine)),
             i32(int(self.abs_enabled)), i32(int(self.traction_control_enabled)))
 
+    def _copy(self) -> WheelPhysicsControl:
+        """A deep copy: new vectors and a new lateral_slip_graph (issue #84)."""
+        return WheelPhysicsControl(
+            axle_type=self.axle_type,
+            offset=self._offset,
+            wheel_radius=self.wheel_radius,
+            wheel_width=self.wheel_width,
+            wheel_mass=self.wheel_mass,
+            cornering_stiffness=self.cornering_stiffness,
+            friction_force_multiplier=self.friction_force_multiplier,
+            side_slip_modifier=self.side_slip_modifier,
+            slip_threshold=self.slip_threshold,
+            skid_threshold=self.skid_threshold,
+            max_steer_angle=self.max_steer_angle,
+            affected_by_steering=self.affected_by_steering,
+            affected_by_brake=self.affected_by_brake,
+            affected_by_handbrake=self.affected_by_handbrake,
+            affected_by_engine=self.affected_by_engine,
+            abs_enabled=self.abs_enabled,
+            traction_control_enabled=self.traction_control_enabled,
+            max_wheelspin_rotation=self.max_wheelspin_rotation,
+            external_torque_combine_method=self.external_torque_combine_method,
+            lateral_slip_graph=self._lateral_slip_graph,
+            suspension_axis=self._suspension_axis,
+            suspension_force_offset=self._suspension_force_offset,
+            suspension_max_raise=self.suspension_max_raise,
+            suspension_max_drop=self.suspension_max_drop,
+            suspension_damping_ratio=self.suspension_damping_ratio,
+            wheel_load_ratio=self.wheel_load_ratio,
+            spring_rate=self.spring_rate,
+            spring_preload=self.spring_preload,
+            suspension_smoothing=self.suspension_smoothing,
+            rollbar_scaling=self.rollbar_scaling,
+            sweep_shape=self.sweep_shape,
+            sweep_type=self.sweep_type,
+            max_brake_torque=self.max_brake_torque,
+            max_hand_brake_torque=self.max_hand_brake_torque,
+            wheel_index=self.wheel_index,
+            location=self._location,
+            old_location=self._old_location,
+            velocity=self._velocity)
+
     @staticmethod
     def _from_c(w: CWheelPhysicsControl) -> WheelPhysicsControl:
-        return WheelPhysicsControl(
+        r = WheelPhysicsControl(
             axle_type=int(w.axle_type),
             offset=_Owned(Vector3D._from_c(w.offset)),
             wheel_radius=w.wheel_radius,
@@ -338,7 +579,6 @@ class WheelPhysicsControl:
             traction_control_enabled=int(w.traction_control_enabled) != 0,
             max_wheelspin_rotation=w.max_wheelspin_rotation,
             external_torque_combine_method=int(w.external_torque_combine_method),
-            lateral_slip_graph=_curve_from_c(w.lateral_slip_graph, w.lateral_slip_graph_size),
             suspension_axis=_Owned(Vector3D._from_c(w.suspension_axis)),
             suspension_force_offset=_Owned(Vector3D._from_c(w.suspension_force_offset)),
             suspension_max_raise=w.suspension_max_raise,
@@ -357,45 +597,50 @@ class WheelPhysicsControl:
             location=_Owned(Location._from_c(w.location)),
             old_location=_Owned(Location._from_c(w.old_location)),
             velocity=_Owned(Vector3D._from_c(w.velocity)))
+        # Fresh from LibCarla: stored as is, not copied again.
+        r._lateral_slip_graph = _curve_from_c(w.lateral_slip_graph, w.lateral_slip_graph_size)
+        return r
 
 class VehiclePhysicsControl:
     """Every field of CARLA's VehiclePhysicsControl, with the Python API's names
     and LibCarla's defaults.
 
-    Unlike the Python API, the lists are plain Codon lists: changes made in place
-    (pc.wheels[0].wheel_radius = 40.0, pc.torque_curve.append(...)) are applied
-    by Vehicle.apply_physics_control(). The number of wheels must match the
-    vehicle's. Values cross into LibCarla as float32.
+    The list fields (torque_curve, steering_curve, forward_gear_ratios,
+    reverse_gear_ratios, wheels) are values, as in the Python API (issue #84):
+    the constructor and the setters store copies, and the getters return a new
+    list of copies, so change a list and assign it back
+    (w = pc.wheels; w[0].wheel_radius = 40.0; pc.wheels = w). The number of
+    wheels must match the vehicle's. Values cross into LibCarla as float32.
     """
-    torque_curve: List[Vector2D]  # (rpm, torque)
-    max_torque: float  # Nm
-    max_rpm: float
-    idle_rpm: float
-    brake_effect: float
-    rev_up_moi: float
-    rev_down_rate: float
+    _torque_curve: List[Vector2D]  # (rpm, torque)
+    _max_torque: float  # Nm
+    _max_rpm: float
+    _idle_rpm: float
+    _brake_effect: float
+    _rev_up_moi: float
+    _rev_down_rate: float
     differential_type: int
-    front_rear_split: float
+    _front_rear_split: float
     use_automatic_gears: bool
-    gear_change_time: float
-    final_ratio: float
-    forward_gear_ratios: List[float]
-    reverse_gear_ratios: List[float]
-    change_up_rpm: float
-    change_down_rpm: float
-    transmission_efficiency: float
-    mass: float  # kg
-    drag_coefficient: float
+    _gear_change_time: float
+    _final_ratio: float
+    _forward_gear_ratios: List[float]
+    _reverse_gear_ratios: List[float]
+    _change_up_rpm: float
+    _change_down_rpm: float
+    _transmission_efficiency: float
+    _mass: float  # kg
+    _drag_coefficient: float
     _center_of_mass: Location  # m, vehicle frame
-    chassis_width: float
-    chassis_height: float
-    downforce_coefficient: float
-    drag_area: float
+    _chassis_width: float
+    _chassis_height: float
+    _downforce_coefficient: float
+    _drag_area: float
     _inertia_tensor_scale: Vector3D
-    sleep_threshold: float
-    sleep_slope_limit: float
-    steering_curve: List[Vector2D]  # (speed, steer factor)
-    wheels: List[WheelPhysicsControl]
+    _sleep_threshold: float
+    _sleep_slope_limit: float
+    _steering_curve: List[Vector2D]  # (speed, steer factor)
+    _wheels: List[WheelPhysicsControl]
     use_sweep_wheel_collision: bool
 
     def __init__(self,
@@ -429,8 +674,10 @@ class VehiclePhysicsControl:
                  steering_curve: Optional[List[Vector2D]] = None,
                  wheels: Optional[List[WheelPhysicsControl]] = None,
                  use_sweep_wheel_collision: bool = False):
-        self.torque_curve = (torque_curve if torque_curve is not None
-                             else [Vector2D(0.0, 500.0), Vector2D(5000.0, 500.0)])
+        # The lists are stored as copies, as the official module converts them
+        # to std::vectors (issue #84).
+        self._torque_curve = (_copies(torque_curve) if torque_curve is not None
+                              else [Vector2D(0.0, 500.0), Vector2D(5000.0, 500.0)])
         self.max_torque = max_torque
         self.max_rpm = max_rpm
         self.idle_rpm = idle_rpm
@@ -442,10 +689,10 @@ class VehiclePhysicsControl:
         self.use_automatic_gears = use_automatic_gears
         self.gear_change_time = gear_change_time
         self.final_ratio = final_ratio
-        self.forward_gear_ratios = (forward_gear_ratios if forward_gear_ratios is not None
-                                    else [2.85, 2.02, 1.35, 1.0, 2.85, 2.02, 1.35, 1.0])
-        self.reverse_gear_ratios = (reverse_gear_ratios if reverse_gear_ratios is not None
-                                    else [2.86, 2.86])
+        self._forward_gear_ratios = (_ratios_f32(forward_gear_ratios) if forward_gear_ratios is not None
+                                     else [2.85, 2.02, 1.35, 1.0, 2.85, 2.02, 1.35, 1.0])
+        self._reverse_gear_ratios = (_ratios_f32(reverse_gear_ratios) if reverse_gear_ratios is not None
+                                     else [2.86, 2.86])
         self.change_up_rpm = change_up_rpm
         self.change_down_rpm = change_down_rpm
         self.transmission_efficiency = transmission_efficiency
@@ -463,10 +710,211 @@ class VehiclePhysicsControl:
             "[tsc-compat] a Location passed as a Vector3D to VehiclePhysicsControl(inertia_tensor_scale=...)")
         self.sleep_threshold = sleep_threshold
         self.sleep_slope_limit = sleep_slope_limit
-        self.steering_curve = (steering_curve if steering_curve is not None
-                               else [Vector2D(0.0, 1.0), Vector2D(10.0, 0.5)])
-        self.wheels = wheels if wheels is not None else List[WheelPhysicsControl]()
+        self._steering_curve = (_copies(steering_curve) if steering_curve is not None
+                                else [Vector2D(0.0, 1.0), Vector2D(10.0, 0.5)])
+        self._wheels = (_copies(wheels) if wheels is not None
+                        else List[WheelPhysicsControl]())
         self.use_sweep_wheel_collision = use_sweep_wheel_collision
+
+    @property
+    def torque_curve(self) -> List[Vector2D]:
+        return _copies(self._torque_curve)
+
+    @torque_curve.setter
+    def torque_curve(self, v: List[Vector2D]):
+        self._torque_curve = _copies(v)
+
+    @property
+    def forward_gear_ratios(self) -> List[float]:
+        return self._forward_gear_ratios.copy()
+
+    @forward_gear_ratios.setter
+    def forward_gear_ratios(self, v: List[float]):
+        self._forward_gear_ratios = _ratios_f32(v)
+
+    @property
+    def reverse_gear_ratios(self) -> List[float]:
+        return self._reverse_gear_ratios.copy()
+
+    @reverse_gear_ratios.setter
+    def reverse_gear_ratios(self, v: List[float]):
+        self._reverse_gear_ratios = _ratios_f32(v)
+
+    @property
+    def steering_curve(self) -> List[Vector2D]:
+        return _copies(self._steering_curve)
+
+    @steering_curve.setter
+    def steering_curve(self, v: List[Vector2D]):
+        self._steering_curve = _copies(v)
+
+    @property
+    def wheels(self) -> List[WheelPhysicsControl]:
+        return _copies(self._wheels)
+
+    @wheels.setter
+    def wheels(self, v: List[WheelPhysicsControl]):
+        self._wheels = _copies(v)
+
+    @property
+    def max_torque(self) -> float:
+        return self._max_torque
+
+    @max_torque.setter
+    def max_torque(self, v: float):
+        self._max_torque = _f32(v)
+
+    @property
+    def max_rpm(self) -> float:
+        return self._max_rpm
+
+    @max_rpm.setter
+    def max_rpm(self, v: float):
+        self._max_rpm = _f32(v)
+
+    @property
+    def idle_rpm(self) -> float:
+        return self._idle_rpm
+
+    @idle_rpm.setter
+    def idle_rpm(self, v: float):
+        self._idle_rpm = _f32(v)
+
+    @property
+    def brake_effect(self) -> float:
+        return self._brake_effect
+
+    @brake_effect.setter
+    def brake_effect(self, v: float):
+        self._brake_effect = _f32(v)
+
+    @property
+    def rev_up_moi(self) -> float:
+        return self._rev_up_moi
+
+    @rev_up_moi.setter
+    def rev_up_moi(self, v: float):
+        self._rev_up_moi = _f32(v)
+
+    @property
+    def rev_down_rate(self) -> float:
+        return self._rev_down_rate
+
+    @rev_down_rate.setter
+    def rev_down_rate(self, v: float):
+        self._rev_down_rate = _f32(v)
+
+    @property
+    def front_rear_split(self) -> float:
+        return self._front_rear_split
+
+    @front_rear_split.setter
+    def front_rear_split(self, v: float):
+        self._front_rear_split = _f32(v)
+
+    @property
+    def gear_change_time(self) -> float:
+        return self._gear_change_time
+
+    @gear_change_time.setter
+    def gear_change_time(self, v: float):
+        self._gear_change_time = _f32(v)
+
+    @property
+    def final_ratio(self) -> float:
+        return self._final_ratio
+
+    @final_ratio.setter
+    def final_ratio(self, v: float):
+        self._final_ratio = _f32(v)
+
+    @property
+    def change_up_rpm(self) -> float:
+        return self._change_up_rpm
+
+    @change_up_rpm.setter
+    def change_up_rpm(self, v: float):
+        self._change_up_rpm = _f32(v)
+
+    @property
+    def change_down_rpm(self) -> float:
+        return self._change_down_rpm
+
+    @change_down_rpm.setter
+    def change_down_rpm(self, v: float):
+        self._change_down_rpm = _f32(v)
+
+    @property
+    def transmission_efficiency(self) -> float:
+        return self._transmission_efficiency
+
+    @transmission_efficiency.setter
+    def transmission_efficiency(self, v: float):
+        self._transmission_efficiency = _f32(v)
+
+    @property
+    def mass(self) -> float:
+        return self._mass
+
+    @mass.setter
+    def mass(self, v: float):
+        self._mass = _f32(v)
+
+    @property
+    def drag_coefficient(self) -> float:
+        return self._drag_coefficient
+
+    @drag_coefficient.setter
+    def drag_coefficient(self, v: float):
+        self._drag_coefficient = _f32(v)
+
+    @property
+    def chassis_width(self) -> float:
+        return self._chassis_width
+
+    @chassis_width.setter
+    def chassis_width(self, v: float):
+        self._chassis_width = _f32(v)
+
+    @property
+    def chassis_height(self) -> float:
+        return self._chassis_height
+
+    @chassis_height.setter
+    def chassis_height(self, v: float):
+        self._chassis_height = _f32(v)
+
+    @property
+    def downforce_coefficient(self) -> float:
+        return self._downforce_coefficient
+
+    @downforce_coefficient.setter
+    def downforce_coefficient(self, v: float):
+        self._downforce_coefficient = _f32(v)
+
+    @property
+    def drag_area(self) -> float:
+        return self._drag_area
+
+    @drag_area.setter
+    def drag_area(self, v: float):
+        self._drag_area = _f32(v)
+
+    @property
+    def sleep_threshold(self) -> float:
+        return self._sleep_threshold
+
+    @sleep_threshold.setter
+    def sleep_threshold(self, v: float):
+        self._sleep_threshold = _f32(v)
+
+    @property
+    def sleep_slope_limit(self) -> float:
+        return self._sleep_slope_limit
+
+    @sleep_slope_limit.setter
+    def sleep_slope_limit(self, v: float):
+        self._sleep_slope_limit = _f32(v)
 
     @property
     def center_of_mass(self) -> Location:
@@ -495,7 +943,7 @@ class VehiclePhysicsControl:
     def __repr__(self) -> str:
         # As the Python API's str(): scalars through `ostream <<` (%g, bools as
         # 1/0, differential_type as a raw uint8_t char).
-        return ("VehiclePhysicsControl(torque_curve=" + fmt_list(self.torque_curve) +
+        return ("VehiclePhysicsControl(torque_curve=" + fmt_list(self._torque_curve) +
                 ", max_torque=" + fmt_g32(self.max_torque) +
                 ", max_rpm=" + fmt_g32(self.max_rpm) +
                 ", idle_rpm=" + fmt_g32(self.idle_rpm) +
@@ -507,8 +955,8 @@ class VehiclePhysicsControl:
                 ", use_automatic_gears=" + fmt_b01(self.use_automatic_gears) +
                 ", gear_change_time=" + fmt_g32(self.gear_change_time) +
                 ", final_ratio=" + fmt_g32(self.final_ratio) +
-                ", forward_gear_ratios=" + fmt_list([fmt_g32(x) for x in self.forward_gear_ratios]) +
-                ", reverse_gear_ratios=" + fmt_list([fmt_g32(x) for x in self.reverse_gear_ratios]) +
+                ", forward_gear_ratios=" + fmt_list([fmt_g32(x) for x in self._forward_gear_ratios]) +
+                ", reverse_gear_ratios=" + fmt_list([fmt_g32(x) for x in self._reverse_gear_ratios]) +
                 ", change_up_rpm=" + fmt_g32(self.change_up_rpm) +
                 ", change_down_rpm=" + fmt_g32(self.change_down_rpm) +
                 ", transmission_efficiency=" + fmt_g32(self.transmission_efficiency) +
@@ -522,8 +970,8 @@ class VehiclePhysicsControl:
                 ", inertia_tensor_scale=" + str(self.inertia_tensor_scale) +
                 ", sleep_threshold=" + fmt_g32(self.sleep_threshold) +
                 ", sleep_slope_limit=" + fmt_g32(self.sleep_slope_limit) +
-                ", steering_curve=" + fmt_list(self.steering_curve) +
-                ", wheels=" + fmt_list(self.wheels) +
+                ", steering_curve=" + fmt_list(self._steering_curve) +
+                ", wheels=" + fmt_list(self._wheels) +
                 ", use_sweep_wheel_collision=" + fmt_b01(self.use_sweep_wheel_collision) + ")")
 
     @staticmethod
@@ -540,14 +988,14 @@ class VehiclePhysicsControl:
     def _c_buffer(self) -> Ptr[CVehiclePhysicsControl]:
         """The control in C layout. Every array it points to is a GC allocation
         referenced from it, so they stay alive as long as the result does."""
-        slips = [_curve_to_c(w.lateral_slip_graph) for w in self.wheels]
-        wheels = Ptr[CWheelPhysicsControl](len(self.wheels))
-        for i in range(len(self.wheels)):
-            wheels[i] = self.wheels[i]._to_c(slips[i])
+        slips = [_curve_to_c(w._lateral_slip_graph) for w in self._wheels]
+        wheels = Ptr[CWheelPhysicsControl](len(self._wheels))
+        for i in range(len(self._wheels)):
+            wheels[i] = self._wheels[i]._to_c(slips[i])
         c = Ptr[CVehiclePhysicsControl](1)
-        c[0] = self._to_c(_curve_to_c(self.torque_curve), _curve_to_c(self.steering_curve),
-                          _ratios_to_c(self.forward_gear_ratios),
-                          _ratios_to_c(self.reverse_gear_ratios), wheels)
+        c[0] = self._to_c(_curve_to_c(self._torque_curve), _curve_to_c(self._steering_curve),
+                          _ratios_to_c(self._forward_gear_ratios),
+                          _ratios_to_c(self._reverse_gear_ratios), wheels)
         return c
 
     def _apply(self, vehicle: cobj):
@@ -555,9 +1003,9 @@ class VehiclePhysicsControl:
 
     def _to_c(self, torque: Ptr[CVector2D], steering: Ptr[CVector2D], forward: Ptr[float],
               reverse: Ptr[float], wheels: Ptr[CWheelPhysicsControl]) -> CVehiclePhysicsControl:
-        return CVehiclePhysicsControl(torque, len(self.torque_curve), steering,
-            len(self.steering_curve), forward, len(self.forward_gear_ratios), reverse,
-            len(self.reverse_gear_ratios), wheels, len(self.wheels), self.max_torque, self.max_rpm,
+        return CVehiclePhysicsControl(torque, len(self._torque_curve), steering,
+            len(self._steering_curve), forward, len(self._forward_gear_ratios), reverse,
+            len(self._reverse_gear_ratios), wheels, len(self._wheels), self.max_torque, self.max_rpm,
             self.idle_rpm, self.brake_effect, self.rev_up_moi, self.rev_down_rate,
             self.front_rear_split, self.gear_change_time, self.final_ratio, self.change_up_rpm,
             self.change_down_rpm, self.transmission_efficiency, self.mass, self.drag_coefficient,
@@ -568,8 +1016,7 @@ class VehiclePhysicsControl:
 
     @staticmethod
     def _from_c(c: CVehiclePhysicsControl) -> VehiclePhysicsControl:
-        return VehiclePhysicsControl(
-            torque_curve=_curve_from_c(c.torque_curve, c.torque_curve_size),
+        r = VehiclePhysicsControl(
             max_torque=c.max_torque,
             max_rpm=c.max_rpm,
             idle_rpm=c.idle_rpm,
@@ -581,8 +1028,6 @@ class VehiclePhysicsControl:
             use_automatic_gears=int(c.use_automatic_gears) != 0,
             gear_change_time=c.gear_change_time,
             final_ratio=c.final_ratio,
-            forward_gear_ratios=_ratios_from_c(c.forward_gear_ratios, c.forward_gear_ratios_size),
-            reverse_gear_ratios=_ratios_from_c(c.reverse_gear_ratios, c.reverse_gear_ratios_size),
             change_up_rpm=c.change_up_rpm,
             change_down_rpm=c.change_down_rpm,
             transmission_efficiency=c.transmission_efficiency,
@@ -596,13 +1041,18 @@ class VehiclePhysicsControl:
             inertia_tensor_scale=_Owned(Vector3D._from_c(c.inertia_tensor_scale)),
             sleep_threshold=c.sleep_threshold,
             sleep_slope_limit=c.sleep_slope_limit,
-            steering_curve=_curve_from_c(c.steering_curve, c.steering_curve_size),
-            wheels=[WheelPhysicsControl._from_c(c.wheels[i]) for i in range(c.wheel_count)],
             use_sweep_wheel_collision=int(c.use_sweep_wheel_collision) != 0)
+        # The lists are fresh from LibCarla: stored as they are, not copied again.
+        r._torque_curve = _curve_from_c(c.torque_curve, c.torque_curve_size)
+        r._forward_gear_ratios = _ratios_from_c(c.forward_gear_ratios, c.forward_gear_ratios_size)
+        r._reverse_gear_ratios = _ratios_from_c(c.reverse_gear_ratios, c.reverse_gear_ratios_size)
+        r._steering_curve = _curve_from_c(c.steering_curve, c.steering_curve_size)
+        r._wheels = [WheelPhysicsControl._from_c(c.wheels[i]) for i in range(c.wheel_count)]
+        return r
 
 class WalkerControl:
     _direction: Vector3D  # world-space direction (normalized by CARLA)
-    speed: float  # m/s
+    _speed: float  # m/s
     jump: bool
 
     def __init__(self, direction = None, speed: float = 0.0, jump: bool = False):
@@ -612,6 +1062,14 @@ class WalkerControl:
             "[tsc-compat] a Location passed as a Vector3D to WalkerControl(direction=...)")
         self.speed = speed
         self.jump = jump
+
+    @property
+    def speed(self) -> float:
+        return self._speed
+
+    @speed.setter
+    def speed(self, v: float):
+        self._speed = _f32(v)
 
     @property
     def direction(self) -> Vector3D:
