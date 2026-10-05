@@ -27,6 +27,9 @@ def main() -> int:
                              "built from a SHA resolved from it)")
     parser.add_argument("--carla-commit", default=None,
                         help="the CARLA commit SHA LibCarla must have been built from")
+    parser.add_argument("--pycarla", action="store_true",
+                        help="the wheel must carry a prebuilt typesafe_carla.carla that matches "
+                             "its sources and toolchain (tools/add_pycarla_to_wheel.py)")
     args = parser.parse_args()
 
     from typesafe_carla import paths
@@ -64,6 +67,18 @@ def main() -> int:
                  "carla/__init__.py", "carla_build.py"):
         if not (package / data).is_file():
             errors.append(f"{data} is missing from the package")
+    if args.pycarla:
+        from typesafe_carla import carla_build
+
+        if not carla_build.prebuilt_is_current():
+            errors.append(f"no prebuilt typesafe_carla.carla matching this installation in "
+                          f"{carla_build.PREBUILT_DIR}")
+        else:
+            so = carla_build.PREBUILT_DIR / "_carla.so"
+            needed = subprocess.run(["readelf", "-d", str(so)], capture_output=True, text=True).stdout
+            if "libpython" in needed:
+                errors.append(f"{so} links libpython")
+            print(f"pycarla  {carla_build.PREBUILT_DIR}")
     if backend == "libcarla":
         # Expects an installed wheel: a source-tree build dir (paths prefers
         # build/ in a checkout) holds THIRD_PARTY_NOTICES but not LICENSE.CARLA.

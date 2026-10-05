@@ -60,6 +60,77 @@ def test_the_cli_runs_the_generator(monkeypatch):
     assert seen == [["--package", "carla"]]
 
 
+def _fake_prebuilt(directory, stamp):
+    directory.mkdir(parents=True)
+    (directory / f"{pycarla.MODULE}.so").write_bytes(b"")
+    (directory / pycarla.STAMP).write_text(stamp + "\n")
+    return directory
+
+
+def test_the_prebuilt_package_is_loaded_when_it_matches(monkeypatch, tmp_path):
+    prebuilt = _fake_prebuilt(tmp_path / "_prebuilt", carla_build.prebuilt_stamp())
+    monkeypatch.setattr(carla_build, "PREBUILT_DIR", prebuilt)
+    monkeypatch.delenv(carla_build.ENV_DIR, raising=False)
+    monkeypatch.setenv(carla_build.ENV_BUILD, "0")
+    assert carla_build.package_dir() == prebuilt
+
+
+def test_a_stale_prebuilt_package_is_not_loaded(monkeypatch, tmp_path):
+    # Edited sources or another toolchain release: build instead (here: refuse).
+    prebuilt = _fake_prebuilt(tmp_path / "_prebuilt", "another release")
+    monkeypatch.setattr(carla_build, "PREBUILT_DIR", prebuilt)
+    monkeypatch.setenv(carla_build.ENV_DIR, str(tmp_path / "cache"))
+    monkeypatch.setenv(carla_build.ENV_BUILD, "0")
+    assert not carla_build.prebuilt_is_current(prebuilt)
+    monkeypatch.delenv(carla_build.ENV_DIR)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    with pytest.raises(ImportError):
+        carla_build.package_dir()
+
+
+def test_the_build_dir_wins_over_the_prebuilt_package(monkeypatch, tmp_path):
+    prebuilt = _fake_prebuilt(tmp_path / "_prebuilt", carla_build.prebuilt_stamp())
+    monkeypatch.setattr(carla_build, "PREBUILT_DIR", prebuilt)
+    monkeypatch.setenv(carla_build.ENV_DIR, str(tmp_path / "mine"))
+    monkeypatch.setenv(carla_build.ENV_BUILD, "0")
+    with pytest.raises(ImportError, match="mine"):
+        carla_build.package_dir()
+
+
+def test_the_prebuilt_key_ignores_the_native_library():
+    assert carla_build.prebuilt_stamp() == pycarla.source_stamp(pycarla.LIBRARY_PACKAGE, native=False)
+    assert carla_build.prebuilt_stamp() != pycarla.source_stamp(pycarla.LIBRARY_PACKAGE)
+
+
+def test_adding_the_prebuilt_package_to_a_wheel(tmp_path):
+    import base64
+    import hashlib
+    import zipfile
+
+    from tools import add_pycarla_to_wheel as tool
+
+    wheel = tmp_path / "typesafe_carla-9.9.9-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as z:
+        z.writestr("typesafe_carla/__init__.py", "x = 1\n")
+        z.writestr("typesafe_carla-9.9.9.dist-info/RECORD",
+                   "typesafe_carla/__init__.py,sha256=abc,6\ntypesafe_carla-9.9.9.dist-info/RECORD,,\n")
+    prebuilt = tmp_path / "_prebuilt"
+    prebuilt.mkdir()
+    (prebuilt / "_carla.so").write_bytes(b"\x7fELF")
+    (prebuilt / "stamp").write_text("k\n")
+    tool.add(wheel, prebuilt)
+    tool.add(wheel, prebuilt)  # idempotent: replaces, does not duplicate
+    with zipfile.ZipFile(wheel) as z:
+        names = z.namelist()
+        record = z.read("typesafe_carla-9.9.9.dist-info/RECORD").decode().splitlines()
+        so = z.read(f"{tool.PREBUILT}/_carla.so")
+    assert names.count(f"{tool.PREBUILT}/_carla.so") == 1
+    digest = base64.urlsafe_b64encode(hashlib.sha256(so).digest()).rstrip(b"=").decode()
+    assert f"{tool.PREBUILT}/_carla.so,sha256={digest},{len(so)}" in record
+    assert record[-1] == "typesafe_carla-9.9.9.dist-info/RECORD,,"
+    assert sum(ln.startswith(tool.PREBUILT) for ln in record) == 2
+
+
 @pytest.fixture(scope="module")
 def library_build():
     out = os.environ.get("TSC_PYCARLA_LIBRARY_DIR")

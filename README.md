@@ -295,14 +295,23 @@ world = client.get_world()
 
 `typesafe_carla.carla` is the library compiled with `codon build --pyext`
 (`typesafe_carla.pycarla`; CARLA's own PythonAPI tests run unmodified on it,
-see below). That compile takes ~15 min and ~8 GB of memory and needs `cc`, so
-it is not in the wheel: the first import builds it into
-`~/.cache/typesafe_carla/pycarla/<key>` (keyed by the installation; later
-imports load it), and `typesafe-codon pycarla` builds it ahead of time, e.g.
-in a container image. `TYPESAFE_CARLA_PYCARLA_DIR` chooses the directory and
-`TYPESAFE_CARLA_PYCARLA_BUILD=0` makes a missing build an `ImportError`
-instead of a build (`python/typesafe_carla/carla_build.py`). It does not
-take the `carla` import name, so it can sit next to the official package.
+see below). **The released wheel carries it prebuilt**
+(`typesafe_carla/carla/_prebuilt`, added by the release workflow): `pip
+install typesafe-carla` imports it with nothing to compile. One build serves
+every Python 3.10+: Codon's output does not depend on the Python version, and
+the package finds the native library and the Codon runtime at run time.
+
+Where no prebuilt package matches the installation (a source checkout, an
+sdist install, edited Codon sources, another `typesafe-carla-toolchain`
+release), the first import builds it instead, into
+`~/.cache/typesafe_carla/pycarla/<key>`; that takes 15 to 30 minutes and ~8 GB
+of memory and needs `cc`. `typesafe-codon pycarla` does the same ahead of time
+(and says so when the wheel's build already applies).
+`TYPESAFE_CARLA_PYCARLA_DIR` chooses the build directory (and wins over the
+prebuilt package), and `TYPESAFE_CARLA_PYCARLA_BUILD=0` makes a missing build
+an `ImportError` instead of a build (`python/typesafe_carla/carla_build.py`).
+It does not take the `carla` import name, so it can sit next to the official
+package.
 
 The same import compiles with Codon (`codon/typesafe_carla/carla.codon` is the
 library under that name), so one source both runs on CPython and is checked by

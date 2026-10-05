@@ -4,12 +4,20 @@ typesafe_carla publishes two distributions:
 
 | Distribution | Contents | Version | Built by |
 |---|---|---|---|
-| `typesafe-carla` | Codon sources, `libtypesafe_carla_ffi.so` (LibCarla linked in statically), the `typesafe-codon` launcher | `python/typesafe_carla/__init__.py` | scikit-build-core (+ cibuildwheel, manylinux_2_28) |
+| `typesafe-carla` | Codon sources, `libtypesafe_carla_ffi.so` (LibCarla linked in statically), the `typesafe-codon` launcher, the prebuilt `typesafe_carla.carla` CPython package (`typesafe_carla/carla/_prebuilt`) | `python/typesafe_carla/__init__.py` | scikit-build-core (+ cibuildwheel, manylinux_2_28); then `tools/add_pycarla_to_wheel.py` (release job `wheel-pycarla`) |
 | `typesafe-carla-toolchain` | The pinned Codon compiler | `toolchain/pyproject.toml` (= Codon version, `.postN` for repackaging) | hatchling + `toolchain/hatch_build.py` |
 
 Both wheels are Linux x86_64 only for now. `typesafe-carla` is tagged
-`py3-none-manylinux_*` because it contains no CPython extension, so one
-wheel serves every Python 3 version.
+`py3-none-manylinux_*`, so one wheel serves every Python 3 version. Its one
+CPython extension, the prebuilt `typesafe_carla/carla/_prebuilt/_carla.so`,
+does not change that: Codon compiles it without Python headers, the same
+bytes for every Python version, and it finds the native library and the Codon
+runtime at run time. The `wheel-pycarla` job compiles it (15-30 min, ~8 GB)
+in the manylinux image from the built wheel and the toolchain wheel, adds it,
+and imports the result under another Python with building disabled; the
+publish jobs upload that wheel (`dist-wheel-pycarla`). A prebuilt package
+is used only with the toolchain release it was compiled with
+(`carla_build.prebuilt_stamp()`); otherwise the first import builds one.
 
 ## Release tags
 

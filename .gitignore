@@ -3,3 +3,4 @@
 __pycache__/
 *.egg-info/
 /dist/
+/python/typesafe_carla/carla/_prebuilt/

@@ -1304,10 +1304,16 @@ def write_package(pkg: Path, gen: Gen) -> None:
 STAMP = "stamp"  # in the output directory: source_stamp() of the build
 
 
-def source_stamp(package: str = PACKAGE_NAME, pruned_path: Path = PRUNED) -> str:
+def source_stamp(package: str = PACKAGE_NAME, pruned_path: Path = PRUNED,
+                 native: bool = True) -> str:
     """What a build depends on: typesafe_carla's Codon sources, this
     generator, the runtime, pruned.json, the Codon toolchain's version, the
-    package name and the native library the package loads."""
+    package name and (`native`) the native library the package loads.
+
+    Without `native` it is the key of a build that finds the native library
+    and the Codon runtime at run time (the wheel's prebuilt package,
+    carla_build): one build of the same sources and toolchain serves every
+    installation."""
     import hashlib
     from importlib import metadata
 
@@ -1318,7 +1324,9 @@ def source_stamp(package: str = PACKAGE_NAME, pruned_path: Path = PRUNED) -> str
         h.update(metadata.version("typesafe-carla-toolchain").encode())
     except metadata.PackageNotFoundError:
         h.update(b"no toolchain package")
-    h.update(b"\0" + package.encode() + b"\0" + str(_native_library()).encode())
+    h.update(b"\0" + package.encode())
+    if native:
+        h.update(b"\0" + str(_native_library()).encode())
     return h.hexdigest()
 
 
@@ -1330,8 +1338,11 @@ def is_current(out: Path, package: str = PACKAGE_NAME, pruned_path: Path = PRUNE
 
 
 def build(out: Path, env: dict[str, str] | None = None, package: str = PACKAGE_NAME,
-          pruned_path: Path = PRUNED, log=print) -> Path:
-    """Builds the package into `out/carla` (imported as `package`); returns `out`."""
+          pruned_path: Path = PRUNED, log=print, rpath: list[str] | None = None) -> Path:
+    """Builds the package into `out/carla` (imported as `package`); returns `out`.
+
+    `_carla.so` finds the Codon runtime through `rpath` (default: this
+    toolchain's library directories)."""
     from typesafe_carla import toolchain
 
     out.mkdir(parents=True, exist_ok=True)
@@ -1340,7 +1351,8 @@ def build(out: Path, env: dict[str, str] | None = None, package: str = PACKAGE_N
     pkg = out / "carla"
     pkg.mkdir(parents=True, exist_ok=True)
     link = ["cc", "-shared", "-o", str(pkg / f"{MODULE}.so"), str(out / f"{MODULE}.o")]
-    link += [f"-L{d}" for d in libdirs] + ["-lcodonrt"] + [f"-Wl,-rpath,{d}" for d in libdirs]
+    link += [f"-L{d}" for d in libdirs] + ["-lcodonrt"]
+    link += [f"-Wl,-rpath,{d}" for d in (libdirs if rpath is None else rpath)]
     subprocess.run(link, check=True)
     write_package(pkg, gen)
     (out / STAMP).write_text(source_stamp(package, pruned_path) + "\n")
@@ -1376,6 +1388,9 @@ def main(argv: list[str] | None = None, prog: str = "typesafe-codon pycarla",
 
         if args.report:
             parser.error("--report needs -o")
+        if not os.environ.get(carla_build.ENV_DIR) and carla_build.prebuilt_is_current():
+            print(f"{carla_build.PREBUILT_DIR} (prebuilt in the wheel; nothing to build)")
+            return 0
         print(carla_build.ensure_built(log=print))
         return 0
     out = (args.out or default_out()).resolve()
