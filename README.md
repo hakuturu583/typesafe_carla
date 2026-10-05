@@ -281,6 +281,43 @@ pinned Codon. Requirements and building for another CARLA ref are in
 [docs/usage.md](docs/usage.md); the release process is in
 [docs/releasing.md](docs/releasing.md).
 
+### From CPython: `import typesafe_carla.carla as carla`
+
+CPython programs (a scenario framework, a test harness) use the same library
+with the CARLA Python API's names, in place of the `carla` package:
+
+```python
+import typesafe_carla.carla as carla
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+```
+
+`typesafe_carla.carla` is the library compiled with `codon build --pyext`
+(`typesafe_carla.pycarla`; CARLA's own PythonAPI tests run unmodified on it,
+see below). **The released wheel carries it prebuilt**
+(`typesafe_carla/carla/_prebuilt`, added by the release workflow): `pip
+install typesafe-carla` imports it with nothing to compile. One build serves
+every Python 3.10+: Codon's output does not depend on the Python version, and
+the package finds the native library and the Codon runtime at run time.
+
+Where no prebuilt package matches the installation (a source checkout, an
+sdist install, edited Codon sources, another `typesafe-carla-toolchain`
+release), the first import builds it instead, into
+`~/.cache/typesafe_carla/pycarla/<key>`; that takes 15 to 50 minutes and ~14 GB
+of memory and needs `cc`. `typesafe-codon pycarla` does the same ahead of time
+(and says so when the wheel's build already applies).
+`TYPESAFE_CARLA_PYCARLA_DIR` chooses the build directory (and wins over the
+prebuilt package), and `TYPESAFE_CARLA_PYCARLA_BUILD=0` makes a missing build
+an `ImportError` instead of a build (`python/typesafe_carla/carla_build.py`).
+It does not take the `carla` import name, so it can sit next to the official
+package.
+
+The same import compiles with Codon (`codon/typesafe_carla/carla.codon` is the
+library under that name), so one source both runs on CPython and is checked by
+the Codon compiler. Codon 0.19 resolves the module only in this form, not as
+`from typesafe_carla import carla`.
+
 ## Testing against a real CARLA server
 
 `tests/integration/*.codon` and `tests/compatibility/` need a running CARLA
@@ -408,8 +445,9 @@ tests/compile/strict_fail/ programs that compile only outside strict mode
 tests/unit/                Codon runtime tests against the mock backend
 tests/upstream/            CARLA's own PythonAPI tests: expectations, unittest shim
 tools/upstream_tests.py    runs those tests (cpython and codon modes), writes GAPS.md
-tools/pycarla.py           typesafe_carla as a CPython package (codon --pyext), for them
-compat/pycarla/            its Python runtime and pruned-overload cache
+tools/pycarla.py           the checkout's `carla` build for them (typesafe_carla.pycarla, --package carla)
+python/typesafe_carla/pycarla/  typesafe_carla as a CPython package (codon --pyext): generator, runtime, pruned-overload cache
+python/typesafe_carla/carla/    `import typesafe_carla.carla as carla` (built on first use, carla_build.py)
 examples/                  example programs
 ```
 

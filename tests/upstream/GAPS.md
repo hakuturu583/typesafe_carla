@@ -207,7 +207,7 @@ wrapper; they are not typesafe_carla gaps. Each is worked around as noted:
   but not assigned, and `isinstance`/`hasattr` see a pyobj. The wrapper
   exports one overload per type the parameter accepts (`GENERIC_PARAMS`). It
   drops the combinations the library rejects at compile time
-  (`compat/pycarla/pruned.json`).
+  (`python/typesafe_carla/pycarla/pruned.json`).
 - Top-level functions do not overload (a redefinition shadows), so each
   overload gets its own name and the runtime tries them in order.
 - The exporter's default for a parameter typed `NoneType` fails to unpack

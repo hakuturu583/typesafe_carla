@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/pycarla
-          key: pycarla-mock-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python }}-${{ hashFiles('codon/**', 'tools/pycarla.py', 'compat/pycarla/**', 'toolchain/**', 'native/**') }}
+          key: pycarla-mock-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python }}-${{ hashFiles('codon/**', 'tools/pycarla.py', 'python/typesafe_carla/pycarla/**', 'toolchain/**', 'native/**') }}
       - name: Compile-pass, compile-fail, runtime and launcher tests
         env:
           TSC_PYCARLA_DIR: ${{ runner.temp }}/pycarla
@@ -172,7 +172,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/pycarla
-          key: pycarla-${{ runner.os }}-${{ runner.arch }}-${{ steps.carla.outputs.sha }}-${{ hashFiles('codon/**', 'tools/pycarla.py', 'compat/pycarla/**', 'toolchain/**') }}
+          key: pycarla-${{ runner.os }}-${{ runner.arch }}-${{ steps.carla.outputs.sha }}-${{ hashFiles('codon/**', 'tools/pycarla.py', 'python/typesafe_carla/pycarla/**', 'toolchain/**') }}
       - name: CARLA PythonAPI unit tests (${{ matrix.carla_ref }}, ${{ matrix.os.runner == 'ubuntu-24.04' && 'cpython + codon' || 'codon' }})
         env:
           PYTHONPATH: python
@@ -181,11 +181,11 @@ jobs:
         run: >-
           uv run --no-project --with ./toolchain --with pyyaml
           python -m tools.upstream_tests --mode "$MODE" --suite unit --summary "$GITHUB_STEP_SUMMARY"
-      # A variant the build had to prune (compat/pycarla/pruned.json) is API
+      # A variant the build had to prune (python/typesafe_carla/pycarla/pruned.json) is API
       # that disappeared: it must be reviewed and committed, not slip by.
       - name: pycarla prunes nothing new
         if: matrix.os.runner == 'ubuntu-24.04'
-        run: git diff --exit-code compat/pycarla/pruned.json
+        run: git diff --exit-code python/typesafe_carla/pycarla/pruned.json
       - name: Save the pycarla build
         if: >-
           matrix.os.runner == 'ubuntu-24.04' && github.event_name != 'pull_request'
@@ -271,7 +271,10 @@ jobs:
           mkdir "$RUNNER_TEMP/clean" && cp examples/connect.py "$RUNNER_TEMP/clean/"
           cd "$RUNNER_TEMP/clean"
           uv venv --python 3.10  # the oldest supported version is the riskiest
-          uv pip install --find-links "$GITHUB_WORKSPACE/dist" typesafe-carla
+          # The built files, not the name: with a release of the same version on
+          # PyPI, `typesafe-carla` alone may resolve to PyPI's (LibCarla) wheel.
+          uv pip install --find-links "$GITHUB_WORKSPACE/dist" "$GITHUB_WORKSPACE"/dist/typesafe_carla-*.whl
+          .venv/bin/python -c "from typesafe_carla import paths; assert paths.native_info()['backend'] == 'mock'"
           .venv/bin/typesafe-codon info
           .venv/bin/typesafe-codon run connect.py
           .venv/bin/typesafe-codon build -release -o connect connect.py

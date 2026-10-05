@@ -404,6 +404,54 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: dist-wheel, path: dist/*.whl }
 
+  wheel-pycarla:
+    # The prebuilt `import typesafe_carla.carla as carla` package
+    # (python/typesafe_carla/carla_build.py), compiled with the toolchain
+    # wheel from the installed wheel and added to it as
+    # typesafe_carla/carla/_prebuilt, so `pip install typesafe-carla` has
+    # nothing to compile. In the manylinux image the wheel was built in, so
+    # `_carla.so` needs no newer glibc than the native library. Codon's output
+    # does not depend on the Python version: the wheel stays py3-none, and the
+    # check below imports it under another interpreter than the builder's.
+    #
+    # The compile takes 30-50 min and peaks at ~14 GB, more than the 16 GB
+    # runner leaves free, so the host gets swap and the image runs under
+    # `docker run` (a job container cannot add swap).
+    needs: [resolve, wheel, toolchain]
+    if: always() && needs.wheel.result == 'success' && needs.toolchain.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+      - uses: actions/download-artifact@v4
+        with: { name: dist-wheel, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: dist-toolchain, path: dist-toolchain }
+      - name: Add swap for the compile
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 16G /swapfile-pycarla && sudo chmod 600 /swapfile-pycarla
+          sudo mkswap /swapfile-pycarla && sudo swapon /swapfile-pycarla
+          free -g
+      - name: Build the prebuilt package into the wheel, and import it without compiling
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work quay.io/pypa/manylinux_2_28_x86_64 bash -euxc '
+            /opt/python/cp312-cp312/bin/python -m venv /tmp/builder
+            /tmp/builder/bin/pip install --no-index --find-links dist-toolchain dist/*.whl
+            (cd /tmp && /tmp/builder/bin/python /work/tools/add_pycarla_to_wheel.py /work/dist/typesafe_carla-*.whl)
+            # Another Python, a fresh venv, building disabled: what `pip install` gets.
+            /opt/python/cp310-cp310/bin/python -m venv /tmp/user
+            /tmp/user/bin/pip install --no-index --find-links dist-toolchain dist/*.whl
+            cd /tmp
+            TYPESAFE_CARLA_PYCARLA_BUILD=0 /tmp/user/bin/python /work/tools/check_wheel.py --backend libcarla --pycarla
+            TYPESAFE_CARLA_PYCARLA_BUILD=0 /tmp/user/bin/python -c "import sys, typesafe_carla.carla as carla; t = carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(yaw=90.0)); assert \"carla\" not in sys.modules and t.location.y == 2.0; print(\"typesafe_carla.carla OK\", carla.__path__)"
+          '
+          sudo chown -R "$(id -u):$(id -g)" dist
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-wheel-pycarla, path: dist/*.whl }
+
   toolchain:
     needs: [resolve, verify]
     if: always() && needs.verify.result == 'success'
@@ -430,14 +478,14 @@ jobs:
   # lookup unambiguous.
   publish-toolchain:
     name: publish typesafe-carla-toolchain to ${{ needs.resolve.outputs.index }}
-    needs: [resolve, sdist, wheel, toolchain]
+    needs: [resolve, sdist, wheel, wheel-pycarla, toolchain]
     # Decided by `resolve`, from the event: a release goes to PyPI; a manual
     # run (even one started from a tag) only with publish=true, to TestPyPI.
     # Waits for every build, so nothing is uploaded unless all of it built.
     if: >-
       always() && needs.resolve.outputs.publish == 'true' &&
       needs.sdist.result == 'success' && needs.wheel.result == 'success' &&
-      needs.toolchain.result == 'success'
+      needs.wheel-pycarla.result == 'success' && needs.toolchain.result == 'success'
     runs-on: ubuntu-24.04
     environment: ${{ needs.resolve.outputs.index }}-toolchain
     permissions:
@@ -447,8 +495,9 @@ jobs:
       # passes; only the toolchain is uploaded from this job.
       - uses: actions/download-artifact@v4
         with: { name: dist-sdist, path: dist }
+      # The wheel with the prebuilt typesafe_carla.carla (wheel-pycarla).
       - uses: actions/download-artifact@v4
-        with: { name: dist-wheel, path: dist }
+        with: { name: dist-wheel-pycarla, path: dist }
       - uses: actions/download-artifact@v4
         with: { name: dist-toolchain, path: dist-toolchain }
       - run: ls -l dist dist-toolchain
@@ -479,8 +528,9 @@ jobs:
       # job uploads ends up in dist/.
       - uses: actions/download-artifact@v4
         with: { name: dist-sdist, path: dist }
+      # The wheel with the prebuilt typesafe_carla.carla (wheel-pycarla).
       - uses: actions/download-artifact@v4
-        with: { name: dist-wheel, path: dist }
+        with: { name: dist-wheel-pycarla, path: dist }
       - run: ls -l dist
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:

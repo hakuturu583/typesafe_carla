@@ -4,7 +4,9 @@
 
 Checks that the native library loads, exports the expected ABI, was built
 with the expected backend (and CARLA ref and commit), links no libpython, and
-that the Codon sources are present. For the libcarla backend it also checks
+that the Codon sources and the CPython binding generator (typesafe_carla.pycarla:
+its runtime and pruned.json, which `import typesafe_carla.carla as carla` builds
+from) are present. For the libcarla backend it also checks
 that the license notices of the statically linked code ship next to the
 library (LICENSE.CARLA, THIRD_PARTY_NOTICES). Used by the release workflow
 before publishing.
@@ -25,6 +27,9 @@ def main() -> int:
                              "built from a SHA resolved from it)")
     parser.add_argument("--carla-commit", default=None,
                         help="the CARLA commit SHA LibCarla must have been built from")
+    parser.add_argument("--pycarla", action="store_true",
+                        help="the wheel must carry a prebuilt typesafe_carla.carla that matches "
+                             "its sources and toolchain (tools/add_pycarla_to_wheel.py)")
     args = parser.parse_args()
 
     from typesafe_carla import paths
@@ -53,6 +58,27 @@ def main() -> int:
         paths.codon_modules_dir()
     except paths.PathError as e:
         errors.append(str(e))
+    from pathlib import Path
+
+    import typesafe_carla
+
+    package = Path(typesafe_carla.__file__).parent
+    for data in ("pycarla/__init__.py", "pycarla/_runtime.py", "pycarla/pruned.json",
+                 "carla/__init__.py", "carla_build.py"):
+        if not (package / data).is_file():
+            errors.append(f"{data} is missing from the package")
+    if args.pycarla:
+        from typesafe_carla import carla_build
+
+        if not carla_build.prebuilt_is_current():
+            errors.append(f"no prebuilt typesafe_carla.carla matching this installation in "
+                          f"{carla_build.PREBUILT_DIR}")
+        else:
+            so = carla_build.PREBUILT_DIR / "_carla.so"
+            needed = subprocess.run(["readelf", "-d", str(so)], capture_output=True, text=True).stdout
+            if "libpython" in needed:
+                errors.append(f"{so} links libpython")
+            print(f"pycarla  {carla_build.PREBUILT_DIR}")
     if backend == "libcarla":
         # Expects an installed wheel: a source-tree build dir (paths prefers
         # build/ in a checkout) holds THIRD_PARTY_NOTICES but not LICENSE.CARLA.
