@@ -739,25 +739,42 @@ Deliberate differences, all in favour of static checking:
   `get_vector_angle`, and `Quaternion`'s `length`, `inverse`,
   `unit_quaternion`, `*` and basis vectors, compute step by step in float32,
   as LibCarla, and give the Python API's results bit for bit
-  (tests/compatibility/arithmetic_cases). `Quaternion(rotation)`,
-  `Quaternion.rotator`, `Rotation.get_normalized`, `Transform.transform` and
-  `transform_vector` use other formulas or double intermediates and round
-  only the result, so they can differ from the Python API in the low bits,
-  more for components near zero (issue #90). Double fields stay double, as
-  in LibCarla:
-  `GeoLocation`, the geo projections, `GeoEllipsoid`, `GeoOffsetTransform`
-  and `WorldSettings`' time steps. Other value types with `float` fields in
-  LibCarla (the controls, the physics controls, `WeatherParameters`, ...)
-  still store the double you set: they become float32 when sent to the
-  server, so `get_control().throttle` after setting `0.2` is
-  `0.2000000029802322`, and `==` compares them in float32.
+  (tests/compatibility/arithmetic_cases). So do the derived geometry
+  (issue #90): `Transform.transform` (one point or a list) and
+  `transform_vector`, `BoundingBox.get_local_vertices`,
+  `get_world_vertices` and `contains`, and `Rotation.get_normalized`
+  (`Rotation(1e10).get_normalized().pitch` is `0.0`, as in LibCarla) follow
+  LibCarla's float formulas on its own float32 matrix, and
+  `Quaternion(rotation)` and `rotator` follow ue5-dev's `Quaternion.h`
+  (`cosf`, `sinf`, `asinf`, `atan2f`, double degree conversions). CARLA
+  0.10.0 has no `Quaternion`, so those two are checked against ue5-dev's
+  header compiled into a small C++ program; the others against the official
+  0.10.0 module. Double fields stay double, as in LibCarla: `GeoLocation`,
+  the geo projections, `GeoEllipsoid`, `GeoOffsetTransform`,
+  `OpendriveGenerationParameters` and `WorldSettings`' time steps
+  (`fixed_delta_seconds`, `max_substep_delta_time`).
+* **Float precision of the other value types (issue #90).** The scalar
+  `float` fields of `VehicleControl`, `WalkerControl`,
+  `VehicleAckermannControl`, `AckermannControllerSettings`,
+  `VehiclePhysicsControl`, `WheelPhysicsControl`, `WeatherParameters`,
+  `WorldSettings` (`max_culling_distance`, `tile_stream_distance`,
+  `actor_active_distance`), `FloatColor`, `OpticalFlowPixel`, `LightState`
+  (`intensity`), `LidarDetection` (`intensity`), `SemanticLidarDetection`
+  (`cos_inc_angle`) and `RadarDetection` store float32 as well, rounded on
+  construction and on assignment as the official module does:
+  `VehicleControl(throttle=0.1).throttle` is `0.10000000149011612`. The
+  lists `VehiclePhysicsControl.forward_gear_ratios` and
+  `reverse_gear_ratios` are plain Codon lists, changed in place: their
+  elements keep the doubles you put there and become float32 when sent to
+  the server (the official 0.10.0 module cannot read them at all). Records
+  only read from the server (measurements, telemetry, `Landmark`, ...)
+  already hold LibCarla's float32 values.
 
 * **`==` / `!=` (issue #70)** follow LibCarla's `operator==` on every value
   type the Python API compares. Float fields compare exactly *in float32*, as
   LibCarla stores them: `Location(0.1) == Location(0.1 + 1e-12)` is `True`
   (both store the same float32), as is `VehicleControl(throttle=0.1) ==
-  VehicleControl(throttle=0.1 + 1e-12)` although the doubles kept there
-  differ. Double fields (`GeoLocation`, the geo projections, `GeoEllipsoid`,
+  VehicleControl(throttle=0.1 + 1e-12)`. Double fields (`GeoLocation`, the geo projections, `GeoEllipsoid`,
   `GeoOffsetTransform`, and `WorldSettings`' `fixed_delta_seconds` and
   `max_substep_delta_time`) compare exactly. As in
   LibCarla, some types compare less than every field. `Rotation`s are also

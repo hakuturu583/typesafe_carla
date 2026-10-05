@@ -24,7 +24,7 @@ from .errors import _check, _i32, CarlaError
 from .map import _read_buffer
 from .geometry import Transform
 from .actor import Vehicle
-from ._eq import _fields_eq
+from ._eq import _f32, _fields_eq
 from ._fmt import fmt_fields
 from ._enum import _member_names, _member_values, _enum_repr
 
@@ -104,11 +104,11 @@ class VehicleFailureState:
 class VehicleAckermannControl:
     """Target steering and speed for the server's Ackermann controller, as
     carla.VehicleAckermannControl. Values must be finite."""
-    steer: float  # rad
-    steer_speed: float  # rad/s
-    speed: float  # m/s
-    acceleration: float  # m/s^2
-    jerk: float  # m/s^3
+    _steer: float  # rad
+    _steer_speed: float  # rad/s
+    _speed: float  # m/s
+    _acceleration: float  # m/s^2
+    _jerk: float  # m/s^3
 
     def __init__(self, steer: float = 0.0, steer_speed: float = 0.0, speed: float = 0.0,
                  acceleration: float = 0.0, jerk: float = 0.0):
@@ -117,6 +117,46 @@ class VehicleAckermannControl:
         self.speed = speed
         self.acceleration = acceleration
         self.jerk = jerk
+
+    @property
+    def steer(self) -> float:
+        return self._steer
+
+    @steer.setter
+    def steer(self, v: float):
+        self._steer = _f32(v)
+
+    @property
+    def steer_speed(self) -> float:
+        return self._steer_speed
+
+    @steer_speed.setter
+    def steer_speed(self, v: float):
+        self._steer_speed = _f32(v)
+
+    @property
+    def speed(self) -> float:
+        return self._speed
+
+    @speed.setter
+    def speed(self, v: float):
+        self._speed = _f32(v)
+
+    @property
+    def acceleration(self) -> float:
+        return self._acceleration
+
+    @acceleration.setter
+    def acceleration(self, v: float):
+        self._acceleration = _f32(v)
+
+    @property
+    def jerk(self) -> float:
+        return self._jerk
+
+    @jerk.setter
+    def jerk(self, v: float):
+        self._jerk = _f32(v)
 
     def __eq__(self, other: VehicleAckermannControl) -> bool:
         return _fields_eq(self, other)
@@ -134,12 +174,12 @@ class VehicleAckermannControl:
 class AckermannControllerSettings:
     """PID gains of the server's Ackermann controller, as
     carla.AckermannControllerSettings. Values must be finite."""
-    speed_kp: float
-    speed_ki: float
-    speed_kd: float
-    accel_kp: float
-    accel_ki: float
-    accel_kd: float
+    _speed_kp: float
+    _speed_ki: float
+    _speed_kd: float
+    _accel_kp: float
+    _accel_ki: float
+    _accel_kd: float
 
     def __init__(self, speed_kp: float = 0.0, speed_ki: float = 0.0, speed_kd: float = 0.0,
                  accel_kp: float = 0.0, accel_ki: float = 0.0, accel_kd: float = 0.0):
@@ -149,6 +189,54 @@ class AckermannControllerSettings:
         self.accel_kp = accel_kp
         self.accel_ki = accel_ki
         self.accel_kd = accel_kd
+
+    @property
+    def speed_kp(self) -> float:
+        return self._speed_kp
+
+    @speed_kp.setter
+    def speed_kp(self, v: float):
+        self._speed_kp = _f32(v)
+
+    @property
+    def speed_ki(self) -> float:
+        return self._speed_ki
+
+    @speed_ki.setter
+    def speed_ki(self, v: float):
+        self._speed_ki = _f32(v)
+
+    @property
+    def speed_kd(self) -> float:
+        return self._speed_kd
+
+    @speed_kd.setter
+    def speed_kd(self, v: float):
+        self._speed_kd = _f32(v)
+
+    @property
+    def accel_kp(self) -> float:
+        return self._accel_kp
+
+    @accel_kp.setter
+    def accel_kp(self, v: float):
+        self._accel_kp = _f32(v)
+
+    @property
+    def accel_ki(self) -> float:
+        return self._accel_ki
+
+    @accel_ki.setter
+    def accel_ki(self, v: float):
+        self._accel_ki = _f32(v)
+
+    @property
+    def accel_kd(self) -> float:
+        return self._accel_kd
+
+    @accel_kd.setter
+    def accel_kd(self, v: float):
+        self._accel_kd = _f32(v)
 
     def __eq__(self, other: AckermannControllerSettings) -> bool:
         return _fields_eq(self, other)

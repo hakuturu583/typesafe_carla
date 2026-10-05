@@ -9,7 +9,7 @@ from ._ffi import (Handle, CTransform, CWorldSettings, tsc_world_get_id, tsc_wor
 from ._ffi import CWorldSettingsExt, tsc_world_get_settings_ext, tsc_world_apply_settings_ext
 from ._ffi import tsc_actor_get_world
 from .errors import _check, _is_actor_id, _actor_id, _i32
-from ._eq import _f32_eq
+from ._eq import _f32, _f32_eq
 from .constants import AttachmentType
 from .geometry import Transform
 from .actor import Actor, ActorList, _make_actor
@@ -33,10 +33,10 @@ class WorldSettings:
     substepping: bool
     max_substep_delta_time: float
     max_substeps: int
-    max_culling_distance: float  # meters; 0 disables culling
+    _max_culling_distance: float  # meters; 0 disables culling
     deterministic_ragdolls: bool
-    tile_stream_distance: float  # meters (large maps)
-    actor_active_distance: float  # meters (large maps)
+    _tile_stream_distance: float  # meters (large maps)
+    _actor_active_distance: float  # meters (large maps)
     spectator_as_ego: bool  # the spectator drives large-map streaming without a hero
 
     # Defaults as the Python API's WorldSettings() (deterministic_ragdolls is
@@ -58,6 +58,30 @@ class WorldSettings:
         self.tile_stream_distance = tile_stream_distance
         self.actor_active_distance = actor_active_distance
         self.spectator_as_ego = spectator_as_ego
+
+    @property
+    def max_culling_distance(self) -> float:
+        return self._max_culling_distance
+
+    @max_culling_distance.setter
+    def max_culling_distance(self, v: float):
+        self._max_culling_distance = _f32(v)
+
+    @property
+    def tile_stream_distance(self) -> float:
+        return self._tile_stream_distance
+
+    @tile_stream_distance.setter
+    def tile_stream_distance(self, v: float):
+        self._tile_stream_distance = _f32(v)
+
+    @property
+    def actor_active_distance(self) -> float:
+        return self._actor_active_distance
+
+    @actor_active_distance.setter
+    def actor_active_distance(self, v: float):
+        self._actor_active_distance = _f32(v)
 
     def __eq__(self, other: WorldSettings) -> bool:
         """Every field, as LibCarla's EpisodeSettings: the time steps (doubles)

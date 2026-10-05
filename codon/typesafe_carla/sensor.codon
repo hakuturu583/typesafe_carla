@@ -50,7 +50,7 @@ from .blueprint import Color
 from .actor import Actor, _make_actor
 from .lane_marking import LaneMarking
 from .map import _read_buffer
-from ._eq import _fields_eq
+from ._eq import _f32, _fields_eq
 from ._callbacks import (_register_callback, _unregister_stream, _find_callback, _pop, _Locked,
                          _maybe_autostart,
                          dispatch_sensor_callbacks)
@@ -396,13 +396,21 @@ class Image(_ArrayMeasurement[_CBgra]):
 
 class LidarDetection:
     _point: Location
-    intensity: float
+    _intensity: float
 
     def __init__(self, point = Location(), intensity: float = 0.0):
         """point: Location (a Vector3D is accepted as in the Python API)."""
         self._point = _location_arg(
             point, "[tsc-compat] a Vector3D passed as a Location to LidarDetection(point)")
         self.intensity = intensity
+
+    @property
+    def intensity(self) -> float:
+        return self._intensity
+
+    @intensity.setter
+    def intensity(self, v: float):
+        self._intensity = _f32(v)
 
     @property
     def point(self) -> Location:
@@ -470,7 +478,7 @@ class LidarMeasurement(_ArrayMeasurement[CLidarPoint]):
 
 class SemanticLidarDetection:
     _point: Location
-    cos_inc_angle: float
+    _cos_inc_angle: float
     object_idx: int  # id of the actor hit (0 for the static scene)
     object_tag: int  # semantic tag of the object hit
 
@@ -482,6 +490,14 @@ class SemanticLidarDetection:
         self.cos_inc_angle = cos_inc_angle
         self.object_idx = object_idx
         self.object_tag = object_tag
+
+    @property
+    def cos_inc_angle(self) -> float:
+        return self._cos_inc_angle
+
+    @cos_inc_angle.setter
+    def cos_inc_angle(self, v: float):
+        self._cos_inc_angle = _f32(v)
 
     @property
     def point(self) -> Location:
@@ -538,10 +554,10 @@ class SemanticLidarMeasurement(_ArrayMeasurement[CSemanticLidarDetection]):
         return _head("SemanticLidarMeasurement", self) + f", number_of_points={len(self)})"
 
 class RadarDetection:
-    velocity: float  # m/s
-    azimuth: float  # rad
-    altitude: float  # rad
-    depth: float  # m
+    _velocity: float  # m/s
+    _azimuth: float  # rad
+    _altitude: float  # rad
+    _depth: float  # m
 
     def __init__(self, velocity: float = 0.0, azimuth: float = 0.0, altitude: float = 0.0,
                  depth: float = 0.0):
@@ -549,6 +565,38 @@ class RadarDetection:
         self.azimuth = azimuth
         self.altitude = altitude
         self.depth = depth
+
+    @property
+    def velocity(self) -> float:
+        return self._velocity
+
+    @velocity.setter
+    def velocity(self, v: float):
+        self._velocity = _f32(v)
+
+    @property
+    def azimuth(self) -> float:
+        return self._azimuth
+
+    @azimuth.setter
+    def azimuth(self, v: float):
+        self._azimuth = _f32(v)
+
+    @property
+    def altitude(self) -> float:
+        return self._altitude
+
+    @altitude.setter
+    def altitude(self, v: float):
+        self._altitude = _f32(v)
+
+    @property
+    def depth(self) -> float:
+        return self._depth
+
+    @depth.setter
+    def depth(self, v: float):
+        self._depth = _f32(v)
 
     def __repr__(self) -> str:
         return fmt_fields("RadarDetection", self)
@@ -712,12 +760,28 @@ class DVSEventArray(_ArrayMeasurement[_CDvsEvent]):
                 f"number_of_events={len(self)})")
 
 class OpticalFlowPixel:
-    x: float
-    y: float
+    _x: float
+    _y: float
 
     def __init__(self, x: float = 0.0, y: float = 0.0):
         self.x = x
         self.y = y
+
+    @property
+    def x(self) -> float:
+        return self._x
+
+    @x.setter
+    def x(self, v: float):
+        self._x = _f32(v)
+
+    @property
+    def y(self) -> float:
+        return self._y
+
+    @y.setter
+    def y(self, v: float):
+        self._y = _f32(v)
 
     def __eq__(self, other: OpticalFlowPixel) -> bool:
         """Exact in float32, as LibCarla."""
