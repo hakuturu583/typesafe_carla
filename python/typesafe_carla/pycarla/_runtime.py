@@ -226,6 +226,32 @@ def _redirect(cls_name: str, args: tuple, kwargs: dict) -> tuple[tuple, dict]:
     return (host, int(port)) + tuple(args[2:]), kwargs
 
 
+# Constructors that, in CARLA's Python API, take keyword arguments raw and
+# ignore the ones they do not know (UE4-era fields such as
+# WheelPhysicsControl(tire_friction=...), #93). Every other constructor there
+# raises ArgumentError (a TypeError) for an unknown keyword, as here. These two
+# drop them too, with a warning. In Codon an unknown keyword stays a compile
+# error.
+_LENIENT_INIT = frozenset({"WheelPhysicsControl", "VehiclePhysicsControl"})
+
+
+def _known_keywords(spec: dict) -> frozenset:
+    """The keywords a lenient constructor keeps: its fields and settable properties."""
+    members = spec.get("members", {})
+    return frozenset([f["name"] for f in spec.get("fields", [])]
+                     + [k[:-len(".setter")] for k in members if k.endswith(".setter")])
+
+
+def _lenient(name: str, known: frozenset, kwargs: dict) -> dict:
+    unknown = sorted(k for k in kwargs if k not in known)
+    if not unknown:
+        return kwargs
+    import warnings
+    warnings.warn(f"carla.{name}(): ignoring unknown keyword arguments {unknown}, as CARLA's "
+                  f"Python API does", stacklevel=3)
+    return {k: v for k, v in kwargs.items() if k in known}
+
+
 def _make_class(name: str, spec: dict, bases: tuple) -> type:
     # No __slots__: as Boost.Python's, the instances take arbitrary attributes
     # (upstream tests set UE4-era fields, e.g. WheelPhysicsControl.tire_friction).
@@ -233,9 +259,12 @@ def _make_class(name: str, spec: dict, bases: tuple) -> type:
     init = spec.get("init")
     if init:
         fn = _fn(init)
+        known = _known_keywords(spec) if name in _LENIENT_INIT else None
 
         def __init__(self, *args, **kwargs):
             args, kwargs = _redirect(name, args, kwargs)
+            if known is not None:
+                kwargs = _lenient(name, known, kwargs)
             self._o = _call(fn, args, kwargs)._o
     else:
         def __init__(self, *args, **kwargs):

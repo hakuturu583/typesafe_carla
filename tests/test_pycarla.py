@@ -245,3 +245,28 @@ loc.x = 5
 assert loc.x == 5 and 'x' not in vars(loc)  # a field still goes to the library
 print('OK')
 """)
+
+
+def test_physics_controls_ignore_unknown_keywords(pycarla):
+    """#93: as in CARLA's Python API (raw-kwargs constructors), the physics
+    controls drop keywords they do not know, here with a warning; every other
+    constructor rejects them with a TypeError, as Boost.Python's ArgumentError."""
+    _run_ok(pycarla, """
+import warnings
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter('always')
+    wheel = carla.WheelPhysicsControl(tire_friction=2, max_steer_angle=30, radius=10)
+    physics = carla.VehiclePhysicsControl(moi=1, use_gear_autobox=1, mass=1000)
+assert wheel.max_steer_angle == 30 and physics.mass == 1000
+assert not hasattr(wheel, 'tire_friction') and not hasattr(physics, 'moi')
+messages = [str(w.message) for w in caught]
+assert len(messages) == 2 and "['radius', 'tire_friction']" in messages[0], messages
+for make in (lambda: carla.VehicleControl(throttle=0.5, bogus=1), lambda: carla.Location(x=1, bogus=1)):
+    try:
+        make()
+    except TypeError:
+        pass
+    else:
+        raise AssertionError('an unknown keyword was accepted')
+print('OK')
+""")
