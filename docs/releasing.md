@@ -12,7 +12,7 @@ Both wheels are Linux x86_64 only for now. `typesafe-carla` is tagged
 CPython extension, the prebuilt `typesafe_carla/carla/_prebuilt/_carla.so`,
 does not change that: Codon compiles it without Python headers, the same
 bytes for every Python version, and it finds the native library and the Codon
-runtime at run time. The `wheel-pycarla` job compiles it (15-30 min, ~8 GB)
+runtime at run time. The `wheel-pycarla` job compiles it (15-50 min, ~14 GB)
 in the manylinux image from the built wheel and the toolchain wheel, adds it,
 and imports the result under another Python with building disabled; the
 publish jobs upload that wheel (`dist-wheel-pycarla`). A prebuilt package

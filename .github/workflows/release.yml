@@ -413,11 +413,14 @@ jobs:
     # `_carla.so` needs no newer glibc than the native library. Codon's output
     # does not depend on the Python version: the wheel stays py3-none, and the
     # check below imports it under another interpreter than the builder's.
-    # 15-30 min and ~8 GB of memory.
+    #
+    # The compile takes 30-50 min and peaks at ~14 GB, more than the 16 GB
+    # runner leaves free, so the host gets swap and the image runs under
+    # `docker run` (a job container cannot add swap).
     needs: [resolve, wheel, toolchain]
     if: always() && needs.wheel.result == 'success' && needs.toolchain.result == 'success'
     runs-on: ubuntu-24.04
-    container: quay.io/pypa/manylinux_2_28_x86_64
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
         with:
@@ -426,22 +429,26 @@ jobs:
         with: { name: dist-wheel, path: dist }
       - uses: actions/download-artifact@v4
         with: { name: dist-toolchain, path: dist-toolchain }
-      - name: Build the prebuilt package into the wheel
+      - name: Add swap for the compile
         run: |
-          /opt/python/cp312-cp312/bin/python -m venv /tmp/builder
-          /tmp/builder/bin/pip install --no-index --find-links dist-toolchain dist/*.whl
-          cd /tmp && /tmp/builder/bin/python "$GITHUB_WORKSPACE/tools/add_pycarla_to_wheel.py" \
-            "$GITHUB_WORKSPACE"/dist/typesafe_carla-*.whl
-      - name: The released wheel imports without compiling (another Python, a fresh venv)
-        env:
-          TYPESAFE_CARLA_PYCARLA_BUILD: "0"
+          sudo swapoff -a || true
+          sudo fallocate -l 16G /swapfile-pycarla && sudo chmod 600 /swapfile-pycarla
+          sudo mkswap /swapfile-pycarla && sudo swapon /swapfile-pycarla
+          free -g
+      - name: Build the prebuilt package into the wheel, and import it without compiling
         run: |
-          /opt/python/cp310-cp310/bin/python -m venv /tmp/user
-          /tmp/user/bin/pip install --no-index --find-links dist-toolchain dist/*.whl
-          cd /tmp && /tmp/user/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" --backend libcarla --pycarla
-          /tmp/user/bin/python -c "import sys, typesafe_carla.carla as carla; \
-            t = carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(yaw=90.0)); \
-            assert 'carla' not in sys.modules and t.location.y == 2.0; print('typesafe_carla.carla OK', carla.__path__)"
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work quay.io/pypa/manylinux_2_28_x86_64 bash -euxc '
+            /opt/python/cp312-cp312/bin/python -m venv /tmp/builder
+            /tmp/builder/bin/pip install --no-index --find-links dist-toolchain dist/*.whl
+            (cd /tmp && /tmp/builder/bin/python /work/tools/add_pycarla_to_wheel.py /work/dist/typesafe_carla-*.whl)
+            # Another Python, a fresh venv, building disabled: what `pip install` gets.
+            /opt/python/cp310-cp310/bin/python -m venv /tmp/user
+            /tmp/user/bin/pip install --no-index --find-links dist-toolchain dist/*.whl
+            cd /tmp
+            TYPESAFE_CARLA_PYCARLA_BUILD=0 /tmp/user/bin/python /work/tools/check_wheel.py --backend libcarla --pycarla
+            TYPESAFE_CARLA_PYCARLA_BUILD=0 /tmp/user/bin/python -c "import sys, typesafe_carla.carla as carla; t = carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(yaw=90.0)); assert \"carla\" not in sys.modules and t.location.y == 2.0; print(\"typesafe_carla.carla OK\", carla.__path__)"
+          '
+          sudo chown -R "$(id -u):$(id -g)" dist
       - uses: actions/upload-artifact@v4
         with: { name: dist-wheel-pycarla, path: dist/*.whl }
 

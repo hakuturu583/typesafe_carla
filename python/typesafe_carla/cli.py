@@ -7,7 +7,7 @@
     typesafe-codon pycarla [-o DIR] [--package carla]     # build typesafe_carla for CPython
 
 ``pycarla`` builds ``typesafe_carla.carla``, the library as a CPython package
-(``import typesafe_carla.carla as carla``, ~15 min, ~8 GB of memory), into the
+(``import typesafe_carla.carla as carla``, 15-50 min, ~14 GB of memory), into the
 cache its first import would otherwise build it in (``carla_build``).
 
 Every other argument is passed to ``codon`` unchanged. ``--strict`` (also

@@ -15,7 +15,7 @@ Where there is no matching prebuilt package -- a source checkout or an
 sdist install, edited Codon sources, another typesafe-carla-toolchain
 release -- the package is built once per installation instead, into a cache,
 on first import or ahead of time with `typesafe-codon pycarla`. That compile
-takes 15 to 30 minutes and about 8 GB of memory and needs a C compiler
+takes 15 to 50 minutes and about 14 GB of memory and needs a C compiler
 (`cc`) to link.
 
 Environment:
@@ -136,7 +136,7 @@ def make_prebuilt(dest: Path, log=_stderr) -> Path:
         pruned = out / "pruned.json"
         if pycarla.PRUNED.is_file():
             shutil.copyfile(pycarla.PRUNED, pruned)
-        log(f"typesafe_carla.carla: building the prebuilt package (15-30 min) in {out} ...")
+        log(f"typesafe_carla.carla: building the prebuilt package (15-50 min) in {out} ...")
         pycarla.build(out, package=pycarla.LIBRARY_PACKAGE, pruned_path=pruned, log=log,
                       rpath=[PREBUILT_RPATH])
         if dest.exists():
@@ -157,7 +157,7 @@ def ensure_built(log=_stderr) -> Path:
     if os.environ.get(ENV_BUILD, "1") == "0":
         raise ImportError(
             f"typesafe_carla.carla is not built in {out} and {ENV_BUILD}=0: "
-            f"run `typesafe-codon pycarla` (~15 min, ~8 GB of memory)")
+            f"run `typesafe-codon pycarla` (15-50 min, ~14 GB of memory)")
     import fcntl
 
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -172,7 +172,7 @@ def _build(out: Path, log) -> None:
     from typesafe_carla import pycarla
 
     log(f"typesafe_carla.carla: building the CPython package into {out} "
-        f"(once per installation; ~15 min, ~8 GB of memory) ...")
+        f"(once per installation; 15-50 min, ~14 GB of memory) ...")
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)

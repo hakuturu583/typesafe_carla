@@ -4,7 +4,7 @@
 
 Run with an interpreter that has that wheel (and its typesafe-carla-toolchain)
 installed: the package is compiled from the installed Codon sources with the
-installed Codon (carla_build.make_prebuilt, 15-30 min, ~8 GB of memory, needs
+installed Codon (carla_build.make_prebuilt, 15-50 min, ~14 GB of memory, needs
 `cc`), and must match them (carla_build.prebuilt_stamp()). Its files go into
 the wheel as typesafe_carla/carla/_prebuilt/, RECORD updated, in place. The
 wheel stays py3-none: Codon's output does not depend on the Python version.

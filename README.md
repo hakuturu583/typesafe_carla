@@ -304,7 +304,7 @@ the package finds the native library and the Codon runtime at run time.
 Where no prebuilt package matches the installation (a source checkout, an
 sdist install, edited Codon sources, another `typesafe-carla-toolchain`
 release), the first import builds it instead, into
-`~/.cache/typesafe_carla/pycarla/<key>`; that takes 15 to 30 minutes and ~8 GB
+`~/.cache/typesafe_carla/pycarla/<key>`; that takes 15 to 50 minutes and ~14 GB
 of memory and needs `cc`. `typesafe-codon pycarla` does the same ahead of time
 (and says so when the wheel's build already applies).
 `TYPESAFE_CARLA_PYCARLA_DIR` chooses the build directory (and wins over the
