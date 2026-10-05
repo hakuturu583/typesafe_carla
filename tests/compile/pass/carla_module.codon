@@ -1,0 +1,15 @@
+# `import typesafe_carla.carla as carla`: the library under the CARLA Python
+# API's module name, the import CPython programs use (python/typesafe_carla/
+# carla), so one source both compiles with Codon and runs on CPython.
+# strict
+import typesafe_carla.carla as carla
+
+def lateral(t: carla.Transform) -> float:
+    return t.location.y
+
+def control() -> carla.VehicleControl:
+    return carla.VehicleControl(throttle=0.5, steer=0.0)
+
+print(lateral(carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(yaw=90.0))))
+print(control().throttle)
+print(carla.TrafficLightState.Red)

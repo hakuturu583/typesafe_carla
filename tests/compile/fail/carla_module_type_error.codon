@@ -1,0 +1,10 @@
+# The library under `typesafe_carla.carla` is the same library: its types are
+# checked at compile time.
+# expect-error: 'Transform' does not match expected type 'VehicleControl'
+import typesafe_carla.carla as carla
+
+def drive(vehicle: carla.Vehicle):
+    vehicle.apply_control(carla.Transform())
+
+# Compile-only: Codon type-checks a function only when it is called.
+drive(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

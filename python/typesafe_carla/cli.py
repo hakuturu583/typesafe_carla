@@ -4,6 +4,11 @@
     typesafe-codon [--strict] build [-release] main.py    # produce an executable
     typesafe-codon info                                   # show what was found
     typesafe-codon env                                    # print the environment as shell exports
+    typesafe-codon pycarla [-o DIR] [--package carla]     # build typesafe_carla for CPython
+
+``pycarla`` builds ``typesafe_carla.carla``, the library as a CPython package
+(``import typesafe_carla.carla as carla``, ~15 min, ~8 GB of memory), into the
+cache its first import would otherwise build it in (``carla_build``).
 
 Every other argument is passed to ``codon`` unchanged. ``--strict`` (also
 accepted right after ``run``/``build``) or ``TYPESAFE_CARLA_STRICT=1`` turns on
@@ -461,6 +466,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args or args[0] in ("-h", "--help", "help"):
         print(__doc__.strip())
         return 0
+    if args[0] == "pycarla":
+        from typesafe_carla import pycarla
+
+        return pycarla.main(args[1:])
 
     try:
         tc = toolchain.find_codon()

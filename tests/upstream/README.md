@@ -170,14 +170,14 @@ Python's `ast`), with no per-class code:
   For an untyped library parameter, it exports one overload per type the
   parameter accepts (`GENERIC_PARAMS`, by parameter name). Combinations the
   library rejects at compile time are pruned automatically
-  (`compat/pycarla/pruned.json`; only the library's own rejections, `PRUNABLE`:
+  (`python/typesafe_carla/pycarla/pruned.json`; only the library's own rejections, `PRUNABLE`:
   any other compile error fails the build). Two library patterns get generic
   treatment: a command's `actor_id` / `actor` pair with the `_MISSING` sentinel
   (exported with an int id; the runtime passes an Actor's id), and the V2X
   dict views (#85), whose `__getitem__(key: Static[str])` cannot be exported:
   their literal keys, read from the source, give each a `_tsc_py()` building
   the Python API's nested dict, which `get()` returns.
-- `carla/__init__.py` with [`compat/pycarla/_runtime.py`](../../compat/pycarla/_runtime.py):
+- `carla/__init__.py` with [`python/typesafe_carla/pycarla/_runtime.py`](../../python/typesafe_carla/pycarla/_runtime.py):
   Python classes mirroring the CARLA Python API, built from the generated
   `_spec.json`. They give the class hierarchy (`isinstance(v, carla.Actor)`),
   the enumerations, `carla.command`, callbacks receiving wrapped objects, and

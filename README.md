@@ -281,6 +281,34 @@ pinned Codon. Requirements and building for another CARLA ref are in
 [docs/usage.md](docs/usage.md); the release process is in
 [docs/releasing.md](docs/releasing.md).
 
+### From CPython: `import typesafe_carla.carla as carla`
+
+CPython programs (a scenario framework, a test harness) use the same library
+with the CARLA Python API's names, in place of the `carla` package:
+
+```python
+import typesafe_carla.carla as carla
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+```
+
+`typesafe_carla.carla` is the library compiled with `codon build --pyext`
+(`typesafe_carla.pycarla`; CARLA's own PythonAPI tests run unmodified on it,
+see below). That compile takes ~15 min and ~8 GB of memory and needs `cc`, so
+it is not in the wheel: the first import builds it into
+`~/.cache/typesafe_carla/pycarla/<key>` (keyed by the installation; later
+imports load it), and `typesafe-codon pycarla` builds it ahead of time, e.g.
+in a container image. `TYPESAFE_CARLA_PYCARLA_DIR` chooses the directory and
+`TYPESAFE_CARLA_PYCARLA_BUILD=0` makes a missing build an `ImportError`
+instead of a build (`python/typesafe_carla/carla_build.py`). It does not
+take the `carla` import name, so it can sit next to the official package.
+
+The same import compiles with Codon (`codon/typesafe_carla/carla.codon` is the
+library under that name), so one source both runs on CPython and is checked by
+the Codon compiler. Codon 0.19 resolves the module only in this form, not as
+`from typesafe_carla import carla`.
+
 ## Testing against a real CARLA server
 
 `tests/integration/*.codon` and `tests/compatibility/` need a running CARLA
@@ -408,8 +436,9 @@ tests/compile/strict_fail/ programs that compile only outside strict mode
 tests/unit/                Codon runtime tests against the mock backend
 tests/upstream/            CARLA's own PythonAPI tests: expectations, unittest shim
 tools/upstream_tests.py    runs those tests (cpython and codon modes), writes GAPS.md
-tools/pycarla.py           typesafe_carla as a CPython package (codon --pyext), for them
-compat/pycarla/            its Python runtime and pruned-overload cache
+tools/pycarla.py           the checkout's `carla` build for them (typesafe_carla.pycarla, --package carla)
+python/typesafe_carla/pycarla/  typesafe_carla as a CPython package (codon --pyext): generator, runtime, pruned-overload cache
+python/typesafe_carla/carla/    `import typesafe_carla.carla as carla` (built on first use, carla_build.py)
 examples/                  example programs
 ```
 

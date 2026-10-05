@@ -1,4 +1,5 @@
-"""Runtime of the generated `carla` package (tools/pycarla.py).
+"""Runtime of the generated `carla` / `typesafe_carla.carla` package
+(typesafe_carla.pycarla).
 
 `_carla.so` exports one function per typesafe_carla member, taking and
 returning opaque boxes (`B_<Class>`). This module builds the CARLA Python
@@ -34,6 +35,8 @@ if not os.environ.get("TYPESAFE_CARLA_LIB") and _SPEC.get("native_library"):
 
 from . import _carla as _ext  # noqa: E402  (needs TYPESAFE_CARLA_LIB)
 
+# The package's import name: `carla` or `typesafe_carla.carla`.
+_PACKAGE = _SPEC.get("package", "carla")
 _BOXES: dict[type, type] = {}
 _MEMORYVIEWS = frozenset(_SPEC.get("memoryviews", ()))
 
@@ -226,7 +229,7 @@ def _redirect(cls_name: str, args: tuple, kwargs: dict) -> tuple[tuple, dict]:
 def _make_class(name: str, spec: dict, bases: tuple) -> type:
     # No __slots__: as Boost.Python's, the instances take arbitrary attributes
     # (upstream tests set UE4-era fields, e.g. WheelPhysicsControl.tire_friction).
-    ns: dict = {"__module__": "carla", "__qualname__": name}
+    ns: dict = {"__module__": _PACKAGE, "__qualname__": name}
     init = spec.get("init")
     if init:
         fn = _fn(init)
@@ -267,7 +270,7 @@ def _make_class(name: str, spec: dict, bases: tuple) -> type:
 
 def _enum(name: str, members: dict[str, int]):
     e = enum.IntEnum(name, members)
-    e.__module__ = "carla"
+    e.__module__ = _PACKAGE
     e.names = {k: e[k] for k in members}
     e.values = {int(v): v for v in e}
     return e
@@ -298,7 +301,7 @@ def install(g: dict) -> None:
     for alias, target in _SPEC["aliases"].items():
         if target in g:
             g[alias] = g[target]
-    command = types.ModuleType("carla.command")
+    command = types.ModuleType(f"{_PACKAGE}.command")
     for name, entry in _SPEC["functions"].items():
         if entry["fn"] is None:
             fn = _stub(name, entry.get("reason", ""))
@@ -319,7 +322,7 @@ def install(g: dict) -> None:
     if "Command" in g:
         command.Command = g["Command"]
     g["command"] = command
-    sys.modules["carla.command"] = command
+    sys.modules[f"{_PACKAGE}.command"] = command
     g["CarlaObject"] = CarlaObject
     global _ACTOR
     _ACTOR = g.get("Actor")

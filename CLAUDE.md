@@ -13,6 +13,7 @@ cmake -S . -B build -DTSC_BACKEND=mock && cmake --build build -j
 ctest --test-dir build                                    # C ABI tests
 uv run pytest                                             # compile-pass/fail, runtime, launcher, architecture
 uv run typesafe-codon run examples/connect.py
+uv run typesafe-codon pycarla                             # build `import typesafe_carla.carla as carla` (CPython, ~15+ min)
 uv run python -m tools.bindgen generate                   # after editing bindings/*.yaml
 uv run python -m tools.bindgen validate --build-dir build # spec vs LibCarla/mock headers (docs/bindgen.md)
 

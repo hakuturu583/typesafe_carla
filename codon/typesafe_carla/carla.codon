@@ -1,0 +1,4 @@
+# `from typesafe_carla import carla`: the library under the CARLA Python API's
+# module name, as CPython programs import it (python/typesafe_carla/carla), so
+# the same source compiles with Codon and runs on CPython.
+from typesafe_carla import *

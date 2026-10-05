@@ -4,7 +4,9 @@
 
 Checks that the native library loads, exports the expected ABI, was built
 with the expected backend (and CARLA ref and commit), links no libpython, and
-that the Codon sources are present. For the libcarla backend it also checks
+that the Codon sources and the CPython binding generator (typesafe_carla.pycarla:
+its runtime and pruned.json, which `import typesafe_carla.carla as carla` builds
+from) are present. For the libcarla backend it also checks
 that the license notices of the statically linked code ship next to the
 library (LICENSE.CARLA, THIRD_PARTY_NOTICES). Used by the release workflow
 before publishing.
@@ -53,6 +55,15 @@ def main() -> int:
         paths.codon_modules_dir()
     except paths.PathError as e:
         errors.append(str(e))
+    from pathlib import Path
+
+    import typesafe_carla
+
+    package = Path(typesafe_carla.__file__).parent
+    for data in ("pycarla/__init__.py", "pycarla/_runtime.py", "pycarla/pruned.json",
+                 "carla/__init__.py", "carla_build.py"):
+        if not (package / data).is_file():
+            errors.append(f"{data} is missing from the package")
     if backend == "libcarla":
         # Expects an installed wheel: a source-tree build dir (paths prefers
         # build/ in a checkout) holds THIRD_PARTY_NOTICES but not LICENSE.CARLA.
