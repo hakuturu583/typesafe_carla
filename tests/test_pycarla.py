@@ -231,6 +231,42 @@ print('OK')
 """)
 
 
+def test_raw_data_views_the_measurement_in_place(pycarla):
+    """raw_data is a read-only view of the measurement's own bytes, as CARLA's
+    memoryview is. It used to be copied through a Python list of ints
+    (`tolist()`), which took ~0.3 s for a 128-channel LiDAR sweep: most of a
+    closed loop's step."""
+    _run_ok(pycarla, _SETUP % 0 + """
+import gc
+q = queue.Queue()
+camera = sensor('sensor.camera.rgb')
+camera.listen(q.put)
+world.tick()
+image = q.get(timeout=10)
+raw = image.raw_data
+assert isinstance(raw, memoryview) and raw.readonly and raw.format == 'B', raw
+assert len(raw) == 4 * image.width * image.height, (len(raw), image.width, image.height)
+# The bytes are the pixels', BGRA.
+for i in (0, 1, len(image) - 1):
+    c = image[i]
+    assert tuple(raw[4 * i:4 * i + 4]) == (c.b, c.g, c.r, c.a), (i, tuple(raw[4 * i:4 * i + 4]), c)
+try:
+    raw[0] = 1
+except TypeError:
+    pass
+else:
+    raise AssertionError('raw_data is writable')
+# The view keeps the measurement alive.
+copy = bytes(raw)
+del image
+gc.collect()
+world.tick()
+assert bytes(raw) == copy
+camera.stop(); camera.destroy()
+print('OK')
+""")
+
+
 def test_instances_take_arbitrary_attributes(pycarla):
     """As Boost.Python's: upstream tests set UE4-era fields (e.g.
     WheelPhysicsControl.tire_friction) and read them back."""
