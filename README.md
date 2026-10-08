@@ -313,6 +313,11 @@ an `ImportError` instead of a build (`python/typesafe_carla/carla_build.py`).
 It does not take the `carla` import name, so it can sit next to the official
 package.
 
+A measurement's `raw_data` is a read-only `memoryview` of the measurement's
+own bytes, as in CARLA's Python API: viewed in place (it keeps the
+measurement alive), so `np.frombuffer(m.raw_data, ...)` costs nothing however
+large the sweep or image.
+
 The same import compiles with Codon (`codon/typesafe_carla/carla.codon` is the
 library under that name), so one source both runs on CPython and is checked by
 the Codon compiler. Codon 0.19 resolves the module only in this form, not as

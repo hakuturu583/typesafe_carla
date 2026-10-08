@@ -20,6 +20,7 @@ Environment:
 
 from __future__ import annotations
 
+import ctypes
 import enum
 import json
 import os
@@ -78,7 +79,7 @@ def _wrap(v):
         obj = cls.__new__(cls)
         obj._o = v
         if cls.__name__ in _MEMORYVIEWS:  # e.g. raw_data: a memoryview in CARLA's API
-            return memoryview(bytes(obj.tolist()))
+            return _memoryview(obj)
         return obj
     if type(v) is list:
         return [_wrap(x) for x in v]
@@ -87,6 +88,23 @@ def _wrap(v):
     if type(v) is dict:
         return {_wrap(k): _wrap(x) for k, x in v.items()}
     return v
+
+
+def _memoryview(obj):
+    """A read-only memoryview of a RawData's bytes, as CARLA's raw_data.
+
+    Viewed in place, not copied: as in CARLA's Python API the view sees the
+    measurement's own buffer (an in-place Image.convert() shows through), and
+    a sweep of megabytes costs nothing to hand over. The view keeps the box,
+    and through it the measurement, alive. A strided view (a slice with a
+    step) is copied, its bytes not being contiguous.
+    """
+    address, n, step = obj._tsc_buffer()
+    if step != 1 or n == 0:
+        return memoryview(bytes(obj.tolist()))
+    buffer = (ctypes.c_ubyte * n).from_address(address)
+    buffer._tsc_owner = obj  # the measurement lives as long as the view
+    return memoryview(buffer).cast("B").toreadonly()
 
 
 def _unwrap(v):

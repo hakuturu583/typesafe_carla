@@ -114,7 +114,9 @@ GENERIC_PARAMS = {
 }
 # Library classes that stand for the Python API's memoryview (RawData: a
 # measurement's raw_data). The runtime hands Python a memoryview of their bytes,
-# so np.frombuffer(m.raw_data, ...) works unchanged.
+# so np.frombuffer(m.raw_data, ...) works unchanged. Each gets an exported
+# `<Class>___tsc_buffer` -> (address, length, step), from which the runtime
+# views the bytes in place rather than copying them through a list of ints.
 MEMORYVIEWS = ["RawData"]
 # A command's target: `<x>_id` (an id or an Actor) and `<x>` (an Actor), both
 # defaulting to the `_MISSING` sentinel, exactly one passed (typesafe_carla's
@@ -827,6 +829,13 @@ class Gen:
                 api["init"] = f"{cls}__new"
             except Unsupported as e:
                 self.stubs[f"{cls}.__init__"] = str(e)
+        if cls in MEMORYVIEWS:
+            # Where the bytes are, so the runtime views them in place: going
+            # through tolist() costs a Python int per byte (~0.3 s for a LiDAR
+            # sweep). The box keeps the measurement, so the address stays valid.
+            self.fn(f"{cls}___tsc_buffer", [("self", f"B_{cls}", None)],
+                    "return (self.v._ptr.__int__(), self.v._len, self.v._step)")
+            api["members"]["_tsc_buffer"] = {"fn": f"{cls}___tsc_buffer", "kind": "method"}
         if "__iter__" in members:
             self.fn(f"{cls}____iter__", [("self", f"B_{cls}", None)],
                     "return [x for x in self.v]")
