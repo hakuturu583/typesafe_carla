@@ -17,7 +17,11 @@ in the manylinux image from the built wheel and the toolchain wheel, adds it,
 and imports the result under another Python with building disabled; the
 publish jobs upload that wheel (`dist-wheel-pycarla`). A prebuilt package
 is used only with the toolchain release it was compiled with
-(`carla_build.prebuilt_stamp()`); otherwise the first import builds one.
+(`carla_build.prebuilt_stamp()`, recorded beside it in `_prebuilt/toolchain`)
+and unmodified installed sources; otherwise the first import says which of the
+two differs (`carla_build.explain_prebuilt_mismatch()`, against the wheel's
+RECORD) and builds one into the cache shared by every installation with the
+same sources and Codon.
 
 ## Release tags
 
