@@ -304,9 +304,18 @@ the package finds the native library and the Codon runtime at run time.
 Where no prebuilt package matches the installation (a source checkout, an
 sdist install, edited Codon sources, another `typesafe-carla-toolchain`
 release), the first import builds it instead, into
-`~/.cache/typesafe_carla/pycarla/<key>`; that takes 15 to 50 minutes and ~14 GB
-of memory and needs `cc`. `typesafe-codon pycarla` does the same ahead of time
-(and says so when the wheel's build already applies).
+`~/.cache/typesafe_carla/pycarla/<version>-<key>`; that takes 15 to 50 minutes
+and ~14 GB of memory and needs `cc`. `typesafe-codon pycarla` does the same
+ahead of time (and says so when the wheel's build already applies). When the
+wheel's prebuilt package is there but does not match, the import first says
+why: the installed files that differ from what the wheel installed (checked
+against its RECORD; e.g. an installation edited through uv's hardlinked
+cache: `uv cache clean typesafe-carla`, then reinstall), or the toolchain
+release it was built with. Like the prebuilt package, a cache build finds the
+native library and the Codon runtime of the importing installation at run
+time, so `<key>` covers only what it is compiled from (the Codon sources, the
+generator, the Codon toolchain): every virtual environment with the same
+`typesafe-carla` and toolchain shares one build.
 `TYPESAFE_CARLA_PYCARLA_DIR` chooses the build directory (and wins over the
 prebuilt package), and `TYPESAFE_CARLA_PYCARLA_BUILD=0` makes a missing build
 an `ImportError` instead of a build (`python/typesafe_carla/carla_build.py`).

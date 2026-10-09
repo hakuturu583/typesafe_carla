@@ -1349,9 +1349,10 @@ def source_stamp(package: str = PACKAGE_NAME, pruned_path: Path = PRUNED,
     package name and (`native`) the native library the package loads.
 
     Without `native` it is the key of a build that finds the native library
-    and the Codon runtime at run time (the wheel's prebuilt package,
-    carla_build): one build of the same sources and toolchain serves every
-    installation."""
+    and the Codon runtime at run time (the wheel's prebuilt package and the
+    cache's builds, carla_build): one build of the same sources and toolchain
+    serves every installation. `native` is for the `carla` package
+    (`--package carla`), whose `_spec.json` names the native library."""
     import hashlib
     from importlib import metadata
 
@@ -1449,7 +1450,15 @@ def main(argv: list[str] | None = None, prog: str = "typesafe-codon pycarla",
         for k, v in sorted(gen.stubs.items()):
             print(f"{k}: {v}")
         return 0
-    build(out, package=args.package)
+    if args.package == LIBRARY_PACKAGE:
+        # What `import typesafe_carla.carla` loads with TYPESAFE_CARLA_PYCARLA_DIR=out:
+        # a build of the cache's kind (carla_build), not tied to this installation.
+        from typesafe_carla import carla_build
+
+        build(out, package=args.package, rpath=[])
+        carla_build.finish_build(out)
+    else:
+        build(out, package=args.package)
     print(out)
     return 0
 
