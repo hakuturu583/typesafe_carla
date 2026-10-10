@@ -333,15 +333,23 @@ jobs:
 
   wheel:
     # LibCarla is built from CARLA sources at $CARLA_GIT_REF (the resolved
-    # commit SHA) inside the manylinux_2_28 image; the wheel is py3-none (no
-    # CPython extension).
+    # commit SHA) inside the manylinux_2_28 image of each architecture; the
+    # wheel is py3-none (no CPython extension).
     #
-    # The build directory is cached keyed by that exact SHA and the image, in
-    # a host directory bind-mounted into the container at /libcarla-build
-    # (docs/releasing.md, "LibCarla build cache").
+    # The build directory is cached keyed by that exact SHA, the image and the
+    # architecture, in a host directory bind-mounted into the container at
+    # /libcarla-build (docs/releasing.md, "LibCarla build cache").
+    name: wheel (${{ matrix.arch.name }})
     needs: [resolve, verify]
     if: always() && needs.verify.result == 'success'
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # Native builds: each architecture on its own runner (no emulation).
+        arch:
+          - { name: x86_64, runner: ubuntu-24.04 }
+          - { name: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.arch.runner }}
     env:
       CARLA_GIT_REF: ${{ needs.resolve.outputs.carla_build_ref }}
       CARLA_COMMIT: ${{ needs.resolve.outputs.carla_commit }}
@@ -366,12 +374,13 @@ jobs:
         with:
           path: ${{ runner.temp }}/libcarla-build
           # Keep the cibuildwheel version in step with `uses:` below.
-          key: libcarla-wheel-${{ env.MANYLINUX_IMAGE }}-cibuildwheel-v3.1.4-${{ needs.resolve.outputs.carla_build_ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'pyproject.toml') }}
+          key: libcarla-wheel-${{ env.MANYLINUX_IMAGE }}-${{ matrix.arch.name }}-cibuildwheel-v3.1.4-${{ needs.resolve.outputs.carla_build_ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'pyproject.toml') }}
       - uses: pypa/cibuildwheel@v3.1.4
         env:
-          CIBW_BUILD: cp312-manylinux_x86_64
-          CIBW_ARCHS: x86_64
+          CIBW_BUILD: cp312-manylinux_${{ matrix.arch.name }}
+          CIBW_ARCHS: ${{ matrix.arch.name }}
           CIBW_MANYLINUX_X86_64_IMAGE: ${{ env.MANYLINUX_IMAGE }}
+          CIBW_MANYLINUX_AARCH64_IMAGE: ${{ env.MANYLINUX_IMAGE }}
           CIBW_ENVIRONMENT_PASS_LINUX: CARLA_GIT_REF
           CIBW_CONTAINER_ENGINE: "docker; create_args: --volume=${{ runner.temp }}/libcarla-build:/libcarla-build"
           CIBW_BEFORE_BUILD: bash {project}/tools/libcarla_cache_guard.sh /libcarla-build/wheel "$CARLA_GIT_REF"
@@ -402,7 +411,7 @@ jobs:
             --backend libcarla --carla-ref "$CARLA_REF_NAME" \
             ${CARLA_COMMIT:+--carla-commit "$CARLA_COMMIT"}
       - uses: actions/upload-artifact@v4
-        with: { name: dist-wheel, path: dist/*.whl }
+        with: { name: "dist-wheel-${{ matrix.arch.name }}", path: dist/*.whl }
 
   wheel-pycarla:
     # The prebuilt `import typesafe_carla.carla as carla` package
@@ -414,30 +423,43 @@ jobs:
     # does not depend on the Python version: the wheel stays py3-none, and the
     # check below imports it under another interpreter than the builder's.
     #
-    # The compile takes 30-50 min and peaks at ~14 GB, more than the 16 GB
-    # runner leaves free, so the host gets swap and the image runs under
-    # `docker run` (a job container cannot add swap).
+    # The compile takes 30-50 min and peaks at ~14 GB (more on aarch64), more
+    # than the 16 GB runner leaves free, so the host gets swap and the image
+    # runs under `docker run` (a job container cannot add swap).
+    name: wheel-pycarla (${{ matrix.arch.name }})
     needs: [resolve, wheel, toolchain]
     if: always() && needs.wheel.result == 'success' && needs.toolchain.result == 'success'
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # Native builds: each architecture on its own runner (no emulation).
+        arch:
+          - { name: x86_64, runner: ubuntu-24.04 }
+          - { name: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.arch.runner }}
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.ref }}
       - uses: actions/download-artifact@v4
-        with: { name: dist-wheel, path: dist }
+        with: { name: "dist-wheel-${{ matrix.arch.name }}", path: dist }
       - uses: actions/download-artifact@v4
-        with: { name: dist-toolchain, path: dist-toolchain }
+        with: { name: "dist-toolchain-${{ matrix.arch.name }}", path: dist-toolchain }
+      # 16 GB was enough on x86_64. On aarch64, ci.yml's pycarla build (the
+      # same package, against the mock) shut the runner down with 3 GB of
+      # swap and passed with 19 GB.
       - name: Add swap for the compile
         run: |
           sudo swapoff -a || true
-          sudo fallocate -l 16G /swapfile-pycarla && sudo chmod 600 /swapfile-pycarla
+          sudo fallocate -l 24G /swapfile-pycarla && sudo chmod 600 /swapfile-pycarla
           sudo mkswap /swapfile-pycarla && sudo swapon /swapfile-pycarla
           free -g
       - name: Build the prebuilt package into the wheel, and import it without compiling
+        env:
+          IMAGE: quay.io/pypa/manylinux_2_28_${{ matrix.arch.name }}
         run: |
-          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work quay.io/pypa/manylinux_2_28_x86_64 bash -euxc '
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work "$IMAGE" bash -euxc '
             /opt/python/cp312-cp312/bin/python -m venv /tmp/builder
             /tmp/builder/bin/pip install --no-index --find-links dist-toolchain dist/*.whl
             (cd /tmp && /tmp/builder/bin/python /work/tools/add_pycarla_to_wheel.py /work/dist/typesafe_carla-*.whl)
@@ -450,24 +472,36 @@ jobs:
           '
           sudo chown -R "$(id -u):$(id -g)" dist
       - uses: actions/upload-artifact@v4
-        with: { name: dist-wheel-pycarla, path: dist/*.whl }
+        with: { name: "dist-wheel-pycarla-${{ matrix.arch.name }}", path: dist/*.whl }
 
   toolchain:
+    # One wheel per architecture (toolchain/hatch_build.py bundles the build
+    # machine's Codon release); the sdist once.
+    name: toolchain (${{ matrix.arch.name }})
     needs: [resolve, verify]
     if: always() && needs.verify.result == 'success'
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # Native builds: each architecture on its own runner (no emulation).
+        arch:
+          - { name: x86_64, runner: ubuntu-24.04 }
+          - { name: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.arch.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.ref }}
       - uses: astral-sh/setup-uv@v6
-      - run: uv build --wheel --sdist toolchain -o dist
+      - run: uv build --wheel toolchain -o dist
+      - if: matrix.arch.name == 'x86_64'
+        run: uv build --sdist toolchain -o dist
       - name: Bundled Codon runs
         run: |
           uv venv /tmp/tc && uv pip install --python /tmp/tc dist/*.whl
           /tmp/tc/bin/python -c "import typesafe_carla_toolchain as t, subprocess; subprocess.run([t.codon_executable(), '--version'], check=True)"
       - uses: actions/upload-artifact@v4
-        with: { name: dist-toolchain, path: dist/* }
+        with: { name: "dist-toolchain-${{ matrix.arch.name }}", path: dist/* }
 
   # The two packages are published from separate jobs with separate
   # environments (<index>-toolchain and <index>) on purpose. PyPI's trusted
@@ -495,11 +529,12 @@ jobs:
       # passes; only the toolchain is uploaded from this job.
       - uses: actions/download-artifact@v4
         with: { name: dist-sdist, path: dist }
-      # The wheel with the prebuilt typesafe_carla.carla (wheel-pycarla).
+      # The wheels with the prebuilt typesafe_carla.carla (wheel-pycarla), one
+      # per architecture.
       - uses: actions/download-artifact@v4
-        with: { name: dist-wheel-pycarla, path: dist }
+        with: { pattern: dist-wheel-pycarla-*, merge-multiple: true, path: dist }
       - uses: actions/download-artifact@v4
-        with: { name: dist-toolchain, path: dist-toolchain }
+        with: { pattern: dist-toolchain-*, merge-multiple: true, path: dist-toolchain }
       - run: ls -l dist dist-toolchain
       # PyPI rejects bad metadata only after the OIDC exchange; failing here
       # costs nothing.
@@ -528,9 +563,10 @@ jobs:
       # job uploads ends up in dist/.
       - uses: actions/download-artifact@v4
         with: { name: dist-sdist, path: dist }
-      # The wheel with the prebuilt typesafe_carla.carla (wheel-pycarla).
+      # The wheels with the prebuilt typesafe_carla.carla (wheel-pycarla), one
+      # per architecture.
       - uses: actions/download-artifact@v4
-        with: { name: dist-wheel-pycarla, path: dist }
+        with: { pattern: dist-wheel-pycarla-*, merge-multiple: true, path: dist }
       - run: ls -l dist
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
