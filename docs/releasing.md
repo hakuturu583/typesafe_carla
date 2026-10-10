@@ -7,17 +7,18 @@ typesafe_carla publishes two distributions:
 | `typesafe-carla` | Codon sources, `libtypesafe_carla_ffi.so` (LibCarla linked in statically), the `typesafe-codon` launcher, the prebuilt `typesafe_carla.carla` CPython package (`typesafe_carla/carla/_prebuilt`) | `python/typesafe_carla/__init__.py` | scikit-build-core (+ cibuildwheel, manylinux_2_28); then `tools/add_pycarla_to_wheel.py` (release job `wheel-pycarla`) |
 | `typesafe-carla-toolchain` | The pinned Codon compiler | `toolchain/pyproject.toml` (= Codon version, `.postN` for repackaging) | hatchling + `toolchain/hatch_build.py` |
 
-Both wheels are Linux x86_64 only for now (`toolchain/hatch_build.py` also
-builds an aarch64 toolchain wheel, and CI tests aarch64, but the release
-workflow does not publish it yet). `typesafe-carla` is tagged
+Both are built for Linux x86_64 and aarch64, each natively on its own runner
+(`ubuntu-24.04` / `ubuntu-24.04-arm`; the `wheel`, `wheel-pycarla` and
+`toolchain` jobs are a matrix over the two, their artifacts suffixed
+`-x86_64` / `-aarch64`). `typesafe-carla` is tagged
 `py3-none-manylinux_*`, so one wheel serves every Python 3 version. Its one
 CPython extension, the prebuilt `typesafe_carla/carla/_prebuilt/_carla.so`,
 does not change that: Codon compiles it without Python headers, the same
 bytes for every Python version, and it finds the native library and the Codon
-runtime at run time. The `wheel-pycarla` job compiles it (15-50 min, ~14 GB)
-in the manylinux image from the built wheel and the toolchain wheel, adds it,
-and imports the result under another Python with building disabled; the
-publish jobs upload that wheel (`dist-wheel-pycarla`). A prebuilt package
+runtime at run time. The `wheel-pycarla` job compiles it (15-50 min, ~14 GB,
+more on aarch64) in the manylinux image from the built wheel and the toolchain
+wheel, adds it, and imports the result under another Python with building
+disabled; the publish jobs upload those wheels (`dist-wheel-pycarla-*`). A prebuilt package
 is used only with the toolchain release it was compiled with
 (`carla_build.prebuilt_stamp()`, recorded beside it in `_prebuilt/toolchain`)
 and unmodified installed sources; otherwise the first import says which of the
@@ -189,9 +190,9 @@ with `actions/cache`, keyed by the resolved CARLA commit SHA:
   push `main`'s out.
 - The release `wheel` job keys by the cibuildwheel version (pinned exactly,
   as each release pins its own manylinux image and compiler), the manylinux
-  image, the exact SHA it builds and the hash of `CMakeLists.txt`, `cmake/`
+  image and architecture, the exact SHA it builds and the hash of `CMakeLists.txt`, `cmake/`
   and `pyproject.toml`
-  (`libcarla-wheel-<image>-cibuildwheel-<version>-<CARLA SHA>-<hash>`), with
+  (`libcarla-wheel-<image>-<arch>-cibuildwheel-<version>-<CARLA SHA>-<hash>`), with
   no fallback key. The cached directory is a host directory bind-mounted into
   the cibuildwheel container at `/libcarla-build` and used as
   scikit-build-core's `build-dir`. Runs on `main` (auto-release, dry runs)
