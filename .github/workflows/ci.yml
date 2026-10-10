@@ -33,6 +33,14 @@ jobs:
       UV_PYTHON: ${{ matrix.python }}
     steps:
       - uses: actions/checkout@v4
+      # The aarch64 runner image's disk is not proven to hold the pycarla and
+      # LibCarla builds: drop preinstalled SDKs the jobs never use. Keeps
+      # large-packages (llvm/clang for bindgen, the GCC versions under test).
+      - name: Free disk space (aarch64)
+        if: runner.arch == 'ARM64'
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          large-packages: false
       - uses: astral-sh/setup-uv@v6
 
       - name: C++ build (mock backend)
@@ -103,6 +111,14 @@ jobs:
         carla_ref: ${{ fromJSON(inputs.carla_ref && format('["ue5-dev","0.10.0","{0}"]', inputs.carla_ref) || '["ue5-dev","0.10.0"]') }}
     steps:
       - uses: actions/checkout@v4
+      # The aarch64 runner image's disk is not proven to hold the pycarla and
+      # LibCarla builds: drop preinstalled SDKs the jobs never use. Keeps
+      # large-packages (llvm/clang for bindgen, the GCC versions under test).
+      - name: Free disk space (aarch64)
+        if: runner.arch == 'ARM64'
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          large-packages: false
       - uses: astral-sh/setup-uv@v6
       - name: Resolve CARLA ${{ matrix.carla_ref }} to a commit
         id: carla
