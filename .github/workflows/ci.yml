@@ -43,8 +43,8 @@ jobs:
           large-packages: false
       # The pycarla build compiles one large module (PROBE_GB in
       # python/typesafe_carla/pycarla) on a 16 GB runner, which is shut down
-      # (no OOM message) when memory runs out. The x86_64 image comes with a
-      # 4 GB swap file; give the aarch64 one 16 GB.
+      # (no OOM message) when memory runs out: it did twice on the aarch64
+      # image with its 3 GB of swap. 16 GB more.
       - name: Add swap (aarch64)
         if: runner.arch == 'ARM64'
         run: |

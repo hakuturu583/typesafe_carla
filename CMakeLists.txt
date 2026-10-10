@@ -15,6 +15,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# No fused multiply-add contraction (GCC's default for C++ is
+# -ffp-contract=fast): float results bit for bit as the official module's on
+# x86-64, whose baseline has no FMA, also where FMA is baseline (aarch64),
+# e.g. Transform::GetMatrix's `cy * sp * sr - sy * cr` (issue #90's tests).
+# For the shim, the mock and LibCarla alike.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  add_compile_options(-ffp-contract=off)
+endif()
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release)
 endif()
