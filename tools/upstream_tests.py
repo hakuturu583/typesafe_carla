@@ -870,13 +870,18 @@ def _cpython_env(pydir: Path | None, server: bool) -> dict[str, str]:
         env.pop("TSC_PYCARLA_PKG", None)
         env.setdefault("PYTHONPATH", "")
     else:
-        from typesafe_carla import paths
+        from typesafe_carla import paths, toolchain
 
         env["TSC_PYCARLA_PKG"] = str(pydir / "carla")
         # the library this run is about (the package may have been built against another)
         env["TYPESAFE_CARLA_LIB"] = os.environ.get("TYPESAFE_CARLA_LIB") or str(paths.native_library())
         env["PYTHONPATH"] = os.pathsep.join(
             [str(pydir)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else []))
+        # This run's Codon runtime: _carla.so's rpath names the toolchain directory
+        # of the run that built it, gone when the build comes from CI's cache.
+        env["LD_LIBRARY_PATH"] = os.pathsep.join(
+            [str(d) for d in toolchain.find_codon().library_dirs()]
+            + ([os.environ["LD_LIBRARY_PATH"]] if os.environ.get("LD_LIBRARY_PATH") else []))
     if server:  # every carla.Client goes to the test server
         env["TSC_PYCARLA_REDIRECT"] = (f"{os.environ.get('TSC_CARLA_HOST', '127.0.0.1')}:"
                                        f"{os.environ.get('TSC_CARLA_PORT', '2000')}")

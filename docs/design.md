@@ -966,7 +966,7 @@ typesafe-carla
 
 typesafe-carla-toolchain contains a pinned Codon distribution.
 
-Initial support: Linux x86_64 only. Later: Linux aarch64, macOS arm64, macOS x86_64.
+Supported: Linux x86_64 and aarch64. Later: macOS arm64, macOS x86_64.
 
 The first target should match CARLA development environments rather than attempting universal support.
 

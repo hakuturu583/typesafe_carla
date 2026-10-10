@@ -246,7 +246,7 @@ names that branch or tag, and it is what is recorded as the ref: e.g.
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
-| 0.1.0 | 4.5 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64: Ubuntu 22.04 (GCC 11), 24.04 (GCC 13), 26.04 (GCC 15); Linux aarch64: Ubuntu 24.04 (GCC 13), from source (PyPI wheels are x86_64 only) | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server (x86_64). `ue5-dev` and `0.10.0`: build, link and pass the C ABI tests in CI on each of those Ubuntu LTS releases with its default GCC |
+| 0.1.0 | 4.5 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64: Ubuntu 22.04 (GCC 11), 24.04 (GCC 13), 26.04 (GCC 15); Linux aarch64: Ubuntu 24.04 (GCC 13); PyPI wheels for both (manylinux_2_28) | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server (x86_64). `ue5-dev` and `0.10.0`: build, link and pass the C ABI tests in CI on each of those Ubuntu LTS releases with its default GCC |
 
 ### Backends
 
