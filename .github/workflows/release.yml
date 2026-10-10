@@ -24,7 +24,11 @@
 #                  `release` job is skipped.
 #   workflow_dispatch    a dry run: builds and checks everything from the
 #                  `carla_ref` input without tagging; with publish=true it also
-#                  uploads to TestPyPI.
+#                  uploads to TestPyPI. With verify_only=true it builds nothing
+#                  and only checks the package version already on TestPyPI.
+#
+# After an upload, `verify-published` installs that version from the index it
+# went to (nothing else) on each architecture and checks it as a user gets it.
 #
 # It is one workflow rather than a separate `on: push: tags` one on purpose: the
 # auto-release tag is pushed with GITHUB_TOKEN, and a tag pushed with
@@ -56,6 +60,10 @@ on:
         required: true
       publish:
         description: "Upload to TestPyPI (otherwise build and check only)"
+        type: boolean
+        default: false
+      verify_only:
+        description: "Build nothing: install this commit's version from TestPyPI on each architecture and check it"
         type: boolean
         default: false
 
@@ -213,6 +221,7 @@ jobs:
       carla_ref: ${{ steps.r.outputs.carla_ref }}
       carla_build_ref: ${{ steps.r.outputs.carla_build_ref }}
       carla_commit: ${{ steps.r.outputs.carla_commit }}
+      verify_only: ${{ steps.r.outputs.verify_only }}
     steps:
       # For a tag push this is the tag, so the tag is checked against its own
       # package version.
@@ -232,10 +241,11 @@ jobs:
           TAG_CARLA_COMMIT: ${{ needs.release.outputs.carla_commit }}
           INPUT_CARLA_REF: ${{ inputs.carla_ref }}
           INPUT_PUBLISH: ${{ inputs.publish }}
+          INPUT_VERIFY_ONLY: ${{ inputs.verify_only }}
         run: |
           set -euo pipefail
           proceed=false; publish=false; index=pypi; ref="$SHA"; tag=""; version=""
-          carla_ref=""; carla_commit=""
+          carla_ref=""; carla_commit=""; verify_only=false
           if [ "$EVENT" = push ] && [[ "$REF" == refs/tags/* ]]; then
             # A hand-cut tag: check it, resolve its CARLA commit, build and publish.
             out=$(mktemp)
@@ -262,6 +272,8 @@ jobs:
             proceed=true; index=testpypi; carla_ref="${INPUT_CARLA_REF:-ue5-dev}"
             carla_commit=$(tools/resolve_carla_ref.sh "$carla_ref")
             if [ "$INPUT_PUBLISH" = true ]; then publish=true; fi
+            # Only `verify-published`, against what TestPyPI already has.
+            if [ "$INPUT_VERIFY_ONLY" = true ]; then proceed=false; publish=false; verify_only=true; fi
           fi
           # PyPI accepts a version once: fail now, not after the build. A re-run
           # (attempt > 1) may be finishing a partial upload, so it is let through.
@@ -280,6 +292,7 @@ jobs:
             echo "proceed=$proceed"; echo "publish=$publish"; echo "index=$index"; echo "upload_url=$upload_url"
             echo "ref=$ref"; echo "tag=$tag"; echo "version=$version"; echo "carla_ref=$carla_ref"
             echo "carla_build_ref=$carla_build_ref"; echo "carla_commit=$carla_commit"
+            echo "verify_only=$verify_only"
           } | tee -a "$GITHUB_OUTPUT"
 
   verify:
@@ -574,6 +587,56 @@ jobs:
           # An existing file is an error, so a version is never "released"
           # without uploading anything; only a re-run may finish a partial upload.
           skip-existing: ${{ github.run_attempt > 1 }}
+
+  # What `pip install typesafe-carla` gets, on each architecture: the version
+  # just uploaded (or, verify_only, already on TestPyPI), from that index alone
+  # (its one dependency, typesafe-carla-toolchain, is published there too).
+  verify-published:
+    name: install from ${{ needs.resolve.outputs.index }} (${{ matrix.arch.name }})
+    needs: [resolve, publish]
+    if: >-
+      always() && (needs.publish.result == 'success' || needs.resolve.outputs.verify_only == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        # Native builds: each architecture on its own runner (no emulation).
+        arch:
+          - { name: x86_64, runner: ubuntu-24.04 }
+          - { name: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.arch.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install the published version from the index
+        env:
+          INDEX: ${{ needs.resolve.outputs.index }}
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' python/typesafe_carla/__init__.py)
+          simple=https://pypi.org/simple/
+          if [ "$INDEX" = testpypi ]; then simple=https://test.pypi.org/simple/; fi
+          python -m venv /tmp/user
+          # An index can take a few minutes to serve a new upload.
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if /tmp/user/bin/pip install --no-cache-dir --index-url "$simple" "typesafe-carla==${version}"; then
+              break
+            fi
+            if [ "$attempt" = 10 ]; then exit 1; fi
+            sleep 30
+          done
+          /tmp/user/bin/pip list | grep -i typesafe
+      - name: Check it as installed (prebuilt typesafe_carla.carla, a Codon build)
+        run: |
+          set -euo pipefail
+          cd /tmp
+          export TYPESAFE_CARLA_PYCARLA_BUILD=0
+          /tmp/user/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" --backend libcarla --pycarla
+          /tmp/user/bin/python -c "import sys, typesafe_carla.carla as carla; t = carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(yaw=90.0)); assert \"carla\" not in sys.modules and t.location.y == 2.0; print(\"typesafe_carla.carla OK\", carla.__path__)"
+          /tmp/user/bin/typesafe-codon build -release -o /tmp/connect "$GITHUB_WORKSPACE/examples/connect.py"
+          file /tmp/connect
 
   # Last: the GitHub release appears only once the packages are on PyPI. The
   # auto-release path drafted it in `release`; a hand-cut tag gets one here.

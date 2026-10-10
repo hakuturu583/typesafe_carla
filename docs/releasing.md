@@ -347,9 +347,16 @@ ubuntu-22.04 leg's prefix even if a newer libstdc++ runtime is installed;
 push to main ──► release ──┐  (bump, tag, push, draft GitHub release; only with a release:* label)
 push a tag ────────────────┤
 workflow_dispatch ─────────┴─► resolve ──► verify ──┬─► sdist ─────┐
-                                                    ├─► wheel ─────┼─► publish-toolchain ──► publish ──► github-release
-                                                    └─► toolchain ─┘
+                                                    ├─► wheel ─────┼─► publish-toolchain ──► publish ──┬─► github-release
+                                                    └─► toolchain ─┘                                     └─► verify-published
 ```
+
+`wheel` (and `wheel-pycarla` after it) and `toolchain` run once per
+architecture (x86_64, aarch64). `verify-published` installs the uploaded
+version from the index it went to, and nothing else, on each architecture,
+and checks it as a user gets it: `check_wheel.py --pycarla`,
+`import typesafe_carla.carla` with building disabled, and a
+`typesafe-codon build -release`.
 
 `publish-toolchain` (environment `<index>-toolchain`) uploads
 `typesafe-carla-toolchain`; `publish` (environment `<index>`) then uploads
@@ -401,7 +408,10 @@ in the PR itself if the C ABI changed.
 Run **Release** manually (workflow_dispatch) with the `carla_ref` you want
 (resolved to its current commit SHA, which is what is built). It builds and checks every artifact
 and uploads them as workflow artifacts; with `publish=true` it also uploads to
-TestPyPI. `tests/distribution/clean_env.sh <dir with the downloaded wheels>
+TestPyPI (then `verify-published` installs it from there). With
+`verify_only=true` it builds and uploads nothing and only runs
+`verify-published` against TestPyPI, for the version on the dispatched
+commit. `tests/distribution/clean_env.sh <dir with the downloaded wheels>
 <port>` then checks the design's success criteria (section 44) in a clean
 container against a running CARLA server: `uv sync`,
 `typesafe-codon build -release main.py`, `./main`, a compile-time rejection,
