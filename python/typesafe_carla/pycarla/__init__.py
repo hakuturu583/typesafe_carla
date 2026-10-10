@@ -1204,8 +1204,9 @@ def _culprits(stderr: str, gen: Gen) -> dict[str, str]:
 
 def _compile(source: Path, output: Path, env: dict[str, str] | None,
              portable: bool = False) -> subprocess.CompletedProcess:
-    """`portable`: code for any x86-64 CPU. Codon targets the build machine's
-    CPU by default (AVX-512 on one, SIGILL on a CPU without it)."""
+    """`portable`: code for any CPU of the architecture. Codon targets the
+    build machine's CPU by default (AVX-512 or SVE on one, SIGILL on a CPU
+    without it)."""
     output.unlink(missing_ok=True)
     flags = ["--disable-native"] if portable else []
     return typesafe_codon("build", "--pyext", "--relocation-model=pic", *flags, "--module", MODULE,
@@ -1382,8 +1383,8 @@ def build(out: Path, env: dict[str, str] | None = None, package: str = PACKAGE_N
     """Builds the package into `out/carla` (imported as `package`); returns `out`.
 
     `_carla.so` finds the Codon runtime through `rpath` (default: this
-    toolchain's library directories). `portable` builds it for any x86-64
-    CPU rather than this machine's (a build to distribute)."""
+    toolchain's library directories). `portable` builds it for any CPU of
+    the architecture rather than this machine's (a build to distribute)."""
     out.mkdir(parents=True, exist_ok=True)
     gen = compile_module(out, env, log=log, package=package, pruned_path=pruned_path,
                          portable=portable)

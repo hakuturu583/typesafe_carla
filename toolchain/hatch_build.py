@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import platform as host
 import shutil
 import tarfile
 import urllib.request
@@ -30,6 +31,11 @@ PLATFORMS = {
         "f27abda792c0c9f9a42d529c2e0a1b2113ec6964eec23d6f62acef9ed42c3de6",
         # The Codon binaries require glibc >= 2.27.
         "manylinux_2_28_x86_64",
+    ),
+    "linux-aarch64": (
+        "codon-linux-aarch64.tar.gz",
+        "368a20c1517eb977d4f2ea513b965d7d90ace57d554e268b1b50629a65840e4d",
+        "manylinux_2_28_aarch64",
     ),
 }
 RELEASE_URL = "https://github.com/exaloop/codon/releases/download/v{version}/{archive}"
@@ -64,7 +70,9 @@ class CodonBundleHook(BuildHookInterface):
     def initialize(self, version: str, build_data: dict) -> None:
         if self.target_name != "wheel":
             return
-        platform = os.environ.get("TYPESAFE_CARLA_TOOLCHAIN_PLATFORM", "linux-x86_64")
+        # The build machine's platform unless set (e.g. to build for another).
+        platform = os.environ.get("TYPESAFE_CARLA_TOOLCHAIN_PLATFORM",
+                                  f"{host.system().lower()}-{host.machine()}")
         if platform not in PLATFORMS:
             raise RuntimeError(f"unsupported platform {platform!r}; known: {sorted(PLATFORMS)}")
         archive, sha256, tag = PLATFORMS[platform]

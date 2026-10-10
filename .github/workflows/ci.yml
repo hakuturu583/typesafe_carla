@@ -17,12 +17,17 @@ jobs:
   test:
     # Mock backend: compile-pass/fail, runtime and launcher tests, no CARLA needed.
     # Python only runs the launcher, build hook and dev tools: test the oldest
-    # and newest supported versions (requires-python >= 3.10).
-    runs-on: ubuntu-24.04
+    # and newest supported versions (requires-python >= 3.10) on x86_64, the
+    # newest on aarch64.
+    name: test (${{ matrix.runner }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
+        runner: [ubuntu-24.04]
         python: ["3.10", "3.14"]
+        include:
+          - { runner: ubuntu-24.04-arm, python: "3.14" }
     env:
       TSC_BACKEND: mock
       UV_PYTHON: ${{ matrix.python }}
@@ -73,6 +78,8 @@ jobs:
     # LTS with that release's default GCC (users build LibCarla and the shim
     # with their distribution's compiler; a manylinux/gcc-toolset prebuilt
     # does not mix with it), times ue5-dev and 0.10.0 (the test server's).
+    # aarch64 on one of them (ubuntu-24.04-arm; the cpython-mode pycarla
+    # tests below run on x86_64 only).
     # LibCarla is built from the ref's current commit SHA, and build/ is
     # cached keyed by that SHA and the toolchain (docs/releasing.md,
     # "LibCarla build cache").
@@ -92,6 +99,7 @@ jobs:
           - { runner: ubuntu-22.04, gcc: 11 }
           - { runner: ubuntu-24.04, gcc: 13 }
           - { runner: ubuntu-26.04, gcc: 15 }
+          - { runner: ubuntu-24.04-arm, gcc: 13 }
         carla_ref: ${{ fromJSON(inputs.carla_ref && format('["ue5-dev","0.10.0","{0}"]', inputs.carla_ref) || '["ue5-dev","0.10.0"]') }}
     steps:
       - uses: actions/checkout@v4
@@ -258,7 +266,12 @@ jobs:
     # The wheel used from a clean environment outside the checkout, so nothing
     # can fall back to repository paths. (Mock backend to keep it fast; the
     # release workflow builds and checks the LibCarla wheel.)
-    runs-on: ubuntu-24.04
+    name: wheel (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

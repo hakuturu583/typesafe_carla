@@ -7,7 +7,7 @@ automatically.
 
 | Package version | Codon | Platform |
 |---|---|---|
-| 0.19.3 | [v0.19.3](https://github.com/exaloop/codon/releases/tag/v0.19.3) | Linux x86_64 (glibc ≥ 2.28) |
+| 0.19.3 | [v0.19.3](https://github.com/exaloop/codon/releases/tag/v0.19.3) | Linux x86_64, aarch64 (glibc ≥ 2.28) |
 
 `codon build` links executables with the system C++ compiler (`g++`) and
 zlib (`-lz`), so they must be installed to produce executables; `codon run`

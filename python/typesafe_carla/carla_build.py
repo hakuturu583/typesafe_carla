@@ -321,7 +321,7 @@ def make_prebuilt(dest: Path, log=_stderr) -> Path:
     """Builds the package for a wheel into `dest` (tools/add_pycarla_to_wheel.py):
     keyed by prebuilt_stamp() (with the toolchain release beside it, for
     explain_prebuilt_mismatch()), linked to find the Codon runtime relative
-    to itself, and compiled for any x86-64 CPU (not the build machine's). Run
+    to itself, and compiled for any CPU of the architecture (not the build machine's). Run
     it with the typesafe-carla and toolchain the wheel is installed with."""
     import tempfile
 
