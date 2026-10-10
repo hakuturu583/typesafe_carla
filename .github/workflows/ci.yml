@@ -33,14 +33,27 @@ jobs:
       UV_PYTHON: ${{ matrix.python }}
     steps:
       - uses: actions/checkout@v4
-      # The aarch64 runner image's disk is not proven to hold the pycarla and
-      # LibCarla builds: drop preinstalled SDKs the jobs never use. Keeps
+      # Headroom for the pycarla and LibCarla builds on the aarch64 image:
+      # drop preinstalled SDKs the jobs never use (~8 GB). Keeps
       # large-packages (llvm/clang for bindgen, the GCC versions under test).
       - name: Free disk space (aarch64)
         if: runner.arch == 'ARM64'
         uses: jlumbroso/free-disk-space@v2.0.0
         with:
           large-packages: false
+      # The pycarla build compiles one large module (PROBE_GB in
+      # python/typesafe_carla/pycarla) on a 16 GB runner, which is shut down
+      # (no OOM message) when memory runs out. The x86_64 image comes with a
+      # 4 GB swap file; give the aarch64 one 16 GB.
+      - name: Add swap (aarch64)
+        if: runner.arch == 'ARM64'
+        run: |
+          free -h
+          sudo fallocate -l 16G /swapfile-ci
+          sudo chmod 600 /swapfile-ci
+          sudo mkswap /swapfile-ci
+          sudo swapon /swapfile-ci
+          free -h
       - uses: astral-sh/setup-uv@v6
 
       - name: C++ build (mock backend)
@@ -111,8 +124,8 @@ jobs:
         carla_ref: ${{ fromJSON(inputs.carla_ref && format('["ue5-dev","0.10.0","{0}"]', inputs.carla_ref) || '["ue5-dev","0.10.0"]') }}
     steps:
       - uses: actions/checkout@v4
-      # The aarch64 runner image's disk is not proven to hold the pycarla and
-      # LibCarla builds: drop preinstalled SDKs the jobs never use. Keeps
+      # Headroom for the pycarla and LibCarla builds on the aarch64 image:
+      # drop preinstalled SDKs the jobs never use (~8 GB). Keeps
       # large-packages (llvm/clang for bindgen, the GCC versions under test).
       - name: Free disk space (aarch64)
         if: runner.arch == 'ARM64'
