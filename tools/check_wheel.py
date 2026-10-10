@@ -15,8 +15,18 @@ before publishing.
 from __future__ import annotations
 
 import argparse
+import platform
+import re
 import subprocess
 import sys
+
+# Registers of optional vector extensions, as `objdump -d` prints them: code
+# that uses them was compiled for the build machine's CPU (not portable,
+# --disable-native) and dies (SIGILL) on a CPU without them.
+NON_BASELINE = {
+    "x86_64": ("AVX", re.compile(r"%[yz]mm\d")),
+    "aarch64": ("SVE", re.compile(r"\b[zp]\d+\.[bhsdq]\b|\bp\d+/[zm]\b")),
+}
 
 
 def main() -> int:
@@ -78,13 +88,16 @@ def main() -> int:
             needed = subprocess.run(["readelf", "-d", str(so)], capture_output=True, text=True).stdout
             if "libpython" in needed:
                 errors.append(f"{so} links libpython")
-            # Built for any x86-64 CPU: AVX registers mean it was compiled for
-            # the build machine's CPU and dies (SIGILL) on one without AVX-512.
+            # Built for any CPU of this architecture (NON_BASELINE).
             asm = subprocess.run(["objdump", "-d", str(so)], capture_output=True, text=True)
+            extension, registers = NON_BASELINE.get(platform.machine(), (None, None))
             if asm.returncode != 0:
                 errors.append(f"objdump -d {so} failed: {asm.stderr.strip()}")
-            elif "%ymm" in asm.stdout or "%zmm" in asm.stdout:
-                errors.append(f"{so} uses AVX instructions: not built portable (--disable-native)")
+            elif registers is None:
+                errors.append(f"no portability check for {platform.machine()}")
+            elif registers.search(asm.stdout):
+                errors.append(f"{so} uses {extension} instructions: not built portable "
+                              "(--disable-native)")
             print(f"pycarla  {carla_build.PREBUILT_DIR}")
     if backend == "libcarla":
         # Expects an installed wheel: a source-tree build dir (paths prefers

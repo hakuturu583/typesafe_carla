@@ -259,17 +259,21 @@ def _codon_identity() -> bytes:
 
 def cache_key() -> str:
     """The key of a build of the cache (or of TYPESAFE_CARLA_PYCARLA_DIR):
-    the prebuilt package's key plus the identity of a Codon other than the
-    bundled toolchain. Not the native library or any path of this
-    installation: the build finds both at run time (prepare_runtime()), so
-    one build serves every installation with the same sources and Codon."""
+    the prebuilt package's key, this machine's architecture (a home
+    directory shared with machines of another one, e.g. x86_64 and aarch64)
+    and the identity of a Codon other than the bundled toolchain. Not the
+    native library or any path of this installation: the build finds both at
+    run time (prepare_runtime()), so one build serves every installation with
+    the same sources, Codon and architecture. (The prebuilt package needs no
+    architecture: a wheel is for one.)"""
     import hashlib
+    import platform
 
-    stamp = prebuilt_stamp()
+    h = hashlib.sha256(prebuilt_stamp().encode() + b"\0machine\0" + platform.machine().encode())
     codon = _codon_identity()
-    if not codon:
-        return stamp
-    return hashlib.sha256(stamp.encode() + b"\0codon\0" + codon).hexdigest()
+    if codon:
+        h.update(b"\0codon\0" + codon)
+    return h.hexdigest()
 
 
 def build_dir() -> Path:
@@ -321,7 +325,7 @@ def make_prebuilt(dest: Path, log=_stderr) -> Path:
     """Builds the package for a wheel into `dest` (tools/add_pycarla_to_wheel.py):
     keyed by prebuilt_stamp() (with the toolchain release beside it, for
     explain_prebuilt_mismatch()), linked to find the Codon runtime relative
-    to itself, and compiled for any x86-64 CPU (not the build machine's). Run
+    to itself, and compiled for any CPU of the architecture (not the build machine's). Run
     it with the typesafe-carla and toolchain the wheel is installed with."""
     import tempfile
 

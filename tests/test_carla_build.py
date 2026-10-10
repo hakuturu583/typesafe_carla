@@ -53,15 +53,26 @@ def test_the_cache_is_shared_by_installations(monkeypatch, tmp_path):
     _bundled_codon(monkeypatch, tmp_path)
     monkeypatch.delenv(carla_build.ENV_DIR, raising=False)
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
-    dirs = set()
+    dirs, keys = set(), set()
     for venv, content in (("a", b"one build"), ("b", b"another build")):
         lib = tmp_path / venv / paths.LIBRARY_NAME
         lib.parent.mkdir()
         lib.write_bytes(content)
         monkeypatch.setenv(paths.ENV_LIB, str(lib))
         dirs.add(carla_build.build_dir())
-        assert carla_build.cache_key() == carla_build.prebuilt_stamp()
-    assert len(dirs) == 1
+        keys.add(carla_build.cache_key())
+    assert len(dirs) == 1 and len(keys) == 1
+
+
+def test_another_architecture_has_its_own_cache_key(monkeypatch, tmp_path):
+    # A home directory shared by x86_64 and aarch64 machines: one build each.
+    import platform
+
+    _bundled_codon(monkeypatch, tmp_path)
+    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
+    x86 = carla_build.cache_key()
+    monkeypatch.setattr(platform, "machine", lambda: "aarch64")
+    assert carla_build.cache_key() != x86
 
 
 def test_another_codon_has_its_own_cache_key(monkeypatch, tmp_path):

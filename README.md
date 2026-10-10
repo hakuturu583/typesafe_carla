@@ -246,7 +246,7 @@ names that branch or tag, and it is what is recorded as the ref: e.g.
 
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
-| 0.1.0 | 4.5 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64; Ubuntu 22.04 (GCC 11), 24.04 (GCC 13), 26.04 (GCC 15) | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server. `ue5-dev` and `0.10.0`: build, link and pass the C ABI tests in CI on each of those Ubuntu LTS releases with its default GCC |
+| 0.1.0 | 4.5 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64: Ubuntu 22.04 (GCC 11), 24.04 (GCC 13), 26.04 (GCC 15); Linux aarch64: Ubuntu 24.04 (GCC 13), from source (PyPI wheels are x86_64 only) | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server (x86_64). `ue5-dev` and `0.10.0`: build, link and pass the C ABI tests in CI on each of those Ubuntu LTS releases with its default GCC |
 
 ### Backends
 
@@ -378,8 +378,8 @@ TSC_CARLA_HOST=127.0.0.1 TSC_CARLA_PORT=2000 TYPESAFE_CARLA_BUILD_DIR=build-carl
 
 ## Quick start (development)
 
-Requirements: Linux x86_64, a C++20 compiler (GCC ≥ 11; CI builds with the default GCC of
-Ubuntu 22.04, 24.04 and 26.04), git, CMake ≥ 3.27.2, and uv.
+Requirements: Linux x86_64 or aarch64, a C++20 compiler (GCC ≥ 11; CI builds with the default GCC of
+Ubuntu 22.04, 24.04 and 26.04, and of 24.04 on aarch64), git, CMake ≥ 3.27.2, and uv.
 Codon is installed by `uv sync` from the `toolchain/` workspace member.
 
 ```sh
