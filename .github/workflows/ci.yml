@@ -44,9 +44,9 @@ jobs:
       # The pycarla build compiles one large module (PROBE_GB in
       # python/typesafe_carla/pycarla) on a 16 GB runner, which is shut down
       # (no OOM message) when memory runs out: it did twice on the aarch64
-      # image with its 3 GB of swap. 16 GB more.
-      - name: Add swap (aarch64)
-        if: runner.arch == 'ARM64'
+      # image with its 3 GB of swap, and the module outgrew the x86_64 image
+      # too with the ue58-dev road model. 16 GB more.
+      - name: Add swap (pycarla build)
         run: |
           free -h
           sudo fallocate -l 16G /swapfile-ci
@@ -204,6 +204,18 @@ jobs:
       # so the package's LibCarla is not built a second time.
       # The pycarla build is cached, keyed by what it is generated from and the
       # CARLA commit (outside build/, which the LibCarla cache saves).
+      # The cpython-mode pycarla build outgrew the x86_64 runner's memory
+      # with the ue58-dev road model: the runner was shut down mid-compile
+      # (no OOM message), as the aarch64 test leg was before. 16 GB of swap.
+      - name: Add swap (pycarla build)
+        if: matrix.os.runner == 'ubuntu-24.04'
+        run: |
+          free -h
+          sudo fallocate -l 16G /swapfile-ci
+          sudo chmod 600 /swapfile-ci
+          sudo mkswap /swapfile-ci
+          sudo swapon /swapfile-ci
+          free -h
       - name: Restore the pycarla build
         id: pycarla
         if: matrix.os.runner == 'ubuntu-24.04'

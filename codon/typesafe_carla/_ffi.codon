@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 5
-TSC_ABI_VERSION_MINOR = 0
+TSC_ABI_VERSION_MINOR = 1
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -1002,6 +1002,100 @@ from C import LIB.tsc_junction_get_id(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_junction_get_bounding_box(cobj, Ptr[CBoundingBox]) -> i32
 from C import LIB.tsc_junction_get_waypoints(cobj, i32, Ptr[cobj]) -> i32
 # END GENERATED junction
+# CARLA ue58-dev's road model (ABI 5.1)
+# BEGIN GENERATED junction_roads from bindings/junction.yaml, do not edit
+from C import LIB.tsc_junction_get_connecting_roads(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_junction_get_adjacent_roads(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_junction_get_entry_lanes(cobj, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_junction_get_exit_lanes(cobj, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_junction_get_entry_waypoints(cobj, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_junction_get_exit_waypoints(cobj, i32, Ptr[cobj]) -> i32
+# END GENERATED junction_roads
+# BEGIN GENERATED map_roads from bindings/map.yaml, do not edit
+from C import LIB.tsc_map_get_roads(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_road(cobj, u32, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_lane_section(cobj, u32, u32, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_lane(cobj, u32, u32, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_junctions(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_map_get_junction_by_id(cobj, i32, Ptr[cobj]) -> i32
+# END GENERATED map_roads
+# BEGIN GENERATED waypoint_road from bindings/waypoint.yaml, do not edit
+from C import LIB.tsc_waypoint_get_road(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_waypoint_get_lane(cobj, Ptr[cobj]) -> i32
+# END GENERATED waypoint_road
+# BEGIN GENERATED road from bindings/road.yaml, do not edit
+from C import LIB.tsc_road_get_id(cobj, Ptr[u32]) -> i32
+from C import LIB.tsc_road_get_name(cobj, Ptr[CString]) -> i32
+from C import LIB.tsc_road_get_length(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_road_is_junction(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_road_get_junction_id(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_road_is_rht(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_road_get_successor_id(cobj, Ptr[u32]) -> i32
+from C import LIB.tsc_road_get_predecessor_id(cobj, Ptr[u32]) -> i32
+from C import LIB.tsc_road_get_next_roads(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_road_get_previous_roads(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_road_get_lanes(cobj, float, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_road_get_lane(cobj, u32, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_road_get_lane_at(cobj, float, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_road_get_sections(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_road_get_section(cobj, u32, Ptr[cobj]) -> i32
+from C import LIB.tsc_road_get_section_at(cobj, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_road_get_junction(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_road_get_transform_at(cobj, float, Ptr[CTransform]) -> i32
+from C import LIB.tsc_road_get_waypoints_at(cobj, float, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_road_get_waypoints(cobj, float, i32, Ptr[cobj]) -> i32
+# END GENERATED road
+# BEGIN GENERATED road_list_items from bindings/lists.yaml, do not edit
+from C import LIB.tsc_road_list_size(cobj) -> int
+from C import LIB.tsc_road_list_get(cobj, int, Ptr[cobj]) -> i32
+# END GENERATED road_list_items
+# BEGIN GENERATED lane_section from bindings/lane_section.yaml, do not edit
+from C import LIB.tsc_lane_section_get_id(cobj, Ptr[u32]) -> i32
+from C import LIB.tsc_lane_section_get_road_id(cobj, Ptr[u32]) -> i32
+from C import LIB.tsc_lane_section_get_unique_id(cobj, Ptr[u64]) -> i32
+from C import LIB.tsc_lane_section_get_road(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_section_get_distance(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_lane_section_get_length(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_lane_section_get_lanes(cobj, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_section_get_lane(cobj, i32, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_section_contains_lane(cobj, i32, Ptr[i32]) -> i32
+from C import LIB.tsc_lane_section_get_next_section(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_section_get_previous_section(cobj, Ptr[cobj]) -> i32
+# END GENERATED lane_section
+# BEGIN GENERATED lane_section_list_items from bindings/lists.yaml, do not edit
+from C import LIB.tsc_lane_section_list_size(cobj) -> int
+from C import LIB.tsc_lane_section_list_get(cobj, int, Ptr[cobj]) -> i32
+# END GENERATED lane_section_list_items
+# BEGIN GENERATED lane from bindings/lane.yaml, do not edit
+from C import LIB.tsc_lane_get_id(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_lane_get_road_id(cobj, Ptr[u32]) -> i32
+from C import LIB.tsc_lane_get_section_id(cobj, Ptr[u32]) -> i32
+from C import LIB.tsc_lane_get_unique_id(cobj, Ptr[u64]) -> i32
+from C import LIB.tsc_lane_get_type(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_lane_get_road(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_get_section(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_get_length(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_lane_get_distance(cobj, Ptr[float]) -> i32
+from C import LIB.tsc_lane_get_level(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_lane_is_straight(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_lane_is_positive_direction(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_lane_get_width(cobj, float, Ptr[float]) -> i32
+from C import LIB.tsc_lane_get_transform(cobj, float, Ptr[CTransform]) -> i32
+from C import LIB.tsc_lane_get_right_lane(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_get_left_lane(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_get_next_lanes(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_get_previous_lanes(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_get_waypoint(cobj, float, Ptr[cobj]) -> i32
+from C import LIB.tsc_lane_get_waypoints(cobj, float, Ptr[cobj]) -> i32
+# END GENERATED lane
+# BEGIN GENERATED lane_list_items from bindings/lists.yaml, do not edit
+from C import LIB.tsc_lane_list_size(cobj) -> int
+from C import LIB.tsc_lane_list_get(cobj, int, Ptr[cobj]) -> i32
+# END GENERATED lane_list_items
+# BEGIN GENERATED junction_list_items from bindings/lists.yaml, do not edit
+from C import LIB.tsc_junction_list_size(cobj) -> int
+from C import LIB.tsc_junction_list_get(cobj, int, Ptr[cobj]) -> i32
+# END GENERATED junction_list_items
 # Issue #22.
 # BEGIN GENERATED map from bindings/map.yaml, do not edit
 from C import LIB.tsc_map_get_georeference(cobj, Ptr[CGeoLocation]) -> i32

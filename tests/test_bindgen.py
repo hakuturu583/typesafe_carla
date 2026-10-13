@@ -57,6 +57,21 @@ q: {call: Q, optional: {name: Thing.q, missing_in: ["0.10.0"]}, args: {flag: boo
 
 
 
+def test_optional_with_handle_output(tmp_path):
+    """An `optional` method returning a handle (ue58-dev's Road, Lane ...): the
+    handle is created only where the method exists, NULL where it fails."""
+    s = _load(tmp_path, """
+r: {call: R, optional: {name: Thing.r, missing_in: ["0.10.0"]}, out: world_handle}
+q: {call: Q, optional: {name: Thing.q, missing_in: ["0.10.0"]}, args: {flag: bool}, out: world_handle}
+""")
+    r, q = s.functions
+    assert r.body() == ('tsc_world_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { '
+                        'h_ = new tsc_world(r_); }), thing_of(thing), R, "Thing.r"); return h_;')
+    assert q.body() == ('tsc_world_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(('
+                        '[&](auto &&r_) { h_ = new tsc_world(r_); }), self_, Q, "Thing.q", '
+                        'flag != 0); }(thing_of(thing)); return h_;')
+
+
 def test_via_checks_the_handle_before_the_arguments(tmp_path):
     """A `via` call takes the object as a function argument, and C++ evaluates
     function arguments in no fixed order: with other arguments, the object
@@ -74,8 +89,6 @@ g: {call: G, via: g_compat, out: string_list}
 
 @pytest.mark.parametrize("entry, message", [
     ("f: {call: F, out: bool, optional: {name: Thing.f, missing_in: [\"0.10.0\"]}}",
-     "an optional method's output needs a type with `assign`"),
-    ("f: {call: F, out: world_handle, optional: {name: Thing.f, missing_in: [\"0.10.0\"]}}",
      "an optional method's output needs a type with `assign`"),
     ("f: {call: F, optional: Thing.f}", "optional must be"),
     ("f: {call: F, optional: {name: Thing.f, missing_in: []}}", "optional must be"),

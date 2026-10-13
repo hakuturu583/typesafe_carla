@@ -162,6 +162,15 @@ class Function:
             checks = ""
             if self.out is None:
                 call = f'TSC_CALL_OPTIONAL({", ".join([obj, self.call, what] + args)})'
+            elif self.out.type.handle:
+                # A new handle for new_handle's lambda (see emit.shim): made by
+                # `use` where the method exists.
+                make = self.out.type.from_carla.replace("{}", "r_")
+                use = f"([&](auto &&r_) {{ h_ = {make}; }})"
+                call = f'TSC_CALL_OPTIONAL_THEN({", ".join([use, obj, self.call, what] + args)})'
+                if args:
+                    call = f"[&](auto &self_) {{ {call}; }}({self_})"
+                return f"{self.out.type.c} *h_ = nullptr; {call}; return h_;"
             else:
                 # An `assign` output, written by `use` with the result where
                 # the method exists.
@@ -337,9 +346,9 @@ def load(bindings: Path = BINDINGS) -> Spec:
                                     "(a pointer, or a type with `invalid`) for test_generated")
                 optional, missing_in = None, ()
                 if "optional" in entry:
-                    if out and not (out.type.assign and not out.type.handle):
+                    if out and not (out.type.assign or out.type.handle):
                         raise SpecError(f"{where}: an optional method's output needs a type "
-                                        "with `assign` (e.g. string)")
+                                        "with `assign` (e.g. string) or a handle")
                     if "via" in entry:
                         raise SpecError(f"{where}: `optional` and `via` exclude each other")
                     o = entry["optional"]

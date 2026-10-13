@@ -254,6 +254,8 @@ namespace road {
 
 using RoadId = uint32_t;
 using LaneId = int32_t;
+using SectionId = uint32_t;
+using JuncId = int32_t;
 using SignId = std::string;
 
 struct LaneValidity {
@@ -835,6 +837,10 @@ struct ActorData;
 class Junction;
 class Landmark;
 class World;
+// CARLA ue58-dev's road model (below Junction).
+class Road;
+class LaneSection;
+class Lane;
 class LightManager;
 
 class Timestamp {
@@ -894,6 +900,9 @@ class Waypoint : public std::enable_shared_from_this<Waypoint> {
   SharedPtr<Waypoint> GetRight() const;
   SharedPtr<Waypoint> GetLeft() const;
   SharedPtr<Junction> GetJunction() const { return nullptr; }  // the mock road has none
+  // CARLA ue58-dev.
+  SharedPtr<Road> GetRoad() const;
+  SharedPtr<Lane> GetLane() const;
   // Issue #22. Lane -1 has the yellow center line on its left; a broken line
   // separates the lanes; lane -2 has a solid edge line on its right.
   std::optional<road::element::LaneMarking> GetRightLaneMarking() const;
@@ -936,6 +945,15 @@ class Map : public std::enable_shared_from_this<Map> {
   std::vector<SharedPtr<Landmark>> GetLandmarksFromId(std::string id) const;
   std::vector<SharedPtr<Landmark>> GetLandmarkGroup(const Landmark &landmark) const;
   void CookInMemoryMap(const std::string &path) const;
+  // CARLA ue58-dev's road model: the mock road is road 1 with one lane
+  // section (0) and the driving lanes -1 and -2; it has no junction.
+  std::vector<SharedPtr<Road>> GetRoads() const;
+  SharedPtr<Road> GetRoad(road::RoadId road_id) const;
+  SharedPtr<LaneSection> GetLaneSection(road::RoadId road_id, road::SectionId section_id) const;
+  SharedPtr<Lane> GetLane(road::RoadId road_id, road::SectionId section_id,
+                          road::LaneId lane_id) const;
+  std::vector<SharedPtr<Junction>> GetJunctions() const { return {}; }
+  SharedPtr<Junction> GetJunctionById(road::JuncId) const { return nullptr; }
   const road::Map &GetMap() const { return _road_map; }
 
  private:
@@ -1334,6 +1352,123 @@ class Junction {
     return {};
   }
   geom::BoundingBox GetBoundingBox() const { return {}; }
+  // CARLA ue58-dev (the mock has no junction to call them on).
+  std::vector<SharedPtr<Road>> GetConnectingRoads() const { return {}; }
+  std::vector<SharedPtr<Road>> GetAdjacentRoads() const { return {}; }
+  std::vector<SharedPtr<Lane>> GetEntryLanes(
+      road::Lane::LaneType = road::Lane::LaneType::Driving) const {
+    return {};
+  }
+  std::vector<SharedPtr<Lane>> GetExitLanes(
+      road::Lane::LaneType = road::Lane::LaneType::Driving) const {
+    return {};
+  }
+  std::vector<SharedPtr<Waypoint>> GetEntryWaypoints(
+      road::Lane::LaneType = road::Lane::LaneType::Driving) const {
+    return {};
+  }
+  std::vector<SharedPtr<Waypoint>> GetExitWaypoints(
+      road::Lane::LaneType = road::Lane::LaneType::Driving) const {
+    return {};
+  }
+};
+
+// CARLA ue58-dev's road model, as LibCarla's client::Road / LaneSection /
+// Lane, over the mock road (Map). LibCarla's constructors are private.
+class Road {
+ public:
+  explicit Road(road::RoadId id) : _id(id) {}
+  road::RoadId GetId() const { return _id; }
+  std::string GetName() const { return "MockRoad"; }
+  double GetLength() const;
+  bool IsJunction() const { return false; }
+  road::JuncId GetJunctionId() const { return -1; }
+  bool IsRHT() const { return true; }
+  road::RoadId GetSuccessorId() const { return 0u; }    // the road ends: no successor
+  road::RoadId GetPredecessorId() const { return 0u; }
+  std::vector<SharedPtr<Road>> GetNextRoads() const { return {}; }
+  std::vector<SharedPtr<Road>> GetPreviousRoads() const { return {}; }
+  std::vector<SharedPtr<Lane>> GetLanes(
+      double s, road::Lane::LaneType type = road::Lane::LaneType::Driving) const;
+  SharedPtr<Lane> GetLane(road::SectionId section_id, road::LaneId lane_id) const;
+  SharedPtr<Lane> GetLaneAt(double s, road::LaneId lane_id) const;
+  std::vector<SharedPtr<LaneSection>> GetSections() const;
+  SharedPtr<LaneSection> GetSection(road::SectionId section_id) const;
+  SharedPtr<LaneSection> GetSectionAt(double s) const;
+  SharedPtr<Junction> GetJunction() const { return nullptr; }
+  // On the road's reference line, the left edge of lane -1.
+  geom::Transform GetTransformAt(double s) const;
+  std::vector<SharedPtr<Waypoint>> GetWaypointsAt(
+      double s, road::Lane::LaneType type = road::Lane::LaneType::Driving) const;
+  std::vector<SharedPtr<Waypoint>> GetWaypoints(
+      double distance, road::Lane::LaneType type = road::Lane::LaneType::Driving) const;
+  bool operator==(const Road &rhs) const { return _id == rhs._id; }
+  bool operator!=(const Road &rhs) const { return !(*this == rhs); }
+
+ private:
+  road::RoadId _id;
+};
+
+class LaneSection {
+ public:
+  LaneSection(road::RoadId road_id, road::SectionId id) : _road_id(road_id), _id(id) {}
+  road::SectionId GetId() const { return _id; }
+  road::RoadId GetRoadId() const { return _road_id; }
+  uint64_t GetUniqueId() const { return (static_cast<uint64_t>(_road_id) << 32) | _id; }
+  SharedPtr<Road> GetRoad() const { return std::make_shared<Road>(_road_id); }
+  double GetDistance() const { return 0.0; }
+  double GetLength() const;
+  std::vector<SharedPtr<Lane>> GetLanes(
+      road::Lane::LaneType type = road::Lane::LaneType::Driving) const;
+  SharedPtr<Lane> GetLane(road::LaneId lane_id) const;
+  bool ContainsLane(road::LaneId lane_id) const;
+  SharedPtr<LaneSection> GetNextSection() const { return nullptr; }  // one section
+  SharedPtr<LaneSection> GetPreviousSection() const { return nullptr; }
+  bool operator==(const LaneSection &rhs) const {
+    return _road_id == rhs._road_id && _id == rhs._id;
+  }
+  bool operator!=(const LaneSection &rhs) const { return !(*this == rhs); }
+
+ private:
+  road::RoadId _road_id;
+  road::SectionId _id;
+};
+
+class Lane {
+ public:
+  Lane(road::RoadId road_id, road::SectionId section_id, road::LaneId id)
+      : _road_id(road_id), _section_id(section_id), _id(id) {}
+  road::LaneId GetId() const { return _id; }
+  road::RoadId GetRoadId() const { return _road_id; }
+  road::SectionId GetSectionId() const { return _section_id; }
+  uint64_t GetUniqueId() const;
+  road::Lane::LaneType GetType() const { return road::Lane::LaneType::Driving; }
+  SharedPtr<Road> GetRoad() const { return std::make_shared<Road>(_road_id); }
+  SharedPtr<LaneSection> GetSection() const {
+    return std::make_shared<LaneSection>(_road_id, _section_id);
+  }
+  double GetLength() const;
+  double GetDistance() const { return 0.0; }
+  bool GetLevel() const { return false; }
+  bool IsStraight() const { return true; }
+  bool IsPositiveDirection() const { return _id < 0; }  // right-hand lanes run along s
+  double GetWidth(double s) const;
+  geom::Transform GetTransform(double s) const;
+  SharedPtr<Lane> GetRightLane() const;
+  SharedPtr<Lane> GetLeftLane() const;
+  std::vector<SharedPtr<Lane>> GetNextLanes() const { return {}; }  // the road ends
+  std::vector<SharedPtr<Lane>> GetPreviousLanes() const { return {}; }
+  SharedPtr<Waypoint> GetWaypoint(double s) const;
+  std::vector<SharedPtr<Waypoint>> GetWaypoints(double distance) const;
+  bool operator==(const Lane &rhs) const {
+    return _road_id == rhs._road_id && _section_id == rhs._section_id && _id == rhs._id;
+  }
+  bool operator!=(const Lane &rhs) const { return !(*this == rhs); }
+
+ private:
+  road::RoadId _road_id;
+  road::SectionId _section_id;
+  road::LaneId _id;
 };
 
 }  // namespace client

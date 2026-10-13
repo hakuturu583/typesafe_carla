@@ -17,3 +17,8 @@ landmark_list:
 traffic_light_list: {items: "{}->lights", what: traffic light list, get: traffic_light_handle}
 waypoint_list: {items: "{}->waypoints", what: waypoint list, get: waypoint_handle}
 world_snapshot: {self: snapshot, items: "{}->actors", what: snapshot, get: actor_snapshot}
+# CARLA ue58-dev's road model (ABI 5.1).
+road_list: {items: "{}->items", what: road list, get: road_handle}
+lane_section_list: {items: "{}->items", what: lane section list, get: lane_section_handle}
+lane_list: {items: "{}->items", what: lane list, get: lane_handle}
+junction_list: {items: "{}->items", what: junction list, get: junction_handle}

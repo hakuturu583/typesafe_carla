@@ -21,6 +21,7 @@ from .world import World, WorldSettings
 from .map import (Map, Waypoint, LaneType, Junction, Landmark, LandmarkOrientation,
                   LandmarkType)
 from .lane_marking import LaneMarking, LaneMarkingType, LaneMarkingColor, LaneChange
+from .road import Road, LaneSection, Lane
 from .geo import (GeoLocation, GeoEllipsoid, GeoOffsetTransform, GeoProjection, GeoProjectionTM,
                   GeoProjectionUTM, GeoProjectionWebMerc, GeoProjectionLCC2SP)
 from .snapshot import WorldSnapshot, ActorSnapshot, Timestamp

@@ -1,0 +1,12 @@
+# Waypoint.get_lane is CARLA ue58-dev only: built for 0.10.0 it does not compile.
+# carla-ref: 0.10.0
+# expect-error: Waypoint.get_lane is not in LibCarla 0.10.0
+import typesafe_carla as carla
+
+def lane_of(w: carla.Waypoint):
+    lane = w.get_lane()
+
+# Compile-only: Codon type-checks a function only when it is called.
+w = carla.Client("localhost", 2000).get_world().get_map().get_waypoint(carla.Location())
+if w is not None:
+    lane_of(w)

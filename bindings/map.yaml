@@ -61,3 +61,28 @@ blocks:
       doc: >-
         Writes the Traffic Manager's in-memory map; empty path: "<map name>.bin".
         LibCarla only logs a file that cannot be opened.
+  # CARLA ue58-dev's road model. Not in LibCarla ue5-dev or 0.10.0.
+  map_roads:
+    get_roads: {call: GetRoads, out: road_list, optional: {name: Map.get_roads, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_road:
+      call: GetRoad
+      args: {road_id: uint32}
+      out: road_or_null
+      optional: {name: Map.get_road, missing_in: ["0.10.0", "ue5-dev"]}
+      doc: "*out = NULL (TSC_OK) when there is no such road."
+    get_lane_section:
+      call: GetLaneSection
+      args: {road_id: uint32, section_id: uint32}
+      out: lane_section_or_null
+      optional: {name: Map.get_lane_section, missing_in: ["0.10.0", "ue5-dev"]}
+    get_lane:
+      call: GetLane
+      args: {road_id: uint32, section_id: uint32, lane_id: int32}
+      out: lane_or_null
+      optional: {name: Map.get_lane, missing_in: ["0.10.0", "ue5-dev"]}
+    get_junctions: {call: GetJunctions, out: junction_list, optional: {name: Map.get_junctions, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_junction_by_id:
+      call: GetJunctionById
+      args: {junction_id: int32}
+      out: junction_or_null
+      optional: {name: Map.get_junction_by_id, missing_in: ["0.10.0", "ue5-dev"]}

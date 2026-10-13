@@ -1051,6 +1051,132 @@ SharedPtr<Waypoint> Waypoint::GetLeft() const {
   return _lane_id == -2 ? MakeWaypoint(-1, _s) : nullptr;
 }
 
+// --- CARLA ue58-dev's road model ----------------------------------------------
+// Road 1, one lane section (0) over its whole length, lanes -1 and -2.
+
+namespace {
+
+bool OnRoad(double s) { return s >= 0.0 && s <= kRoadLength; }
+bool IsMockLane(road::LaneId lane) { return lane == -1 || lane == -2; }
+bool Drives(road::Lane::LaneType type) {
+  return (static_cast<int32_t>(type) & static_cast<int32_t>(road::Lane::LaneType::Driving)) != 0;
+}
+SharedPtr<Lane> MakeLane(road::LaneId lane) {
+  return IsMockLane(lane) ? std::make_shared<Lane>(1u, 0u, lane) : nullptr;
+}
+std::vector<SharedPtr<Lane>> DrivingLanes(road::Lane::LaneType type) {
+  std::vector<SharedPtr<Lane>> lanes;
+  if (Drives(type))
+    for (int32_t lane : kLanes) lanes.push_back(MakeLane(lane));
+  return lanes;
+}
+
+}  // namespace
+
+double Road::GetLength() const { return kRoadLength; }
+
+std::vector<SharedPtr<Lane>> Road::GetLanes(double s, road::Lane::LaneType type) const {
+  return OnRoad(s) ? DrivingLanes(type) : std::vector<SharedPtr<Lane>>{};
+}
+
+SharedPtr<Lane> Road::GetLane(road::SectionId section_id, road::LaneId lane_id) const {
+  return section_id == 0u ? MakeLane(lane_id) : nullptr;
+}
+
+SharedPtr<Lane> Road::GetLaneAt(double s, road::LaneId lane_id) const {
+  return OnRoad(s) ? MakeLane(lane_id) : nullptr;
+}
+
+std::vector<SharedPtr<LaneSection>> Road::GetSections() const {
+  return {std::make_shared<LaneSection>(_id, 0u)};
+}
+
+SharedPtr<LaneSection> Road::GetSection(road::SectionId section_id) const {
+  return section_id == 0u ? std::make_shared<LaneSection>(_id, 0u) : nullptr;
+}
+
+SharedPtr<LaneSection> Road::GetSectionAt(double s) const {
+  return OnRoad(s) ? std::make_shared<LaneSection>(_id, 0u) : nullptr;
+}
+
+geom::Transform Road::GetTransformAt(double s) const {
+  return geom::Transform(geom::Location(static_cast<float>(s),
+                                        static_cast<float>(LaneY(-1) - kLaneWidth / 2.0), 0.0f));
+}
+
+std::vector<SharedPtr<Waypoint>> Road::GetWaypointsAt(double s, road::Lane::LaneType type) const {
+  std::vector<SharedPtr<Waypoint>> result;
+  if (OnRoad(s) && Drives(type))
+    for (int32_t lane : kLanes) result.push_back(MakeWaypoint(lane, s));
+  return result;
+}
+
+std::vector<SharedPtr<Waypoint>> Road::GetWaypoints(double distance,
+                                                    road::Lane::LaneType type) const {
+  std::vector<SharedPtr<Waypoint>> result;
+  if (!Drives(type)) return result;
+  for (int32_t lane : kLanes)
+    for (double s = 0.0; s <= kRoadLength; s += distance) result.push_back(MakeWaypoint(lane, s));
+  return result;
+}
+
+double LaneSection::GetLength() const { return kRoadLength; }
+
+std::vector<SharedPtr<Lane>> LaneSection::GetLanes(road::Lane::LaneType type) const {
+  return DrivingLanes(type);
+}
+
+SharedPtr<Lane> LaneSection::GetLane(road::LaneId lane_id) const { return MakeLane(lane_id); }
+
+bool LaneSection::ContainsLane(road::LaneId lane_id) const { return IsMockLane(lane_id); }
+
+uint64_t Lane::GetUniqueId() const {
+  return (static_cast<uint64_t>(_road_id) << 32) | (static_cast<uint64_t>(_section_id) << 16) |
+         static_cast<uint16_t>(static_cast<int16_t>(_id));
+}
+
+double Lane::GetLength() const { return kRoadLength; }
+
+double Lane::GetWidth(double) const { return kLaneWidth; }
+
+geom::Transform Lane::GetTransform(double s) const {
+  return geom::Transform(geom::Location(static_cast<float>(s), static_cast<float>(LaneY(_id)), 0.0f));
+}
+
+SharedPtr<Lane> Lane::GetRightLane() const { return _id == -1 ? MakeLane(-2) : nullptr; }
+
+SharedPtr<Lane> Lane::GetLeftLane() const { return _id == -2 ? MakeLane(-1) : nullptr; }
+
+SharedPtr<Waypoint> Lane::GetWaypoint(double s) const {
+  return OnRoad(s) ? MakeWaypoint(_id, s) : nullptr;
+}
+
+std::vector<SharedPtr<Waypoint>> Lane::GetWaypoints(double distance) const {
+  std::vector<SharedPtr<Waypoint>> result;
+  for (double s = 0.0; s <= kRoadLength; s += distance) result.push_back(MakeWaypoint(_id, s));
+  return result;
+}
+
+SharedPtr<Road> Waypoint::GetRoad() const { return std::make_shared<Road>(1u); }
+
+SharedPtr<Lane> Waypoint::GetLane() const { return MakeLane(_lane_id); }
+
+std::vector<SharedPtr<Road>> Map::GetRoads() const { return {std::make_shared<Road>(1u)}; }
+
+SharedPtr<Road> Map::GetRoad(road::RoadId road_id) const {
+  return road_id == 1u ? std::make_shared<Road>(1u) : nullptr;
+}
+
+SharedPtr<LaneSection> Map::GetLaneSection(road::RoadId road_id,
+                                           road::SectionId section_id) const {
+  return road_id == 1u && section_id == 0u ? std::make_shared<LaneSection>(1u, 0u) : nullptr;
+}
+
+SharedPtr<Lane> Map::GetLane(road::RoadId road_id, road::SectionId section_id,
+                             road::LaneId lane_id) const {
+  return road_id == 1u && section_id == 0u ? MakeLane(lane_id) : nullptr;
+}
+
 Map::Map() : _name("Carla/Maps/MockTown") {
   _xodr = "<?xml version=\"1.0\"?><OpenDRIVE><header name=\"MockTown\"/>"
           "<road id=\"1\" length=\"200\"/></OpenDRIVE>";

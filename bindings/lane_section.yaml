@@ -1,0 +1,40 @@
+# CARLA ue58-dev's lane section of a road: tsc_lane_section_<name>.
+# Not in LibCarla ue5-dev or 0.10.0: every call is optional there.
+class: carla::client::LaneSection
+prefix: lane_section
+self: {type: const tsc_lane_section_t, name: section, get: lane_section_of}
+blocks:
+  lane_section:
+    get_id: {call: GetId, out: uint32_out, optional: {name: LaneSection.id, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_road_id: {call: GetRoadId, out: uint32_out, optional: {name: LaneSection.road_id, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_unique_id:
+      call: GetUniqueId
+      out: uint64_out
+      optional: {name: LaneSection.__hash__, missing_in: ["0.10.0", "ue5-dev"]}
+    get_road: {call: GetRoad, out: road_or_null, optional: {name: LaneSection.get_road, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_distance:
+      {call: GetDistance, out: double_out, optional: {name: LaneSection.s_start, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_length: {call: GetLength, out: double_out, optional: {name: LaneSection.length, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_lanes:
+      call: GetLanes
+      args: {lane_type: lane_type}
+      out: lane_list
+      optional: {name: LaneSection.get_lanes, missing_in: ["0.10.0", "ue5-dev"]}
+    get_lane:
+      call: GetLane
+      args: {lane_id: int32}
+      out: lane_or_null
+      optional: {name: LaneSection.get_lane, missing_in: ["0.10.0", "ue5-dev"]}
+    contains_lane:
+      call: ContainsLane
+      args: {lane_id: int32}
+      out: bool_out
+      optional: {name: LaneSection.contains_lane, missing_in: ["0.10.0", "ue5-dev"]}
+    get_next_section:
+      call: GetNextSection
+      out: lane_section_or_null
+      optional: {name: LaneSection.get_next_section, missing_in: ["0.10.0", "ue5-dev"]}
+    get_previous_section:
+      call: GetPreviousSection
+      out: lane_section_or_null
+      optional: {name: LaneSection.get_previous_section, missing_in: ["0.10.0", "ue5-dev"]}

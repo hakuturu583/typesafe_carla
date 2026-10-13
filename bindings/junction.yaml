@@ -11,3 +11,29 @@ blocks:
       args: {lane_type: lane_type}
       out: waypoint_pair_list
       doc: "Pairs (entry, exit) as a waypoint list [b0, e0, b1, e1, ...]."
+  # CARLA ue58-dev. Not in LibCarla ue5-dev or 0.10.0.
+  junction_roads:
+    get_connecting_roads:
+      {call: GetConnectingRoads, out: road_list, optional: {name: Junction.get_connecting_roads, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_adjacent_roads:
+      {call: GetAdjacentRoads, out: road_list, optional: {name: Junction.get_adjacent_roads, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_entry_lanes:
+      call: GetEntryLanes
+      args: {lane_type: lane_type}
+      out: lane_list
+      optional: {name: Junction.get_entry_lanes, missing_in: ["0.10.0", "ue5-dev"]}
+    get_exit_lanes:
+      call: GetExitLanes
+      args: {lane_type: lane_type}
+      out: lane_list
+      optional: {name: Junction.get_exit_lanes, missing_in: ["0.10.0", "ue5-dev"]}
+    get_entry_waypoints:
+      call: GetEntryWaypoints
+      args: {lane_type: lane_type}
+      out: waypoint_list
+      optional: {name: Junction.get_entry_waypoints, missing_in: ["0.10.0", "ue5-dev"]}
+    get_exit_waypoints:
+      call: GetExitWaypoints
+      args: {lane_type: lane_type}
+      out: waypoint_list
+      optional: {name: Junction.get_exit_waypoints, missing_in: ["0.10.0", "ue5-dev"]}
