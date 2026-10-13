@@ -133,9 +133,24 @@ def test_check_carla_ref(tmp_path, monkeypatch):
     assert paths.check_carla_ref(lib) == "0.10.0"
     monkeypatch.setenv(paths.ENV_CHECK_REF, "none")
     assert paths.check_carla_ref(lib) == ""
-    monkeypatch.setenv(paths.ENV_CHECK_REF, 'x"; evil')
+    # Any git ref name: escaped in the generated Codon literal.
+    monkeypatch.setenv(paths.ENV_CHECK_REF, 'feature+lidar@"next"')
+    assert paths.check_carla_ref(lib) == 'feature+lidar@"next"'
+    assert 'TSC_CARLA_REF: Static[str] = "feature+lidar@\\"next\\""' in \
+        paths._build_config_source(False, paths.check_carla_ref(lib))
+    monkeypatch.setenv(paths.ENV_CHECK_REF, "bad\nref")
     with pytest.raises(paths.PathError, match="invalid CARLA ref"):
         paths.check_carla_ref(lib)
+
+
+def test_a_ref_with_any_git_ref_characters_compiles(launcher, tmp_path):
+    """The escaped literal is valid Codon (tests/compile/pass/carla_ref_checked.codon)."""
+    from pathlib import Path
+
+    source = Path(__file__).parent / "compile" / "pass" / "carla_ref_checked.codon"
+    result = launcher("build", "--llvm", "-o", str(tmp_path / "out.ll"), str(source),
+                      env={paths.ENV_CHECK_REF: 'feature+lidar@"next"\\x'})
+    assert result.returncode == 0, result.stderr
 
 
 def test_info_shows_strict_mode(launcher):
