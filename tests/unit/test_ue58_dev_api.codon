@@ -50,5 +50,17 @@ assert world.get_publish_tf()
 world.set_publish_tf(False)
 assert not world.get_publish_tf()
 
+# --- EpisodeSettings.adjust_signs_height_to_ground ----------------------------
+s = world.get_settings()
+assert not s.adjust_signs_height_to_ground
+assert carla.WorldSettings() == carla.WorldSettings(adjust_signs_height_to_ground=False)
+assert carla.WorldSettings() != carla.WorldSettings(adjust_signs_height_to_ground=True)
+s.adjust_signs_height_to_ground = True
+world.apply_settings(s)
+assert world.get_settings().adjust_signs_height_to_ground
+s.adjust_signs_height_to_ground = False
+world.apply_settings(s)
+assert not world.get_settings().adjust_signs_height_to_ground
+
 vehicle.destroy()
 print("OK")

@@ -117,7 +117,7 @@ static void test_layout(void) {
   CHECK(offsetof(tsc_vehicle_telemetry_data_t, gear) == 40);
   CHECK(sizeof(tsc_bone_transform_out_t) == 160);
   CHECK(sizeof(tsc_string_list_t) == 16);         /* issue #23 */
-  CHECK(sizeof(tsc_world_settings_ext_t) == 32);  /* issue #23 */
+  CHECK(sizeof(tsc_world_settings_ext_t) == 40);  /* issue #23, ue58-dev field */
   /* Issue #21 */
   CHECK(sizeof(tsc_vehicle_light_state_t) == 8);
   CHECK(sizeof(tsc_environment_object_t) == 152);
@@ -217,6 +217,13 @@ static void test_mock_issue23(void) {
   CHECK_OK(tsc_world_apply_settings(world, &s, 1.0, &frame));
   CHECK_OK(tsc_world_get_settings_ext(world, &s, &ext));
   CHECK(ext.actor_active_distance == 750.0);
+  /* ue58-dev's field: the mock has it. */
+  CHECK(ext.adjust_signs_height_to_ground == 0);
+  ext.adjust_signs_height_to_ground = 1;
+  CHECK_OK(tsc_world_apply_settings_ext(world, &s, &ext, 1.0, &frame));
+  CHECK_OK(tsc_world_get_settings_ext(world, &s, &ext));
+  CHECK(ext.adjust_signs_height_to_ground == 1);
+  ext.adjust_signs_height_to_ground = 0;
   ext.max_culling_distance = 0.0 / 0.0;
   CHECK(tsc_world_apply_settings_ext(world, &s, &ext, 1.0, &frame) == TSC_INVALID_ARGUMENT);
   CHECK_OK(tsc_debug_clear_shapes(world));

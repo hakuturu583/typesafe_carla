@@ -397,6 +397,7 @@ class EpisodeSettings {
   float tile_stream_distance = 3000.f;
   float actor_active_distance = 2000.f;
   bool spectator_as_ego = true;
+  bool adjust_signs_height_to_ground = false;  // ue58-dev
 };
 
 // rpc::WheelPhysicsControl and rpc::VehiclePhysicsControl: the same fields,

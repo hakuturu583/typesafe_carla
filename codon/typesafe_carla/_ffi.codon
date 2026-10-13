@@ -13,8 +13,8 @@ from internal.gc import register_finalizer
 LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
-TSC_ABI_VERSION_MAJOR = 4
-TSC_ABI_VERSION_MINOR = 7
+TSC_ABI_VERSION_MAJOR = 5
+TSC_ABI_VERSION_MINOR = 0
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -91,6 +91,7 @@ class CWorldSettingsExt:
     actor_active_distance: float
     deterministic_ragdolls: i32
     spectator_as_ego: i32
+    adjust_signs_height_to_ground: i32
 
 @tuple
 class CActorAttribute:

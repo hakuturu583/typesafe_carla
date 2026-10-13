@@ -71,8 +71,8 @@ extern "C" {
  *      tsc_command_t.physics_control shares storage with blueprint (#79).
  * 4.7: tsc_queue_signal_count / _wait / _notify, for a background callback
  *      dispatcher (#86). */
-#define TSC_ABI_VERSION_MAJOR 4
-#define TSC_ABI_VERSION_MINOR 7
+#define TSC_ABI_VERSION_MAJOR 5
+#define TSC_ABI_VERSION_MINOR 0
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -1968,6 +1968,9 @@ typedef struct {
   double actor_active_distance;
   int32_t deterministic_ragdolls;
   int32_t spectator_as_ego;
+  /* CARLA ue58-dev. With a LibCarla without it, reads 0 and applying 1 is
+   * TSC_ERROR. */
+  int32_t adjust_signs_height_to_ground;
 } tsc_world_settings_ext_t;
 
 TSC_API tsc_status_t tsc_world_get_settings_ext(tsc_world_t *world, tsc_world_settings_t *out,
