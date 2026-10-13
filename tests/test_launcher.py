@@ -110,6 +110,34 @@ def test_codon_path_dir(tmp_path, monkeypatch):
     assert sorted(p.name for p in lax.parent.iterdir()) == sorted([lax.name, strict.name])
 
 
+def test_codon_path_dir_per_carla_ref(tmp_path, monkeypatch):
+    monkeypatch.setenv(paths.ENV_CACHE_DIR, str(tmp_path))
+    none, ue5, ue58 = (paths.codon_path_dir(False, r) for r in ("", "ue5-dev", "ue58-dev"))
+    assert len({none, ue5, ue58}) == 3
+    assert 'TSC_CARLA_REF: Static[str] = ""' in (none / "_tsc_build_config.codon").read_text()
+    assert 'TSC_CARLA_REF: Static[str] = "ue58-dev"' in (ue58 / "_tsc_build_config.codon").read_text()
+
+
+def test_check_carla_ref(tmp_path, monkeypatch):
+    lib = tmp_path / paths.LIBRARY_NAME
+    lib.write_bytes(b"")
+    info = tmp_path / "BUILD_INFO.json"
+    monkeypatch.delenv(paths.ENV_CHECK_REF, raising=False)
+    info.write_text('{"backend": "libcarla", "carla_git_ref": "ue58-dev"}')
+    assert paths.check_carla_ref(lib) == "ue58-dev"
+    info.write_text('{"backend": "mock", "carla_git_ref": "mock"}')
+    assert paths.check_carla_ref(lib) == ""  # the mock has every method
+    info.unlink()
+    assert paths.check_carla_ref(lib) == ""
+    monkeypatch.setenv(paths.ENV_CHECK_REF, "0.10.0")
+    assert paths.check_carla_ref(lib) == "0.10.0"
+    monkeypatch.setenv(paths.ENV_CHECK_REF, "none")
+    assert paths.check_carla_ref(lib) == ""
+    monkeypatch.setenv(paths.ENV_CHECK_REF, 'x"; evil')
+    with pytest.raises(paths.PathError, match="invalid CARLA ref"):
+        paths.check_carla_ref(lib)
+
+
 def test_info_shows_strict_mode(launcher):
     assert "strict mode        off" in launcher("info").stdout
     assert "strict mode        on" in launcher("--strict", "info").stdout

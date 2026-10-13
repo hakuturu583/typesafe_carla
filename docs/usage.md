@@ -51,7 +51,20 @@ TYPESAFE_CARLA_CARLA_REF=ue58-dev python main.py   # import typesafe_carla.carla
 shows the selected one under `carla ref` and `carla commit`. A program built
 with `typesafe-codon build` keeps the ref it was built with (its RPATH names
 that library's directory). The Codon and Python APIs are the same for every
-ref; a method a ref's LibCarla lacks raises `CarlaError` there.
+ref, but a program is checked against the ref it is built for: calling a
+method that ref's LibCarla lacks is a compile error, e.g. for `0.10.0`:
+
+```
+error: DebugHelper.clear_debug_shape is not in LibCarla 0.10.0: build for another CARLA ref (TYPESAFE_CARLA_CARLA_REF)
+```
+
+`typesafe-codon info` shows the ref under `checked against`.
+`TYPESAFE_CARLA_CHECK_REF=<ref>` checks against another ref than the
+library's, and `TYPESAFE_CARLA_CHECK_REF=none` turns the check off; then such
+a call raises `CarlaError` at run time instead, as it always does in Python
+(`import typesafe_carla.carla`, one build for every ref) and with the mock
+backend. A ref the library does not know (a commit SHA, a newer branch) is not
+checked either.
 
 To build a client for another ref (for example `0.10.0` for a CARLA 0.10.0
 server), have uv build typesafe-carla from its source distribution:

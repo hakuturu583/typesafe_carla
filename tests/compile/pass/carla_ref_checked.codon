@@ -1,0 +1,19 @@
+# The methods tests/compile/fail/carla_ref_*.codon reject for CARLA 0.10.0,
+# built for CARLA ue5-dev, whose LibCarla has them.
+# carla-ref: ue5-dev
+# strict
+import typesafe_carla as carla
+
+def calls(client: carla.Client, vehicle: carla.Vehicle, radio: carla.Sensor):
+    world = client.get_world()
+    world.debug.clear_debug_shape()
+    world.debug.clear_debug_string()
+    tm = client.get_trafficmanager()
+    tm.global_large_vehicle_wide_turn(True)
+    tm.vehicle_large_vehicle_wide_turn(vehicle, True)
+    radio.send("hello")
+
+# Compile-only: Codon type-checks a function only when it is called.
+client = carla.Client("localhost", 2000)
+actors = client.get_world().get_actors()
+calls(client, actors[0].as_vehicle(), actors[1].as_sensor())

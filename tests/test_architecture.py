@@ -150,3 +150,32 @@ def test_actor_shortcuts_reject_subclasses_and_are_marked():
         assert first.strip().startswith(f'_plain_actor_only(self, "{name}'), name
         assert second.strip().startswith(
             f'compat_shortcut("Actor.{name}", "[tsc-compat] Actor.{name}'), name
+
+
+# Optional LibCarla methods whose Codon API calls them only for non-default
+# arguments, a run-time choice: they stay CarlaError at run time.
+_RUNTIME_ONLY_OPTIONALS = {
+    "Client.start_recorder(stop_replayer=False)",
+    "Client.replay_file(replay_weather, offset, map_override)",
+}
+
+
+def test_optional_methods_are_checked_against_the_carla_ref():
+    """A method whose LibCarla call is `optional` (bindings/*.yaml) is a compile
+    error when the program is built for a ref in its `missing_in`: its Codon
+    method calls carla_api_missing_in with the same name and refs
+    (_carla_ref.codon)."""
+    from tools.bindgen import spec
+
+    sources = "\n".join(p.read_text() for p in CODON_SOURCES)
+    optionals = {f.optional: f.missing_in for f in spec.load().generated() if f.optional}
+    assert optionals.keys() >= _RUNTIME_ONLY_OPTIONALS
+    missing = []
+    for name, refs in sorted(optionals.items()):
+        if name in _RUNTIME_ONLY_OPTIONALS:
+            continue
+        assert len(refs) <= 3, f"{name}: carla_api_missing_in takes up to 3 refs"
+        call = f'carla_api_missing_in("{name}", ' + ", ".join(f'"{r}"' for r in refs) + ")"
+        if call not in sources:
+            missing.append(call)
+    assert not missing, f"not in codon/typesafe_carla: {missing}"

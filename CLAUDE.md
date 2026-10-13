@@ -70,7 +70,12 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   (`_native/refs/<ref>/`, `TYPESAFE_CARLA_CARLA_REF`). The C ABI and Codon API
   are their union: a LibCarla method only some refs have is `optional` with
   the others in `missing_in` (e.g. a ue58-dev-only method:
-  `missing_in: ["0.10.0", "ue5-dev"]`).
+  `missing_in: ["0.10.0", "ue5-dev"]`), and its Codon method first calls
+  `carla_api_missing_in("<optional name>", <the same refs>)` (`_carla_ref.codon`):
+  a compile error in a program built for one of them (the launcher writes the
+  library's ref into `_tsc_build_config`; `TYPESAFE_CARLA_CHECK_REF` overrides
+  it, `none` for no check). `tests/test_architecture.py` checks the pairing;
+  a `tests/compile/fail` case uses a `# carla-ref: <ref>` line.
 - Versions: `python/typesafe_carla/__init__.py` and
   `codon/typesafe_carla/__init__.codon` must agree.
 

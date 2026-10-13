@@ -1,0 +1,31 @@
+# Compile-time check of API calls against the CARLA ref the program is built
+# for. The launcher writes TSC_CARLA_REF into the generated _tsc_build_config
+# module (typesafe_carla.paths.check_carla_ref): the ref of the native library
+# it links (TYPESAFE_CARLA_CARLA_REF selects one of a release wheel's), or
+# TYPESAFE_CARLA_CHECK_REF. "" checks nothing: the mock backend, the CPython
+# package (typesafe_carla.carla, one build for every ref) and
+# TYPESAFE_CARLA_CHECK_REF=none.
+#
+# A method whose LibCarla call is `optional` in bindings/*.yaml calls
+# carla_api_missing_in() with the same refs as its `missing_in` first
+# (tests/test_architecture.py checks this). Codon only realizes the functions
+# a program calls, so a program that uses such a method and is built for one
+# of those refs fails to compile; otherwise the call costs nothing. A ref that
+# is not listed (a newer branch, a commit SHA) compiles, and the native
+# library raises CarlaError at run time if its LibCarla lacks the method.
+from _tsc_build_config import TSC_CARLA_REF
+
+CARLA_REF: Static[str] = TSC_CARLA_REF
+
+def carla_api_missing_in(api: Literal[str], r1: Literal[str], r2: Literal[str] = "",
+                         r3: Literal[str] = ""):
+    """A compile error if the program is built for CARLA `r1`, `r2` or `r3`,
+    whose LibCarla has no `api`. (Static string comparisons only: `in` on a
+    Literal[str] is not evaluated at compile time.)"""
+    if CARLA_REF != "":
+        if CARLA_REF == r1:
+            compile_error(api + " is not in LibCarla " + r1 + ": build for another CARLA ref (TYPESAFE_CARLA_CARLA_REF)")
+        if CARLA_REF == r2:
+            compile_error(api + " is not in LibCarla " + r2 + ": build for another CARLA ref (TYPESAFE_CARLA_CARLA_REF)")
+        if CARLA_REF == r3:
+            compile_error(api + " is not in LibCarla " + r3 + ": build for another CARLA ref (TYPESAFE_CARLA_CARLA_REF)")

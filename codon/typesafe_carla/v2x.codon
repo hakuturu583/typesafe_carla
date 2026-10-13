@@ -36,6 +36,7 @@ from ._ffi import (CItsHeader, CItsValue, CItsReferencePosition, CCamBasicVehicl
                    tsc_cam_event_get_protected_zones, tsc_cam_event_get_path_history,
                    tsc_custom_v2x_event_get_message_count, tsc_custom_v2x_event_get_message)
 from .errors import _check, CarlaError, _normalize_index, _u8
+from ._carla_ref import carla_api_missing_in
 from .map import _read_buffer
 from .sensor import SensorData, Sensor, _Measurement
 from ._fmt import fmt_f32
@@ -480,7 +481,9 @@ class Sensor:
         server-side sensor LibCarla only logs a warning, as in the Python API.
         Raises ActorTypeError on a client-side sensor (lane invasion), also
         with a LibCarla without V2X (CARLA 0.10.0); there, any other sensor
-        raises CarlaError ("... is not available in LibCarla 0.10.0")."""
+        raises CarlaError ("... is not available in LibCarla 0.10.0"), and a
+        program built for CARLA 0.10.0 does not compile."""
+        carla_api_missing_in("Sensor.send", "0.10.0")
         _check(tsc_sensor_send(self._h.ptr, message._bytes, message._size))
 
     def send(self, message: str):

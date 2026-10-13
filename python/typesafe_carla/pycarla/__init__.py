@@ -1211,7 +1211,11 @@ def _compile(source: Path, output: Path, env: dict[str, str] | None,
     flags = ["--disable-native"] if portable else []
     return typesafe_codon("build", "--pyext", "--relocation-model=pic", *flags, "--module", MODULE,
                           "-o", str(output), str(source),
-                          env={"TYPESAFE_CARLA_COMPAT_WARNINGS": "0", **(env or {})})
+                          # One build for every CARLA ref (typesafe_carla.carla is shared by a
+                          # wheel's native libraries): a method a ref lacks raises CarlaError
+                          # at run time, not a compile error (paths.check_carla_ref).
+                          env={"TYPESAFE_CARLA_COMPAT_WARNINGS": "0",
+                               "TYPESAFE_CARLA_CHECK_REF": "none", **(env or {})})
 
 
 def _probe(out: Path, gen: Gen, shards: int, env: dict[str, str] | None) -> dict[str, str]:

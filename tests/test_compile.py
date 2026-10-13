@@ -6,8 +6,9 @@ must fail to compile, with the message given by the file's `# expect-error:`
 line, so a program that fails for an unrelated reason (a typo, a missing
 import) does not count as a pass. tests/compile/strict_fail/*.codon use a
 Python-API compatibility shortcut: they must compile normally and fail in
-strict mode with their `# expect-error:` message. Programs are compiled to
-LLVM IR only; never run.
+strict mode with their `# expect-error:` message. A `# carla-ref: <ref>` line
+compiles the program for that CARLA ref (TYPESAFE_CARLA_CHECK_REF; otherwise
+the mock's: none). Programs are compiled to LLVM IR only; never run.
 """
 
 from __future__ import annotations
@@ -25,8 +26,10 @@ STRICT_FAIL = sorted((COMPILE_DIR / "strict_fail").glob("*.codon"))
 
 def _compile(launcher, source: Path, tmp_path: Path, strict: bool = False):
     flags = ["--strict"] if strict else []
+    refs = [line.split(":", 1)[1].strip() for line in source.read_text().splitlines()
+            if line.startswith("# carla-ref:")]
     return launcher(*flags, "build", "--llvm", "-o", str(tmp_path / (source.stem + ".ll")),
-                    str(source))
+                    str(source), env={"TYPESAFE_CARLA_CHECK_REF": refs[0] if refs else "none"})
 
 
 def expected_error(source: Path) -> str:

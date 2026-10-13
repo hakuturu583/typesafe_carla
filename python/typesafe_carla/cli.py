@@ -33,7 +33,10 @@ not be produced or a fallback was taken.
 The launcher sets:
 
 * ``CODON_PATH``: a generated directory with the typesafe_carla Codon sources
-  and the build configuration (``paths.codon_path_dir``);
+  and the build configuration (``paths.codon_path_dir``): strict mode, and the
+  CARLA ref API calls are checked against (``paths.check_carla_ref``: the
+  native library's, or ``TYPESAFE_CARLA_CHECK_REF``; a method that ref's
+  LibCarla lacks is a compile error);
 * ``TYPESAFE_CARLA_LIB``: the native library the Codon module loads (of the
   CARLA ref ``TYPESAFE_CARLA_CARLA_REF`` selects, when the installation has
   more than one: ``typesafe-codon info`` lists them);
@@ -86,7 +89,8 @@ def build_environment(tc: toolchain.Toolchain, strict: bool = False) -> dict[str
     env = os.environ.copy()
     lib = paths.native_library()
     env["CODON_DIR"] = str(tc.codon_dir)
-    env["CODON_PATH"] = _prepend(str(paths.codon_path_dir(strict)), env.get("CODON_PATH"))
+    env["CODON_PATH"] = _prepend(str(paths.codon_path_dir(strict, paths.check_carla_ref(lib))),
+                                 env.get("CODON_PATH"))
     env[paths.ENV_LIB] = str(lib)
     ld = [str(lib.parent)] + [str(d) for d in tc.library_dirs()]
     env["LD_LIBRARY_PATH"] = _prepend(os.pathsep.join(ld), env.get("LD_LIBRARY_PATH"))
@@ -439,7 +443,10 @@ def _info(tc: toolchain.Toolchain | None, error: str | None, strict: bool) -> in
         print(f"codon              NOT FOUND: {error}")
     try:
         print(f"codon modules      {paths.codon_modules_dir()}")
-        print(f"CODON_PATH         {paths.codon_path_dir(strict)}")
+        ref = paths.check_carla_ref()
+        print(f"CODON_PATH         {paths.codon_path_dir(strict, ref)}")
+        print(f"checked against    {'CARLA ' + ref if ref else 'no CARLA ref'} "
+              f"(the library's ref, or {paths.ENV_CHECK_REF})")
     except paths.PathError as e:
         print(f"codon modules      NOT FOUND: {e}")
     try:

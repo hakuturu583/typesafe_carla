@@ -27,8 +27,10 @@ def _require_server(backend):
 
 @pytest.mark.parametrize("source", PROGRAMS, ids=lambda p: p.stem)
 def test_integration(launcher, source):
+    # The programs call methods a LibCarla may lack (0.10.0) and check the
+    # CarlaError: no compile-time check of the CARLA ref (paths.check_carla_ref).
     result = launcher("run", "-release", str(source), timeout=900,
-                      env={"TSC_TEST_DIR": str(source.parent)})
+                      env={"TSC_TEST_DIR": str(source.parent), "TYPESAFE_CARLA_CHECK_REF": "none"})
     output = result.stdout + result.stderr
     print(output)
     assert result.returncode == 0, output
