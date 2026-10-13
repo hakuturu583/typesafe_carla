@@ -13,7 +13,8 @@ selects another at run time (typesafe_carla.paths).
 The wheels must be the same version and platform and hold the same files
 outside `_native/`: only the native library may differ between refs. The ref
 of each wheel is the `carla_git_ref` of its BUILD_INFO.json; refs must be
-distinct and usable as a directory name.
+distinct, and every ref but the base wheel's must be usable as a directory
+name (no "/").
 """
 
 from __future__ import annotations
@@ -45,12 +46,16 @@ def _members(wheel: zipfile.ZipFile) -> dict[str, bytes]:
             if not n.endswith("/") and not n.endswith(".dist-info/RECORD")}
 
 
-def _ref_of(name: str, files: dict[str, bytes]) -> str:
+def _ref_of(name: str, files: dict[str, bytes], directory: bool) -> str:
+    """The wheel's CARLA ref; `directory`: it must also name a directory under REFS
+    (the base wheel's stays in _native/, so any ref will do there)."""
     try:
         ref = json.loads(files[f"{NATIVE}/BUILD_INFO.json"])["carla_git_ref"]
     except (KeyError, ValueError) as e:
         raise MergeError(f"{name}: no CARLA ref in {NATIVE}/BUILD_INFO.json ({e!r})") from None
-    if not isinstance(ref, str) or not _REF_DIR.fullmatch(ref) or ref == "refs":
+    if not isinstance(ref, str) or not ref:
+        raise MergeError(f"{name}: invalid CARLA ref {ref!r} in {NATIVE}/BUILD_INFO.json")
+    if directory and (not _REF_DIR.fullmatch(ref) or ref == "refs"):
         raise MergeError(f"{name}: CARLA ref {ref!r} cannot name a directory under {REFS}")
     return ref
 
@@ -61,7 +66,7 @@ def merge(base: Path, others: list[Path]) -> list[str]:
         base_files = _members(z)
     if any(n.startswith(REFS + "/") for n in base_files):
         raise MergeError(f"{base.name} already has {REFS}/")
-    refs = [_ref_of(base.name, base_files)]
+    refs = [_ref_of(base.name, base_files, directory=False)]
     shared = {n: d for n, d in base_files.items()
               if not n.startswith(NATIVE + "/") and ".dist-info/" not in n}
     added: dict[str, bytes] = {}
@@ -70,7 +75,7 @@ def merge(base: Path, others: list[Path]) -> list[str]:
             raise MergeError(f"{other.name} is not the same version and platform as {base.name}")
         with zipfile.ZipFile(other) as z:
             files = _members(z)
-        ref = _ref_of(str(other), files)
+        ref = _ref_of(str(other), files, directory=True)
         if ref in refs:
             raise MergeError(f"{other}: CARLA ref {ref} is already in the wheel")
         theirs = {n: d for n, d in files.items()

@@ -404,3 +404,12 @@ def test_refs_cli(refs_file, capsys):
     assert release_tag.main(["refs", "0.10.0"], fetch, refs_file=refs_file) == 0
     out = dict(ln.split("=", 1) for ln in capsys.readouterr().out.splitlines())
     assert json.loads(out["carla_matrix"])[0]["ref"] == "0.10.0"
+
+
+def test_refs_cli_accepts_a_slash_only_in_the_first_ref(capsys):
+    fetch = fake_github_per_ref({"feature%2Fx": [commit_json()],
+                                 "ue58-dev": [commit_json(SHA2)]})
+    assert release_tag.main(["refs", "feature/x", "ue58-dev"], fetch) == 0
+    capsys.readouterr()
+    assert release_tag.main(["refs", "ue58-dev", "feature/x"], fetch) == 1
+    assert "only the first ref" in capsys.readouterr().err

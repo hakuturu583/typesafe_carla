@@ -166,6 +166,15 @@ def release_refs(path: Path = REFS_FILE) -> list[str]:
     return refs
 
 
+def check_bundled(refs: list[str]) -> None:
+    """Every ref but the first goes to typesafe_carla/_native/refs/<ref>/, so it
+    must name a directory; fail before building rather than when merging."""
+    for ref in refs[1:]:
+        if not _LISTED_REF.fullmatch(ref):
+            raise TagError(f"CARLA ref {ref!r} cannot name a directory "
+                           "(typesafe_carla/_native/refs/<ref>); only the first ref may contain '/'")
+
+
 def parse(tag: str, expected_version: str) -> ReleaseTag:
     form = ("expected <version>-<YYYYMMDD> or <version>-<CARLA ref>-<YYYYMMDD>, "
             "e.g. 0.5.0-20261009 or 0.1.0-ue5-dev-20260915")
@@ -370,6 +379,7 @@ def main(argv: list[str] | None = None, fetch: Fetch = github_fetch,
             return 0
         if args.command == "refs":
             refs = args.refs or release_refs(refs_file)
+            check_bundled(refs)
             resolved = resolve_refs(refs, None, fetch)
         elif args.command == "make":
             if args.ref is not None:

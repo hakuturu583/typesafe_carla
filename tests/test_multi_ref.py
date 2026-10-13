@@ -64,6 +64,21 @@ def test_merge_rejects_a_ref_twice(tmp_path):
         merge_native_wheels.merge(base, [other])
 
 
+def test_a_base_ref_with_a_slash_stays_in_native(tmp_path):
+    base = make_wheel(tmp_path / "a", "feature/my-branch")
+    assert merge_native_wheels.merge(base, []) == ["feature/my-branch"]
+    other = make_wheel(tmp_path / "b", "ue58-dev")
+    base = make_wheel(tmp_path / "c", "feature/my-branch")
+    assert merge_native_wheels.merge(base, [other]) == ["feature/my-branch", "ue58-dev"]
+
+
+def test_merge_rejects_another_ref_with_a_slash(tmp_path):
+    base = make_wheel(tmp_path / "a", "ue5-dev")
+    other = make_wheel(tmp_path / "b", "feature/my-branch")
+    with pytest.raises(merge_native_wheels.MergeError, match="directory"):
+        merge_native_wheels.merge(base, [other])
+
+
 def test_merge_rejects_wheels_that_differ_outside_native(tmp_path):
     base = make_wheel(tmp_path / "a", "ue5-dev")
     other = make_wheel(tmp_path / "b", "ue58-dev",
