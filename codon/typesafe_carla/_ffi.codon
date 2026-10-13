@@ -1081,6 +1081,13 @@ from C import LIB.tsc_vehicle_enable_chrono_physics(cobj, u64, float, cobj, int,
 # BEGIN GENERATED vehicle_bones from bindings/vehicle_ext.yaml, do not edit
 from C import LIB.tsc_vehicle_get_vehicle_bone_world_transforms(cobj, Ptr[CTransform], int, Ptr[int]) -> i32
 # END GENERATED vehicle_bones
+# BEGIN GENERATED vehicle_wheel_animation from bindings/vehicle_ext.yaml, do not edit
+from C import LIB.tsc_vehicle_set_wheel_animation_override(cobj, i32) -> i32
+from C import LIB.tsc_vehicle_set_wheel_pitch_angle(cobj, i32, float) -> i32
+from C import LIB.tsc_vehicle_get_wheel_pitch_angle(cobj, i32, Ptr[float]) -> i32
+from C import LIB.tsc_vehicle_set_wheel_suspension_offset(cobj, i32, float) -> i32
+from C import LIB.tsc_vehicle_get_wheel_suspension_offset(cobj, i32, Ptr[float]) -> i32
+# END GENERATED vehicle_wheel_animation
 from C import LIB.tsc_vehicle_get_telemetry_data(cobj, Ptr[CVehicleTelemetryData], Ptr[CWheelTelemetryData], int, Ptr[int]) -> i32
 # BEGIN GENERATED walker_pose from bindings/walker.yaml, do not edit
 from C import LIB.tsc_walker_blend_pose(cobj, float) -> i32
@@ -1218,6 +1225,11 @@ from C import LIB.tsc_world_apply_float_color_texture_to_objects(cobj, Ptr[CStri
 from C import LIB.tsc_world_apply_textures_to_objects(cobj, Ptr[CString], int, Ptr[CTextureColor], Ptr[CTextureFloatColor], Ptr[CTextureFloatColor], Ptr[CTextureFloatColor]) -> i32
 from C import LIB.tsc_world_get_light_manager(cobj, Ptr[cobj]) -> i32
 # END GENERATED world
+# BEGIN GENERATED world_ue58 from bindings/world.yaml, do not edit
+from C import LIB.tsc_world_get_ego_spawn_points(cobj, Ptr[CTransform], int, Ptr[int]) -> i32
+from C import LIB.tsc_world_get_publish_tf(cobj, Ptr[i32]) -> i32
+from C import LIB.tsc_world_set_publish_tf(cobj, i32) -> i32
+# END GENERATED world_ue58
 from C import LIB.tsc_vehicle_light_state_list_free(Ptr[CVehicleLightStateList]) -> None
 from C import LIB.tsc_bounding_box_list_free(Ptr[CBoundingBoxList]) -> None
 from C import LIB.tsc_environment_object_list_free(Ptr[CEnvironmentObjectList]) -> None

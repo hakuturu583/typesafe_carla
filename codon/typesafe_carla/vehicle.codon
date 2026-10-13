@@ -19,8 +19,11 @@ from ._ffi import (CVehicleAckermannControl, CAckermannControllerSettings, CWhee
                    tsc_vehicle_set_wheel_steer_direction, tsc_vehicle_use_carsim_road,
                    tsc_vehicle_enable_carsim, tsc_vehicle_enable_chrono_physics,
                    tsc_vehicle_get_telemetry_data, tsc_vehicle_get_vehicle_bone_world_transforms,
-                   TSC_INVALID_ARGUMENT)
+                   tsc_vehicle_set_wheel_animation_override, tsc_vehicle_set_wheel_pitch_angle,
+                   tsc_vehicle_get_wheel_pitch_angle, tsc_vehicle_set_wheel_suspension_offset,
+                   tsc_vehicle_get_wheel_suspension_offset, TSC_INVALID_ARGUMENT)
 from .errors import _check, _i32, CarlaError
+from ._carla_ref import carla_api_missing_in
 from .map import _read_buffer
 from .geometry import Transform
 from .actor import Vehicle
@@ -448,6 +451,49 @@ class Vehicle:
         leaves the wheel positional-only and calls the angle `wheel_location`."""
         _check(tsc_vehicle_set_wheel_steer_direction(
             self._h.ptr, _i32(wheel.value, "wheel"), wheel_location))
+
+    # The wheel animation override (CARLA ue58-dev; a compile error when built
+    # for ue5-dev or 0.10.0, whose LibCarla lacks it).
+
+    def set_wheel_animation_override(self, enabled: bool):
+        """While enabled, the wheels show only the values set with
+        set_wheel_steer_direction, set_wheel_pitch_angle and
+        set_wheel_suspension_offset, from the pose they had. Visual only. The
+        server raises CarlaError for a vehicle whose animation blueprint does
+        not derive from CarlaVehicleAnimationInstance."""
+        carla_api_missing_in("Vehicle.set_wheel_animation_override", "0.10.0", "ue5-dev")
+        _check(tsc_vehicle_set_wheel_animation_override(self._h.ptr, i32(int(enabled))))
+
+    def set_wheel_pitch_angle(self, wheel_location: VehicleWheelLocation, angle_in_deg: float):
+        """The wheel's spin angle, degrees (visual). CarlaError unless the wheel
+        animation override is enabled."""
+        carla_api_missing_in("Vehicle.set_wheel_pitch_angle", "0.10.0", "ue5-dev")
+        _check(tsc_vehicle_set_wheel_pitch_angle(
+            self._h.ptr, _i32(wheel_location.value, "wheel_location"), angle_in_deg))
+
+    def get_wheel_pitch_angle(self, wheel_location: VehicleWheelLocation) -> float:
+        """The wheel's spin angle, degrees: the one set under the override,
+        else the physics' (or, without physics, the visual one)."""
+        carla_api_missing_in("Vehicle.get_wheel_pitch_angle", "0.10.0", "ue5-dev")
+        out = Ptr[float](1)
+        _check(tsc_vehicle_get_wheel_pitch_angle(
+            self._h.ptr, _i32(wheel_location.value, "wheel_location"), out))
+        return out[0]
+
+    def set_wheel_suspension_offset(self, wheel_location: VehicleWheelLocation, offset: float):
+        """The wheel's suspension offset, m along the suspension axis, positive
+        when compressed (visual). CarlaError unless the override is enabled."""
+        carla_api_missing_in("Vehicle.set_wheel_suspension_offset", "0.10.0", "ue5-dev")
+        _check(tsc_vehicle_set_wheel_suspension_offset(
+            self._h.ptr, _i32(wheel_location.value, "wheel_location"), offset))
+
+    def get_wheel_suspension_offset(self, wheel_location: VehicleWheelLocation) -> float:
+        """The wheel's suspension offset, m (as get_wheel_pitch_angle)."""
+        carla_api_missing_in("Vehicle.get_wheel_suspension_offset", "0.10.0", "ue5-dev")
+        out = Ptr[float](1)
+        _check(tsc_vehicle_get_wheel_suspension_offset(
+            self._h.ptr, _i32(wheel_location.value, "wheel_location"), out))
+        return out[0]
 
     def get_vehicle_bone_world_transforms(self) -> List[Transform]:
         """One RPC. Needs a LibCarla with Vehicle::GetVehicleBoneWorldTransforms

@@ -1777,6 +1777,22 @@ TSC_API tsc_status_t tsc_vehicle_get_telemetry_data(tsc_vehicle_t *vehicle,
 TSC_API tsc_status_t tsc_vehicle_get_vehicle_bone_world_transforms(
     tsc_vehicle_t *vehicle, tsc_transform_t *out, size_t capacity, size_t *out_count);
 /* END GENERATED vehicle_bones */
+/* BEGIN GENERATED vehicle_wheel_animation from bindings/vehicle_ext.yaml, do not edit */
+/* While enabled, the wheels show only the steer / pitch / suspension values set. */
+TSC_API tsc_status_t tsc_vehicle_set_wheel_animation_override(tsc_vehicle_t *vehicle,
+                                                              int32_t enabled);
+/* The server raises an error unless the wheel animation override is enabled. */
+TSC_API tsc_status_t tsc_vehicle_set_wheel_pitch_angle(tsc_vehicle_t *vehicle,
+                                                       int32_t wheel_location, double angle_in_deg);
+/* *out in degrees. */
+TSC_API tsc_status_t tsc_vehicle_get_wheel_pitch_angle(tsc_vehicle_t *vehicle,
+                                                       int32_t wheel_location, double *out);
+/* The server raises an error unless the wheel animation override is enabled. */
+TSC_API tsc_status_t tsc_vehicle_set_wheel_suspension_offset(tsc_vehicle_t *vehicle,
+                                                             int32_t wheel_location, double offset);
+TSC_API tsc_status_t tsc_vehicle_get_wheel_suspension_offset(tsc_vehicle_t *vehicle,
+                                                             int32_t wheel_location, double *out);
+/* END GENERATED vehicle_wheel_animation */
 
 /* --- Walker bones and poses ------------------------------------------------ */
 
@@ -2185,6 +2201,13 @@ TSC_API tsc_status_t tsc_world_apply_textures_to_objects(
     const tsc_texture_float_color_t *ao_roughness_metallic_emissive_texture);
 TSC_API tsc_status_t tsc_world_get_light_manager(tsc_world_t *world, tsc_light_manager_t **out);
 /* END GENERATED world */
+/* BEGIN GENERATED world_ue58 from bindings/world.yaml, do not edit */
+/* Two-call pattern: pass out=NULL to get the count. Copies min(capacity, n). */
+TSC_API tsc_status_t tsc_world_get_ego_spawn_points(
+    tsc_world_t *world, tsc_transform_t *out, size_t capacity, size_t *out_count);
+TSC_API tsc_status_t tsc_world_get_publish_tf(tsc_world_t *world, int32_t *out);
+TSC_API tsc_status_t tsc_world_set_publish_tf(tsc_world_t *world, int32_t publish_tf);
+/* END GENERATED world_ue58 */
 
 /* --- Light manager (World::GetLightManager) ------------------------------------------ */
 

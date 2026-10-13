@@ -1145,6 +1145,12 @@ class Vehicle : public Actor {
   // Visual only, as on the server: GetWheelSteerAngle reports the physics angle.
   void SetWheelSteerDirection(WheelLocation wheel_location, float angle_in_deg);
   float GetWheelSteerAngle(WheelLocation wheel_location);
+  // CARLA ue58-dev only (the mock has the union of the supported refs' API).
+  void SetWheelAnimationOverride(bool enabled);
+  void SetWheelPitchAngle(WheelLocation wheel_location, float angle_in_deg);
+  float GetWheelPitchAngle(WheelLocation wheel_location);
+  void SetWheelSuspensionOffset(WheelLocation wheel_location, float offset);
+  float GetWheelSuspensionOffset(WheelLocation wheel_location);
   TelemetryData GetTelemetryData() const;
   // No CarSim / Chrono on the mock "server": accepted and recorded, like the
   // asynchronous RPCs a server without the plugins ignores.
@@ -1424,6 +1430,10 @@ class World {
   void SetPedestriansSeed(unsigned int seed);
   float GetIMUSensorGravity() const;  // ue5-dev only
   void SetIMUSensorGravity(float gravity);
+  // CARLA ue58-dev only.
+  std::vector<geom::Transform> GetEgoSpawnPoints() const;
+  bool GetPublishTF() const;
+  void SetPublishTF(bool publish_tf);
   SharedPtr<LightManager> GetLightManager() const;
   size_t OnTick(std::function<void(WorldSnapshot)> callback);
   void RemoveOnTick(size_t callback_id);

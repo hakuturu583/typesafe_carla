@@ -164,6 +164,31 @@ class Actor:
         compat_shortcut("Actor.set_wheel_steer_direction", "[tsc-compat] Actor.set_wheel_steer_direction() without as_vehicle()", "call as_vehicle() first")
         return self.as_vehicle().set_wheel_steer_direction(*args, **kwargs)
 
+    def set_wheel_animation_override(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_wheel_animation_override()")
+        compat_shortcut("Actor.set_wheel_animation_override", "[tsc-compat] Actor.set_wheel_animation_override() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().set_wheel_animation_override(*args, **kwargs)
+
+    def set_wheel_pitch_angle(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_wheel_pitch_angle()")
+        compat_shortcut("Actor.set_wheel_pitch_angle", "[tsc-compat] Actor.set_wheel_pitch_angle() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().set_wheel_pitch_angle(*args, **kwargs)
+
+    def get_wheel_pitch_angle(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_wheel_pitch_angle()")
+        compat_shortcut("Actor.get_wheel_pitch_angle", "[tsc-compat] Actor.get_wheel_pitch_angle() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_wheel_pitch_angle(*args, **kwargs)
+
+    def set_wheel_suspension_offset(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "set_wheel_suspension_offset()")
+        compat_shortcut("Actor.set_wheel_suspension_offset", "[tsc-compat] Actor.set_wheel_suspension_offset() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().set_wheel_suspension_offset(*args, **kwargs)
+
+    def get_wheel_suspension_offset(self: S, *args, S: type, **kwargs):
+        _plain_actor_only(self, "get_wheel_suspension_offset()")
+        compat_shortcut("Actor.get_wheel_suspension_offset", "[tsc-compat] Actor.get_wheel_suspension_offset() without as_vehicle()", "call as_vehicle() first")
+        return self.as_vehicle().get_wheel_suspension_offset(*args, **kwargs)
+
     def get_vehicle_bone_world_transforms(self: S, *args, S: type, **kwargs):
         _plain_actor_only(self, "get_vehicle_bone_world_transforms()")
         compat_shortcut("Actor.get_vehicle_bone_world_transforms", "[tsc-compat] Actor.get_vehicle_bone_world_transforms() without as_vehicle()", "call as_vehicle() first")

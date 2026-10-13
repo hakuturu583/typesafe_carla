@@ -58,6 +58,10 @@ struct ActorData {
   uint32_t open_doors = 0u;  // bit per rpc::VehicleDoor below All
   bool debug_telemetry = false;
   std::map<int, float> wheel_steer_direction;  // visual only
+  // CARLA ue58-dev: the wheel animation override and the poses set under it.
+  bool wheel_animation_override = false;
+  std::map<int, float> wheel_pitch;
+  std::map<int, float> wheel_suspension_offset;
   rpc::VehicleFailureState failure_state = rpc::VehicleFailureState::None;
   std::string carsim_file;
   bool carsim_road = false;
@@ -2034,6 +2038,55 @@ void Vehicle::SetWheelSteerDirection(WheelLocation wheel_location, float angle_i
     WheelAt(a, wheel_location);
     a.wheel_steer_direction[static_cast<int>(wheel_location)] = angle_in_deg;
     return 0;
+  });
+}
+
+// The ue58-dev wheel animation override. As on its server, the setters fail
+// unless the override is on; the getters return what was set under it, else
+// the mock's physics (no rolling, no suspension travel): 0.
+void Vehicle::SetWheelAnimationOverride(bool enabled) {
+  WithData([&](mock::ActorData &a) { a.wheel_animation_override = enabled; return 0; });
+}
+
+static void RequireWheelOverride(const mock::ActorData &a, const char *what) {
+  if (!a.wheel_animation_override)
+    throw std::runtime_error(std::string(what) +
+                             ": the wheel animation override is not enabled "
+                             "(set_wheel_animation_override)");
+}
+
+void Vehicle::SetWheelPitchAngle(WheelLocation wheel_location, float angle_in_deg) {
+  WithData([&](mock::ActorData &a) {
+    WheelAt(a, wheel_location);
+    RequireWheelOverride(a, "SetWheelPitchAngle");
+    a.wheel_pitch[static_cast<int>(wheel_location)] = angle_in_deg;
+    return 0;
+  });
+}
+
+float Vehicle::GetWheelPitchAngle(WheelLocation wheel_location) {
+  return WithData([&](mock::ActorData &a) {
+    WheelAt(a, wheel_location);
+    const auto it = a.wheel_pitch.find(static_cast<int>(wheel_location));
+    return a.wheel_animation_override && it != a.wheel_pitch.end() ? it->second : 0.0f;
+  });
+}
+
+void Vehicle::SetWheelSuspensionOffset(WheelLocation wheel_location, float offset) {
+  WithData([&](mock::ActorData &a) {
+    WheelAt(a, wheel_location);
+    RequireWheelOverride(a, "SetWheelSuspensionOffset");
+    a.wheel_suspension_offset[static_cast<int>(wheel_location)] = offset;
+    return 0;
+  });
+}
+
+float Vehicle::GetWheelSuspensionOffset(WheelLocation wheel_location) {
+  return WithData([&](mock::ActorData &a) {
+    WheelAt(a, wheel_location);
+    const auto it = a.wheel_suspension_offset.find(static_cast<int>(wheel_location));
+    return a.wheel_animation_override && it != a.wheel_suspension_offset.end() ? it->second
+                                                                               : 0.0f;
   });
 }
 

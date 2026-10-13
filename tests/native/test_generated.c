@@ -218,6 +218,11 @@ int main(void) {
   expect_null_rejected(tsc_vehicle_enable_carsim(NULL, NULL, 1), "tsc_vehicle_enable_carsim");
   expect_null_rejected(tsc_vehicle_enable_chrono_physics(NULL, 0, NAN, NULL, 1, NULL, 1, NULL, 1, NULL, 1), "tsc_vehicle_enable_chrono_physics");
   expect_null_rejected(tsc_vehicle_get_vehicle_bone_world_transforms(NULL, (tsc_transform_t[1]){0}, 0, (size_t[1]){0}), "tsc_vehicle_get_vehicle_bone_world_transforms");
+  expect_null_rejected(tsc_vehicle_set_wheel_animation_override(NULL, 0), "tsc_vehicle_set_wheel_animation_override");
+  expect_null_rejected(tsc_vehicle_set_wheel_pitch_angle(NULL, 99, NAN), "tsc_vehicle_set_wheel_pitch_angle");
+  expect_null_rejected(tsc_vehicle_get_wheel_pitch_angle(NULL, 99, (double[1]){0}), "tsc_vehicle_get_wheel_pitch_angle");
+  expect_null_rejected(tsc_vehicle_set_wheel_suspension_offset(NULL, 99, NAN), "tsc_vehicle_set_wheel_suspension_offset");
+  expect_null_rejected(tsc_vehicle_get_wheel_suspension_offset(NULL, 99, (double[1]){0}), "tsc_vehicle_get_wheel_suspension_offset");
   expect_null_rejected(tsc_walker_apply_control(NULL, NULL), "tsc_walker_apply_control");
   expect_null_rejected(tsc_walker_get_control(NULL, (tsc_walker_control_t[1]){0}), "tsc_walker_get_control");
   expect_null_rejected(tsc_walker_set_bones(NULL, NULL, 1), "tsc_walker_set_bones");
@@ -283,6 +288,9 @@ int main(void) {
   expect_null_rejected(tsc_world_apply_float_color_texture_to_objects(NULL, NULL, 1, 99, NULL), "tsc_world_apply_float_color_texture_to_objects");
   expect_null_rejected(tsc_world_apply_textures_to_objects(NULL, NULL, 1, NULL, NULL, NULL, NULL), "tsc_world_apply_textures_to_objects");
   expect_null_rejected(tsc_world_get_light_manager(NULL, (tsc_light_manager_t *[1]){NULL}), "tsc_world_get_light_manager");
+  expect_null_rejected(tsc_world_get_ego_spawn_points(NULL, (tsc_transform_t[1]){0}, 0, (size_t[1]){0}), "tsc_world_get_ego_spawn_points");
+  expect_null_rejected(tsc_world_get_publish_tf(NULL, (int32_t[1]){0}), "tsc_world_get_publish_tf");
+  expect_null_rejected(tsc_world_set_publish_tf(NULL, 0), "tsc_world_set_publish_tf");
   expect_null_rejected(tsc_world_snapshot_get_id(NULL, (uint64_t[1]){0}), "tsc_world_snapshot_get_id");
   expect_null_rejected(tsc_world_snapshot_get_timestamp(NULL, (tsc_timestamp_t[1]){0}), "tsc_world_snapshot_get_timestamp");
   if (tsc_actor_list_size(NULL) != 0) { fputs("tsc_actor_list_size(NULL)\n", stderr); ++g_failures; }
@@ -301,6 +309,6 @@ int main(void) {
   if (tsc_world_snapshot_size(NULL) != 0) { fputs("tsc_world_snapshot_size(NULL)\n", stderr); ++g_failures; }
   expect_null_rejected(tsc_world_snapshot_get(NULL, 0, (tsc_actor_snapshot_t[1]){0}), "tsc_world_snapshot_get");
   if (g_failures != 0) return 1;
-  printf("test_generated: 267 generated functions reject NULL handles\n");
+  printf("test_generated: 275 generated functions reject NULL handles\n");
   return 0;
 }
