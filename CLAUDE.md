@@ -62,8 +62,9 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   the helpers call `compat_shortcut`. It needs a `tests/compile/strict_fail`
   case for the compat path.
 - The mock (`native/mock`) mirrors LibCarla UE5 (ue5-dev) signatures *and
-  behaviour* (return values, empty results, exceptions); keep it in sync with
-  any LibCarla API the shim starts using. Where 0.10.0 behaves differently,
+  behaviour* (return values, empty results, exceptions), plus the ue58-dev
+  additions (it has the union of the release refs' API, as `validate` needs);
+  keep it in sync with any LibCarla API the shim starts using. Where 0.10.0 behaves differently,
   the shim maps both to one documented status.
 - Releases build every CARLA ref in `tools/release_carla_refs.txt` (ue5-dev,
   the default, and ue58-dev) into one wheel, a native library per ref
