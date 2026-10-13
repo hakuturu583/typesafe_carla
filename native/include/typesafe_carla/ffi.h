@@ -72,7 +72,7 @@ extern "C" {
  * 4.7: tsc_queue_signal_count / _wait / _notify, for a background callback
  *      dispatcher (#86). */
 #define TSC_ABI_VERSION_MAJOR 5
-#define TSC_ABI_VERSION_MINOR 0
+#define TSC_ABI_VERSION_MINOR 1
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -165,7 +165,15 @@ typedef enum {
   TSC_KIND_BONE_LIST = 23,          /* ABI 3.2 (#20): Walker.get_bones() result */
   TSC_KIND_TRAFFIC_SIGN = 24,       /* ABI 3.4 (#19); also an actor (a traffic light is also a sign) */
   TSC_KIND_LIGHT_MANAGER = 25,      /* ABI 3.5 (#21) */
-  TSC_KIND_TICK_LISTENER = 26       /* ABI 3.5 (#21): a World.on_tick registration */
+  TSC_KIND_TICK_LISTENER = 26,      /* ABI 3.5 (#21): a World.on_tick registration */
+  /* ABI 5.1: CARLA ue58-dev's road model (Map.get_roads() ...). */
+  TSC_KIND_ROAD = 27,
+  TSC_KIND_LANE_SECTION = 28,
+  TSC_KIND_LANE = 29,
+  TSC_KIND_ROAD_LIST = 30,
+  TSC_KIND_LANE_SECTION_LIST = 31,
+  TSC_KIND_LANE_LIST = 32,
+  TSC_KIND_JUNCTION_LIST = 33
 } tsc_handle_kind_t;
 
 typedef struct tsc_handle tsc_handle_t;
@@ -1144,6 +1152,16 @@ typedef struct tsc_traffic_manager tsc_traffic_manager_t;
 typedef struct tsc_landmark_list tsc_landmark_list_t;
 typedef struct tsc_landmark_handle tsc_landmark_handle_t; /* one landmark */
 typedef struct tsc_junction tsc_junction_t;
+/* CARLA ue58-dev's road model (ABI 5.1): an OpenDRIVE road, a lane section of
+ * it, a lane of that, and lists of each. With a LibCarla without them (ue5-dev,
+ * 0.10.0), every function returning or taking one is TSC_ERROR. */
+typedef struct tsc_road tsc_road_t;
+typedef struct tsc_lane_section tsc_lane_section_t;
+typedef struct tsc_lane tsc_lane_t;
+typedef struct tsc_road_list tsc_road_list_t;
+typedef struct tsc_lane_section_list tsc_lane_section_list_t;
+typedef struct tsc_lane_list tsc_lane_list_t;
+typedef struct tsc_junction_list tsc_junction_list_t;
 
 /* --- More actor operations ----------------------------------------------- */
 
@@ -1412,6 +1430,134 @@ TSC_API tsc_status_t tsc_junction_get_bounding_box(const tsc_junction_t *junctio
 TSC_API tsc_status_t tsc_junction_get_waypoints(const tsc_junction_t *junction, int32_t lane_type,
                                                 tsc_waypoint_list_t **out);
 /* END GENERATED junction */
+
+/* --- CARLA ue58-dev's road model (ABI 5.1) ------------------------------- */
+
+/* BEGIN GENERATED junction_roads from bindings/junction.yaml, do not edit */
+TSC_API tsc_status_t tsc_junction_get_connecting_roads(const tsc_junction_t *junction,
+                                                       tsc_road_list_t **out);
+TSC_API tsc_status_t tsc_junction_get_adjacent_roads(const tsc_junction_t *junction,
+                                                     tsc_road_list_t **out);
+TSC_API tsc_status_t tsc_junction_get_entry_lanes(const tsc_junction_t *junction, int32_t lane_type,
+                                                  tsc_lane_list_t **out);
+TSC_API tsc_status_t tsc_junction_get_exit_lanes(const tsc_junction_t *junction, int32_t lane_type,
+                                                 tsc_lane_list_t **out);
+TSC_API tsc_status_t tsc_junction_get_entry_waypoints(const tsc_junction_t *junction,
+                                                      int32_t lane_type, tsc_waypoint_list_t **out);
+TSC_API tsc_status_t tsc_junction_get_exit_waypoints(const tsc_junction_t *junction,
+                                                     int32_t lane_type, tsc_waypoint_list_t **out);
+/* END GENERATED junction_roads */
+/* BEGIN GENERATED map_roads from bindings/map.yaml, do not edit */
+TSC_API tsc_status_t tsc_map_get_roads(const tsc_map_t *map, tsc_road_list_t **out);
+/* *out = NULL (TSC_OK) when there is no such road. */
+TSC_API tsc_status_t tsc_map_get_road(const tsc_map_t *map, uint32_t road_id, tsc_road_t **out);
+TSC_API tsc_status_t tsc_map_get_lane_section(const tsc_map_t *map, uint32_t road_id,
+                                              uint32_t section_id, tsc_lane_section_t **out);
+TSC_API tsc_status_t tsc_map_get_lane(const tsc_map_t *map, uint32_t road_id, uint32_t section_id,
+                                      int32_t lane_id, tsc_lane_t **out);
+TSC_API tsc_status_t tsc_map_get_junctions(const tsc_map_t *map, tsc_junction_list_t **out);
+TSC_API tsc_status_t tsc_map_get_junction_by_id(const tsc_map_t *map, int32_t junction_id,
+                                                tsc_junction_t **out);
+/* END GENERATED map_roads */
+/* BEGIN GENERATED waypoint_road from bindings/waypoint.yaml, do not edit */
+TSC_API tsc_status_t tsc_waypoint_get_road(const tsc_waypoint_t *waypoint, tsc_road_t **out);
+TSC_API tsc_status_t tsc_waypoint_get_lane(const tsc_waypoint_t *waypoint, tsc_lane_t **out);
+/* END GENERATED waypoint_road */
+/* BEGIN GENERATED road from bindings/road.yaml, do not edit */
+TSC_API tsc_status_t tsc_road_get_id(const tsc_road_t *road, uint32_t *out);
+TSC_API tsc_status_t tsc_road_get_name(const tsc_road_t *road, tsc_string_t *out);
+TSC_API tsc_status_t tsc_road_get_length(const tsc_road_t *road, double *out);
+TSC_API tsc_status_t tsc_road_is_junction(const tsc_road_t *road, int32_t *out);
+/* -1 when the road is not part of a junction. */
+TSC_API tsc_status_t tsc_road_get_junction_id(const tsc_road_t *road, int32_t *out);
+TSC_API tsc_status_t tsc_road_is_rht(const tsc_road_t *road, int32_t *out);
+TSC_API tsc_status_t tsc_road_get_successor_id(const tsc_road_t *road, uint32_t *out);
+TSC_API tsc_status_t tsc_road_get_predecessor_id(const tsc_road_t *road, uint32_t *out);
+TSC_API tsc_status_t tsc_road_get_next_roads(const tsc_road_t *road, tsc_road_list_t **out);
+TSC_API tsc_status_t tsc_road_get_previous_roads(const tsc_road_t *road, tsc_road_list_t **out);
+/* Every lane of lane_type (CARLA LaneType bits) at road coordinate s. */
+TSC_API tsc_status_t tsc_road_get_lanes(const tsc_road_t *road, double s, int32_t lane_type,
+                                        tsc_lane_list_t **out);
+TSC_API tsc_status_t tsc_road_get_lane(const tsc_road_t *road, uint32_t section_id, int32_t lane_id,
+                                       tsc_lane_t **out);
+TSC_API tsc_status_t tsc_road_get_lane_at(const tsc_road_t *road, double s, int32_t lane_id,
+                                          tsc_lane_t **out);
+TSC_API tsc_status_t tsc_road_get_sections(const tsc_road_t *road, tsc_lane_section_list_t **out);
+TSC_API tsc_status_t tsc_road_get_section(const tsc_road_t *road, uint32_t section_id,
+                                          tsc_lane_section_t **out);
+TSC_API tsc_status_t tsc_road_get_section_at(const tsc_road_t *road, double s,
+                                             tsc_lane_section_t **out);
+TSC_API tsc_status_t tsc_road_get_junction(const tsc_road_t *road, tsc_junction_t **out);
+TSC_API tsc_status_t tsc_road_get_transform_at(const tsc_road_t *road, double s,
+                                               tsc_transform_t *out);
+/* A cross-section: one waypoint per lane of lane_type at s. */
+TSC_API tsc_status_t tsc_road_get_waypoints_at(const tsc_road_t *road, double s, int32_t lane_type,
+                                               tsc_waypoint_list_t **out);
+/* Waypoints along the road every distance metres, on every lane of lane_type. */
+TSC_API tsc_status_t tsc_road_get_waypoints(const tsc_road_t *road, double distance,
+                                            int32_t lane_type, tsc_waypoint_list_t **out);
+/* END GENERATED road */
+/* BEGIN GENERATED road_list_items from bindings/lists.yaml, do not edit */
+TSC_API size_t tsc_road_list_size(const tsc_road_list_t *list);
+TSC_API tsc_status_t tsc_road_list_get(const tsc_road_list_t *list, size_t index, tsc_road_t **out);
+/* END GENERATED road_list_items */
+/* BEGIN GENERATED lane_section from bindings/lane_section.yaml, do not edit */
+TSC_API tsc_status_t tsc_lane_section_get_id(const tsc_lane_section_t *section, uint32_t *out);
+TSC_API tsc_status_t tsc_lane_section_get_road_id(const tsc_lane_section_t *section, uint32_t *out);
+TSC_API tsc_status_t tsc_lane_section_get_unique_id(const tsc_lane_section_t *section,
+                                                    uint64_t *out);
+TSC_API tsc_status_t tsc_lane_section_get_road(const tsc_lane_section_t *section, tsc_road_t **out);
+TSC_API tsc_status_t tsc_lane_section_get_distance(const tsc_lane_section_t *section, double *out);
+TSC_API tsc_status_t tsc_lane_section_get_length(const tsc_lane_section_t *section, double *out);
+TSC_API tsc_status_t tsc_lane_section_get_lanes(const tsc_lane_section_t *section,
+                                                int32_t lane_type, tsc_lane_list_t **out);
+TSC_API tsc_status_t tsc_lane_section_get_lane(const tsc_lane_section_t *section, int32_t lane_id,
+                                               tsc_lane_t **out);
+TSC_API tsc_status_t tsc_lane_section_contains_lane(const tsc_lane_section_t *section,
+                                                    int32_t lane_id, int32_t *out);
+TSC_API tsc_status_t tsc_lane_section_get_next_section(const tsc_lane_section_t *section,
+                                                       tsc_lane_section_t **out);
+TSC_API tsc_status_t tsc_lane_section_get_previous_section(const tsc_lane_section_t *section,
+                                                           tsc_lane_section_t **out);
+/* END GENERATED lane_section */
+/* BEGIN GENERATED lane_section_list_items from bindings/lists.yaml, do not edit */
+TSC_API size_t tsc_lane_section_list_size(const tsc_lane_section_list_t *list);
+TSC_API tsc_status_t tsc_lane_section_list_get(const tsc_lane_section_list_t *list, size_t index,
+                                               tsc_lane_section_t **out);
+/* END GENERATED lane_section_list_items */
+/* BEGIN GENERATED lane from bindings/lane.yaml, do not edit */
+TSC_API tsc_status_t tsc_lane_get_id(const tsc_lane_t *lane, int32_t *out);
+TSC_API tsc_status_t tsc_lane_get_road_id(const tsc_lane_t *lane, uint32_t *out);
+TSC_API tsc_status_t tsc_lane_get_section_id(const tsc_lane_t *lane, uint32_t *out);
+TSC_API tsc_status_t tsc_lane_get_unique_id(const tsc_lane_t *lane, uint64_t *out);
+/* CARLA LaneType bits. */
+TSC_API tsc_status_t tsc_lane_get_type(const tsc_lane_t *lane, int32_t *out);
+TSC_API tsc_status_t tsc_lane_get_road(const tsc_lane_t *lane, tsc_road_t **out);
+TSC_API tsc_status_t tsc_lane_get_section(const tsc_lane_t *lane, tsc_lane_section_t **out);
+TSC_API tsc_status_t tsc_lane_get_length(const tsc_lane_t *lane, double *out);
+TSC_API tsc_status_t tsc_lane_get_distance(const tsc_lane_t *lane, double *out);
+TSC_API tsc_status_t tsc_lane_get_level(const tsc_lane_t *lane, int32_t *out);
+TSC_API tsc_status_t tsc_lane_is_straight(const tsc_lane_t *lane, int32_t *out);
+TSC_API tsc_status_t tsc_lane_is_positive_direction(const tsc_lane_t *lane, int32_t *out);
+TSC_API tsc_status_t tsc_lane_get_width(const tsc_lane_t *lane, double s, double *out);
+TSC_API tsc_status_t tsc_lane_get_transform(const tsc_lane_t *lane, double s, tsc_transform_t *out);
+TSC_API tsc_status_t tsc_lane_get_right_lane(const tsc_lane_t *lane, tsc_lane_t **out);
+TSC_API tsc_status_t tsc_lane_get_left_lane(const tsc_lane_t *lane, tsc_lane_t **out);
+TSC_API tsc_status_t tsc_lane_get_next_lanes(const tsc_lane_t *lane, tsc_lane_list_t **out);
+TSC_API tsc_status_t tsc_lane_get_previous_lanes(const tsc_lane_t *lane, tsc_lane_list_t **out);
+TSC_API tsc_status_t tsc_lane_get_waypoint(const tsc_lane_t *lane, double s, tsc_waypoint_t **out);
+TSC_API tsc_status_t tsc_lane_get_waypoints(const tsc_lane_t *lane, double distance,
+                                            tsc_waypoint_list_t **out);
+/* END GENERATED lane */
+/* BEGIN GENERATED lane_list_items from bindings/lists.yaml, do not edit */
+TSC_API size_t tsc_lane_list_size(const tsc_lane_list_t *list);
+TSC_API tsc_status_t tsc_lane_list_get(const tsc_lane_list_t *list, size_t index, tsc_lane_t **out);
+/* END GENERATED lane_list_items */
+/* BEGIN GENERATED junction_list_items from bindings/lists.yaml, do not edit */
+TSC_API size_t tsc_junction_list_size(const tsc_junction_list_t *list);
+TSC_API tsc_status_t tsc_junction_list_get(const tsc_junction_list_t *list, size_t index,
+                                           tsc_junction_t **out);
+/* END GENERATED junction_list_items */
 
 /* --- Lane markings (shared with #24 (LaneInvasionEvent)) ------------------------------ */
 

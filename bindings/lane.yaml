@@ -1,0 +1,53 @@
+# CARLA ue58-dev's lane of a lane section: tsc_lane_<name>.
+# Not in LibCarla ue5-dev or 0.10.0: every call is optional there.
+class: carla::client::Lane
+prefix: lane
+self: {type: const tsc_lane_t, name: lane, get: lane_of}
+blocks:
+  lane:
+    get_id: {call: GetId, out: int32_out, optional: {name: Lane.id, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_road_id: {call: GetRoadId, out: uint32_out, optional: {name: Lane.road_id, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_section_id: {call: GetSectionId, out: uint32_out, optional: {name: Lane.section_id, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_unique_id: {call: GetUniqueId, out: uint64_out, optional: {name: Lane.__hash__, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_type:
+      call: GetType
+      out: lane_type_out
+      optional: {name: Lane.type, missing_in: ["0.10.0", "ue5-dev"]}
+      doc: "CARLA LaneType bits."
+    get_road: {call: GetRoad, out: road_or_null, optional: {name: Lane.get_road, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_section:
+      {call: GetSection, out: lane_section_or_null, optional: {name: Lane.get_section, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_length: {call: GetLength, out: double_out, optional: {name: Lane.length, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_distance: {call: GetDistance, out: double_out, optional: {name: Lane.s_start, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_level: {call: GetLevel, out: bool_out, optional: {name: Lane.level, missing_in: ["0.10.0", "ue5-dev"]}}
+    is_straight: {call: IsStraight, out: bool_out, optional: {name: Lane.is_straight, missing_in: ["0.10.0", "ue5-dev"]}}
+    is_positive_direction:
+      call: IsPositiveDirection
+      out: bool_out
+      optional: {name: Lane.is_positive_direction, missing_in: ["0.10.0", "ue5-dev"]}
+    get_width:
+      call: GetWidth
+      args: {s: distance}
+      out: double_out
+      optional: {name: Lane.get_width, missing_in: ["0.10.0", "ue5-dev"]}
+    get_transform:
+      call: GetTransform
+      args: {s: distance}
+      out: transform_out
+      optional: {name: Lane.get_transform, missing_in: ["0.10.0", "ue5-dev"]}
+    get_right_lane:
+      {call: GetRightLane, out: lane_or_null, optional: {name: Lane.get_right_lane, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_left_lane: {call: GetLeftLane, out: lane_or_null, optional: {name: Lane.get_left_lane, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_next_lanes: {call: GetNextLanes, out: lane_list, optional: {name: Lane.get_next_lane, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_previous_lanes:
+      {call: GetPreviousLanes, out: lane_list, optional: {name: Lane.get_previous_lane, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_waypoint:
+      call: GetWaypoint
+      args: {s: distance}
+      out: waypoint_or_null
+      optional: {name: Lane.get_waypoint, missing_in: ["0.10.0", "ue5-dev"]}
+    get_waypoints:
+      call: GetWaypoints
+      args: {distance: positive}
+      out: waypoint_list
+      optional: {name: Lane.get_waypoints, missing_in: ["0.10.0", "ue5-dev"]}

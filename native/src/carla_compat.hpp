@@ -74,6 +74,21 @@
 #endif
 // V2X (issue #42): ServerSideSensor::Send, rpc::CustomV2XBytes and the CAM /
 // custom V2X measurements are in ue5-dev, not in CARLA 0.10.0.
+// CARLA ue58-dev's road model. Without it (ue5-dev, 0.10.0) the classes are
+// only declared: the handles hold pointers to them, and every call on one is
+// optional (TSC_CALL_OPTIONAL: a `requires` on an incomplete type is false).
+#if __has_include(<carla/client/Road.h>)
+#include <carla/client/Lane.h>
+#include <carla/client/LaneSection.h>
+#include <carla/client/Road.h>
+#else
+namespace carla::client {
+class Road;
+class LaneSection;
+class Lane;
+}  // namespace carla::client
+#endif
+
 #if __has_include(<carla/sensor/data/V2XEvent.h>)
 #include <carla/rpc/CustomV2XBytes.h>
 #include <carla/sensor/data/V2XEvent.h>

@@ -271,6 +271,49 @@ static void test_mock_issue23(void) {
   tsc_handle_release(H(client));
 }
 
+/* CARLA ue58-dev's road model on the mock: road 1, section 0, lanes -1 and -2. */
+static void test_mock_road_model(void) {
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  tsc_map_t *map = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2058, 0, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+  CHECK_OK(tsc_world_get_map(world, &map));
+  tsc_road_list_t *roads = NULL;
+  CHECK_OK(tsc_map_get_roads(map, &roads));
+  CHECK(tsc_road_list_size(roads) == 1);
+  tsc_road_t *road = NULL;
+  CHECK_OK(tsc_road_list_get(roads, 0, &road));
+  uint32_t road_id = 0;
+  CHECK_OK(tsc_road_get_id(road, &road_id));
+  CHECK(road_id == 1);
+  CHECK(tsc_road_list_get(roads, 1, &road) == TSC_NOT_FOUND);
+  /* A missing road, section or lane is a NULL handle, not an error. */
+  tsc_road_t *none = (tsc_road_t *)1;
+  CHECK_OK(tsc_map_get_road(map, 7, &none));
+  CHECK(none == NULL);
+  tsc_lane_t *lane = NULL;
+  CHECK_OK(tsc_map_get_lane(map, 1, 0, -1, &lane));
+  CHECK(lane != NULL);
+  int32_t lane_id = 0;
+  CHECK_OK(tsc_lane_get_id(lane, &lane_id));
+  CHECK(lane_id == -1);
+  tsc_transform_t t;
+  CHECK_OK(tsc_lane_get_transform(lane, 10.0, &t));
+  CHECK(t.location.x == 10.0f);
+  tsc_lane_t *left = (tsc_lane_t *)1;
+  CHECK_OK(tsc_lane_get_left_lane(lane, &left));
+  CHECK(left == NULL);
+  /* A lane handle is not a road. */
+  CHECK(tsc_road_get_id((const tsc_road_t *)lane, &road_id) == TSC_INVALID_ARGUMENT);
+  tsc_handle_release(H(lane));
+  tsc_handle_release(H(road));
+  tsc_handle_release(H(roads));
+  tsc_handle_release(H(map));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+}
+
 static void test_null_arguments(void) {
   tsc_client_t *client = NULL;
   CHECK(tsc_client_create(kHost, strlen(kHost), 2000, 0, NULL) == TSC_INVALID_ARGUMENT);
@@ -1962,6 +2005,7 @@ int main(void) {
     test_mock_timeout();
     test_mock_issue33();
     test_mock_issue86();
+    test_mock_road_model();
   } else {
     printf("backend '%s': skipping mock-server checks\n", tsc_backend_name());
   }

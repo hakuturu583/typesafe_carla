@@ -1,0 +1,63 @@
+# CARLA ue58-dev's road model on the mock backend: road 1, one lane section
+# (0) over its 200 m, driving lanes -1 and -2 (3.5 m wide), no junctions.
+import typesafe_carla as carla
+
+m = carla.Client("localhost", 2000).get_world().get_map()
+
+# --- Map ----------------------------------------------------------------------------
+roads = m.get_roads()
+assert len(roads) == 1 and roads[0].id == 1
+assert m.get_road(2) is None and m.get_lane_section(1, 1) is None
+assert len(m.get_junctions()) == 0 and m.get_junction_by_id(0) is None
+
+# --- Road ---------------------------------------------------------------------------
+road = unwrap(m.get_road(1))
+assert road == roads[0] and not (road != roads[0]) and hash(road) == 1
+assert road.name == "MockRoad" and road.length == 200.0
+assert not road.is_junction and road.junction_id == -1 and road.is_rht
+assert road.successor_id == 0 and road.predecessor_id == 0
+assert len(road.get_next_road()) == 0 and len(road.get_previous_road()) == 0
+assert road.get_junction() is None
+lanes = road.get_lanes(10.0)
+assert [l.id for l in lanes] == [-1, -2]
+assert len(road.get_lanes(10.0, carla.LaneType.Sidewalk)) == 0
+assert len(road.get_lanes(500.0)) == 0
+assert unwrap(road.get_lane(0, -2)).id == -2 and unwrap(road.get_lane_at(5.0, -1)).id == -1
+assert road.get_lane_at(500.0, -1) is None
+assert len(road.get_sections()) == 1 and road.get_section(1) is None
+assert unwrap(road.get_section(0)).id == 0 and unwrap(road.get_section_at(50.0)).id == 0
+t = road.get_transform_at(20.0)
+assert t.location.x == 20.0 and t.location.y == -1.75
+across = road.get_waypoints_at(30.0)
+assert len(across) == 2 and across[0].lane_id == -1 and across[1].lane_id == -2
+assert len(road.get_waypoints(100.0)) == 6  # s = 0, 100, 200 on each lane
+
+# --- LaneSection --------------------------------------------------------------------
+section = unwrap(m.get_lane_section(1, 0))
+assert section.id == 0 and section.road_id == 1 and section.s_start == 0.0
+assert section.length == 200.0 and section.get_road() == road
+assert section == unwrap(road.get_section(0)) and hash(section) == (1 << 32)
+assert [l.id for l in section.get_lanes()] == [-1, -2]
+assert section.contains_lane(-2) and not section.contains_lane(3)
+assert unwrap(section.get_lane(-1)).id == -1
+assert section.get_next_section() is None and section.get_previous_section() is None
+
+# --- Lane ---------------------------------------------------------------------------
+lane = unwrap(m.get_lane(1, 0, -1))
+assert lane.id == -1 and lane.road_id == 1 and lane.section_id == 0
+assert lane.type == carla.LaneType.Driving and lane.length == 200.0 and lane.s_start == 0.0
+assert not lane.level and lane.is_straight and lane.is_positive_direction
+assert lane.get_road() == road and lane.get_section() == section
+assert lane == lanes[0] and lane != lanes[1] and hash(lane) != hash(lanes[1])
+assert lane.get_width(10.0) == 3.5 and lane.get_transform(10.0).location.x == 10.0
+assert unwrap(lane.get_right_lane()).id == -2 and lane.get_left_lane() is None
+assert unwrap(unwrap(lane.get_right_lane()).get_left_lane()) == lane
+assert len(lane.get_next_lane()) == 0 and len(lane.get_previous_lane()) == 0
+wp = unwrap(lane.get_waypoint(42.0))
+assert wp.lane_id == -1 and wp.s == 42.0 and lane.get_waypoint(500.0) is None
+assert len(lane.get_waypoints(50.0)) == 5
+
+# --- Waypoint -----------------------------------------------------------------------
+assert unwrap(wp.get_road()) == road and unwrap(wp.get_lane()) == lane
+
+print("ue58 road model OK")

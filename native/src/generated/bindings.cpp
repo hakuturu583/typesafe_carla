@@ -590,6 +590,48 @@ tsc_status_t tsc_junction_get_waypoints(const tsc_junction_t *junction, int32_t 
   });
 }
 
+tsc_status_t tsc_junction_get_connecting_roads(const tsc_junction_t *junction,
+                                               tsc_road_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_road_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_road_list(without_nulls(r_)); }), junction_of(junction), GetConnectingRoads, "Junction.get_connecting_roads"); return h_;
+  });
+}
+
+tsc_status_t tsc_junction_get_adjacent_roads(const tsc_junction_t *junction,
+                                             tsc_road_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_road_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_road_list(without_nulls(r_)); }), junction_of(junction), GetAdjacentRoads, "Junction.get_adjacent_roads"); return h_;
+  });
+}
+
+tsc_status_t tsc_junction_get_entry_lanes(const tsc_junction_t *junction, int32_t lane_type,
+                                          tsc_lane_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_list_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_lane_list(without_nulls(r_)); }), self_, GetEntryLanes, "Junction.get_entry_lanes", static_cast<carla::road::Lane::LaneType>(lane_type)); }(junction_of(junction)); return h_;
+  });
+}
+
+tsc_status_t tsc_junction_get_exit_lanes(const tsc_junction_t *junction, int32_t lane_type,
+                                         tsc_lane_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_list_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_lane_list(without_nulls(r_)); }), self_, GetExitLanes, "Junction.get_exit_lanes", static_cast<carla::road::Lane::LaneType>(lane_type)); }(junction_of(junction)); return h_;
+  });
+}
+
+tsc_status_t tsc_junction_get_entry_waypoints(const tsc_junction_t *junction, int32_t lane_type,
+                                              tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_waypoint_list_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_waypoint_list(without_nulls(r_)); }), self_, GetEntryWaypoints, "Junction.get_entry_waypoints", static_cast<carla::road::Lane::LaneType>(lane_type)); }(junction_of(junction)); return h_;
+  });
+}
+
+tsc_status_t tsc_junction_get_exit_waypoints(const tsc_junction_t *junction, int32_t lane_type,
+                                             tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_waypoint_list_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_waypoint_list(without_nulls(r_)); }), self_, GetExitWaypoints, "Junction.get_exit_waypoints", static_cast<carla::road::Lane::LaneType>(lane_type)); }(junction_of(junction)); return h_;
+  });
+}
+
 // bindings/landmark.yaml: carla::client::Landmark
 
 tsc_status_t tsc_landmark_get_h_offset(const tsc_landmark_handle_t *landmark, double *out) {
@@ -625,6 +667,129 @@ tsc_status_t tsc_landmark_get_lane_validities(
   });
 }
 
+// bindings/lane.yaml: carla::client::Lane
+
+tsc_status_t tsc_lane_get_id(const tsc_lane_t *lane, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_of(lane), GetId, "Lane.id");
+  });
+}
+
+tsc_status_t tsc_lane_get_road_id(const tsc_lane_t *lane, uint32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_of(lane), GetRoadId, "Lane.road_id");
+  });
+}
+
+tsc_status_t tsc_lane_get_section_id(const tsc_lane_t *lane, uint32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_of(lane), GetSectionId, "Lane.section_id");
+  });
+}
+
+tsc_status_t tsc_lane_get_unique_id(const tsc_lane_t *lane, uint64_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_of(lane), GetUniqueId, "Lane.__hash__");
+  });
+}
+
+tsc_status_t tsc_lane_get_type(const tsc_lane_t *lane, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = static_cast<int32_t>(r_); }), lane_of(lane), GetType, "Lane.type");
+  });
+}
+
+tsc_status_t tsc_lane_get_road(const tsc_lane_t *lane, tsc_road_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_road_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_road>(r_); }), lane_of(lane), GetRoad, "Lane.get_road"); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_get_section(const tsc_lane_t *lane, tsc_lane_section_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_section_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane_section>(r_); }), lane_of(lane), GetSection, "Lane.get_section"); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_get_length(const tsc_lane_t *lane, double *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_of(lane), GetLength, "Lane.length");
+  });
+}
+
+tsc_status_t tsc_lane_get_distance(const tsc_lane_t *lane, double *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_of(lane), GetDistance, "Lane.s_start");
+  });
+}
+
+tsc_status_t tsc_lane_get_level(const tsc_lane_t *lane, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_ ? 1 : 0; }), lane_of(lane), GetLevel, "Lane.level");
+  });
+}
+
+tsc_status_t tsc_lane_is_straight(const tsc_lane_t *lane, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_ ? 1 : 0; }), lane_of(lane), IsStraight, "Lane.is_straight");
+  });
+}
+
+tsc_status_t tsc_lane_is_positive_direction(const tsc_lane_t *lane, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_ ? 1 : 0; }), lane_of(lane), IsPositiveDirection, "Lane.is_positive_direction");
+  });
+}
+
+tsc_status_t tsc_lane_get_width(const tsc_lane_t *lane, double s, double *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), self_, GetWidth, "Lane.get_width", check_search_distance(s, "s")); }(lane_of(lane));
+  });
+}
+
+tsc_status_t tsc_lane_get_transform(const tsc_lane_t *lane, double s, tsc_transform_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = from_carla(r_); }), self_, GetTransform, "Lane.get_transform", check_search_distance(s, "s")); }(lane_of(lane));
+  });
+}
+
+tsc_status_t tsc_lane_get_right_lane(const tsc_lane_t *lane, tsc_lane_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane>(r_); }), lane_of(lane), GetRightLane, "Lane.get_right_lane"); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_get_left_lane(const tsc_lane_t *lane, tsc_lane_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane>(r_); }), lane_of(lane), GetLeftLane, "Lane.get_left_lane"); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_get_next_lanes(const tsc_lane_t *lane, tsc_lane_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_lane_list(without_nulls(r_)); }), lane_of(lane), GetNextLanes, "Lane.get_next_lane"); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_get_previous_lanes(const tsc_lane_t *lane, tsc_lane_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_lane_list(without_nulls(r_)); }), lane_of(lane), GetPreviousLanes, "Lane.get_previous_lane"); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_get_waypoint(const tsc_lane_t *lane, double s, tsc_waypoint_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_waypoint_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_waypoint>(r_); }), self_, GetWaypoint, "Lane.get_waypoint", check_search_distance(s, "s")); }(lane_of(lane)); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_get_waypoints(const tsc_lane_t *lane, double distance,
+                                    tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_waypoint_list_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_waypoint_list(without_nulls(r_)); }), self_, GetWaypoints, "Lane.get_waypoints", check_positive(distance, "distance")); }(lane_of(lane)); return h_;
+  });
+}
+
 // bindings/lane_invasion_event.yaml: carla::sensor::data::LaneInvasionEvent
 
 tsc_status_t tsc_lane_invasion_event_get_actor(const tsc_sensor_data_t *data, tsc_actor_t **out) {
@@ -637,6 +802,79 @@ tsc_status_t tsc_lane_invasion_event_get_crossed_lane_markings(
     const tsc_sensor_data_t *data, tsc_lane_marking_t *out, size_t capacity, size_t *out_count) {
   return TSC_GUARD({
     require_ptr(out_count, "out_count"); copy_out(lane_invasion_event_of(data).GetCrossedLaneMarkings(), out, capacity, out_count);
+  });
+}
+
+// bindings/lane_section.yaml: carla::client::LaneSection
+
+tsc_status_t tsc_lane_section_get_id(const tsc_lane_section_t *section, uint32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_section_of(section), GetId, "LaneSection.id");
+  });
+}
+
+tsc_status_t tsc_lane_section_get_road_id(const tsc_lane_section_t *section, uint32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_section_of(section), GetRoadId, "LaneSection.road_id");
+  });
+}
+
+tsc_status_t tsc_lane_section_get_unique_id(const tsc_lane_section_t *section, uint64_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_section_of(section), GetUniqueId, "LaneSection.__hash__");
+  });
+}
+
+tsc_status_t tsc_lane_section_get_road(const tsc_lane_section_t *section, tsc_road_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_road_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_road>(r_); }), lane_section_of(section), GetRoad, "LaneSection.get_road"); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_section_get_distance(const tsc_lane_section_t *section, double *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_section_of(section), GetDistance, "LaneSection.s_start");
+  });
+}
+
+tsc_status_t tsc_lane_section_get_length(const tsc_lane_section_t *section, double *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), lane_section_of(section), GetLength, "LaneSection.length");
+  });
+}
+
+tsc_status_t tsc_lane_section_get_lanes(const tsc_lane_section_t *section, int32_t lane_type,
+                                        tsc_lane_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_list_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_lane_list(without_nulls(r_)); }), self_, GetLanes, "LaneSection.get_lanes", static_cast<carla::road::Lane::LaneType>(lane_type)); }(lane_section_of(section)); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_section_get_lane(const tsc_lane_section_t *section, int32_t lane_id,
+                                       tsc_lane_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane>(r_); }), self_, GetLane, "LaneSection.get_lane", lane_id); }(lane_section_of(section)); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_section_contains_lane(const tsc_lane_section_t *section, int32_t lane_id,
+                                            int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_ ? 1 : 0; }), self_, ContainsLane, "LaneSection.contains_lane", lane_id); }(lane_section_of(section));
+  });
+}
+
+tsc_status_t tsc_lane_section_get_next_section(const tsc_lane_section_t *section,
+                                               tsc_lane_section_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_section_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane_section>(r_); }), lane_section_of(section), GetNextSection, "LaneSection.get_next_section"); return h_;
+  });
+}
+
+tsc_status_t tsc_lane_section_get_previous_section(const tsc_lane_section_t *section,
+                                                   tsc_lane_section_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_section_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane_section>(r_); }), lane_section_of(section), GetPreviousSection, "LaneSection.get_previous_section"); return h_;
   });
 }
 
@@ -765,6 +1003,45 @@ tsc_status_t tsc_map_cook_in_memory_map(const tsc_map_t *map, const char *path, 
   return TSC_GUARD({ map_of(map).CookInMemoryMap(to_string(path, path_len, "path")); });
 }
 
+tsc_status_t tsc_map_get_roads(const tsc_map_t *map, tsc_road_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_road_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_road_list(without_nulls(r_)); }), map_of(map), GetRoads, "Map.get_roads"); return h_;
+  });
+}
+
+tsc_status_t tsc_map_get_road(const tsc_map_t *map, uint32_t road_id, tsc_road_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_road_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_road>(r_); }), self_, GetRoad, "Map.get_road", road_id); }(map_of(map)); return h_;
+  });
+}
+
+tsc_status_t tsc_map_get_lane_section(const tsc_map_t *map, uint32_t road_id, uint32_t section_id,
+                                      tsc_lane_section_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_section_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane_section>(r_); }), self_, GetLaneSection, "Map.get_lane_section", road_id, section_id); }(map_of(map)); return h_;
+  });
+}
+
+tsc_status_t tsc_map_get_lane(const tsc_map_t *map, uint32_t road_id, uint32_t section_id,
+                              int32_t lane_id, tsc_lane_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane>(r_); }), self_, GetLane, "Map.get_lane", road_id, section_id, lane_id); }(map_of(map)); return h_;
+  });
+}
+
+tsc_status_t tsc_map_get_junctions(const tsc_map_t *map, tsc_junction_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_junction_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_junction_list(without_nulls(r_)); }), map_of(map), GetJunctions, "Map.get_junctions"); return h_;
+  });
+}
+
+tsc_status_t tsc_map_get_junction_by_id(const tsc_map_t *map, int32_t junction_id,
+                                        tsc_junction_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_junction_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_junction>(r_); }), self_, GetJunctionById, "Map.get_junction_by_id", junction_id); }(map_of(map)); return h_;
+  });
+}
+
 // bindings/obstacle_detection_event.yaml: carla::sensor::data::ObstacleDetectionEvent
 
 tsc_status_t tsc_obstacle_detection_get_distance(const tsc_sensor_data_t *data, double *out) {
@@ -783,6 +1060,134 @@ tsc_status_t tsc_obstacle_detection_get_other_actor(const tsc_sensor_data_t *dat
                                                     tsc_actor_t **out) {
   return new_handle(__func__, out, [&] {
     return make_actor_handle(obstacle_event_of(data).GetOtherActor());
+  });
+}
+
+// bindings/road.yaml: carla::client::Road
+
+tsc_status_t tsc_road_get_id(const tsc_road_t *road, uint32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), road_of(road), GetId, "Road.id");
+  });
+}
+
+tsc_status_t tsc_road_get_name(const tsc_road_t *road, tsc_string_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { string_assign(out, r_); }), road_of(road), GetName, "Road.name");
+  });
+}
+
+tsc_status_t tsc_road_get_length(const tsc_road_t *road, double *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), road_of(road), GetLength, "Road.length");
+  });
+}
+
+tsc_status_t tsc_road_is_junction(const tsc_road_t *road, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_ ? 1 : 0; }), road_of(road), IsJunction, "Road.is_junction");
+  });
+}
+
+tsc_status_t tsc_road_get_junction_id(const tsc_road_t *road, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), road_of(road), GetJunctionId, "Road.junction_id");
+  });
+}
+
+tsc_status_t tsc_road_is_rht(const tsc_road_t *road, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_ ? 1 : 0; }), road_of(road), IsRHT, "Road.is_rht");
+  });
+}
+
+tsc_status_t tsc_road_get_successor_id(const tsc_road_t *road, uint32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), road_of(road), GetSuccessorId, "Road.successor_id");
+  });
+}
+
+tsc_status_t tsc_road_get_predecessor_id(const tsc_road_t *road, uint32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), road_of(road), GetPredecessorId, "Road.predecessor_id");
+  });
+}
+
+tsc_status_t tsc_road_get_next_roads(const tsc_road_t *road, tsc_road_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_road_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_road_list(without_nulls(r_)); }), road_of(road), GetNextRoads, "Road.get_next_road"); return h_;
+  });
+}
+
+tsc_status_t tsc_road_get_previous_roads(const tsc_road_t *road, tsc_road_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_road_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_road_list(without_nulls(r_)); }), road_of(road), GetPreviousRoads, "Road.get_previous_road"); return h_;
+  });
+}
+
+tsc_status_t tsc_road_get_lanes(const tsc_road_t *road, double s, int32_t lane_type,
+                                tsc_lane_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_list_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_lane_list(without_nulls(r_)); }), self_, GetLanes, "Road.get_lanes", check_search_distance(s, "s"), static_cast<carla::road::Lane::LaneType>(lane_type)); }(road_of(road)); return h_;
+  });
+}
+
+tsc_status_t tsc_road_get_lane(const tsc_road_t *road, uint32_t section_id, int32_t lane_id,
+                               tsc_lane_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane>(r_); }), self_, GetLane, "Road.get_lane", section_id, lane_id); }(road_of(road)); return h_;
+  });
+}
+
+tsc_status_t tsc_road_get_lane_at(const tsc_road_t *road, double s, int32_t lane_id,
+                                  tsc_lane_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane>(r_); }), self_, GetLaneAt, "Road.get_lane_at", check_search_distance(s, "s"), lane_id); }(road_of(road)); return h_;
+  });
+}
+
+tsc_status_t tsc_road_get_sections(const tsc_road_t *road, tsc_lane_section_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_section_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_lane_section_list(without_nulls(r_)); }), road_of(road), GetSections, "Road.get_sections"); return h_;
+  });
+}
+
+tsc_status_t tsc_road_get_section(const tsc_road_t *road, uint32_t section_id,
+                                  tsc_lane_section_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_section_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane_section>(r_); }), self_, GetSection, "Road.get_section", section_id); }(road_of(road)); return h_;
+  });
+}
+
+tsc_status_t tsc_road_get_section_at(const tsc_road_t *road, double s, tsc_lane_section_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_section_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane_section>(r_); }), self_, GetSectionAt, "Road.get_section_at", check_search_distance(s, "s")); }(road_of(road)); return h_;
+  });
+}
+
+tsc_status_t tsc_road_get_junction(const tsc_road_t *road, tsc_junction_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_junction_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_junction>(r_); }), road_of(road), GetJunction, "Road.get_junction"); return h_;
+  });
+}
+
+tsc_status_t tsc_road_get_transform_at(const tsc_road_t *road, double s, tsc_transform_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = from_carla(r_); }), self_, GetTransformAt, "Road.get_transform_at", check_search_distance(s, "s")); }(road_of(road));
+  });
+}
+
+tsc_status_t tsc_road_get_waypoints_at(const tsc_road_t *road, double s, int32_t lane_type,
+                                       tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_waypoint_list_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_waypoint_list(without_nulls(r_)); }), self_, GetWaypointsAt, "Road.get_waypoints_at", check_search_distance(s, "s"), static_cast<carla::road::Lane::LaneType>(lane_type)); }(road_of(road)); return h_;
+  });
+}
+
+tsc_status_t tsc_road_get_waypoints(const tsc_road_t *road, double distance, int32_t lane_type,
+                                    tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_waypoint_list_t *h_ = nullptr; [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_waypoint_list(without_nulls(r_)); }), self_, GetWaypoints, "Road.get_waypoints", check_positive(distance, "distance"), static_cast<carla::road::Lane::LaneType>(lane_type)); }(road_of(road)); return h_;
   });
 }
 
@@ -1378,6 +1783,18 @@ tsc_status_t tsc_waypoint_get_landmarks_of_type(const tsc_waypoint_t *waypoint, 
   });
 }
 
+tsc_status_t tsc_waypoint_get_road(const tsc_waypoint_t *waypoint, tsc_road_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_road_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_road>(r_); }), waypoint_of(waypoint), GetRoad, "Waypoint.get_road"); return h_;
+  });
+}
+
+tsc_status_t tsc_waypoint_get_lane(const tsc_waypoint_t *waypoint, tsc_lane_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_lane_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new_or_null<tsc_lane>(r_); }), waypoint_of(waypoint), GetLane, "Waypoint.get_lane"); return h_;
+  });
+}
+
 // bindings/world.yaml: carla::client::World
 
 tsc_status_t tsc_world_get_id(tsc_world_t *world, uint64_t *out_id) {
@@ -1766,6 +2183,52 @@ tsc_status_t tsc_world_snapshot_get(const tsc_world_snapshot_t *snapshot, size_t
                                     tsc_actor_snapshot_t *out) {
   return TSC_GUARD({
     assign_out(out, "out", [&] { return list_at(check_handle(snapshot, "snapshot", TSC_KIND_WORLD_SNAPSHOT)->actors, index, "snapshot"); });
+  });
+}
+
+size_t tsc_road_list_size(const tsc_road_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_ROAD_LIST) return 0;
+  return list->items.size();
+}
+
+tsc_status_t tsc_road_list_get(const tsc_road_list_t *list, size_t index, tsc_road_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_road(non_null(list_at(check_handle(list, "list", TSC_KIND_ROAD_LIST)->items, index, "road list"), "road"));
+  });
+}
+
+size_t tsc_lane_section_list_size(const tsc_lane_section_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_LANE_SECTION_LIST) return 0;
+  return list->items.size();
+}
+
+tsc_status_t tsc_lane_section_list_get(const tsc_lane_section_list_t *list, size_t index,
+                                       tsc_lane_section_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_lane_section(non_null(list_at(check_handle(list, "list", TSC_KIND_LANE_SECTION_LIST)->items, index, "lane section list"), "lane section"));
+  });
+}
+
+size_t tsc_lane_list_size(const tsc_lane_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_LANE_LIST) return 0;
+  return list->items.size();
+}
+
+tsc_status_t tsc_lane_list_get(const tsc_lane_list_t *list, size_t index, tsc_lane_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_lane(non_null(list_at(check_handle(list, "list", TSC_KIND_LANE_LIST)->items, index, "lane list"), "lane"));
+  });
+}
+
+size_t tsc_junction_list_size(const tsc_junction_list_t *list) {
+  if (list == nullptr || list->kind != TSC_KIND_JUNCTION_LIST) return 0;
+  return list->items.size();
+}
+
+tsc_status_t tsc_junction_list_get(const tsc_junction_list_t *list, size_t index,
+                                   tsc_junction_t **out) {
+  return new_handle(__func__, out, [&] {
+    return new tsc_junction(non_null(list_at(check_handle(list, "list", TSC_KIND_JUNCTION_LIST)->items, index, "junction list"), "junction"));
   });
 }
 

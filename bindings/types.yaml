@@ -60,6 +60,24 @@ bool_out:
   codon: i32
   assign: "*{out} = {} ? 1 : 0"
   cpp: ["bool"]
+int32_out: {c: int32_t, codon: i32, assign: "*{out} = {}", cpp: ["int", "int32_t"]}
+uint32_out: {c: uint32_t, codon: u32, assign: "*{out} = {}", cpp: ["unsigned int", "uint32_t"]}
+uint64_out:
+  c: uint64_t
+  codon: u64
+  assign: "*{out} = {}"
+  cpp: ["unsigned long( long)?", "uint64_t"]
+lane_type_out:
+  c: int32_t
+  codon: i32
+  assign: "*{out} = static_cast<int32_t>({})"
+  cpp: ["carla::road::Lane::LaneType"]
+transform_out:
+  c: tsc_transform_t
+  struct: true
+  codon: CTransform
+  assign: "*{out} = from_carla({})"
+  cpp: ["carla::geom::Transform"]
 # A finite float; NaN and infinities are rejected.
 finite:
   c: double
@@ -683,3 +701,52 @@ custom_v2x_bytes_in:
   to_carla: 'to_custom_v2x_bytes({name}, {name}_size, "{name}")'
   invalid: "NULL, 1"
   cpp: ["carla::rpc::CustomV2XBytes"]
+# --- CARLA ue58-dev's road model (ABI 5.1) ---
+# Ids as LibCarla's road::RoadId (uint32), SectionId (uint32), LaneId
+# (int32) and JuncId (int32): int32 / uint32 above.
+road_or_null:
+  c: tsc_road_t
+  handle: true
+  from_carla: "new_or_null<tsc_road>({})"
+  cpp: ["(boost|std)::shared_ptr<carla::client::Road>"]
+lane_section_or_null:
+  c: tsc_lane_section_t
+  handle: true
+  from_carla: "new_or_null<tsc_lane_section>({})"
+  cpp: ["(boost|std)::shared_ptr<carla::client::LaneSection>"]
+lane_or_null:
+  c: tsc_lane_t
+  handle: true
+  from_carla: "new_or_null<tsc_lane>({})"
+  cpp: ["(boost|std)::shared_ptr<carla::client::Lane>"]
+road_list:
+  c: tsc_road_list_t
+  handle: true
+  from_carla: "new tsc_road_list(without_nulls({}))"
+  cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Road>.*>"]
+lane_section_list:
+  c: tsc_lane_section_list_t
+  handle: true
+  from_carla: "new tsc_lane_section_list(without_nulls({}))"
+  cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::LaneSection>.*>"]
+lane_list:
+  c: tsc_lane_list_t
+  handle: true
+  from_carla: "new tsc_lane_list(without_nulls({}))"
+  cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Lane>.*>"]
+junction_list:
+  c: tsc_junction_list_t
+  handle: true
+  from_carla: "new tsc_junction_list(without_nulls({}))"
+  cpp: ["std::vector<(boost|std)::shared_ptr<carla::client::Junction>.*>"]
+# List elements (bindings/lists.yaml).
+road_handle: {c: tsc_road_t, handle: true, from_carla: 'new tsc_road(non_null({}, "road"))'}
+lane_section_handle:
+  c: tsc_lane_section_t
+  handle: true
+  from_carla: 'new tsc_lane_section(non_null({}, "lane section"))'
+lane_handle: {c: tsc_lane_t, handle: true, from_carla: 'new tsc_lane(non_null({}, "lane"))'}
+junction_handle:
+  c: tsc_junction_t
+  handle: true
+  from_carla: 'new tsc_junction(non_null({}, "junction"))'

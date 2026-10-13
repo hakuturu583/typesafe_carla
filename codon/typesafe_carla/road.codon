@@ -1,0 +1,559 @@
+# CARLA ue58-dev's road model: Road, LaneSection and Lane (Map.get_roads(),
+# Waypoint.get_road() ...), as the Python API of that branch. LibCarla
+# ue5-dev and 0.10.0 have none of it: every method is a compile error in a
+# program built for them (carla_api_missing_in, _carla_ref.codon), and
+# CarlaError at run time where nothing is checked (Python, TYPESAFE_CARLA_CHECK_REF=none).
+
+from ._ffi import (Handle, CString, CTransform, take_string, tsc_handle_release,
+                   tsc_road_get_id, tsc_road_get_name, tsc_road_get_length, tsc_road_is_junction,
+                   tsc_road_get_junction_id, tsc_road_is_rht, tsc_road_get_successor_id,
+                   tsc_road_get_predecessor_id, tsc_road_get_next_roads,
+                   tsc_road_get_previous_roads, tsc_road_get_lanes, tsc_road_get_lane,
+                   tsc_road_get_lane_at, tsc_road_get_sections, tsc_road_get_section,
+                   tsc_road_get_section_at, tsc_road_get_junction, tsc_road_get_transform_at,
+                   tsc_road_get_waypoints_at, tsc_road_get_waypoints,
+                   tsc_lane_section_get_id, tsc_lane_section_get_road_id,
+                   tsc_lane_section_get_unique_id, tsc_lane_section_get_road,
+                   tsc_lane_section_get_distance, tsc_lane_section_get_length,
+                   tsc_lane_section_get_lanes, tsc_lane_section_get_lane,
+                   tsc_lane_section_contains_lane, tsc_lane_section_get_next_section,
+                   tsc_lane_section_get_previous_section,
+                   tsc_lane_get_id, tsc_lane_get_road_id, tsc_lane_get_section_id,
+                   tsc_lane_get_unique_id, tsc_lane_get_type, tsc_lane_get_road,
+                   tsc_lane_get_section, tsc_lane_get_length, tsc_lane_get_distance,
+                   tsc_lane_get_level, tsc_lane_is_straight, tsc_lane_is_positive_direction,
+                   tsc_lane_get_width, tsc_lane_get_transform, tsc_lane_get_right_lane,
+                   tsc_lane_get_left_lane, tsc_lane_get_next_lanes, tsc_lane_get_previous_lanes,
+                   tsc_lane_get_waypoint, tsc_lane_get_waypoints,
+                   tsc_road_list_size, tsc_road_list_get, tsc_lane_section_list_size,
+                   tsc_lane_section_list_get, tsc_lane_list_size, tsc_lane_list_get,
+                   tsc_junction_list_size, tsc_junction_list_get,
+                   tsc_map_get_roads, tsc_map_get_road, tsc_map_get_lane_section,
+                   tsc_map_get_lane, tsc_map_get_junctions, tsc_map_get_junction_by_id,
+                   tsc_waypoint_get_road, tsc_waypoint_get_lane,
+                   tsc_junction_get_connecting_roads, tsc_junction_get_adjacent_roads,
+                   tsc_junction_get_entry_lanes, tsc_junction_get_exit_lanes,
+                   tsc_junction_get_entry_waypoints, tsc_junction_get_exit_waypoints)
+from .errors import _check
+from ._carla_ref import carla_api_missing_in
+from .geometry import Transform
+from .map import Map, Waypoint, Junction, _take_list, _waypoint_or_none
+
+def _take_handles(ptr: cobj, size, get, T: type) -> List[T]:
+    """Copies a native road / lane section / lane / junction list into a Codon
+    list of T(Handle) and releases it."""
+    h = Handle(ptr)
+    n = size(h.ptr)
+    result = List[T](n)
+    out = Ptr[cobj](1)
+    for i in range(n):
+        _check(get(h.ptr, i, out))
+        result.append(T(Handle(out[0])))
+    h.release()
+    return result
+
+def _or_none(ptr: cobj, T: type) -> Optional[T]:
+    if ptr == cobj():
+        return None
+    return T(Handle(ptr))
+
+class Road:
+    """An OpenDRIVE road: lane sections along s, each holding the lanes."""
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    @property
+    def id(self) -> int:
+        carla_api_missing_in("Road.id", "0.10.0", "ue5-dev")
+        out = Ptr[u32](1)
+        _check(tsc_road_get_id(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def name(self) -> str:
+        carla_api_missing_in("Road.name", "0.10.0", "ue5-dev")
+        out = Ptr[CString](1)
+        _check(tsc_road_get_name(self._h.ptr, out))
+        return take_string(out)
+
+    @property
+    def length(self) -> float:
+        carla_api_missing_in("Road.length", "0.10.0", "ue5-dev")
+        out = Ptr[float](1)
+        _check(tsc_road_get_length(self._h.ptr, out))
+        return out[0]
+
+    @property
+    def is_junction(self) -> bool:
+        carla_api_missing_in("Road.is_junction", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_road_is_junction(self._h.ptr, out))
+        return out[0] != i32(0)
+
+    @property
+    def junction_id(self) -> int:
+        carla_api_missing_in("Road.junction_id", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_road_get_junction_id(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def is_rht(self) -> bool:
+        carla_api_missing_in("Road.is_rht", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_road_is_rht(self._h.ptr, out))
+        return out[0] != i32(0)
+
+    @property
+    def successor_id(self) -> int:
+        carla_api_missing_in("Road.successor_id", "0.10.0", "ue5-dev")
+        out = Ptr[u32](1)
+        _check(tsc_road_get_successor_id(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def predecessor_id(self) -> int:
+        carla_api_missing_in("Road.predecessor_id", "0.10.0", "ue5-dev")
+        out = Ptr[u32](1)
+        _check(tsc_road_get_predecessor_id(self._h.ptr, out))
+        return int(out[0])
+
+    def get_next_road(self) -> List[Road]:
+        """Roads reachable by continuing forward."""
+        carla_api_missing_in("Road.get_next_road", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_next_roads(self._h.ptr, out))
+        return _take_handles(out[0], tsc_road_list_size, tsc_road_list_get, Road)
+
+    def get_previous_road(self) -> List[Road]:
+        """Roads that lead into this one."""
+        carla_api_missing_in("Road.get_previous_road", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_previous_roads(self._h.ptr, out))
+        return _take_handles(out[0], tsc_road_list_size, tsc_road_list_get, Road)
+
+    def get_transform_at(self, s: float) -> Transform:
+        """On the road's reference line at road coordinate s (m)."""
+        carla_api_missing_in("Road.get_transform_at", "0.10.0", "ue5-dev")
+        out = Ptr[CTransform](1)
+        _check(tsc_road_get_transform_at(self._h.ptr, s, out))
+        return Transform._from_c(out[0])
+
+    def get_waypoints_at(self, s: float, lane_type: int = 2) -> List[Waypoint]:  # LaneType.Driving
+        """A cross-section: one waypoint per lane of lane_type at s."""
+        carla_api_missing_in("Road.get_waypoints_at", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_waypoints_at(self._h.ptr, s, i32(lane_type), out))
+        return _take_list(out[0])
+
+    def get_waypoints(self, distance: float, lane_type: int = 2) -> List[Waypoint]:
+        """Waypoints along the road every `distance` m, on every lane of lane_type."""
+        carla_api_missing_in("Road.get_waypoints", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_waypoints(self._h.ptr, distance, i32(lane_type), out))
+        return _take_list(out[0])
+
+    def __eq__(self, other: Road) -> bool:
+        return self.id == other.id
+
+    def __ne__(self, other: Road) -> bool:
+        return not (self == other)
+
+    def __hash__(self) -> int:
+        return self.id
+
+    def __repr__(self) -> str:
+        return f"Road(id={self.id})"
+
+class LaneSection:
+    """A stretch of a road over which its lanes do not change."""
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    @property
+    def id(self) -> int:
+        carla_api_missing_in("LaneSection.id", "0.10.0", "ue5-dev")
+        out = Ptr[u32](1)
+        _check(tsc_lane_section_get_id(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def road_id(self) -> int:
+        carla_api_missing_in("LaneSection.road_id", "0.10.0", "ue5-dev")
+        out = Ptr[u32](1)
+        _check(tsc_lane_section_get_road_id(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def s_start(self) -> float:
+        carla_api_missing_in("LaneSection.s_start", "0.10.0", "ue5-dev")
+        out = Ptr[float](1)
+        _check(tsc_lane_section_get_distance(self._h.ptr, out))
+        return out[0]
+
+    @property
+    def length(self) -> float:
+        carla_api_missing_in("LaneSection.length", "0.10.0", "ue5-dev")
+        out = Ptr[float](1)
+        _check(tsc_lane_section_get_length(self._h.ptr, out))
+        return out[0]
+
+    def contains_lane(self, lane_id: int) -> bool:
+        carla_api_missing_in("LaneSection.contains_lane", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_lane_section_contains_lane(self._h.ptr, i32(lane_id), out))
+        return out[0] != i32(0)
+
+    def get_next_section(self) -> Optional[LaneSection]:
+        """The next section of the road, or None at its end."""
+        carla_api_missing_in("LaneSection.get_next_section", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_section_get_next_section(self._h.ptr, out))
+        return _or_none(out[0], LaneSection)
+
+    def get_previous_section(self) -> Optional[LaneSection]:
+        carla_api_missing_in("LaneSection.get_previous_section", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_section_get_previous_section(self._h.ptr, out))
+        return _or_none(out[0], LaneSection)
+
+    def _unique_id(self) -> int:
+        carla_api_missing_in("LaneSection.__hash__", "0.10.0", "ue5-dev")
+        out = Ptr[u64](1)
+        _check(tsc_lane_section_get_unique_id(self._h.ptr, out))
+        return int(out[0])
+
+    def __eq__(self, other: LaneSection) -> bool:
+        return self.road_id == other.road_id and self.id == other.id
+
+    def __ne__(self, other: LaneSection) -> bool:
+        return not (self == other)
+
+    def __hash__(self) -> int:
+        return self._unique_id()
+
+    def __repr__(self) -> str:
+        return f"LaneSection(road_id={self.road_id}, id={self.id})"
+
+class Lane:
+    """A lane of a lane section (OpenDRIVE: negative ids right of the
+    reference line, positive left)."""
+    _h: Handle
+
+    def __init__(self, h: Handle):
+        self._h = h
+
+    @property
+    def id(self) -> int:
+        carla_api_missing_in("Lane.id", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_lane_get_id(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def road_id(self) -> int:
+        carla_api_missing_in("Lane.road_id", "0.10.0", "ue5-dev")
+        out = Ptr[u32](1)
+        _check(tsc_lane_get_road_id(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def section_id(self) -> int:
+        carla_api_missing_in("Lane.section_id", "0.10.0", "ue5-dev")
+        out = Ptr[u32](1)
+        _check(tsc_lane_get_section_id(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def type(self) -> int:
+        carla_api_missing_in("Lane.type", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_lane_get_type(self._h.ptr, out))
+        return int(out[0])
+
+    @property
+    def length(self) -> float:
+        carla_api_missing_in("Lane.length", "0.10.0", "ue5-dev")
+        out = Ptr[float](1)
+        _check(tsc_lane_get_length(self._h.ptr, out))
+        return out[0]
+
+    @property
+    def s_start(self) -> float:
+        carla_api_missing_in("Lane.s_start", "0.10.0", "ue5-dev")
+        out = Ptr[float](1)
+        _check(tsc_lane_get_distance(self._h.ptr, out))
+        return out[0]
+
+    @property
+    def level(self) -> bool:
+        carla_api_missing_in("Lane.level", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_lane_get_level(self._h.ptr, out))
+        return out[0] != i32(0)
+
+    @property
+    def is_straight(self) -> bool:
+        carla_api_missing_in("Lane.is_straight", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_lane_is_straight(self._h.ptr, out))
+        return out[0] != i32(0)
+
+    @property
+    def is_positive_direction(self) -> bool:
+        carla_api_missing_in("Lane.is_positive_direction", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_lane_is_positive_direction(self._h.ptr, out))
+        return out[0] != i32(0)
+
+    def get_width(self, s: float) -> float:
+        """The lane's width (m) at road coordinate s."""
+        carla_api_missing_in("Lane.get_width", "0.10.0", "ue5-dev")
+        out = Ptr[float](1)
+        _check(tsc_lane_get_width(self._h.ptr, s, out))
+        return out[0]
+
+    def get_transform(self, s: float) -> Transform:
+        """On the lane's centre at road coordinate s."""
+        carla_api_missing_in("Lane.get_transform", "0.10.0", "ue5-dev")
+        out = Ptr[CTransform](1)
+        _check(tsc_lane_get_transform(self._h.ptr, s, out))
+        return Transform._from_c(out[0])
+
+    def get_right_lane(self) -> Optional[Lane]:
+        carla_api_missing_in("Lane.get_right_lane", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_get_right_lane(self._h.ptr, out))
+        return _or_none(out[0], Lane)
+
+    def get_left_lane(self) -> Optional[Lane]:
+        carla_api_missing_in("Lane.get_left_lane", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_get_left_lane(self._h.ptr, out))
+        return _or_none(out[0], Lane)
+
+    def get_next_lane(self) -> List[Lane]:
+        """Lanes that follow this one (across lane sections and roads)."""
+        carla_api_missing_in("Lane.get_next_lane", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_get_next_lanes(self._h.ptr, out))
+        return _take_handles(out[0], tsc_lane_list_size, tsc_lane_list_get, Lane)
+
+    def get_previous_lane(self) -> List[Lane]:
+        carla_api_missing_in("Lane.get_previous_lane", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_get_previous_lanes(self._h.ptr, out))
+        return _take_handles(out[0], tsc_lane_list_size, tsc_lane_list_get, Lane)
+
+    def get_waypoint(self, s: float) -> Optional[Waypoint]:
+        carla_api_missing_in("Lane.get_waypoint", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_get_waypoint(self._h.ptr, s, out))
+        return _waypoint_or_none(out[0])
+
+    def get_waypoints(self, distance: float) -> List[Waypoint]:
+        """Waypoints along the lane every `distance` m."""
+        carla_api_missing_in("Lane.get_waypoints", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_get_waypoints(self._h.ptr, distance, out))
+        return _take_list(out[0])
+
+    def _unique_id(self) -> int:
+        carla_api_missing_in("Lane.__hash__", "0.10.0", "ue5-dev")
+        out = Ptr[u64](1)
+        _check(tsc_lane_get_unique_id(self._h.ptr, out))
+        return int(out[0])
+
+    def __eq__(self, other: Lane) -> bool:
+        return (self.road_id == other.road_id and self.section_id == other.section_id and
+                self.id == other.id)
+
+    def __ne__(self, other: Lane) -> bool:
+        return not (self == other)
+
+    def __hash__(self) -> int:
+        return self._unique_id()
+
+    def __repr__(self) -> str:
+        return f"Lane(road_id={self.road_id}, section_id={self.section_id}, id={self.id})"
+
+# Methods returning a later class (Codon: forward references through @extend).
+
+@extend
+class Road:
+    def get_lanes(self, s: float, lane_type: int = 2) -> List[Lane]:  # LaneType.Driving
+        """Every lane of lane_type at road coordinate s."""
+        carla_api_missing_in("Road.get_lanes", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_lanes(self._h.ptr, s, i32(lane_type), out))
+        return _take_handles(out[0], tsc_lane_list_size, tsc_lane_list_get, Lane)
+
+    def get_lane(self, section_id: int, lane_id: int) -> Optional[Lane]:
+        carla_api_missing_in("Road.get_lane", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_lane(self._h.ptr, u32(section_id), i32(lane_id), out))
+        return _or_none(out[0], Lane)
+
+    def get_lane_at(self, s: float, lane_id: int) -> Optional[Lane]:
+        """The lane with this id in whichever section covers s."""
+        carla_api_missing_in("Road.get_lane_at", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_lane_at(self._h.ptr, s, i32(lane_id), out))
+        return _or_none(out[0], Lane)
+
+    def get_sections(self) -> List[LaneSection]:
+        carla_api_missing_in("Road.get_sections", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_sections(self._h.ptr, out))
+        return _take_handles(out[0], tsc_lane_section_list_size, tsc_lane_section_list_get,
+                             LaneSection)
+
+    def get_section(self, section_id: int) -> Optional[LaneSection]:
+        carla_api_missing_in("Road.get_section", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_section(self._h.ptr, u32(section_id), out))
+        return _or_none(out[0], LaneSection)
+
+    def get_section_at(self, s: float) -> Optional[LaneSection]:
+        carla_api_missing_in("Road.get_section_at", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_section_at(self._h.ptr, s, out))
+        return _or_none(out[0], LaneSection)
+
+    def get_junction(self) -> Optional[Junction]:
+        """The junction this road belongs to, or None."""
+        carla_api_missing_in("Road.get_junction", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_road_get_junction(self._h.ptr, out))
+        return _or_none(out[0], Junction)
+
+@extend
+class LaneSection:
+    def get_road(self) -> Road:
+        carla_api_missing_in("LaneSection.get_road", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_section_get_road(self._h.ptr, out))
+        return Road(Handle(out[0]))
+
+    def get_lanes(self, lane_type: int = 2) -> List[Lane]:  # LaneType.Driving
+        carla_api_missing_in("LaneSection.get_lanes", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_section_get_lanes(self._h.ptr, i32(lane_type), out))
+        return _take_handles(out[0], tsc_lane_list_size, tsc_lane_list_get, Lane)
+
+    def get_lane(self, lane_id: int) -> Optional[Lane]:
+        carla_api_missing_in("LaneSection.get_lane", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_section_get_lane(self._h.ptr, i32(lane_id), out))
+        return _or_none(out[0], Lane)
+
+@extend
+class Lane:
+    def get_road(self) -> Road:
+        carla_api_missing_in("Lane.get_road", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_get_road(self._h.ptr, out))
+        return Road(Handle(out[0]))
+
+    def get_section(self) -> LaneSection:
+        carla_api_missing_in("Lane.get_section", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_lane_get_section(self._h.ptr, out))
+        return LaneSection(Handle(out[0]))
+
+@extend
+class Map:
+    def get_roads(self) -> List[Road]:
+        carla_api_missing_in("Map.get_roads", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_roads(self._h.ptr, out))
+        return _take_handles(out[0], tsc_road_list_size, tsc_road_list_get, Road)
+
+    def get_road(self, road_id: int) -> Optional[Road]:
+        """None when the map has no such road."""
+        carla_api_missing_in("Map.get_road", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_road(self._h.ptr, u32(road_id), out))
+        return _or_none(out[0], Road)
+
+    def get_lane_section(self, road_id: int, section_id: int) -> Optional[LaneSection]:
+        carla_api_missing_in("Map.get_lane_section", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_lane_section(self._h.ptr, u32(road_id), u32(section_id), out))
+        return _or_none(out[0], LaneSection)
+
+    def get_lane(self, road_id: int, section_id: int, lane_id: int) -> Optional[Lane]:
+        carla_api_missing_in("Map.get_lane", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_lane(self._h.ptr, u32(road_id), u32(section_id), i32(lane_id), out))
+        return _or_none(out[0], Lane)
+
+    def get_junctions(self) -> List[Junction]:
+        carla_api_missing_in("Map.get_junctions", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_junctions(self._h.ptr, out))
+        return _take_handles(out[0], tsc_junction_list_size, tsc_junction_list_get, Junction)
+
+    def get_junction_by_id(self, junction_id: int) -> Optional[Junction]:
+        carla_api_missing_in("Map.get_junction_by_id", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_map_get_junction_by_id(self._h.ptr, i32(junction_id), out))
+        return _or_none(out[0], Junction)
+
+@extend
+class Waypoint:
+    def get_road(self) -> Optional[Road]:
+        carla_api_missing_in("Waypoint.get_road", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_waypoint_get_road(self._h.ptr, out))
+        return _or_none(out[0], Road)
+
+    def get_lane(self) -> Optional[Lane]:
+        carla_api_missing_in("Waypoint.get_lane", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_waypoint_get_lane(self._h.ptr, out))
+        return _or_none(out[0], Lane)
+
+@extend
+class Junction:
+    def get_connecting_roads(self) -> List[Road]:
+        """The roads inside the junction."""
+        carla_api_missing_in("Junction.get_connecting_roads", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_junction_get_connecting_roads(self._h.ptr, out))
+        return _take_handles(out[0], tsc_road_list_size, tsc_road_list_get, Road)
+
+    def get_adjacent_roads(self) -> List[Road]:
+        """The roads leading into or out of the junction."""
+        carla_api_missing_in("Junction.get_adjacent_roads", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_junction_get_adjacent_roads(self._h.ptr, out))
+        return _take_handles(out[0], tsc_road_list_size, tsc_road_list_get, Road)
+
+    def get_entry_lanes(self, lane_type: int = 2) -> List[Lane]:  # LaneType.Driving
+        carla_api_missing_in("Junction.get_entry_lanes", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_junction_get_entry_lanes(self._h.ptr, i32(lane_type), out))
+        return _take_handles(out[0], tsc_lane_list_size, tsc_lane_list_get, Lane)
+
+    def get_exit_lanes(self, lane_type: int = 2) -> List[Lane]:
+        carla_api_missing_in("Junction.get_exit_lanes", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_junction_get_exit_lanes(self._h.ptr, i32(lane_type), out))
+        return _take_handles(out[0], tsc_lane_list_size, tsc_lane_list_get, Lane)
+
+    def get_entry_waypoints(self, lane_type: int = 2) -> List[Waypoint]:
+        carla_api_missing_in("Junction.get_entry_waypoints", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_junction_get_entry_waypoints(self._h.ptr, i32(lane_type), out))
+        return _take_list(out[0])
+
+    def get_exit_waypoints(self, lane_type: int = 2) -> List[Waypoint]:
+        carla_api_missing_in("Junction.get_exit_waypoints", "0.10.0", "ue5-dev")
+        out = Ptr[cobj](1)
+        _check(tsc_junction_get_exit_waypoints(self._h.ptr, i32(lane_type), out))
+        return _take_list(out[0])

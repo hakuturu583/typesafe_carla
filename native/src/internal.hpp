@@ -248,6 +248,43 @@ struct tsc_junction : tsc_handle {
       : tsc_handle(TSC_KIND_JUNCTION), junction(std::move(j)) {}
 };
 
+// CARLA ue58-dev's road model (ABI 5.1). One handle type and one list per
+// class; the classes may be incomplete (carla_compat.hpp).
+template <typename T, tsc_handle_kind_t K>
+struct tsc_object_handle : tsc_handle {
+  carla::SharedPtr<T> object;
+  explicit tsc_object_handle(carla::SharedPtr<T> o) : tsc_handle(K), object(std::move(o)) {}
+};
+
+template <typename T, tsc_handle_kind_t K>
+struct tsc_object_list : tsc_handle {
+  std::vector<carla::SharedPtr<T>> items;
+  explicit tsc_object_list(std::vector<carla::SharedPtr<T>> v) : tsc_handle(K), items(std::move(v)) {}
+};
+
+struct tsc_road : tsc_object_handle<carla::client::Road, TSC_KIND_ROAD> {
+  using tsc_object_handle::tsc_object_handle;
+};
+struct tsc_lane_section : tsc_object_handle<carla::client::LaneSection, TSC_KIND_LANE_SECTION> {
+  using tsc_object_handle::tsc_object_handle;
+};
+struct tsc_lane : tsc_object_handle<carla::client::Lane, TSC_KIND_LANE> {
+  using tsc_object_handle::tsc_object_handle;
+};
+struct tsc_road_list : tsc_object_list<carla::client::Road, TSC_KIND_ROAD_LIST> {
+  using tsc_object_list::tsc_object_list;
+};
+struct tsc_lane_section_list
+    : tsc_object_list<carla::client::LaneSection, TSC_KIND_LANE_SECTION_LIST> {
+  using tsc_object_list::tsc_object_list;
+};
+struct tsc_lane_list : tsc_object_list<carla::client::Lane, TSC_KIND_LANE_LIST> {
+  using tsc_object_list::tsc_object_list;
+};
+struct tsc_junction_list : tsc_object_list<carla::client::Junction, TSC_KIND_JUNCTION_LIST> {
+  using tsc_object_list::tsc_object_list;
+};
+
 // A physics control snapshot, already converted to the C layout: `view` points
 // into the vectors below, which never change after construction.
 struct tsc_physics_control : tsc_handle {
@@ -843,6 +880,18 @@ inline const carla::client::WorldSnapshot &snapshot_of(const tsc_world_snapshot_
 
 inline const carla::client::Junction &junction_of(const tsc_junction_t *j) {
   return *check_handle(j, "junction", TSC_KIND_JUNCTION)->junction;
+}
+
+inline const carla::client::Road &road_of(const tsc_road_t *r) {
+  return *check_handle(r, "road", TSC_KIND_ROAD)->object;
+}
+
+inline const carla::client::LaneSection &lane_section_of(const tsc_lane_section_t *s) {
+  return *check_handle(s, "section", TSC_KIND_LANE_SECTION)->object;
+}
+
+inline const carla::client::Lane &lane_of(const tsc_lane_t *l) {
+  return *check_handle(l, "lane", TSC_KIND_LANE)->object;
 }
 
 inline tsc_sensor &sensor_handle(tsc_sensor_t *s) {

@@ -1,0 +1,12 @@
+# Map.get_roads is CARLA ue58-dev only: built for ue5-dev, whose LibCarla has
+# no road model, the program does not compile.
+# carla-ref: ue5-dev
+# expect-error: Map.get_roads is not in LibCarla ue5-dev
+import typesafe_carla as carla
+
+def roads(m: carla.Map):
+    for road in m.get_roads():
+        print(road.id)
+
+# Compile-only: Codon type-checks a function only when it is called.
+roads(carla.Client("localhost", 2000).get_world().get_map())

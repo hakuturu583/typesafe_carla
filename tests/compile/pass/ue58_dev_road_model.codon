@@ -1,0 +1,86 @@
+# CARLA ue58-dev's road model (Road, LaneSection, Lane), built for ue58-dev,
+# with its static types.
+# carla-ref: ue58-dev
+# strict
+import typesafe_carla as carla
+
+def roads(m: carla.Map):
+    all_roads: List[carla.Road] = m.get_roads()
+    road: Optional[carla.Road] = m.get_road(1)
+    section: Optional[carla.LaneSection] = m.get_lane_section(1, 0)
+    lane: Optional[carla.Lane] = m.get_lane(1, 0, -1)
+    junctions: List[carla.Junction] = m.get_junctions()
+    junction: Optional[carla.Junction] = m.get_junction_by_id(0)
+
+def road_api(r: carla.Road):
+    rid: int = r.id
+    name: str = r.name
+    length: float = r.length
+    flags: bool = r.is_junction or r.is_rht
+    jid: int = r.junction_id + r.successor_id + r.predecessor_id
+    nxt: List[carla.Road] = r.get_next_road() + r.get_previous_road()
+    lanes: List[carla.Lane] = r.get_lanes(10.0, carla.LaneType.Driving)
+    lane: Optional[carla.Lane] = r.get_lane(0, -1)
+    at: Optional[carla.Lane] = r.get_lane_at(10.0, -1)
+    sections: List[carla.LaneSection] = r.get_sections()
+    s0: Optional[carla.LaneSection] = r.get_section(0)
+    s1: Optional[carla.LaneSection] = r.get_section_at(10.0)
+    junction: Optional[carla.Junction] = r.get_junction()
+    t: carla.Transform = r.get_transform_at(10.0)
+    across: List[carla.Waypoint] = r.get_waypoints_at(10.0)
+    along: List[carla.Waypoint] = r.get_waypoints(2.0, carla.LaneType.Driving)
+    same: bool = r == r and not (r != r)
+    h: int = hash(r)
+
+def section_api(s: carla.LaneSection):
+    ids: int = s.id + s.road_id
+    span: float = s.s_start + s.length
+    road: carla.Road = s.get_road()
+    lanes: List[carla.Lane] = s.get_lanes()
+    lane: Optional[carla.Lane] = s.get_lane(-1)
+    has: bool = s.contains_lane(-1)
+    nxt: Optional[carla.LaneSection] = s.get_next_section()
+    prv: Optional[carla.LaneSection] = s.get_previous_section()
+    h: int = hash(s)
+
+def lane_api(l: carla.Lane):
+    ids: int = l.id + l.road_id + l.section_id + l.type
+    span: float = l.s_start + l.length + l.get_width(1.0)
+    flags: bool = l.level or l.is_straight or l.is_positive_direction
+    road: carla.Road = l.get_road()
+    section: carla.LaneSection = l.get_section()
+    t: carla.Transform = l.get_transform(1.0)
+    right: Optional[carla.Lane] = l.get_right_lane()
+    left: Optional[carla.Lane] = l.get_left_lane()
+    nxt: List[carla.Lane] = l.get_next_lane() + l.get_previous_lane()
+    wp: Optional[carla.Waypoint] = l.get_waypoint(1.0)
+    wps: List[carla.Waypoint] = l.get_waypoints(2.0)
+    h: int = hash(l)
+
+def waypoint_api(w: carla.Waypoint):
+    road: Optional[carla.Road] = w.get_road()
+    lane: Optional[carla.Lane] = w.get_lane()
+
+def junction_api(j: carla.Junction):
+    roads: List[carla.Road] = j.get_connecting_roads() + j.get_adjacent_roads()
+    lanes: List[carla.Lane] = j.get_entry_lanes() + j.get_exit_lanes(carla.LaneType.Driving)
+    wps: List[carla.Waypoint] = j.get_entry_waypoints() + j.get_exit_waypoints()
+
+# Compile-only: Codon type-checks a function only when it is called.
+m = carla.Client("localhost", 2000).get_world().get_map()
+roads(m)
+r = m.get_road(1)
+if r is not None:
+    road_api(r)
+s = m.get_lane_section(1, 0)
+if s is not None:
+    section_api(s)
+l = m.get_lane(1, 0, -1)
+if l is not None:
+    lane_api(l)
+w = m.get_waypoint(carla.Location(1.0, 0.0, 0.0))
+if w is not None:
+    waypoint_api(w)
+j = m.get_junction_by_id(0)
+if j is not None:
+    junction_api(j)

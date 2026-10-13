@@ -1,0 +1,72 @@
+# CARLA ue58-dev's OpenDRIVE road (Map.get_roads() ...): tsc_road_<name>.
+# Not in LibCarla ue5-dev or 0.10.0: every call is optional there.
+class: carla::client::Road
+prefix: road
+self: {type: const tsc_road_t, name: road, get: road_of}
+blocks:
+  road:
+    get_id: {call: GetId, out: uint32_out, optional: {name: Road.id, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_name: {call: GetName, out: string, optional: {name: Road.name, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_length: {call: GetLength, out: double_out, optional: {name: Road.length, missing_in: ["0.10.0", "ue5-dev"]}}
+    is_junction: {call: IsJunction, out: bool_out, optional: {name: Road.is_junction, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_junction_id:
+      call: GetJunctionId
+      out: int32_out
+      optional: {name: Road.junction_id, missing_in: ["0.10.0", "ue5-dev"]}
+      doc: "-1 when the road is not part of a junction."
+    is_rht: {call: IsRHT, out: bool_out, optional: {name: Road.is_rht, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_successor_id:
+      {call: GetSuccessorId, out: uint32_out, optional: {name: Road.successor_id, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_predecessor_id:
+      {call: GetPredecessorId, out: uint32_out, optional: {name: Road.predecessor_id, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_next_roads:
+      {call: GetNextRoads, out: road_list, optional: {name: Road.get_next_road, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_previous_roads:
+      {call: GetPreviousRoads, out: road_list, optional: {name: Road.get_previous_road, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_lanes:
+      call: GetLanes
+      args: {s: distance, lane_type: lane_type}
+      out: lane_list
+      optional: {name: Road.get_lanes, missing_in: ["0.10.0", "ue5-dev"]}
+      doc: "Every lane of lane_type (CARLA LaneType bits) at road coordinate s."
+    get_lane:
+      call: GetLane
+      args: {section_id: uint32, lane_id: int32}
+      out: lane_or_null
+      optional: {name: Road.get_lane, missing_in: ["0.10.0", "ue5-dev"]}
+    get_lane_at:
+      call: GetLaneAt
+      args: {s: distance, lane_id: int32}
+      out: lane_or_null
+      optional: {name: Road.get_lane_at, missing_in: ["0.10.0", "ue5-dev"]}
+    get_sections:
+      {call: GetSections, out: lane_section_list, optional: {name: Road.get_sections, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_section:
+      call: GetSection
+      args: {section_id: uint32}
+      out: lane_section_or_null
+      optional: {name: Road.get_section, missing_in: ["0.10.0", "ue5-dev"]}
+    get_section_at:
+      call: GetSectionAt
+      args: {s: distance}
+      out: lane_section_or_null
+      optional: {name: Road.get_section_at, missing_in: ["0.10.0", "ue5-dev"]}
+    get_junction:
+      {call: GetJunction, out: junction_or_null, optional: {name: Road.get_junction, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_transform_at:
+      call: GetTransformAt
+      args: {s: distance}
+      out: transform_out
+      optional: {name: Road.get_transform_at, missing_in: ["0.10.0", "ue5-dev"]}
+    get_waypoints_at:
+      call: GetWaypointsAt
+      args: {s: distance, lane_type: lane_type}
+      out: waypoint_list
+      optional: {name: Road.get_waypoints_at, missing_in: ["0.10.0", "ue5-dev"]}
+      doc: "A cross-section: one waypoint per lane of lane_type at s."
+    get_waypoints:
+      call: GetWaypoints
+      args: {distance: positive, lane_type: lane_type}
+      out: waypoint_list
+      optional: {name: Road.get_waypoints, missing_in: ["0.10.0", "ue5-dev"]}
+      doc: "Waypoints along the road every distance metres, on every lane of lane_type."

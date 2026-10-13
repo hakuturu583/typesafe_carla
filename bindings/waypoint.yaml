@@ -47,3 +47,7 @@ blocks:
       call: GetLandmarksOfTypeInDistance
       args: {distance: distance, type: string_in, stop_at_junction: bool}
       out: landmark_list
+  # CARLA ue58-dev. Not in LibCarla ue5-dev or 0.10.0.
+  waypoint_road:
+    get_road: {call: GetRoad, out: road_or_null, optional: {name: Waypoint.get_road, missing_in: ["0.10.0", "ue5-dev"]}}
+    get_lane: {call: GetLane, out: lane_or_null, optional: {name: Waypoint.get_lane, missing_in: ["0.10.0", "ue5-dev"]}}
