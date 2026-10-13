@@ -158,6 +158,26 @@ std::vector<carla::geom::Transform> vehicle_bone_world_transforms(const V &vehic
 // Thrown (as TSC_ERROR) for a feature the linked LibCarla does not have.
 [[noreturn]] inline void unsupported(const char *what) { throw missing_in_libcarla(what); }
 
+// EpisodeSettings::adjust_signs_height_to_ground (CARLA ue58-dev). Templates,
+// so that `requires` checks the member instead of failing on its absence.
+template <typename S>
+int32_t adjust_signs_height_to_ground(const S &s) {
+  if constexpr (requires { s.adjust_signs_height_to_ground; }) {
+    return s.adjust_signs_height_to_ground ? 1 : 0;
+  } else {
+    return 0;
+  }
+}
+
+template <typename S>
+void set_adjust_signs_height_to_ground(S &s, int32_t value) {
+  if constexpr (requires { s.adjust_signs_height_to_ground; }) {
+    s.adjust_signs_height_to_ground = value != 0;
+  } else if (value != 0) {
+    unsupported("EpisodeSettings.adjust_signs_height_to_ground");
+  }
+}
+
 // obj.method(args...), or unsupported(what) when the linked LibCarla has no
 // such method (a generic lambda, so that the `requires` may fail). Generated
 // for `optional:` entries of bindings/*.yaml.
