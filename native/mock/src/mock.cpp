@@ -2627,46 +2627,48 @@ std::vector<std::string> Client::GetAvailableMaps() const {
 
 bool Client::SetFilesBaseFolder(const std::string &path) { return !path.empty(); }
 
-// CARLA ue58-dev's content packs: the mock server knows one pack, "MockPack",
-// in /packs/MockPack, unmounted until mount_content_pack. As the server, it
-// fails (an RPC error) on a path that holds no pack.
+// CARLA ue58-dev's content packs: each mock server knows one pack,
+// "MockPack", in /packs/MockPack, unmounted until mount_content_pack (a level
+// load keeps it mounted). As the server, it fails (an RPC error) on a path
+// that holds no pack.
 namespace {
 std::mutex g_pack_mutex;
-bool g_pack_mounted = false;
+std::map<const mock::Episode *, bool> g_pack_mounted;  // per server
 
-rpc::ContentPackInfo MockPack() {
+rpc::ContentPackInfo MockPack(bool mounted) {
   rpc::ContentPackInfo p;
   p.name = "MockPack";
   p.version = "1.0.0";
   p.base_release = "carla-0.10.2-Linux";
   p.path = "/packs/MockPack";
-  p.mounted = g_pack_mounted;
+  p.mounted = mounted;
   p.maps = {"/MockPack/Maps/PackTown"};
   return p;
 }
 }  // namespace
 
 std::vector<rpc::ContentPackInfo> Client::GetContentPacks() const {
-  mock::Connect(_endpoint, _timeout);
+  const auto server = mock::Connect(_endpoint, _timeout);
   std::lock_guard<std::mutex> lock(g_pack_mutex);
-  return {MockPack()};
+  return {MockPack(g_pack_mounted[server.get()])};
 }
 
 rpc::ContentPackInfo Client::MountContentPack(const std::string &path) const {
-  mock::Connect(_endpoint, _timeout);
+  const auto server = mock::Connect(_endpoint, _timeout);
   std::lock_guard<std::mutex> lock(g_pack_mutex);
   if (path != "/packs/MockPack") {
     throw std::runtime_error("mount_content_pack: no content pack in " + path);
   }
-  g_pack_mounted = true;
-  return MockPack();
+  g_pack_mounted[server.get()] = true;
+  return MockPack(true);
 }
 
 bool Client::UnmountContentPack(const std::string &name) const {
-  mock::Connect(_endpoint, _timeout);
+  const auto server = mock::Connect(_endpoint, _timeout);
   std::lock_guard<std::mutex> lock(g_pack_mutex);
-  if (name != "MockPack" || !g_pack_mounted) return false;
-  g_pack_mounted = false;
+  bool &mounted = g_pack_mounted[server.get()];
+  if (name != "MockPack" || !mounted) return false;
+  mounted = false;
   return true;
 }
 

@@ -29,6 +29,8 @@ assert not client.unmount_content_pack("MockPack")  # not mounted
 mounted = client.mount_content_pack("/packs/MockPack")
 assert mounted.mounted and mounted.name == "MockPack" and client.get_content_packs()[0].mounted
 assert raises(lambda: client.mount_content_pack("/packs/None"))  # the server's error
+other = carla.Client("localhost", 2001)  # another mock server
+assert not other.get_content_packs()[0].mounted and not other.unmount_content_pack("MockPack")
 assert client.unmount_content_pack("MockPack") and not client.get_content_packs()[0].mounted
 assert not client.unmount_content_pack("Other")
 
@@ -57,7 +59,8 @@ assert raises(lambda: world.set_sky_light_map(2, 1, [0.1, 0.2]))          # wron
 assert raises(lambda: world.set_sky_light_map(panorama, 1.0, 0))          # face size
 assert raises(lambda: world.set_sky_light_map(panorama, -1.0))            # intensity
 assert raises(lambda: world.set_sky_light_map(carla.TextureFloatColor()))  # empty
-world.clear_sky_light_map()
+world = client.reload_world()  # a level load drops it, as in CARLA
+assert not world.has_sky_light_map()
 
 # --- Constant acceleration ----------------------------------------------------------
 bp = world.get_blueprint_library().find("vehicle.audi.tt")
