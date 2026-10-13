@@ -134,3 +134,18 @@ blocks:
              emissive_texture: texture_float_color, normal_texture: texture_float_color,
              ao_roughness_metallic_emissive_texture: texture_float_color}
     get_light_manager: {call: GetLightManager, out: light_manager_handle}
+  # CARLA ue58-dev. Not in LibCarla ue5-dev or 0.10.0.
+  world_ue58:
+    get_ego_spawn_points:
+      call: GetEgoSpawnPoints
+      optional: {name: World.get_ego_spawn_points, missing_in: ["0.10.0", "ue5-dev"]}
+      out: transform_buffer
+      doc: "Two-call pattern: pass out=NULL to get the count. Copies min(capacity, n)."
+    get_publish_tf:
+      call: GetPublishTF
+      optional: {name: World.get_publish_tf, missing_in: ["0.10.0", "ue5-dev"]}
+      out: bool_out
+    set_publish_tf:
+      call: SetPublishTF
+      optional: {name: World.set_publish_tf, missing_in: ["0.10.0", "ue5-dev"]}
+      args: {publish_tf: bool}

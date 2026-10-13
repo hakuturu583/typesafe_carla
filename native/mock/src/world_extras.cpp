@@ -34,6 +34,7 @@ struct Extras {
   std::shared_ptr<LightManager> light_manager;
   std::vector<rpc::EnvironmentObject> objects;
   float imu_gravity = 9.81f;
+  bool publish_tf = false;  // ue58-dev
 };
 
 rpc::EnvironmentObject Object(uint64_t id, std::string name, rpc::CityObjectLabel type,
@@ -261,6 +262,22 @@ void World::SetIMUSensorGravity(float gravity) {
   auto x = mock::ExtrasOf(_episode.get());
   std::lock_guard<std::mutex> lock(x->mutex);
   x->imu_gravity = gravity;
+}
+
+// CARLA ue58-dev. The mock's map places no ego spawn point: an empty list,
+// as a map without them gives.
+std::vector<geom::Transform> World::GetEgoSpawnPoints() const { return {}; }
+
+bool World::GetPublishTF() const {
+  auto x = mock::ExtrasOf(_episode.get());
+  std::lock_guard<std::mutex> lock(x->mutex);
+  return x->publish_tf;
+}
+
+void World::SetPublishTF(bool publish_tf) {
+  auto x = mock::ExtrasOf(_episode.get());
+  std::lock_guard<std::mutex> lock(x->mutex);
+  x->publish_tf = publish_tf;
 }
 
 SharedPtr<LightManager> World::GetLightManager() const {

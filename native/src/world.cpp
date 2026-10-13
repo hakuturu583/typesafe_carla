@@ -52,6 +52,7 @@ tsc_status_t tsc_world_get_settings_ext(tsc_world_t *world, tsc_world_settings_t
       out_ext->actor_active_distance = s.actor_active_distance;
       out_ext->deterministic_ragdolls = s.deterministic_ragdolls ? 1 : 0;
       out_ext->spectator_as_ego = s.spectator_as_ego ? 1 : 0;
+      out_ext->adjust_signs_height_to_ground = adjust_signs_height_to_ground(s);  // ue58-dev
     }
   });
 }
@@ -87,6 +88,7 @@ tsc_status_t tsc_world_apply_settings_ext(tsc_world_t *world, const tsc_world_se
           check_non_negative(ext->actor_active_distance, "actor_active_distance");
       s.deterministic_ragdolls = ext->deterministic_ragdolls != 0;
       s.spectator_as_ego = ext->spectator_as_ego != 0;
+      set_adjust_signs_height_to_ground(s, ext->adjust_signs_height_to_ground);  // ue58-dev
     }
     *out_frame = w.ApplySettings(s, seconds_to_duration(timeout_seconds));
   });

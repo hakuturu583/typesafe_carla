@@ -38,6 +38,9 @@ class WorldSettings:
     _tile_stream_distance: float  # meters (large maps)
     _actor_active_distance: float  # meters (large maps)
     spectator_as_ego: bool  # the spectator drives large-map streaming without a hero
+    # CARLA ue58-dev: the server moves traffic signs onto the ground. True needs
+    # a LibCarla with it: applying it otherwise raises CarlaError.
+    adjust_signs_height_to_ground: bool
 
     # Defaults as the Python API's WorldSettings() (deterministic_ragdolls is
     # False there, True in a fresh LibCarla EpisodeSettings).
@@ -46,7 +49,7 @@ class WorldSettings:
                  max_substep_delta_time: float = 0.01, max_substeps: int = 10,
                  max_culling_distance: float = 0.0, deterministic_ragdolls: bool = False,
                  tile_stream_distance: float = 3000.0, actor_active_distance: float = 2000.0,
-                 spectator_as_ego: bool = True):
+                 spectator_as_ego: bool = True, adjust_signs_height_to_ground: bool = False):
         self.synchronous_mode = synchronous_mode
         self.no_rendering_mode = no_rendering_mode
         self.fixed_delta_seconds = fixed_delta_seconds
@@ -58,6 +61,7 @@ class WorldSettings:
         self.tile_stream_distance = tile_stream_distance
         self.actor_active_distance = actor_active_distance
         self.spectator_as_ego = spectator_as_ego
+        self.adjust_signs_height_to_ground = adjust_signs_height_to_ground
 
     @property
     def max_culling_distance(self) -> float:
@@ -97,7 +101,8 @@ class WorldSettings:
                 self.deterministic_ragdolls == other.deterministic_ragdolls and
                 _f32_eq(self.tile_stream_distance, other.tile_stream_distance) and
                 _f32_eq(self.actor_active_distance, other.actor_active_distance) and
-                self.spectator_as_ego == other.spectator_as_ego)
+                self.spectator_as_ego == other.spectator_as_ego and
+                self.adjust_signs_height_to_ground == other.adjust_signs_height_to_ground)
 
     def __ne__(self, other: WorldSettings) -> bool:
         return not (self == other)
@@ -126,7 +131,8 @@ class WorldSettings:
     def _ext_to_c(self) -> CWorldSettingsExt:
         return CWorldSettingsExt(self.max_culling_distance, self.tile_stream_distance,
                                  self.actor_active_distance, i32(int(self.deterministic_ragdolls)),
-                                 i32(int(self.spectator_as_ego)))
+                                 i32(int(self.spectator_as_ego)),
+                                 i32(int(self.adjust_signs_height_to_ground)))
 
     @staticmethod
     def _from_c(s: CWorldSettings, e: CWorldSettingsExt) -> WorldSettings:
@@ -137,7 +143,8 @@ class WorldSettings:
                              int(s.substepping) != 0, s.max_substep_delta_time,
                              int(s.max_substeps), e.max_culling_distance,
                              int(e.deterministic_ragdolls) != 0, e.tile_stream_distance,
-                             e.actor_active_distance, int(e.spectator_as_ego) != 0)
+                             e.actor_active_distance, int(e.spectator_as_ego) != 0,
+                             int(e.adjust_signs_height_to_ground) != 0)
 
 def _parent_ptr(attach_to) -> cobj:
     """Handle of `attach_to`: None, any Actor subclass, or an Optional of one.

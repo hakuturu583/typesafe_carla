@@ -1,0 +1,11 @@
+# World.get_ego_spawn_points is CARLA ue58-dev only: built for ue5-dev, whose
+# LibCarla lacks it, the program does not compile.
+# carla-ref: ue5-dev
+# expect-error: World.get_ego_spawn_points is not in LibCarla ue5-dev
+import typesafe_carla as carla
+
+def ego(world: carla.World):
+    points = world.get_ego_spawn_points()
+
+# Compile-only: Codon type-checks a function only when it is called.
+ego(carla.Client("localhost", 2000).get_world())

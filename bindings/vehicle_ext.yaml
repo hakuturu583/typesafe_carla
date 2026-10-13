@@ -52,3 +52,32 @@ blocks:
       via: vehicle_bone_world_transforms
       out: transform_buffer
       doc: "Two-call buffer. TSC_ERROR with LibCarla 0.10.0, which lacks the method."
+  # CARLA ue58-dev: the wheel animation override and the wheels' pitch and
+  # suspension offset under it. Not in LibCarla ue5-dev or 0.10.0.
+  vehicle_wheel_animation:
+    set_wheel_animation_override:
+      call: SetWheelAnimationOverride
+      optional: {name: Vehicle.set_wheel_animation_override, missing_in: ["0.10.0", "ue5-dev"]}
+      args: {enabled: bool}
+      doc: "While enabled, the wheels show only the steer / pitch / suspension values set."
+    set_wheel_pitch_angle:
+      call: SetWheelPitchAngle
+      optional: {name: Vehicle.set_wheel_pitch_angle, missing_in: ["0.10.0", "ue5-dev"]}
+      args: {wheel_location: vehicle_wheel_location, angle_in_deg: finite}
+      doc: "The server raises an error unless the wheel animation override is enabled."
+    get_wheel_pitch_angle:
+      call: GetWheelPitchAngle
+      optional: {name: Vehicle.get_wheel_pitch_angle, missing_in: ["0.10.0", "ue5-dev"]}
+      args: {wheel_location: vehicle_wheel_location}
+      out: double_out
+      doc: "*out in degrees."
+    set_wheel_suspension_offset:
+      call: SetWheelSuspensionOffset
+      optional: {name: Vehicle.set_wheel_suspension_offset, missing_in: ["0.10.0", "ue5-dev"]}
+      args: {wheel_location: vehicle_wheel_location, offset: finite}
+      doc: "The server raises an error unless the wheel animation override is enabled."
+    get_wheel_suspension_offset:
+      call: GetWheelSuspensionOffset
+      optional: {name: Vehicle.get_wheel_suspension_offset, missing_in: ["0.10.0", "ue5-dev"]}
+      args: {wheel_location: vehicle_wheel_location}
+      out: double_out

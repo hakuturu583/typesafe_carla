@@ -71,8 +71,8 @@ extern "C" {
  *      tsc_command_t.physics_control shares storage with blueprint (#79).
  * 4.7: tsc_queue_signal_count / _wait / _notify, for a background callback
  *      dispatcher (#86). */
-#define TSC_ABI_VERSION_MAJOR 4
-#define TSC_ABI_VERSION_MINOR 7
+#define TSC_ABI_VERSION_MAJOR 5
+#define TSC_ABI_VERSION_MINOR 0
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -1777,6 +1777,22 @@ TSC_API tsc_status_t tsc_vehicle_get_telemetry_data(tsc_vehicle_t *vehicle,
 TSC_API tsc_status_t tsc_vehicle_get_vehicle_bone_world_transforms(
     tsc_vehicle_t *vehicle, tsc_transform_t *out, size_t capacity, size_t *out_count);
 /* END GENERATED vehicle_bones */
+/* BEGIN GENERATED vehicle_wheel_animation from bindings/vehicle_ext.yaml, do not edit */
+/* While enabled, the wheels show only the steer / pitch / suspension values set. */
+TSC_API tsc_status_t tsc_vehicle_set_wheel_animation_override(tsc_vehicle_t *vehicle,
+                                                              int32_t enabled);
+/* The server raises an error unless the wheel animation override is enabled. */
+TSC_API tsc_status_t tsc_vehicle_set_wheel_pitch_angle(tsc_vehicle_t *vehicle,
+                                                       int32_t wheel_location, double angle_in_deg);
+/* *out in degrees. */
+TSC_API tsc_status_t tsc_vehicle_get_wheel_pitch_angle(tsc_vehicle_t *vehicle,
+                                                       int32_t wheel_location, double *out);
+/* The server raises an error unless the wheel animation override is enabled. */
+TSC_API tsc_status_t tsc_vehicle_set_wheel_suspension_offset(tsc_vehicle_t *vehicle,
+                                                             int32_t wheel_location, double offset);
+TSC_API tsc_status_t tsc_vehicle_get_wheel_suspension_offset(tsc_vehicle_t *vehicle,
+                                                             int32_t wheel_location, double *out);
+/* END GENERATED vehicle_wheel_animation */
 
 /* --- Walker bones and poses ------------------------------------------------ */
 
@@ -1952,6 +1968,9 @@ typedef struct {
   double actor_active_distance;
   int32_t deterministic_ragdolls;
   int32_t spectator_as_ego;
+  /* CARLA ue58-dev. With a LibCarla without it, reads 0 and applying 1 is
+   * TSC_ERROR. */
+  int32_t adjust_signs_height_to_ground;
 } tsc_world_settings_ext_t;
 
 TSC_API tsc_status_t tsc_world_get_settings_ext(tsc_world_t *world, tsc_world_settings_t *out,
@@ -2185,6 +2204,13 @@ TSC_API tsc_status_t tsc_world_apply_textures_to_objects(
     const tsc_texture_float_color_t *ao_roughness_metallic_emissive_texture);
 TSC_API tsc_status_t tsc_world_get_light_manager(tsc_world_t *world, tsc_light_manager_t **out);
 /* END GENERATED world */
+/* BEGIN GENERATED world_ue58 from bindings/world.yaml, do not edit */
+/* Two-call pattern: pass out=NULL to get the count. Copies min(capacity, n). */
+TSC_API tsc_status_t tsc_world_get_ego_spawn_points(
+    tsc_world_t *world, tsc_transform_t *out, size_t capacity, size_t *out_count);
+TSC_API tsc_status_t tsc_world_get_publish_tf(tsc_world_t *world, int32_t *out);
+TSC_API tsc_status_t tsc_world_set_publish_tf(tsc_world_t *world, int32_t publish_tf);
+/* END GENERATED world_ue58 */
 
 /* --- Light manager (World::GetLightManager) ------------------------------------------ */
 

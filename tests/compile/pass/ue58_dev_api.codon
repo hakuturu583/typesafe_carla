@@ -1,0 +1,26 @@
+# The CARLA ue58-dev additions, built for ue58-dev, with their static types.
+# carla-ref: ue58-dev
+# strict
+import typesafe_carla as carla
+
+def wheels(vehicle: carla.Vehicle):
+    vehicle.set_wheel_animation_override(True)
+    vehicle.set_wheel_pitch_angle(carla.VehicleWheelLocation.FL_Wheel, 45.0)
+    pitch: float = vehicle.get_wheel_pitch_angle(carla.VehicleWheelLocation.FL_Wheel)
+    vehicle.set_wheel_suspension_offset(carla.VehicleWheelLocation.BR_Wheel, 0.02)
+    offset: float = vehicle.get_wheel_suspension_offset(carla.VehicleWheelLocation.BR_Wheel)
+    vehicle.set_wheel_animation_override(False)
+
+def world_api(world: carla.World):
+    points: List[carla.Transform] = world.get_ego_spawn_points()
+    world.set_publish_tf(True)
+    publishing: bool = world.get_publish_tf()
+    settings: carla.WorldSettings = world.get_settings()
+    settings.adjust_signs_height_to_ground = True
+    world.apply_settings(settings)
+    adjusted: bool = carla.WorldSettings(adjust_signs_height_to_ground=True).adjust_signs_height_to_ground
+
+# Compile-only: Codon type-checks a function only when it is called.
+world = carla.Client("localhost", 2000).get_world()
+wheels(world.get_actors()[0].as_vehicle())
+world_api(world)

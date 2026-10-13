@@ -1,0 +1,66 @@
+# The CARLA ue58-dev additions on the mock backend (which has the union of the
+# supported refs' API): the wheel animation override, ego spawn points and
+# the ROS 2 TF switch.
+import typesafe_carla as carla
+
+def raises_carla_error(fn) -> bool:
+    try:
+        fn()
+    except carla.CarlaError:
+        return True
+    return False
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+lib = world.get_blueprint_library()
+vehicle = world.spawn_actor(lib.find("vehicle.audi.tt"),
+                            world.get_map().get_spawn_points()[3]).as_vehicle()
+FL = carla.VehicleWheelLocation.FL_Wheel
+BR = carla.VehicleWheelLocation.BR_Wheel
+
+# --- Wheel animation override ------------------------------------------------
+# As on a ue58-dev server, the setters need the override.
+assert raises_carla_error(lambda: vehicle.set_wheel_pitch_angle(FL, 30.0))
+assert raises_carla_error(lambda: vehicle.set_wheel_suspension_offset(FL, 0.02))
+assert vehicle.get_wheel_pitch_angle(FL) == 0.0 and vehicle.get_wheel_suspension_offset(FL) == 0.0
+vehicle.set_wheel_animation_override(True)
+vehicle.set_wheel_pitch_angle(FL, 30.0)
+vehicle.set_wheel_suspension_offset(BR, 0.02)
+assert abs(vehicle.get_wheel_pitch_angle(FL) - 30.0) < 1e-6
+assert abs(vehicle.get_wheel_suspension_offset(BR) - 0.02) < 1e-6
+assert vehicle.get_wheel_pitch_angle(BR) == 0.0
+# Not finite: rejected before the call.
+assert raises_carla_error(lambda: vehicle.set_wheel_pitch_angle(FL, float("nan")))
+# The override off hands the wheels back to the (mock's still) physics.
+vehicle.set_wheel_animation_override(False)
+assert vehicle.get_wheel_pitch_angle(FL) == 0.0
+
+# Through the Actor compatibility shortcuts.
+actor = world.get_actor(vehicle.id)
+assert actor is not None
+actor.set_wheel_animation_override(True)
+actor.set_wheel_pitch_angle(FL, 10.0)
+assert abs(actor.get_wheel_pitch_angle(FL) - 10.0) < 1e-6
+
+# --- World -------------------------------------------------------------------
+assert world.get_ego_spawn_points() == List[carla.Transform]()  # none in the mock's map
+assert not world.get_publish_tf()
+world.set_publish_tf(True)
+assert world.get_publish_tf()
+world.set_publish_tf(False)
+assert not world.get_publish_tf()
+
+# --- EpisodeSettings.adjust_signs_height_to_ground ----------------------------
+s = world.get_settings()
+assert not s.adjust_signs_height_to_ground
+assert carla.WorldSettings() == carla.WorldSettings(adjust_signs_height_to_ground=False)
+assert carla.WorldSettings() != carla.WorldSettings(adjust_signs_height_to_ground=True)
+s.adjust_signs_height_to_ground = True
+world.apply_settings(s)
+assert world.get_settings().adjust_signs_height_to_ground
+s.adjust_signs_height_to_ground = False
+world.apply_settings(s)
+assert not world.get_settings().adjust_signs_height_to_ground
+
+vehicle.destroy()
+print("OK")

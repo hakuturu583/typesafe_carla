@@ -1189,6 +1189,40 @@ tsc_status_t tsc_vehicle_get_vehicle_bone_world_transforms(
   });
 }
 
+tsc_status_t tsc_vehicle_set_wheel_animation_override(tsc_vehicle_t *vehicle, int32_t enabled) {
+  return TSC_GUARD({
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetWheelAnimationOverride, "Vehicle.set_wheel_animation_override", enabled != 0); }(vehicle_of(vehicle));
+  });
+}
+
+tsc_status_t tsc_vehicle_set_wheel_pitch_angle(tsc_vehicle_t *vehicle, int32_t wheel_location,
+                                               double angle_in_deg) {
+  return TSC_GUARD({
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetWheelPitchAngle, "Vehicle.set_wheel_pitch_angle", to_enum<carla::rpc::VehicleWheelLocation>(wheel_location, TSC_WHEEL_FL, TSC_WHEEL_BR, "wheel location"), check_finite(angle_in_deg, "angle_in_deg")); }(vehicle_of(vehicle));
+  });
+}
+
+tsc_status_t tsc_vehicle_get_wheel_pitch_angle(tsc_vehicle_t *vehicle, int32_t wheel_location,
+                                               double *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), self_, GetWheelPitchAngle, "Vehicle.get_wheel_pitch_angle", to_enum<carla::rpc::VehicleWheelLocation>(wheel_location, TSC_WHEEL_FL, TSC_WHEEL_BR, "wheel location")); }(vehicle_of(vehicle));
+  });
+}
+
+tsc_status_t tsc_vehicle_set_wheel_suspension_offset(tsc_vehicle_t *vehicle, int32_t wheel_location,
+                                                     double offset) {
+  return TSC_GUARD({
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetWheelSuspensionOffset, "Vehicle.set_wheel_suspension_offset", to_enum<carla::rpc::VehicleWheelLocation>(wheel_location, TSC_WHEEL_FL, TSC_WHEEL_BR, "wheel location"), check_finite(offset, "offset")); }(vehicle_of(vehicle));
+  });
+}
+
+tsc_status_t tsc_vehicle_get_wheel_suspension_offset(tsc_vehicle_t *vehicle, int32_t wheel_location,
+                                                     double *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_; }), self_, GetWheelSuspensionOffset, "Vehicle.get_wheel_suspension_offset", to_enum<carla::rpc::VehicleWheelLocation>(wheel_location, TSC_WHEEL_FL, TSC_WHEEL_BR, "wheel location")); }(vehicle_of(vehicle));
+  });
+}
+
 // bindings/walker.yaml: carla::client::Walker
 
 tsc_status_t tsc_walker_apply_control(tsc_walker_t *walker, const tsc_walker_control_t *control) {
@@ -1607,6 +1641,25 @@ tsc_status_t tsc_world_apply_textures_to_objects(
 tsc_status_t tsc_world_get_light_manager(tsc_world_t *world, tsc_light_manager_t **out) {
   return new_handle(__func__, out, [&] {
     return new_or_null<tsc_light_manager>(world_of(world).GetLightManager());
+  });
+}
+
+tsc_status_t tsc_world_get_ego_spawn_points(
+    tsc_world_t *world, tsc_transform_t *out, size_t capacity, size_t *out_count) {
+  return TSC_GUARD({
+    require_ptr(out_count, "out_count"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { copy_out(r_, out, capacity, out_count); }), world_of(world), GetEgoSpawnPoints, "World.get_ego_spawn_points");
+  });
+}
+
+tsc_status_t tsc_world_get_publish_tf(tsc_world_t *world, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_ ? 1 : 0; }), world_of(world), GetPublishTF, "World.get_publish_tf");
+  });
+}
+
+tsc_status_t tsc_world_set_publish_tf(tsc_world_t *world, int32_t publish_tf) {
+  return TSC_GUARD({
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetPublishTF, "World.set_publish_tf", publish_tf != 0); }(world_of(world));
   });
 }
 
