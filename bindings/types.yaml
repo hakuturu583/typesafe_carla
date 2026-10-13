@@ -48,6 +48,18 @@ double:
   c: double
   codon: float
   cpp: ["float", "double"]
+# double / bool written by a statement: the output of an `optional` method,
+# whose result reaches the caller through TSC_CALL_OPTIONAL_THEN.
+double_out:
+  c: double
+  codon: float
+  assign: "*{out} = {}"
+  cpp: ["float", "double"]
+bool_out:
+  c: int32_t
+  codon: i32
+  assign: "*{out} = {} ? 1 : 0"
+  cpp: ["bool"]
 # A finite float; NaN and infinities are rejected.
 finite:
   c: double

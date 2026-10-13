@@ -62,15 +62,21 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   the helpers call `compat_shortcut`. It needs a `tests/compile/strict_fail`
   case for the compat path.
 - The mock (`native/mock`) mirrors LibCarla UE5 (ue5-dev) signatures *and
-  behaviour* (return values, empty results, exceptions); keep it in sync with
-  any LibCarla API the shim starts using. Where 0.10.0 behaves differently,
+  behaviour* (return values, empty results, exceptions), plus the ue58-dev
+  additions (it has the union of the release refs' API, as `validate` needs);
+  keep it in sync with any LibCarla API the shim starts using. Where 0.10.0 behaves differently,
   the shim maps both to one documented status.
 - Releases build every CARLA ref in `tools/release_carla_refs.txt` (ue5-dev,
   the default, and ue58-dev) into one wheel, a native library per ref
   (`_native/refs/<ref>/`, `TYPESAFE_CARLA_CARLA_REF`). The C ABI and Codon API
   are their union: a LibCarla method only some refs have is `optional` with
   the others in `missing_in` (e.g. a ue58-dev-only method:
-  `missing_in: ["0.10.0", "ue5-dev"]`).
+  `missing_in: ["0.10.0", "ue5-dev"]`), and its Codon method first calls
+  `carla_api_missing_in("<optional name>", <the same refs>)` (`_carla_ref.codon`):
+  a compile error in a program built for one of them (the launcher writes the
+  library's ref into `_tsc_build_config`; `TYPESAFE_CARLA_CHECK_REF` overrides
+  it, `none` for no check). `tests/test_architecture.py` checks the pairing;
+  a `tests/compile/fail` case uses a `# carla-ref: <ref>` line.
 - Versions: `python/typesafe_carla/__init__.py` and
   `codon/typesafe_carla/__init__.codon` must agree.
 

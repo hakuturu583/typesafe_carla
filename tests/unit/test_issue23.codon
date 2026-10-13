@@ -4,7 +4,7 @@
 import typesafe_carla as carla
 import typesafe_carla._ffi as ffi
 
-assert ffi.CStringList.__elemsize__ == 16 and ffi.CWorldSettingsExt.__elemsize__ == 32
+assert ffi.CStringList.__elemsize__ == 16 and ffi.CWorldSettingsExt.__elemsize__ == 40
 
 def close(a: float, b: float, eps: float = 1e-5) -> bool:
     return abs(a - b) <= eps

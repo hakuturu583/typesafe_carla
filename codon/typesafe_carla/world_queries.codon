@@ -21,15 +21,18 @@ from ._ffi import (Handle, CString, CVehicleLightStateList,
                    tsc_world_load_map_layer, tsc_world_unload_map_layer,
                    tsc_world_set_pedestrians_seed, tsc_world_set_pedestrians_cross_factor,
                    tsc_world_get_imu_sensor_gravity, tsc_world_set_imu_sensor_gravity,
+                   tsc_world_get_ego_spawn_points, tsc_world_get_publish_tf,
+                   tsc_world_set_publish_tf, CTransform,
                    tsc_world_apply_color_texture_to_objects,
                    tsc_world_apply_float_color_texture_to_objects,
                    tsc_world_apply_textures_to_objects, tsc_world_on_tick,
                    tsc_world_get_client_token, tsc_tick_listener_get_id)
 from .errors import _check, _i32, _u8, CarlaError
+from ._carla_ref import carla_api_missing_in
 from .geometry import Location, Vector3D, Transform, BoundingBox, _loc, _vector_ref
 from .actor import Actor
 from .traffic_light import TrafficLight, TrafficSign, _take_traffic_lights
-from .map import Landmark
+from .map import Landmark, _read_buffer
 from .map import Waypoint
 from .snapshot import WorldSnapshot
 from .world import World
@@ -310,6 +313,25 @@ class World:
     def set_imu_sensor_gravity(self, gravity: float):
         """Raises CarlaError with LibCarla 0.10.0, which lacks it (ue5-dev has it)."""
         _check(tsc_world_set_imu_sensor_gravity(self._h.ptr, gravity))
+
+    # CARLA ue58-dev (a compile error when built for ue5-dev or 0.10.0).
+
+    def get_ego_spawn_points(self) -> List[Transform]:
+        """The map's spawn points meant for the ego vehicle (empty if it has none)."""
+        carla_api_missing_in("World.get_ego_spawn_points", "0.10.0", "ue5-dev")
+        buf, n = _read_buffer(tsc_world_get_ego_spawn_points, self._h.ptr, CTransform)
+        return [Transform._from_c(buf[i]) for i in range(n)]
+
+    def get_publish_tf(self) -> bool:
+        """Whether the server publishes the ROS 2 TF tree."""
+        carla_api_missing_in("World.get_publish_tf", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_world_get_publish_tf(self._h.ptr, out))
+        return out[0] != i32(0)
+
+    def set_publish_tf(self, publish_tf: bool):
+        carla_api_missing_in("World.set_publish_tf", "0.10.0", "ue5-dev")
+        _check(tsc_world_set_publish_tf(self._h.ptr, i32(int(publish_tf))))
 
     # --- Textures -------------------------------------------------------------------
 

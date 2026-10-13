@@ -63,8 +63,10 @@ def _short(v: str | None) -> str:
 
 def main() -> int:
     python = os.environ.get("CARLA_PYTHON", sys.executable)
+    # The scenario reports "skip" for what the LibCarla build lacks (CarlaError at
+    # run time), so no compile-time check of the CARLA ref.
     typesafe = run([sys.executable, "-m", "typesafe_carla.cli", "run", "-release",
-                    str(HERE / "scenario_typesafe.codon")])
+                    str(HERE / "scenario_typesafe.codon")], {"TYPESAFE_CARLA_CHECK_REF": "none"})
     # Keys typesafe_carla's LibCarla build cannot provide (e.g. telemetry with
     # LibCarla 0.10.0) are skipped on both sides.
     skipped = ",".join(k for k, v in typesafe.items() if v == "skip")

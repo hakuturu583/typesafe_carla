@@ -1,0 +1,11 @@
+# Built for CARLA 0.10.0, whose Traffic Manager has no large-vehicle wide turn.
+# carla-ref: 0.10.0
+# expect-error: TrafficManager.vehicle_large_vehicle_wide_turn is not in LibCarla 0.10.0
+import typesafe_carla as carla
+
+def wide(client: carla.Client, vehicle: carla.Vehicle):
+    client.get_trafficmanager().vehicle_large_vehicle_wide_turn(vehicle, True)
+
+# Compile-only: Codon type-checks a function only when it is called.
+client = carla.Client("localhost", 2000)
+wide(client, client.get_world().get_actors()[0].as_vehicle())

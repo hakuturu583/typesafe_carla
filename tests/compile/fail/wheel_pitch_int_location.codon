@@ -1,0 +1,9 @@
+# The wheel is a VehicleWheelLocation, not an int (or a door).
+# expect-error: 'int' does not match expected type 'VehicleWheelLocation'
+import typesafe_carla as carla
+
+def spin(vehicle: carla.Vehicle):
+    vehicle.set_wheel_pitch_angle(0, 45.0)
+
+# Compile-only: Codon type-checks a function only when it is called.
+spin(carla.Client("localhost", 2000).get_world().get_actors()[0].as_vehicle())

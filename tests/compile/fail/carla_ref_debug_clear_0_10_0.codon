@@ -1,0 +1,11 @@
+# Built for CARLA 0.10.0, whose LibCarla has no DebugHelper::ClearShapes: a
+# compile error instead of CarlaError at run time (_carla_ref.codon).
+# carla-ref: 0.10.0
+# expect-error: DebugHelper.clear_debug_shape is not in LibCarla 0.10.0
+import typesafe_carla as carla
+
+def clear(world: carla.World):
+    world.debug.clear_debug_shape()
+
+# Compile-only: Codon type-checks a function only when it is called.
+clear(carla.Client("localhost", 2000).get_world())

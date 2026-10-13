@@ -6,8 +6,9 @@ must fail to compile, with the message given by the file's `# expect-error:`
 line, so a program that fails for an unrelated reason (a typo, a missing
 import) does not count as a pass. tests/compile/strict_fail/*.codon use a
 Python-API compatibility shortcut: they must compile normally and fail in
-strict mode with their `# expect-error:` message. Programs are compiled to
-LLVM IR only; never run.
+strict mode with their `# expect-error:` message. A `# carla-ref: <ref>` line
+compiles the program for that CARLA ref (TYPESAFE_CARLA_CHECK_REF; otherwise
+the mock's: none). Programs are compiled to LLVM IR only; never run.
 """
 
 from __future__ import annotations
@@ -25,8 +26,10 @@ STRICT_FAIL = sorted((COMPILE_DIR / "strict_fail").glob("*.codon"))
 
 def _compile(launcher, source: Path, tmp_path: Path, strict: bool = False):
     flags = ["--strict"] if strict else []
+    refs = [line.split(":", 1)[1].strip() for line in source.read_text().splitlines()
+            if line.startswith("# carla-ref:")]
     return launcher(*flags, "build", "--llvm", "-o", str(tmp_path / (source.stem + ".ll")),
-                    str(source))
+                    str(source), env={"TYPESAFE_CARLA_CHECK_REF": refs[0] if refs else "none"})
 
 
 def expected_error(source: Path) -> str:
@@ -79,7 +82,7 @@ def test_every_shortcut_warns_and_fails_in_strict_mode(launcher, tmp_path):
     assert result.returncode == 0, result.stderr
     warnings = {line for line in result.stderr.splitlines()
                 if line.startswith("typesafe-codon: compile-time warning: ")}
-    assert len(warnings) == len(actor_shortcuts()) == 68, "\n".join(sorted(warnings))
+    assert len(warnings) == len(actor_shortcuts()) == 73, "\n".join(sorted(warnings))
     result = _compile(launcher, source, tmp_path, strict=True)
     assert result.returncode != 0
     assert "strict mode: " in result.stderr, result.stderr

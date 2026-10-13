@@ -4,6 +4,7 @@ from ._ffi import (CColor, CBoundingBox, CRotation, ref, tsc_debug_draw_point,
                    tsc_debug_draw_line, tsc_debug_draw_arrow, tsc_debug_draw_box,
                    tsc_debug_draw_string, tsc_debug_clear_shapes, tsc_debug_clear_strings)
 from .errors import _check
+from ._carla_ref import carla_api_missing_in
 from .geometry import Location, Rotation, BoundingBox, _loc
 from .blueprint import Color
 from .world import World
@@ -62,11 +63,13 @@ class DebugHelper:
 
     def clear_debug_shape(self):
         """Removes the persistent shapes (LibCarla ue5-dev and a server with this
-        RPC; CarlaError with a CARLA 0.10.0 build)."""
+        RPC; a compile error when built for CARLA 0.10.0)."""
+        carla_api_missing_in("DebugHelper.clear_debug_shape", "0.10.0")
         _check(tsc_debug_clear_shapes(self._world._h.ptr))
 
     def clear_debug_string(self):
         """Removes the persistent strings (as clear_debug_shape)."""
+        carla_api_missing_in("DebugHelper.clear_debug_string", "0.10.0")
         _check(tsc_debug_clear_strings(self._world._h.ptr))
 
 @extend
