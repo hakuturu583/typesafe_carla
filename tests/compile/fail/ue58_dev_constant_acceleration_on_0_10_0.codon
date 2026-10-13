@@ -1,0 +1,11 @@
+# Actor.enable_constant_acceleration is CARLA ue58-dev only: built for 0.10.0
+# the program does not compile.
+# carla-ref: 0.10.0
+# expect-error: Actor.enable_constant_acceleration is not in LibCarla 0.10.0
+import typesafe_carla as carla
+
+def push(actor: carla.Actor):
+    actor.enable_constant_acceleration(carla.Vector3D(1.0, 0.0, 0.0))
+
+# Compile-only: Codon type-checks a function only when it is called.
+push(carla.Client("localhost", 2000).get_world().get_actors()[0])

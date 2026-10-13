@@ -29,6 +29,8 @@ from ._ffi import (Handle, CString, CTransform, CVector3D, CVehicleControl, TSC_
                    tsc_actor_get_parent, tsc_actor_get_semantic_tags, tsc_actor_get_attributes,
                    tsc_actor_set_collisions, tsc_actor_enable_constant_velocity,
                    tsc_actor_disable_constant_velocity, tsc_actor_add_force_at_location,
+                   tsc_actor_enable_constant_acceleration,
+                   tsc_actor_disable_constant_acceleration,
                    tsc_actor_add_impulse_at_location, tsc_actor_get_bone_names,
                    tsc_actor_get_bone_world_transforms, tsc_actor_get_bone_relative_transforms,
                    tsc_actor_get_component_names, tsc_actor_get_component_world_transform,
@@ -41,6 +43,7 @@ from .geometry import BoundingBox, Location, Transform, Vector3D, _vector_ref, _
 from .control import VehicleControl, VehiclePhysicsControl
 from .texture import TextureColor, TextureFloatColor
 from ._fmt import fmt_list
+from ._carla_ref import carla_api_missing_in
 
 TM_DEFAULT_PORT = 8000
 
@@ -244,6 +247,17 @@ class Actor:
 
     def disable_constant_velocity(self):
         _check(tsc_actor_disable_constant_velocity(self._h.ptr))
+
+    def enable_constant_acceleration(self, acceleration):
+        """acceleration: Vector3D, m/s^2 (a Location is accepted as in the
+        Python API). CARLA ue58-dev only."""
+        carla_api_missing_in("Actor.enable_constant_acceleration", "0.10.0", "ue5-dev")
+        self._vector_call(tsc_actor_enable_constant_acceleration, _vector_ref(
+            acceleration, "[tsc-compat] a Location passed as a Vector3D to Actor.enable_constant_acceleration"))
+
+    def disable_constant_acceleration(self):
+        carla_api_missing_in("Actor.disable_constant_acceleration", "0.10.0", "ue5-dev")
+        _check(tsc_actor_disable_constant_acceleration(self._h.ptr))
 
     def _vector_at_call(self, fn, v: Vector3D, location: Location):
         p = Ptr[CVector3D](2)

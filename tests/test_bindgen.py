@@ -175,7 +175,7 @@ def test_missing_method_rule():
     from tools.bindgen.clang import _missing_allowed
 
     s = spec.load()
-    optional = next(f for f in s.functions if f.optional)
+    optional = next(f for f in s.functions if f.missing_in == ("0.10.0",))
     assert _missing_allowed(optional, "libcarla", "0.10.0") is None
     assert _missing_allowed(optional, "libcarla", "ue5-dev") is not None
     assert _missing_allowed(optional, "mock", "unknown") is not None

@@ -149,3 +149,20 @@ blocks:
       call: SetPublishTF
       optional: {name: World.set_publish_tf, missing_in: ["0.10.0", "ue5-dev"]}
       args: {publish_tf: bool}
+    spawn_custom_mesh:
+      call: SpawnCustomMesh
+      optional: {name: World.spawn_custom_mesh, missing_in: ["0.10.0", "ue5-dev"]}
+      args: {vertices: float_triples_in, triangles: uint32_triples_in, material: string_in}
+      doc: "vertices: x, y, z per vertex; triangles: three vertex indices each."
+    set_sky_light_map:
+      call: SetSkyLightMap
+      optional: {name: World.set_sky_light_map, missing_in: ["0.10.0", "ue5-dev"]}
+      args: {panorama: texture_float_color, intensity: non_negative, face_size: positive_int32}
+      doc: "panorama: an equirectangular linear-RGB texture; face_size: cube face pixels."
+    clear_sky_light_map:
+      call: ClearSkyLightMap
+      optional: {name: World.clear_sky_light_map, missing_in: ["0.10.0", "ue5-dev"]}
+    has_sky_light_map:
+      call: HasSkyLightMap
+      optional: {name: World.has_sky_light_map, missing_in: ["0.10.0", "ue5-dev"]}
+      out: bool_out

@@ -6,3 +6,14 @@ self: {type: tsc_traffic_sign_t, name: sign, get: sign_of}
 blocks:
   traffic_sign:
     get_trigger_volume: {call: GetTriggerVolume, out: bounding_box}
+  # CARLA ue58-dev moved these from TrafficLight to TrafficSign (TrafficLight
+  # inherits them: tsc_traffic_light_get_stop_waypoints works everywhere).
+  traffic_sign_ue58:
+    get_stop_waypoints:
+      call: GetStopWaypoints
+      optional: {name: TrafficSign.get_stop_waypoints, missing_in: ["0.10.0", "ue5-dev"]}
+      out: waypoint_list
+    get_affected_lane_waypoints:
+      call: GetAffectedLaneWaypoints
+      optional: {name: TrafficSign.get_affected_lane_waypoints, missing_in: ["0.10.0", "ue5-dev"]}
+      out: waypoint_list

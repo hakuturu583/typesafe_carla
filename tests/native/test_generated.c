@@ -62,6 +62,8 @@ int main(void) {
   expect_null_rejected(tsc_actor_disable_constant_velocity(NULL), "tsc_actor_disable_constant_velocity");
   expect_null_rejected(tsc_actor_add_force_at_location(NULL, NULL, NULL), "tsc_actor_add_force_at_location");
   expect_null_rejected(tsc_actor_add_impulse_at_location(NULL, NULL, NULL), "tsc_actor_add_impulse_at_location");
+  expect_null_rejected(tsc_actor_enable_constant_acceleration(NULL, NULL), "tsc_actor_enable_constant_acceleration");
+  expect_null_rejected(tsc_actor_disable_constant_acceleration(NULL), "tsc_actor_disable_constant_acceleration");
   expect_null_rejected(tsc_actor_apply_texture_color(NULL, 99, NULL), "tsc_actor_apply_texture_color");
   expect_null_rejected(tsc_actor_apply_texture_float_color(NULL, 99, NULL), "tsc_actor_apply_texture_float_color");
   expect_null_rejected(tsc_actor_get_bone_names(NULL, (tsc_string_list_t[1]){0}), "tsc_actor_get_bone_names");
@@ -107,6 +109,9 @@ int main(void) {
   expect_null_rejected(tsc_client_get_required_files(NULL, NULL, 1, 0, (tsc_string_list_t[1]){0}), "tsc_client_get_required_files");
   expect_null_rejected(tsc_client_request_file(NULL, NULL, 1), "tsc_client_request_file");
   expect_null_rejected(tsc_client_set_files_base_folder(NULL, NULL, 1, (int32_t[1]){0}), "tsc_client_set_files_base_folder");
+  expect_null_rejected(tsc_client_get_content_packs(NULL, (tsc_content_pack_info_list_t[1]){0}), "tsc_client_get_content_packs");
+  expect_null_rejected(tsc_client_mount_content_pack(NULL, NULL, 1, (tsc_content_pack_info_t[1]){0}), "tsc_client_mount_content_pack");
+  expect_null_rejected(tsc_client_unmount_content_pack(NULL, NULL, 1, (int32_t[1]){0}), "tsc_client_unmount_content_pack");
   expect_null_rejected(tsc_collision_event_get_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_collision_event_get_actor");
   expect_null_rejected(tsc_collision_event_get_other_actor(NULL, (tsc_actor_t *[1]){NULL}), "tsc_collision_event_get_other_actor");
   expect_null_rejected(tsc_debug_draw_point(NULL, NULL, 0, NULL, NAN, 0), "tsc_debug_draw_point");
@@ -256,6 +261,8 @@ int main(void) {
   expect_null_rejected(tsc_traffic_manager_set_path(NULL, NULL, NULL, 1, 0), "tsc_traffic_manager_set_path");
   expect_null_rejected(tsc_traffic_manager_set_route(NULL, NULL, NULL, 1, 0), "tsc_traffic_manager_set_route");
   expect_null_rejected(tsc_traffic_sign_get_trigger_volume(NULL, (tsc_bounding_box_t[1]){0}), "tsc_traffic_sign_get_trigger_volume");
+  expect_null_rejected(tsc_traffic_sign_get_stop_waypoints(NULL, (tsc_waypoint_list_t *[1]){NULL}), "tsc_traffic_sign_get_stop_waypoints");
+  expect_null_rejected(tsc_traffic_sign_get_affected_lane_waypoints(NULL, (tsc_waypoint_list_t *[1]){NULL}), "tsc_traffic_sign_get_affected_lane_waypoints");
   expect_null_rejected(tsc_transform_get_matrix(NULL, (double[1]){0}), "tsc_transform_get_matrix");
   expect_null_rejected(tsc_transform_get_inverse_matrix(NULL, (double[1]){0}), "tsc_transform_get_inverse_matrix");
   expect_null_rejected(tsc_vehicle_apply_control(NULL, NULL), "tsc_vehicle_apply_control");
@@ -356,6 +363,10 @@ int main(void) {
   expect_null_rejected(tsc_world_get_ego_spawn_points(NULL, (tsc_transform_t[1]){0}, 0, (size_t[1]){0}), "tsc_world_get_ego_spawn_points");
   expect_null_rejected(tsc_world_get_publish_tf(NULL, (int32_t[1]){0}), "tsc_world_get_publish_tf");
   expect_null_rejected(tsc_world_set_publish_tf(NULL, 0), "tsc_world_set_publish_tf");
+  expect_null_rejected(tsc_world_spawn_custom_mesh(NULL, NULL, 3, NULL, 3, NULL, 1), "tsc_world_spawn_custom_mesh");
+  expect_null_rejected(tsc_world_set_sky_light_map(NULL, NULL, NAN, 0), "tsc_world_set_sky_light_map");
+  expect_null_rejected(tsc_world_clear_sky_light_map(NULL), "tsc_world_clear_sky_light_map");
+  expect_null_rejected(tsc_world_has_sky_light_map(NULL, (int32_t[1]){0}), "tsc_world_has_sky_light_map");
   expect_null_rejected(tsc_world_snapshot_get_id(NULL, (uint64_t[1]){0}), "tsc_world_snapshot_get_id");
   expect_null_rejected(tsc_world_snapshot_get_timestamp(NULL, (tsc_timestamp_t[1]){0}), "tsc_world_snapshot_get_timestamp");
   if (tsc_actor_list_size(NULL) != 0) { fputs("tsc_actor_list_size(NULL)\n", stderr); ++g_failures; }
@@ -382,6 +393,6 @@ int main(void) {
   if (tsc_junction_list_size(NULL) != 0) { fputs("tsc_junction_list_size(NULL)\n", stderr); ++g_failures; }
   expect_null_rejected(tsc_junction_list_get(NULL, 0, (tsc_junction_t *[1]){NULL}), "tsc_junction_list_get");
   if (g_failures != 0) return 1;
-  printf("test_generated: 348 generated functions reject NULL handles\n");
+  printf("test_generated: 359 generated functions reject NULL handles\n");
   return 0;
 }

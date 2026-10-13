@@ -24,6 +24,9 @@ from .errors import _check, _check_traffic_light_state
 from .geometry import BoundingBox
 from .actor import Actor, Vehicle
 from .map import Waypoint, _waypoints, _read_buffer
+from ._carla_ref import carla_api_missing_in
+from ._ffi import (tsc_traffic_sign_get_affected_lane_waypoints,
+                   tsc_traffic_sign_get_stop_waypoints)
 
 class TrafficSign(Actor):
     """A traffic sign (stop, yield, speed limit, ...), or a traffic light
@@ -38,6 +41,18 @@ class TrafficSign(Actor):
         out = Ptr[CBoundingBox](1)
         _check(tsc_traffic_sign_get_trigger_volume(self._h.ptr, out))
         return BoundingBox._from_c(out[0])
+
+    # CARLA ue58-dev (TrafficLight has both on every ref).
+
+    def get_affected_lane_waypoints(self) -> List[Waypoint]:
+        """A waypoint at the sign on each lane it affects."""
+        carla_api_missing_in("TrafficSign.get_affected_lane_waypoints", "0.10.0", "ue5-dev")
+        return _waypoints(tsc_traffic_sign_get_affected_lane_waypoints, self._h.ptr)
+
+    def get_stop_waypoints(self) -> List[Waypoint]:
+        """A waypoint per lane where vehicles stop for the sign."""
+        carla_api_missing_in("TrafficSign.get_stop_waypoints", "0.10.0", "ue5-dev")
+        return _waypoints(tsc_traffic_sign_get_stop_waypoints, self._h.ptr)
 
 class TrafficLight(Actor):
     def __init__(self, h: Handle):

@@ -22,7 +22,9 @@ from ._ffi import (Handle, CString, CVehicleLightStateList,
                    tsc_world_set_pedestrians_seed, tsc_world_set_pedestrians_cross_factor,
                    tsc_world_get_imu_sensor_gravity, tsc_world_set_imu_sensor_gravity,
                    tsc_world_get_ego_spawn_points, tsc_world_get_publish_tf,
-                   tsc_world_set_publish_tf, CTransform,
+                   tsc_world_set_publish_tf, CTransform, tsc_world_spawn_custom_mesh,
+                   tsc_world_set_sky_light_map, tsc_world_clear_sky_light_map,
+                   tsc_world_has_sky_light_map,
                    tsc_world_apply_color_texture_to_objects,
                    tsc_world_apply_float_color_texture_to_objects,
                    tsc_world_apply_textures_to_objects, tsc_world_on_tick,
@@ -37,7 +39,7 @@ from .map import Waypoint
 from .snapshot import WorldSnapshot
 from .world import World
 from .labels import CityObjectLabel
-from .texture import TextureColor, TextureFloatColor
+from .texture import TextureColor, TextureFloatColor, FloatColor
 from ._callbacks import _register_tick_callback, _unregister_tick_callback, _maybe_autostart
 
 class _MapLayer(_IntEnum):
@@ -167,6 +169,33 @@ class _TickThunk[F]:
 
     def run(self, snapshot: cobj):
         self.f(WorldSnapshot(Handle(snapshot)))
+
+def _mesh_indices(triangles: List[int]) -> Ptr[u32]:
+    """World.spawn_custom_mesh's triangle indices as uint32."""
+    t = Ptr[u32](len(triangles))
+    for i in range(len(triangles)):
+        index = triangles[i]
+        if index < 0 or index > 0xFFFFFFFF:
+            raise CarlaError(f"triangles: vertex index {index} is out of range",
+                             TSC_INVALID_ARGUMENT)
+        t[i] = u32(index)
+    return t
+
+def _sky_panorama(width: int, height: int, pixels: List[float]) -> TextureFloatColor:
+    """World.set_sky_light_map's pixels (3 or 4 values each, row-major from
+    the top row) as a texture, as the Python API reads its buffer."""
+    n = width * height
+    channels = 3 if len(pixels) == 3 * n else (4 if len(pixels) == 4 * n else 0)
+    if channels == 0 or n == 0:
+        raise CarlaError("set_sky_light_map: pixels must hold width*height*3 or "
+                         "width*height*4 values", TSC_INVALID_ARGUMENT)
+    panorama = TextureFloatColor(width, height)
+    for y in range(height):
+        for x in range(width):
+            k = channels * (y * width + x)
+            panorama.set(x, y, FloatColor(pixels[k], pixels[k + 1], pixels[k + 2],
+                                          pixels[k + 3] if channels == 4 else 1.0))
+    return panorama
 
 @extend
 class World:
@@ -332,6 +361,42 @@ class World:
     def set_publish_tf(self, publish_tf: bool):
         carla_api_missing_in("World.set_publish_tf", "0.10.0", "ue5-dev")
         _check(tsc_world_set_publish_tf(self._h.ptr, i32(int(publish_tf))))
+
+    def spawn_custom_mesh(self, vertices: List[float], triangles: List[int],
+                          material: str = "grass"):
+        """Spawns a static mesh: vertices holds x, y, z per vertex (world
+        frame, meters), triangles three vertex indices per triangle."""
+        carla_api_missing_in("World.spawn_custom_mesh", "0.10.0", "ue5-dev")
+        v = Ptr[float32](len(vertices))
+        for i in range(len(vertices)):
+            v[i] = float32(vertices[i])
+        t = _mesh_indices(triangles)
+        _check(tsc_world_spawn_custom_mesh(self._h.ptr, v, len(vertices), t, len(triangles),
+                                           material.ptr, material.len))
+
+    def set_sky_light_map(self, panorama: TextureFloatColor, intensity: float = 1.0,
+                          face_size: int = 512):
+        """Lights the scene from an equirectangular panorama (linear RGB), as
+        a cube map with faces of face_size pixels."""
+        carla_api_missing_in("World.set_sky_light_map", "0.10.0", "ue5-dev")
+        _check(tsc_world_set_sky_light_map(self._h.ptr, ref(panorama._to_c()), intensity,
+                                           _i32(face_size, "face_size")))
+
+    def set_sky_light_map(self, width: int, height: int, pixels: List[float],
+                          intensity: float = 1.0, face_size: int = 512):
+        """The panorama as width * height pixels, row-major from the top row,
+        of 3 (RGB, alpha 1) or 4 (RGBA) float32 values each."""
+        self.set_sky_light_map(_sky_panorama(width, height, pixels), intensity, face_size)
+
+    def clear_sky_light_map(self):
+        carla_api_missing_in("World.clear_sky_light_map", "0.10.0", "ue5-dev")
+        _check(tsc_world_clear_sky_light_map(self._h.ptr))
+
+    def has_sky_light_map(self) -> bool:
+        carla_api_missing_in("World.has_sky_light_map", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_world_has_sky_light_map(self._h.ptr, out))
+        return out[0] != i32(0)
 
     # --- Textures -------------------------------------------------------------------
 

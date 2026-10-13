@@ -14,7 +14,7 @@ LIB = os.getenv("TYPESAFE_CARLA_LIB", "libtypesafe_carla_ffi.so")
 
 # ABI version this Codon source was written against (ffi.h).
 TSC_ABI_VERSION_MAJOR = 5
-TSC_ABI_VERSION_MINOR = 1
+TSC_ABI_VERSION_MINOR = 2
 
 TSC_OK = 0
 TSC_ERROR = 1
@@ -99,6 +99,21 @@ class CActorAttribute:
     value: CString
     type: i32
     is_modifiable: i32
+
+@tuple
+class CContentPackInfo:
+    name: CString
+    version: CString
+    base_release: CString
+    path: CString
+    mounted: i32
+    reserved0: i32
+    maps: CStringList
+
+@tuple
+class CContentPackInfoList:
+    items: Ptr[CContentPackInfo]
+    size: int
 
 @tuple
 class CBoundingBox:
@@ -706,6 +721,8 @@ from C import LIB.tsc_build_commit() -> cobj
 from C import LIB.tsc_backend_name() -> cobj
 from C import LIB.tsc_string_free(Ptr[CString]) -> None
 from C import LIB.tsc_actor_attribute_free(Ptr[CActorAttribute]) -> None
+from C import LIB.tsc_content_pack_info_free(Ptr[CContentPackInfo]) -> None
+from C import LIB.tsc_content_pack_info_list_free(Ptr[CContentPackInfoList]) -> None
 # Issue #33.
 from C import LIB.tsc_actor_blueprint_get_attribute_ids(cobj, Ptr[CStringList]) -> i32
 from C import LIB.tsc_actor_blueprint_get_recommended_values(cobj, cobj, int, Ptr[CStringList]) -> i32
@@ -1214,6 +1231,11 @@ from C import LIB.tsc_client_get_required_files(cobj, cobj, int, i32, Ptr[CStrin
 from C import LIB.tsc_client_request_file(cobj, cobj, int) -> i32
 from C import LIB.tsc_client_set_files_base_folder(cobj, cobj, int, Ptr[i32]) -> i32
 # END GENERATED client_files
+# BEGIN GENERATED client_content_packs from bindings/client.yaml, do not edit
+from C import LIB.tsc_client_get_content_packs(cobj, Ptr[CContentPackInfoList]) -> i32
+from C import LIB.tsc_client_mount_content_pack(cobj, cobj, int, Ptr[CContentPackInfo]) -> i32
+from C import LIB.tsc_client_unmount_content_pack(cobj, cobj, int, Ptr[i32]) -> i32
+# END GENERATED client_content_packs
 # BEGIN GENERATED traffic_manager_issue23 from bindings/traffic_manager.yaml, do not edit
 from C import LIB.tsc_traffic_manager_set_osm_mode(cobj, i32) -> i32
 from C import LIB.tsc_traffic_manager_set_respawn_dormant_vehicles(cobj, i32) -> i32
@@ -1270,6 +1292,10 @@ from C import LIB.tsc_actor_disable_constant_velocity(cobj) -> i32
 from C import LIB.tsc_actor_add_force_at_location(cobj, Ptr[CVector3D], Ptr[CVector3D]) -> i32
 from C import LIB.tsc_actor_add_impulse_at_location(cobj, Ptr[CVector3D], Ptr[CVector3D]) -> i32
 # END GENERATED actor_physics_at_location
+# BEGIN GENERATED actor_ue58 from bindings/actor.yaml, do not edit
+from C import LIB.tsc_actor_enable_constant_acceleration(cobj, Ptr[CVector3D]) -> i32
+from C import LIB.tsc_actor_disable_constant_acceleration(cobj) -> i32
+# END GENERATED actor_ue58
 # BEGIN GENERATED actor_skeleton from bindings/actor.yaml, do not edit
 from C import LIB.tsc_actor_get_bone_names(cobj, Ptr[CStringList]) -> i32
 from C import LIB.tsc_actor_get_bone_world_transforms(cobj, Ptr[CTransformList]) -> i32
@@ -1289,6 +1315,10 @@ from C import LIB.tsc_actor_as_traffic_sign(cobj, Ptr[cobj]) -> i32
 # BEGIN GENERATED traffic_sign from bindings/traffic_sign.yaml, do not edit
 from C import LIB.tsc_traffic_sign_get_trigger_volume(cobj, Ptr[CBoundingBox]) -> i32
 # END GENERATED traffic_sign
+# BEGIN GENERATED traffic_sign_ue58 from bindings/traffic_sign.yaml, do not edit
+from C import LIB.tsc_traffic_sign_get_stop_waypoints(cobj, Ptr[cobj]) -> i32
+from C import LIB.tsc_traffic_sign_get_affected_lane_waypoints(cobj, Ptr[cobj]) -> i32
+# END GENERATED traffic_sign_ue58
 from C import LIB.tsc_transform_list_free(Ptr[CTransformList]) -> None
 
 # Issue #21: world queries, environment objects, lights, textures, on_tick
@@ -1324,6 +1354,10 @@ from C import LIB.tsc_world_get_light_manager(cobj, Ptr[cobj]) -> i32
 from C import LIB.tsc_world_get_ego_spawn_points(cobj, Ptr[CTransform], int, Ptr[int]) -> i32
 from C import LIB.tsc_world_get_publish_tf(cobj, Ptr[i32]) -> i32
 from C import LIB.tsc_world_set_publish_tf(cobj, i32) -> i32
+from C import LIB.tsc_world_spawn_custom_mesh(cobj, Ptr[float32], int, Ptr[u32], int, cobj, int) -> i32
+from C import LIB.tsc_world_set_sky_light_map(cobj, Ptr[CTextureFloatColor], float, i32) -> i32
+from C import LIB.tsc_world_clear_sky_light_map(cobj) -> i32
+from C import LIB.tsc_world_has_sky_light_map(cobj, Ptr[i32]) -> i32
 # END GENERATED world_ue58
 from C import LIB.tsc_vehicle_light_state_list_free(Ptr[CVehicleLightStateList]) -> None
 from C import LIB.tsc_bounding_box_list_free(Ptr[CBoundingBoxList]) -> None

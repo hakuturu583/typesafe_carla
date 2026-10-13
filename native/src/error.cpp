@@ -66,4 +66,22 @@ void tsc_actor_attribute_free(tsc_actor_attribute_t *attribute) {
   tsc_string_free(&attribute->value);
 }
 
+void tsc_content_pack_info_free(tsc_content_pack_info_t *info) {
+  if (info == nullptr) return;
+  tsc_string_free(&info->name);
+  tsc_string_free(&info->version);
+  tsc_string_free(&info->base_release);
+  tsc_string_free(&info->path);
+  tsc_string_list_free(&info->maps);
+  info->mounted = 0;
+}
+
+void tsc_content_pack_info_list_free(tsc_content_pack_info_list_t *list) {
+  if (list == nullptr) return;
+  for (size_t i = 0; list->items != nullptr && i < list->size; ++i) {
+    tsc_content_pack_info_free(&list->items[i]);
+  }
+  tsc::free_list_items(list);
+}
+
 }  // extern "C"

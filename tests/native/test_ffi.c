@@ -65,6 +65,7 @@ static void test_layout(void) {
   CHECK(sizeof(tsc_world_settings_t) == 40);
   CHECK(sizeof(tsc_string_t) == 16);
   CHECK(sizeof(tsc_actor_attribute_t) == 40);
+  CHECK(sizeof(tsc_content_pack_info_t) == 88);
   /* ABI 1.2 */
   CHECK(sizeof(tsc_bounding_box_t) == 72);
   CHECK(sizeof(tsc_timestamp_t) == 32);
@@ -310,6 +311,49 @@ static void test_mock_road_model(void) {
   tsc_handle_release(H(road));
   tsc_handle_release(H(roads));
   tsc_handle_release(H(map));
+  tsc_handle_release(H(world));
+  tsc_handle_release(H(client));
+}
+
+/* CARLA ue58-dev's content packs and mesh/sky-light arguments on the mock. */
+static void test_mock_ue58_extras(void) {
+  tsc_client_t *client = NULL;
+  tsc_world_t *world = NULL;
+  CHECK_OK(tsc_client_create(kHost, strlen(kHost), 2059, 0, &client));
+  CHECK_OK(tsc_client_get_world(client, &world));
+  tsc_content_pack_info_list_t packs = {0};
+  CHECK_OK(tsc_client_get_content_packs(client, &packs));
+  CHECK(packs.size == 1 && strcmp(packs.items[0].name.data, "MockPack") == 0);
+  CHECK(packs.items[0].maps.size == 1 && packs.items[0].mounted == 0);
+  tsc_content_pack_info_list_free(&packs);
+  CHECK(packs.items == NULL && packs.size == 0);
+  tsc_content_pack_info_t pack = {0};
+  const char *path = "/packs/MockPack";
+  CHECK_OK(tsc_client_mount_content_pack(client, path, strlen(path), &pack));
+  CHECK(pack.mounted == 1 && strcmp(pack.path.data, path) == 0);
+  tsc_content_pack_info_free(&pack);
+  tsc_content_pack_info_free(&pack); /* safe twice */
+  int32_t unmounted = 0;
+  CHECK_OK(tsc_client_unmount_content_pack(client, "MockPack", 8, &unmounted));
+  CHECK(unmounted == 1);
+  /* Mesh arrays: x, y, z per vertex and three indices per triangle. */
+  const float vertices[9] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
+  const uint32_t triangles[3] = {0, 1, 2};
+  CHECK_OK(tsc_world_spawn_custom_mesh(world, vertices, 9, triangles, 3, "grass", 5));
+  CHECK(tsc_world_spawn_custom_mesh(world, vertices, 8, triangles, 3, "grass", 5) ==
+        TSC_INVALID_ARGUMENT);
+  CHECK(tsc_world_spawn_custom_mesh(world, vertices, 9, triangles, 2, "grass", 5) ==
+        TSC_INVALID_ARGUMENT);
+  CHECK(tsc_world_spawn_custom_mesh(world, NULL, 9, triangles, 3, "grass", 5) ==
+        TSC_INVALID_ARGUMENT);
+  tsc_float_color_t pixel = {1.0f, 1.0f, 1.0f, 1.0f};
+  tsc_texture_float_color_t panorama = {1, 1, &pixel};
+  CHECK(tsc_world_set_sky_light_map(world, &panorama, 1.0, 0) == TSC_INVALID_ARGUMENT);
+  CHECK_OK(tsc_world_set_sky_light_map(world, &panorama, 1.0, 512));
+  int32_t has = 0;
+  CHECK_OK(tsc_world_has_sky_light_map(world, &has));
+  CHECK(has == 1);
+  CHECK_OK(tsc_world_clear_sky_light_map(world));
   tsc_handle_release(H(world));
   tsc_handle_release(H(client));
 }
@@ -2006,6 +2050,7 @@ int main(void) {
     test_mock_issue33();
     test_mock_issue86();
     test_mock_road_model();
+    test_mock_ue58_extras();
   } else {
     printf("backend '%s': skipping mock-server checks\n", tsc_backend_name());
   }
