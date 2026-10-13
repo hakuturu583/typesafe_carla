@@ -1,0 +1,11 @@
+# In strict mode a position is not an acceleration (CARLA ue58-dev's
+# Actor.enable_constant_acceleration).
+# carla-ref: ue58-dev
+# expect-error: strict mode: convert with location.as_vector() (Location as Vector3D is a Python-API compatibility shortcut)
+import typesafe_carla as carla
+
+def push(actor: carla.Actor):
+    actor.enable_constant_acceleration(actor.get_location())
+
+# Compile-only: Codon type-checks a function only when it is called.
+push(carla.Client("localhost", 2000).get_world().get_actors()[0])

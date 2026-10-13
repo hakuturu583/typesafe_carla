@@ -51,6 +51,15 @@ blocks:
     disable_constant_velocity: {call: DisableConstantVelocity}
     add_force_at_location: {call: AddForce, args: {force: vector3d, location: location_as_vector3d}}
     add_impulse_at_location: {call: AddImpulse, args: {impulse: vector3d, location: location_as_vector3d}}
+  # CARLA ue58-dev. Not in LibCarla ue5-dev or 0.10.0.
+  actor_ue58:
+    enable_constant_acceleration:
+      call: EnableConstantAcceleration
+      optional: {name: Actor.enable_constant_acceleration, missing_in: ["0.10.0", "ue5-dev"]}
+      args: {acceleration: vector3d}
+    disable_constant_acceleration:
+      call: DisableConstantAcceleration
+      optional: {name: Actor.disable_constant_acceleration, missing_in: ["0.10.0", "ue5-dev"]}
   actor_texture:
     apply_texture_color:
       call: ApplyTexture

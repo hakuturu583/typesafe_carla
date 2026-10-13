@@ -750,3 +750,39 @@ junction_handle:
   c: tsc_junction_t
   handle: true
   from_carla: 'new tsc_junction(non_null({}, "junction"))'
+# --- CARLA ue58-dev: content packs, custom meshes, sky light maps (ABI 5.2) ---
+content_pack_info:
+  c: tsc_content_pack_info_t
+  struct: true
+  codon: CContentPackInfo
+  assign: "content_pack_assign({out}, {})"
+  cpp: ["carla::rpc::ContentPackInfo"]
+content_pack_info_list:
+  c: tsc_content_pack_info_list_t
+  struct: true
+  codon: CContentPackInfoList
+  assign: "content_pack_list_assign({out}, {})"
+  cpp: ["std::vector<carla::rpc::ContentPackInfo.*"]
+# Mesh vertex coordinates, x, y, z per vertex (count a multiple of 3, finite).
+float_triples_in:
+  c: const float *
+  c_param: "const float *{name}, size_t {name}_size"
+  codon: "Ptr[float32], int"
+  to_carla: 'to_float_triples({name}, {name}_size, "{name}")'
+  invalid: "NULL, 3"
+  cpp: ["std::vector<float.*>"]
+# Triangle vertex indices, three per triangle.
+uint32_triples_in:
+  c: const uint32_t *
+  c_param: "const uint32_t *{name}, size_t {name}_size"
+  codon: "Ptr[u32], int"
+  to_carla: 'to_uint32_triples({name}, {name}_size, "{name}")'
+  invalid: "NULL, 3"
+  cpp: ["std::vector<unsigned int.*>"]
+# A positive int (e.g. the sky light map's cube face size in pixels).
+positive_int32:
+  c: int32_t
+  codon: i32
+  to_carla: 'check_positive_int({}, "{name}")'
+  invalid: 0
+  cpp: ["int", "int32_t"]

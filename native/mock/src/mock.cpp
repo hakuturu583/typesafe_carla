@@ -71,6 +71,7 @@ struct ActorData {
   bool ros_enabled = false;  // issue #33: ServerSideSensor::EnableForROS
   // Issue #19.
   std::optional<geom::Vector3D> constant_velocity;  // world frame in the mock
+  std::optional<geom::Vector3D> constant_acceleration;  // ue58-dev; world frame
 
   bool is_walker() const { return type_id.rfind("walker.", 0) == 0; }
   bool is_walker_ai_controller() const { return type_id == "controller.ai.walker"; }
@@ -349,6 +350,18 @@ struct Episode : std::enable_shared_from_this<Episode> {
         if (a.parent) continue;
         a.velocity = *a.constant_velocity;
         a.acceleration = geom::Vector3D();
+        a.transform.location.x += static_cast<float>(a.velocity.x * dt);
+        a.transform.location.y += static_cast<float>(a.velocity.y * dt);
+        a.transform.location.z += static_cast<float>(a.velocity.z * dt);
+        continue;
+      }
+      if (a.constant_acceleration) {  // likewise, from the current velocity
+        if (a.parent) continue;
+        const geom::Vector3D acc = *a.constant_acceleration;
+        a.acceleration = acc;
+        a.velocity = geom::Vector3D(a.velocity.x + static_cast<float>(acc.x * dt),
+                                    a.velocity.y + static_cast<float>(acc.y * dt),
+                                    a.velocity.z + static_cast<float>(acc.z * dt));
         a.transform.location.x += static_cast<float>(a.velocity.x * dt);
         a.transform.location.y += static_cast<float>(a.velocity.y * dt);
         a.transform.location.z += static_cast<float>(a.velocity.z * dt);
@@ -2521,7 +2534,7 @@ std::vector<SharedPtr<TrafficLight>> TrafficLight::GetGroupTrafficLights() {
   return {std::static_pointer_cast<TrafficLight>(shared_from_this())};
 }
 
-std::vector<SharedPtr<Waypoint>> TrafficLight::GetAffectedLaneWaypoints() const {
+std::vector<SharedPtr<Waypoint>> TrafficSign::GetAffectedLaneWaypoints() const {
   WithData([](mock::ActorData &) { return 0; });
   return {MakeWaypoint(-1, kSignalS), MakeWaypoint(-2, kSignalS)};
 }
@@ -2532,7 +2545,7 @@ std::vector<geom::BoundingBox> TrafficLight::GetLightBoxes() const {
                             geom::Vector3D(0.3f, 0.3f, 0.9f), t.rotation)};
 }
 
-std::vector<SharedPtr<Waypoint>> TrafficLight::GetStopWaypoints() const {
+std::vector<SharedPtr<Waypoint>> TrafficSign::GetStopWaypoints() const {
   WithData([](mock::ActorData &) { return 0; });
   return {MakeWaypoint(-1, kSignalS - 5.0), MakeWaypoint(-2, kSignalS - 5.0)};
 }
@@ -2613,6 +2626,49 @@ std::vector<std::string> Client::GetAvailableMaps() const {
 }
 
 bool Client::SetFilesBaseFolder(const std::string &path) { return !path.empty(); }
+
+// CARLA ue58-dev's content packs: the mock server knows one pack, "MockPack",
+// in /packs/MockPack, unmounted until mount_content_pack. As the server, it
+// fails (an RPC error) on a path that holds no pack.
+namespace {
+std::mutex g_pack_mutex;
+bool g_pack_mounted = false;
+
+rpc::ContentPackInfo MockPack() {
+  rpc::ContentPackInfo p;
+  p.name = "MockPack";
+  p.version = "1.0.0";
+  p.base_release = "carla-0.10.2-Linux";
+  p.path = "/packs/MockPack";
+  p.mounted = g_pack_mounted;
+  p.maps = {"/MockPack/Maps/PackTown"};
+  return p;
+}
+}  // namespace
+
+std::vector<rpc::ContentPackInfo> Client::GetContentPacks() const {
+  mock::Connect(_endpoint, _timeout);
+  std::lock_guard<std::mutex> lock(g_pack_mutex);
+  return {MockPack()};
+}
+
+rpc::ContentPackInfo Client::MountContentPack(const std::string &path) const {
+  mock::Connect(_endpoint, _timeout);
+  std::lock_guard<std::mutex> lock(g_pack_mutex);
+  if (path != "/packs/MockPack") {
+    throw std::runtime_error("mount_content_pack: no content pack in " + path);
+  }
+  g_pack_mounted = true;
+  return MockPack();
+}
+
+bool Client::UnmountContentPack(const std::string &name) const {
+  mock::Connect(_endpoint, _timeout);
+  std::lock_guard<std::mutex> lock(g_pack_mutex);
+  if (name != "MockPack" || !g_pack_mounted) return false;
+  g_pack_mounted = false;
+  return true;
+}
 
 // The mock map needs one file; downloading is not simulated.
 std::vector<std::string> Client::GetRequiredFiles(const std::string &folder, const bool) const {
@@ -2738,6 +2794,14 @@ void Actor::EnableConstantVelocity(const geom::Vector3D &vector) {
 
 void Actor::DisableConstantVelocity() {
   WithData([](mock::ActorData &a) { a.constant_velocity.reset(); return 0; });
+}
+
+void Actor::EnableConstantAcceleration(const geom::Vector3D &vector) {
+  WithData([&](mock::ActorData &a) { a.constant_acceleration = vector; return 0; });
+}
+
+void Actor::DisableConstantAcceleration() {
+  WithData([](mock::ActorData &a) { a.constant_acceleration.reset(); return 0; });
 }
 
 // The mock has no rotational dynamics: the point of application is ignored.

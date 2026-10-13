@@ -1,0 +1,11 @@
+# TrafficSign.get_stop_waypoints is CARLA ue58-dev only (ue5-dev has it on
+# TrafficLight alone): built for ue5-dev the program does not compile.
+# carla-ref: ue5-dev
+# expect-error: TrafficSign.get_stop_waypoints is not in LibCarla ue5-dev
+import typesafe_carla as carla
+
+def stops(sign: carla.TrafficSign):
+    waypoints = sign.get_stop_waypoints()
+
+# Compile-only: Codon type-checks a function only when it is called.
+stops(carla.Client("localhost", 2000).get_world().get_actors()[0].as_traffic_sign())

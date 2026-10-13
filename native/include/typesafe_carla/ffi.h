@@ -72,7 +72,7 @@ extern "C" {
  * 4.7: tsc_queue_signal_count / _wait / _notify, for a background callback
  *      dispatcher (#86). */
 #define TSC_ABI_VERSION_MAJOR 5
-#define TSC_ABI_VERSION_MINOR 1
+#define TSC_ABI_VERSION_MINOR 2
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -254,6 +254,29 @@ typedef struct {
 
 /* Frees both strings. */
 TSC_API void tsc_actor_attribute_free(tsc_actor_attribute_t *attribute);
+
+/* A content pack known to the server (CARLA ue58-dev's rpc::ContentPackInfo):
+ * a content-only Unreal plugin with a carla-pack.json manifest. */
+typedef struct {
+  tsc_string_t name;         /* == plugin name, mounted at "/<name>/" */
+  tsc_string_t version;
+  tsc_string_t base_release; /* the release it was cooked against */
+  tsc_string_t path;         /* the pack directory on the server host */
+  int32_t mounted;
+  int32_t reserved0;
+  tsc_string_list_t maps;    /* map names it declares (loadable with load_world) */
+} tsc_content_pack_info_t;
+
+/* Frees every string. Safe on a zeroed or already freed struct. */
+TSC_API void tsc_content_pack_info_free(tsc_content_pack_info_t *info);
+
+typedef struct {
+  tsc_content_pack_info_t *items;
+  size_t size;
+} tsc_content_pack_info_list_t;
+
+/* Frees every item and the array. */
+TSC_API void tsc_content_pack_info_list_free(tsc_content_pack_info_list_t *list);
 
 /* ------------------------------------------------------------------------ */
 /* Client                                                                   */
@@ -2007,6 +2030,18 @@ TSC_API tsc_status_t tsc_client_set_files_base_folder(tsc_client_t *client,
                                                       const char *path, size_t path_len,
                                                       int32_t *out);
 /* END GENERATED client_files */
+/* BEGIN GENERATED client_content_packs from bindings/client.yaml, do not edit */
+/* Free with tsc_content_pack_info_list_free. */
+TSC_API tsc_status_t tsc_client_get_content_packs(tsc_client_t *client,
+                                                  tsc_content_pack_info_list_t *out);
+/* path: the pack directory on the server host. Free with tsc_content_pack_info_free. */
+TSC_API tsc_status_t tsc_client_mount_content_pack(tsc_client_t *client,
+                                                   const char *path, size_t path_len,
+                                                   tsc_content_pack_info_t *out);
+TSC_API tsc_status_t tsc_client_unmount_content_pack(tsc_client_t *client,
+                                                     const char *name, size_t name_len,
+                                                     int32_t *out);
+/* END GENERATED client_content_packs */
 /* LibCarla's LoadWorldIfDifferent: loads `map_name` unless it is the current
  * map (with or without the "Carla/Maps/" prefix). *out is the new world, or
  * NULL when the map was already loaded. map_layers: CARLA MapLayer bit flags. */
@@ -2185,6 +2220,11 @@ TSC_API tsc_status_t tsc_actor_add_impulse_at_location(tsc_actor_t *actor,
                                                        const tsc_vector3d_t *impulse,
                                                        const tsc_location_t *location);
 /* END GENERATED actor_physics_at_location */
+/* BEGIN GENERATED actor_ue58 from bindings/actor.yaml, do not edit */
+TSC_API tsc_status_t tsc_actor_enable_constant_acceleration(tsc_actor_t *actor,
+                                                            const tsc_vector3d_t *acceleration);
+TSC_API tsc_status_t tsc_actor_disable_constant_acceleration(tsc_actor_t *actor);
+/* END GENERATED actor_ue58 */
 
 /* Skeleton queries (one RPC each). They exist in LibCarla ue5-dev but not in
  * CARLA 0.10.0's LibCarla: built against that, they fail with TSC_ERROR. */
@@ -2227,6 +2267,12 @@ TSC_API tsc_status_t tsc_actor_as_traffic_sign(tsc_actor_t *actor, tsc_traffic_s
 TSC_API tsc_status_t tsc_traffic_sign_get_trigger_volume(tsc_traffic_sign_t *sign,
                                                          tsc_bounding_box_t *out);
 /* END GENERATED traffic_sign */
+/* BEGIN GENERATED traffic_sign_ue58 from bindings/traffic_sign.yaml, do not edit */
+TSC_API tsc_status_t tsc_traffic_sign_get_stop_waypoints(tsc_traffic_sign_t *sign,
+                                                         tsc_waypoint_list_t **out);
+TSC_API tsc_status_t tsc_traffic_sign_get_affected_lane_waypoints(tsc_traffic_sign_t *sign,
+                                                                  tsc_waypoint_list_t **out);
+/* END GENERATED traffic_sign_ue58 */
 
 /* ------------------------------------------------------------------------ */
 /* World queries, environment objects, lights, textures, on_tick (#21)      */
@@ -2356,6 +2402,17 @@ TSC_API tsc_status_t tsc_world_get_ego_spawn_points(
     tsc_world_t *world, tsc_transform_t *out, size_t capacity, size_t *out_count);
 TSC_API tsc_status_t tsc_world_get_publish_tf(tsc_world_t *world, int32_t *out);
 TSC_API tsc_status_t tsc_world_set_publish_tf(tsc_world_t *world, int32_t publish_tf);
+/* vertices: x, y, z per vertex; triangles: three vertex indices each. */
+TSC_API tsc_status_t tsc_world_spawn_custom_mesh(tsc_world_t *world,
+                                                 const float *vertices, size_t vertices_size,
+                                                 const uint32_t *triangles, size_t triangles_size,
+                                                 const char *material, size_t material_len);
+/* panorama: an equirectangular linear-RGB texture; face_size: cube face pixels. */
+TSC_API tsc_status_t tsc_world_set_sky_light_map(tsc_world_t *world,
+                                                 const tsc_texture_float_color_t *panorama,
+                                                 double intensity, int32_t face_size);
+TSC_API tsc_status_t tsc_world_clear_sky_light_map(tsc_world_t *world);
+TSC_API tsc_status_t tsc_world_has_sky_light_map(tsc_world_t *world, int32_t *out);
 /* END GENERATED world_ue58 */
 
 /* --- Light manager (World::GetLightManager) ------------------------------------------ */

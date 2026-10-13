@@ -642,6 +642,18 @@ class OpendriveGenerationParameters {
   bool enable_pedestrian_navigation = true;
 };
 
+// CARLA ue58-dev.
+class ContentPackInfo {
+ public:
+  ContentPackInfo() = default;
+  std::string name;
+  std::string version;
+  std::string base_release;
+  std::string path;
+  bool mounted = false;
+  std::vector<std::string> maps;
+};
+
 class ActorDescription {
  public:
   std::string id;
@@ -1096,6 +1108,9 @@ class Actor : public std::enable_shared_from_this<Actor> {
   bool IsActive() const;
   void EnableConstantVelocity(const geom::Vector3D &vector);
   void DisableConstantVelocity();
+  // CARLA ue58-dev only.
+  void EnableConstantAcceleration(const geom::Vector3D &vector);
+  void DisableConstantAcceleration();
   void AddImpulse(const geom::Vector3D &impulse, const geom::Vector3D &location);
   void AddForce(const geom::Vector3D &force, const geom::Vector3D &location);
   void SetCollisions(bool enabled = true);
@@ -1276,6 +1291,10 @@ class TrafficSign : public Actor {
   using Actor::Actor;
   const geom::BoundingBox &GetTriggerVolume() const { return GetBoundingBox(); }
   road::SignId GetSignId() const;  // issue #21 (world_extras.cpp)
+  // On TrafficSign in CARLA ue58-dev, on TrafficLight in ue5-dev and 0.10.0.
+  // The mock's signal "1000" controls both lanes at s = 100.
+  std::vector<SharedPtr<Waypoint>> GetAffectedLaneWaypoints() const;
+  std::vector<SharedPtr<Waypoint>> GetStopWaypoints() const;
 };
 
 // Cycles Green -> Yellow -> Red with the configured times unless frozen.
@@ -1298,10 +1317,8 @@ class TrafficLight : public TrafficSign {
   // Issue #22. The mock's light controls both lanes at s = 100 (OpenDRIVE
   // signal "1000"); it is alone in its group.
   std::vector<SharedPtr<TrafficLight>> GetGroupTrafficLights();
-  std::vector<SharedPtr<Waypoint>> GetAffectedLaneWaypoints() const;
   std::vector<geom::BoundingBox> GetLightBoxes() const;
   road::SignId GetOpenDRIVEID() const { return "1000"; }
-  std::vector<SharedPtr<Waypoint>> GetStopWaypoints() const;
 };
 
 class Landmark {
@@ -1570,6 +1587,12 @@ class World {
   std::vector<geom::Transform> GetEgoSpawnPoints() const;
   bool GetPublishTF() const;
   void SetPublishTF(bool publish_tf);
+  void SpawnCustomMesh(const std::vector<float> &vertices, const std::vector<uint32_t> &triangles,
+                       const std::string &material);
+  void SetSkyLightMap(const rpc::TextureFloatColor &panorama, float intensity = 1.0f,
+                      int32_t face_size = 512);
+  void ClearSkyLightMap();
+  bool HasSkyLightMap() const;
   SharedPtr<LightManager> GetLightManager() const;
   size_t OnTick(std::function<void(WorldSnapshot)> callback);
   void RemoveOnTick(size_t callback_id);
@@ -1694,6 +1717,10 @@ class Client {
   void SetReplayerIgnoreHero(bool ignore_hero);
   void SetReplayerIgnoreSpectator(bool ignore_spectator);
   std::vector<std::string> GetAvailableMaps() const;
+  // CARLA ue58-dev only.
+  std::vector<rpc::ContentPackInfo> GetContentPacks() const;
+  rpc::ContentPackInfo MountContentPack(const std::string &path) const;
+  bool UnmountContentPack(const std::string &name) const;
   bool SetFilesBaseFolder(const std::string &path);
   std::vector<std::string> GetRequiredFiles(const std::string &folder = "",
                                             const bool download = true) const;

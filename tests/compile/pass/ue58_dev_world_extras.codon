@@ -1,0 +1,38 @@
+# CARLA ue58-dev's content packs, custom meshes, sky light maps, constant
+# acceleration and TrafficSign waypoints, built for ue58-dev, with their
+# static types.
+# carla-ref: ue58-dev
+# strict
+import typesafe_carla as carla
+
+def packs(client: carla.Client):
+    known: List[carla.ContentPackInfo] = client.get_content_packs()
+    pack: carla.ContentPackInfo = client.mount_content_pack("/packs/MockPack")
+    name: str = pack.name + pack.version + pack.base_release + pack.path
+    mounted: bool = pack.mounted
+    maps: List[str] = pack.maps
+    unmounted: bool = client.unmount_content_pack(pack.name)
+    text: str = str(pack)
+
+def world_extras(world: carla.World):
+    world.spawn_custom_mesh([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0], [0, 1, 2])
+    world.spawn_custom_mesh([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0], [0, 1, 2], "grass")
+    world.set_sky_light_map(carla.TextureFloatColor(4, 2))
+    world.set_sky_light_map(carla.TextureFloatColor(4, 2), 0.5, 256)
+    world.set_sky_light_map(2, 1, [0.1, 0.2, 0.3, 0.4, 0.5, 0.6], intensity=2.0)
+    lit: bool = world.has_sky_light_map()
+    world.clear_sky_light_map()
+
+def actor_extras(actor: carla.Actor, sign: carla.TrafficSign):
+    actor.enable_constant_acceleration(carla.Vector3D(1.0, 0.0, 0.0))
+    actor.disable_constant_acceleration()
+    stop: List[carla.Waypoint] = sign.get_stop_waypoints()
+    lanes: List[carla.Waypoint] = sign.get_affected_lane_waypoints()
+
+# Compile-only: Codon type-checks a function only when it is called.
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+packs(client)
+world_extras(world)
+actor = world.get_actors()[0]
+actor_extras(actor, actor.as_traffic_sign())

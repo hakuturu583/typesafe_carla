@@ -89,6 +89,12 @@ class Lane;
 }  // namespace carla::client
 #endif
 
+// CARLA ue58-dev's content packs (Client::GetContentPacks & co): only the
+// optional calls name rpc::ContentPackInfo, through generic code.
+#if __has_include(<carla/rpc/ContentPackInfo.h>)
+#include <carla/rpc/ContentPackInfo.h>
+#endif
+
 #if __has_include(<carla/sensor/data/V2XEvent.h>)
 #include <carla/rpc/CustomV2XBytes.h>
 #include <carla/sensor/data/V2XEvent.h>

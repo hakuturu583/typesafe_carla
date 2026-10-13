@@ -15,12 +15,48 @@ from ._ffi import (CStringList, take_string_list, tsc_client_get_available_maps,
                    tsc_client_load_world_if_different, tsc_client_get_required_files,
                    tsc_client_request_file, tsc_client_set_files_base_folder,
                    tsc_client_set_replayer_ignore_hero, tsc_client_set_replayer_ignore_spectator)
+from ._ffi import (CContentPackInfo, CContentPackInfoList, copy_string,
+                   tsc_content_pack_info_free, tsc_content_pack_info_list_free,
+                   tsc_client_get_content_packs, tsc_client_mount_content_pack,
+                   tsc_client_unmount_content_pack)
+from ._carla_ref import carla_api_missing_in
 from .errors import _check, _check_port, CarlaError, _is_actor_id
 from .world import World
 from .geometry import Transform
 from .world_queries import MapLayer, _map_layer
 from ._callbacks import _dispatch_point, _unregister_callback, _stop_gbuffers
 from .command import Command, CommandResponse, _flatten, _responses, _DESTROY_ACTOR
+
+class ContentPackInfo:
+    """A content pack known to the server (CARLA ue58-dev): a content-only
+    Unreal plugin, mounted at "/<name>/", whose maps load with load_world."""
+    name: str
+    version: str
+    base_release: str
+    path: str
+    mounted: bool
+    maps: List[str]
+
+    def __init__(self, name: str, version: str, base_release: str, path: str, mounted: bool,
+                 maps: List[str]):
+        self.name = name
+        self.version = version
+        self.base_release = base_release
+        self.path = path
+        self.mounted = mounted
+        self.maps = maps
+
+    def _from_c(c: CContentPackInfo) -> ContentPackInfo:
+        v = c.maps
+        maps = [copy_string(v.items[i]) for i in range(v.size)]
+        return ContentPackInfo(copy_string(c.name), copy_string(c.version),
+                               copy_string(c.base_release), copy_string(c.path),
+                               c.mounted != i32(0), maps)
+
+    def __repr__(self) -> str:
+        return (f"ContentPackInfo(name={self.name}, version={self.version}, "
+                f"base_release={self.base_release}, path={self.path}, "
+                f"mounted={self.mounted}, maps=[{', '.join(self.maps)}])")
 
 class OpendriveGenerationParameters:
     """Mesh generation settings for Client.generate_opendrive_world()."""
@@ -144,6 +180,34 @@ class Client:
         _check(tsc_client_get_required_files(self._h.ptr, folder.ptr, folder.len,
                                              i32(int(download)), out))
         return take_string_list(out)
+
+    # --- Content packs (CARLA ue58-dev) ----------------------------------------
+
+    def get_content_packs(self) -> List[ContentPackInfo]:
+        """Every content pack the server knows, mounted or not."""
+        carla_api_missing_in("Client.get_content_packs", "0.10.0", "ue5-dev")
+        out = Ptr[CContentPackInfoList](1)
+        _check(tsc_client_get_content_packs(self._h.ptr, out))
+        v = out[0]
+        result = [ContentPackInfo._from_c(v.items[i]) for i in range(v.size)]
+        tsc_content_pack_info_list_free(out)
+        return result
+
+    def mount_content_pack(self, path: str) -> ContentPackInfo:
+        """Mounts the pack in `path` (a directory on the server host)."""
+        carla_api_missing_in("Client.mount_content_pack", "0.10.0", "ue5-dev")
+        out = Ptr[CContentPackInfo](1)
+        _check(tsc_client_mount_content_pack(self._h.ptr, path.ptr, path.len, out))
+        result = ContentPackInfo._from_c(out[0])
+        tsc_content_pack_info_free(out)
+        return result
+
+    def unmount_content_pack(self, name: str) -> bool:
+        """False when no mounted pack has that name."""
+        carla_api_missing_in("Client.unmount_content_pack", "0.10.0", "ue5-dev")
+        out = Ptr[i32](1)
+        _check(tsc_client_unmount_content_pack(self._h.ptr, name.ptr, name.len, out))
+        return out[0] != i32(0)
 
     def request_file(self, name: str):
         """Downloads one file from the server into the files base folder."""

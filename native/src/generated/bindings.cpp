@@ -186,6 +186,19 @@ tsc_status_t tsc_actor_add_impulse_at_location(tsc_actor_t *actor, const tsc_vec
   });
 }
 
+tsc_status_t tsc_actor_enable_constant_acceleration(tsc_actor_t *actor,
+                                                    const tsc_vector3d_t *acceleration) {
+  return TSC_GUARD({
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, EnableConstantAcceleration, "Actor.enable_constant_acceleration", to_carla_vector(*require_ptr(acceleration, "acceleration"))); }(actor_of(actor));
+  });
+}
+
+tsc_status_t tsc_actor_disable_constant_acceleration(tsc_actor_t *actor) {
+  return TSC_GUARD({
+    TSC_CALL_OPTIONAL(actor_of(actor), DisableConstantAcceleration, "Actor.disable_constant_acceleration");
+  });
+}
+
 tsc_status_t tsc_actor_apply_texture_color(tsc_actor_t *actor, int32_t material_parameter,
                                            const tsc_texture_color_t *texture) {
   return TSC_GUARD({
@@ -495,6 +508,26 @@ tsc_status_t tsc_client_set_files_base_folder(tsc_client_t *client,
                                               const char *path, size_t path_len, int32_t *out) {
   return TSC_GUARD({
     assign_out(out, "out", [&] { return client_of(client).SetFilesBaseFolder(to_string(path, path_len, "path")) ? 1 : 0; });
+  });
+}
+
+tsc_status_t tsc_client_get_content_packs(tsc_client_t *client, tsc_content_pack_info_list_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { content_pack_list_assign(out, r_); }), client_of(client), GetContentPacks, "Client.get_content_packs");
+  });
+}
+
+tsc_status_t tsc_client_mount_content_pack(tsc_client_t *client, const char *path, size_t path_len,
+                                           tsc_content_pack_info_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { content_pack_assign(out, r_); }), self_, MountContentPack, "Client.mount_content_pack", to_string(path, path_len, "path")); }(client_of(client));
+  });
+}
+
+tsc_status_t tsc_client_unmount_content_pack(tsc_client_t *client,
+                                             const char *name, size_t name_len, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); [&](auto &self_) { TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_ ? 1 : 0; }), self_, UnmountContentPack, "Client.unmount_content_pack", to_string(name, name_len, "name")); }(client_of(client));
   });
 }
 
@@ -1431,6 +1464,20 @@ tsc_status_t tsc_traffic_sign_get_trigger_volume(tsc_traffic_sign_t *sign,
   });
 }
 
+tsc_status_t tsc_traffic_sign_get_stop_waypoints(tsc_traffic_sign_t *sign,
+                                                 tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_waypoint_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_waypoint_list(without_nulls(r_)); }), sign_of(sign), GetStopWaypoints, "TrafficSign.get_stop_waypoints"); return h_;
+  });
+}
+
+tsc_status_t tsc_traffic_sign_get_affected_lane_waypoints(tsc_traffic_sign_t *sign,
+                                                          tsc_waypoint_list_t **out) {
+  return new_handle(__func__, out, [&] {
+    tsc_waypoint_list_t *h_ = nullptr; TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { h_ = new tsc_waypoint_list(without_nulls(r_)); }), sign_of(sign), GetAffectedLaneWaypoints, "TrafficSign.get_affected_lane_waypoints"); return h_;
+  });
+}
+
 // bindings/transform.yaml: carla::geom::Transform
 
 tsc_status_t tsc_transform_get_matrix(const tsc_transform_t *transform, double *out16) {
@@ -2077,6 +2124,35 @@ tsc_status_t tsc_world_get_publish_tf(tsc_world_t *world, int32_t *out) {
 tsc_status_t tsc_world_set_publish_tf(tsc_world_t *world, int32_t publish_tf) {
   return TSC_GUARD({
     [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetPublishTF, "World.set_publish_tf", publish_tf != 0); }(world_of(world));
+  });
+}
+
+tsc_status_t tsc_world_spawn_custom_mesh(tsc_world_t *world,
+                                         const float *vertices, size_t vertices_size,
+                                         const uint32_t *triangles, size_t triangles_size,
+                                         const char *material, size_t material_len) {
+  return TSC_GUARD({
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SpawnCustomMesh, "World.spawn_custom_mesh", to_float_triples(vertices, vertices_size, "vertices"), to_uint32_triples(triangles, triangles_size, "triangles"), to_string(material, material_len, "material")); }(world_of(world));
+  });
+}
+
+tsc_status_t tsc_world_set_sky_light_map(tsc_world_t *world,
+                                         const tsc_texture_float_color_t *panorama,
+                                         double intensity, int32_t face_size) {
+  return TSC_GUARD({
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetSkyLightMap, "World.set_sky_light_map", to_carla_texture(&*require_ptr(panorama, "panorama"), "panorama"), check_non_negative(intensity, "intensity"), check_positive_int(face_size, "face_size")); }(world_of(world));
+  });
+}
+
+tsc_status_t tsc_world_clear_sky_light_map(tsc_world_t *world) {
+  return TSC_GUARD({
+    TSC_CALL_OPTIONAL(world_of(world), ClearSkyLightMap, "World.clear_sky_light_map");
+  });
+}
+
+tsc_status_t tsc_world_has_sky_light_map(tsc_world_t *world, int32_t *out) {
+  return TSC_GUARD({
+    require_ptr(out, "out"); TSC_CALL_OPTIONAL_THEN(([&](auto &&r_) { *out = r_ ? 1 : 0; }), world_of(world), HasSkyLightMap, "World.has_sky_light_map");
   });
 }
 

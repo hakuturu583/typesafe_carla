@@ -35,6 +35,8 @@ struct Extras {
   std::vector<rpc::EnvironmentObject> objects;
   float imu_gravity = 9.81f;
   bool publish_tf = false;  // ue58-dev
+  bool sky_light_map = false;  // ue58-dev
+  size_t custom_meshes = 0;    // ue58-dev
 };
 
 rpc::EnvironmentObject Object(uint64_t id, std::string name, rpc::CityObjectLabel type,
@@ -278,6 +280,45 @@ void World::SetPublishTF(bool publish_tf) {
   auto x = mock::ExtrasOf(_episode.get());
   std::lock_guard<std::mutex> lock(x->mutex);
   x->publish_tf = publish_tf;
+}
+
+// CARLA ue58-dev. The mock checks what the server would reject (a mesh with
+// no triangle, an index past the vertices, an empty panorama) and keeps only
+// whether a sky light map is set.
+void World::SpawnCustomMesh(const std::vector<float> &vertices,
+                            const std::vector<uint32_t> &triangles, const std::string &) {
+  if (vertices.size() % 3 != 0 || triangles.empty() || triangles.size() % 3 != 0) {
+    throw std::runtime_error("spawn_custom_mesh: malformed mesh");
+  }
+  for (uint32_t index : triangles) {
+    if (index >= vertices.size() / 3) {
+      throw std::runtime_error("spawn_custom_mesh: vertex index out of range");
+    }
+  }
+  auto x = mock::ExtrasOf(_episode.get());
+  std::lock_guard<std::mutex> lock(x->mutex);
+  ++x->custom_meshes;
+}
+
+void World::SetSkyLightMap(const rpc::TextureFloatColor &panorama, float, int32_t) {
+  if (panorama.GetWidth() == 0 || panorama.GetHeight() == 0) {
+    throw std::runtime_error("set_sky_light_map: empty panorama");
+  }
+  auto x = mock::ExtrasOf(_episode.get());
+  std::lock_guard<std::mutex> lock(x->mutex);
+  x->sky_light_map = true;
+}
+
+void World::ClearSkyLightMap() {
+  auto x = mock::ExtrasOf(_episode.get());
+  std::lock_guard<std::mutex> lock(x->mutex);
+  x->sky_light_map = false;
+}
+
+bool World::HasSkyLightMap() const {
+  auto x = mock::ExtrasOf(_episode.get());
+  std::lock_guard<std::mutex> lock(x->mutex);
+  return x->sky_light_map;
 }
 
 SharedPtr<LightManager> World::GetLightManager() const {

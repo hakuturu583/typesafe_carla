@@ -823,6 +823,66 @@ void list_assign(List *out, const Vec &values, Convert &&convert) {
   *out = list;
 }
 
+// CARLA ue58-dev's rpc::ContentPackInfo as a tsc_content_pack_info_t.
+// Templates: the type exists only in ue58-dev, and only optional calls
+// (generic lambdas) instantiate these.
+template <typename Pack>
+void content_pack_fill(tsc_content_pack_info_t &r, const Pack &p) {
+  string_assign(&r.name, p.name);
+  string_assign(&r.version, p.version);
+  string_assign(&r.base_release, p.base_release);
+  string_assign(&r.path, p.path);
+  string_list_assign(&r.maps, p.maps);
+  r.mounted = p.mounted ? 1 : 0;
+}
+template <typename Pack>
+void content_pack_assign(tsc_content_pack_info_t *out, const Pack &p) {
+  require_ptr(out, "out");
+  tsc_content_pack_info_t r{};
+  try {
+    content_pack_fill(r, p);
+  } catch (...) {
+    tsc_content_pack_info_free(&r);
+    throw;
+  }
+  *out = r;
+}
+template <typename Packs>
+void content_pack_list_assign(tsc_content_pack_info_list_t *out, const Packs &packs) {
+  require_ptr(out, "out");
+  tsc_content_pack_info_list_t list{alloc_list_items<tsc_content_pack_info_t>(packs.size()),
+                                    packs.size()};
+  try {
+    for (size_t i = 0; i < packs.size(); ++i) content_pack_fill(list.items[i], packs[i]);
+  } catch (...) {
+    tsc_content_pack_info_list_free(&list);  // unfilled items are zeroed
+    throw;
+  }
+  *out = list;
+}
+// An input array of mesh vertex coordinates (x, y, z per vertex) or
+// triangle indices (three per triangle), for World.spawn_custom_mesh.
+inline std::vector<float> to_float_triples(const float *values, size_t count, const char *name) {
+  require_array(values, count, name);
+  if (count % 3 != 0) {
+    fail(TSC_INVALID_ARGUMENT, std::string(name) + ": " + std::to_string(count) +
+                                   " values, not a multiple of 3");
+  }
+  for (size_t i = 0; i < count; ++i) {
+    if (!std::isfinite(values[i])) fail(TSC_INVALID_ARGUMENT, std::string(name) + ": not finite");
+  }
+  return values == nullptr ? std::vector<float>() : std::vector<float>(values, values + count);
+}
+inline std::vector<uint32_t> to_uint32_triples(const uint32_t *values, size_t count,
+                                               const char *name) {
+  if (count % 3 != 0) {
+    fail(TSC_INVALID_ARGUMENT, std::string(name) + ": " + std::to_string(count) +
+                                   " values, not a multiple of 3");
+  }
+  require_array(values, count, name);
+  return values == nullptr ? std::vector<uint32_t>() : std::vector<uint32_t>(values, values + count);
+}
+
 // Issue #21: the identity of the client connection (LibCarla's Simulator) a
 // World belongs to. OnTick callback ids are per Simulator, which keeps its
 // callbacks across load_world.
@@ -959,6 +1019,10 @@ inline double duration_seconds(carla::time_duration d) {
   return static_cast<double>(d.milliseconds()) / 1000.0;
 }
 
+inline int32_t check_positive_int(int32_t v, const char *name) {
+  if (v <= 0) fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be positive");
+  return v;
+}
 inline double check_positive(double v, const char *name) {
   if (!(v > 0.0) || !std::isfinite(v)) {
     fail(TSC_INVALID_ARGUMENT, std::string(name) + " must be a positive finite number");

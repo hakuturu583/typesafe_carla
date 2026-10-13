@@ -1,0 +1,83 @@
+# CARLA ue58-dev's content packs, custom meshes, sky light maps, constant
+# acceleration and TrafficSign waypoints, on the mock backend.
+import typesafe_carla as carla
+import typesafe_carla._ffi as ffi
+
+assert ffi.CContentPackInfo.__elemsize__ == 88 and ffi.CContentPackInfoList.__elemsize__ == 16
+
+def raises(f) -> bool:
+    try:
+        f()
+    except carla.CarlaError:
+        return True
+    return False
+
+client = carla.Client("localhost", 2000)
+world = client.get_world()
+
+# --- Content packs: the mock server knows "MockPack", unmounted --------------------
+packs = client.get_content_packs()
+assert len(packs) == 1
+pack = packs[0]
+assert pack.name == "MockPack" and pack.version == "1.0.0" and not pack.mounted
+assert pack.base_release == "carla-0.10.2-Linux" and pack.path == "/packs/MockPack"
+assert pack.maps == ["/MockPack/Maps/PackTown"]
+assert str(pack) == ("ContentPackInfo(name=MockPack, version=1.0.0, "
+                     "base_release=carla-0.10.2-Linux, path=/packs/MockPack, mounted=False, "
+                     "maps=[/MockPack/Maps/PackTown])")
+assert not client.unmount_content_pack("MockPack")  # not mounted
+mounted = client.mount_content_pack("/packs/MockPack")
+assert mounted.mounted and mounted.name == "MockPack" and client.get_content_packs()[0].mounted
+assert raises(lambda: client.mount_content_pack("/packs/None"))  # the server's error
+assert client.unmount_content_pack("MockPack") and not client.get_content_packs()[0].mounted
+assert not client.unmount_content_pack("Other")
+
+# --- Custom meshes ------------------------------------------------------------------
+quad = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0]
+world.spawn_custom_mesh(quad, [0, 1, 2, 0, 2, 3])
+world.spawn_custom_mesh(quad, [0, 1, 2], "asphalt")
+assert raises(lambda: world.spawn_custom_mesh([0.0, 1.0], [0, 1, 2]))      # not x, y, z
+assert raises(lambda: world.spawn_custom_mesh(quad, [0, 1]))               # not triangles
+assert raises(lambda: world.spawn_custom_mesh(quad, [0, 1, 4]))            # past the vertices
+assert raises(lambda: world.spawn_custom_mesh(quad, [0, 1, -1]))           # not a uint32
+assert raises(lambda: world.spawn_custom_mesh([0.0, 0.0, float("nan")], [0, 0, 0]))
+
+# --- Sky light map ------------------------------------------------------------------
+assert not world.has_sky_light_map()
+panorama = carla.TextureFloatColor(4, 2)
+panorama.set(0, 0, carla.FloatColor(2.0, 2.0, 2.0))
+world.set_sky_light_map(panorama, 0.5, 64)
+assert world.has_sky_light_map()
+world.clear_sky_light_map()
+assert not world.has_sky_light_map()
+world.set_sky_light_map(2, 1, [0.1, 0.2, 0.3, 0.4, 0.5, 0.6])            # RGB
+world.set_sky_light_map(1, 1, [0.1, 0.2, 0.3, 1.0], intensity=2.0)        # RGBA
+assert world.has_sky_light_map()
+assert raises(lambda: world.set_sky_light_map(2, 1, [0.1, 0.2]))          # wrong size
+assert raises(lambda: world.set_sky_light_map(panorama, 1.0, 0))          # face size
+assert raises(lambda: world.set_sky_light_map(panorama, -1.0))            # intensity
+assert raises(lambda: world.set_sky_light_map(carla.TextureFloatColor()))  # empty
+world.clear_sky_light_map()
+
+# --- Constant acceleration ----------------------------------------------------------
+bp = world.get_blueprint_library().find("vehicle.audi.tt")
+car = world.spawn_actor(bp, carla.Transform(carla.Location(0.0, 30.0, 0.5)))
+car.enable_constant_acceleration(carla.Vector3D(2.0, 0.0, 0.0))
+world.tick()
+v1 = car.get_velocity().x
+world.tick()
+v2 = car.get_velocity().x
+assert 0.0 < v1 < v2 and car.get_acceleration() == carla.Vector3D(2.0, 0.0, 0.0)
+car.disable_constant_acceleration()
+car.destroy()
+
+# --- TrafficSign waypoints: the mock's signal "1000" at s = 100 ---------------------
+mark = world.get_map().get_all_landmarks()[0]
+sign = unwrap(world.get_traffic_sign(mark))
+assert [w.lane_id for w in sign.get_affected_lane_waypoints()] == [-1, -2]
+stops = sign.get_stop_waypoints()
+assert len(stops) == 2 and stops[0].s == 95.0
+light = unwrap(world.get_traffic_light(mark))
+assert len(light.get_stop_waypoints()) == 2  # on TrafficLight, every ref
+
+print("ue58 world extras OK")
