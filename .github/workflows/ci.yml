@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    # Daily: catch ue5-dev changes that break the shim before a release does.
+    # Daily: catch ue5-dev / ue58-dev changes that break the shim before a release does.
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
@@ -98,7 +98,8 @@ jobs:
     # sources. Runs the C ABI tests that need no server. Every current Ubuntu
     # LTS with that release's default GCC (users build LibCarla and the shim
     # with their distribution's compiler; a manylinux/gcc-toolset prebuilt
-    # does not mix with it), times ue5-dev and 0.10.0 (the test server's).
+    # does not mix with it), times the release refs (ue5-dev, ue58-dev:
+    # tools/release_carla_refs.txt) and 0.10.0 (the test server's).
     # aarch64 on one of them (ubuntu-24.04-arm; the cpython-mode pycarla
     # tests below run on x86_64 only).
     # LibCarla is built from the ref's current commit SHA, and build/ is
@@ -121,7 +122,7 @@ jobs:
           - { runner: ubuntu-24.04, gcc: 13 }
           - { runner: ubuntu-26.04, gcc: 15 }
           - { runner: ubuntu-24.04-arm, gcc: 13 }
-        carla_ref: ${{ fromJSON(inputs.carla_ref && format('["ue5-dev","0.10.0","{0}"]', inputs.carla_ref) || '["ue5-dev","0.10.0"]') }}
+        carla_ref: ${{ fromJSON(inputs.carla_ref && format('["ue5-dev","ue58-dev","0.10.0","{0}"]', inputs.carla_ref) || '["ue5-dev","ue58-dev","0.10.0"]') }}
     steps:
       - uses: actions/checkout@v4
       # Headroom for the pycarla and LibCarla builds on the aarch64 image:
@@ -209,7 +210,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/pycarla
-          key: pycarla-${{ runner.os }}-${{ runner.arch }}-${{ steps.carla.outputs.sha }}-${{ hashFiles('codon/**', 'tools/pycarla.py', 'python/typesafe_carla/pycarla/**', 'toolchain/**') }}
+          # "portable": entries before it were built for the saving runner's CPU
+          # (SIGILL on a runner without its AVX-512).
+          key: pycarla-portable-${{ runner.os }}-${{ runner.arch }}-${{ steps.carla.outputs.sha }}-${{ hashFiles('codon/**', 'tools/pycarla.py', 'python/typesafe_carla/pycarla/**', 'toolchain/**') }}
       - name: CARLA PythonAPI unit tests (${{ matrix.carla_ref }}, ${{ matrix.os.runner == 'ubuntu-24.04' && 'cpython + codon' || 'codon' }})
         env:
           PYTHONPATH: python

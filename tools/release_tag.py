@@ -1,9 +1,16 @@
-"""Release tags of the form ``<version>-<CARLA ref>-<YYYYMMDD>``.
+"""Release tags: ``<version>-<YYYYMMDD>`` or ``<version>-<CARLA ref>-<YYYYMMDD>``.
 
     tools/release_tag.py check <tag> [--github-output FILE] [--offline]
-    tools/release_tag.py make <CARLA ref> [--github-output FILE]
+    tools/release_tag.py make [<CARLA ref>] [--github-output FILE]
+    tools/release_tag.py refs [<CARLA ref>...] [--github-output FILE]
 
-Examples: ``0.1.0-ue5-dev-20260915``, ``0.1.0-0.10.0-20250320``.
+Examples: ``0.5.0-20261009`` (every ref of ``tools/release_carla_refs.txt``),
+``0.1.0-ue5-dev-20260915``, ``0.1.0-0.10.0-20250320`` (that ref alone).
+
+A tag without a ref builds every ref listed in ``tools/release_carla_refs.txt``
+(of the tagged commit), each from its last commit on or before the date, into
+one wheel per platform (``tools/merge_native_wheels.py``); a tag with a ref
+builds that ref alone.
 
 - ``<version>`` is everything up to the first ``-`` and must equal the
   package version (``__version__`` in the Python and Codon packages, read by
@@ -26,15 +33,24 @@ committed on the tag date. ``--offline`` skips the lookup.
 commit (used by the auto-release job after ``tools/bump_version.py``). Its date
 is that commit's, which may be today: such a tag is not re-checked; the SHA
 the job records in the annotated tag and the GitHub release is authoritative.
+Without a ref, it forms the tag of every listed ref: each one's latest commit,
+dated with the newest of them.
+
+``refs`` resolves refs (default: the listed ones) to their current commits,
+without a tag (the release workflow's dry run).
 
 ``unpublished`` fails if the package version (or ``--version``) is already on
 PyPI (or ``--index testpypi``): PyPI accepts each version once.
 
 Commits are looked up with the GitHub API (``GITHUB_TOKEN`` is used if set).
 Outputs are ``key=value`` lines (``tag``, ``version``, ``carla_ref`` as in the
-tag, ``carla_commit`` = the SHA LibCarla is built from, ``carla_commit_date``),
-printed to stdout or appended to FILE (``$GITHUB_OUTPUT`` in the release
-workflow); messages go to stderr, or to stdout with ``--github-output``.
+tag, ``carla_commit`` = the SHA LibCarla is built from, ``carla_commit_date``;
+the last three only for a tag with a ref), and for every tag ``carla_refs``
+(the refs, comma-separated, the default first) and ``carla_matrix`` (JSON, one
+``{"index", "ref", "commit", "date"}`` per ref, the default first: the
+workflow's build matrix), printed to stdout or appended to FILE
+(``$GITHUB_OUTPUT`` in the release workflow); messages go to stderr, or to
+stdout with ``--github-output``.
 """
 
 from __future__ import annotations
@@ -48,6 +64,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
 try:  # imported as tools.release_tag (tests) or run as tools/release_tag.py
@@ -57,6 +74,7 @@ except ImportError:
 
 CARLA_REPO = "carla-simulator/carla"
 PACKAGE = "typesafe-carla"
+REFS_FILE = Path(__file__).resolve().parent / "release_carla_refs.txt"
 INDEX_JSON = {"pypi": "https://pypi.org/pypi", "testpypi": "https://test.pypi.org/pypi"}
 
 # A PEP 440 public version in canonical form (it never contains "-").
@@ -69,6 +87,8 @@ _REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 _UE4_REF = re.compile(r"(0\.9(\.|$)|ue4([-_/.]|$))", re.IGNORECASE)
 # A ref that names a commit by (abbreviated) SHA.
 _SHA_REF = re.compile(r"[0-9a-f]{7,40}")
+# A listed release ref also names a directory (typesafe_carla/_native/refs/<ref>).
+_LISTED_REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 class TagError(ValueError):
@@ -81,10 +101,12 @@ class RefNotFound(TagError):
 
 class ReleaseTag(NamedTuple):
     version: str
-    carla_ref: str
+    carla_ref: str | None  # None: every ref of tools/release_carla_refs.txt
     date: datetime.date
 
     def __str__(self) -> str:
+        if self.carla_ref is None:
+            return f"{self.version}-{self.date:%Y%m%d}"
         return f"{self.version}-{self.carla_ref}-{self.date:%Y%m%d}"
 
 
@@ -124,11 +146,47 @@ def check_ref(ref: str) -> None:
                        "CARLA UE5 (ue5-dev, 0.10.x and later)")
 
 
+def release_refs(path: Path = REFS_FILE) -> list[str]:
+    """The refs of tools/release_carla_refs.txt, the default first."""
+    try:
+        lines = path.read_text().splitlines()
+    except OSError as e:
+        raise TagError(f"cannot read the release refs: {e}") from None
+    refs = [ln.split("#", 1)[0].strip() for ln in lines]
+    refs = [r for r in refs if r]
+    if not refs:
+        raise TagError(f"{path} lists no CARLA ref")
+    for ref in refs:
+        check_ref(ref)
+        if not _LISTED_REF.fullmatch(ref):
+            raise TagError(f"{path}: CARLA ref {ref!r} cannot name a directory "
+                           "(typesafe_carla/_native/refs/<ref>)")
+    if len(set(refs)) != len(refs):
+        raise TagError(f"{path} lists a CARLA ref twice")
+    return refs
+
+
+def check_bundled(refs: list[str]) -> None:
+    """Every ref but the first goes to typesafe_carla/_native/refs/<ref>/, so it
+    must name a directory; fail before building rather than when merging."""
+    for ref in refs[1:]:
+        if not _LISTED_REF.fullmatch(ref):
+            raise TagError(f"CARLA ref {ref!r} cannot name a directory "
+                           "(typesafe_carla/_native/refs/<ref>); only the first ref may contain '/'")
+
+
 def parse(tag: str, expected_version: str) -> ReleaseTag:
-    form = "expected <version>-<CARLA ref>-<YYYYMMDD>, e.g. 0.1.0-ue5-dev-20260915"
+    form = ("expected <version>-<YYYYMMDD> or <version>-<CARLA ref>-<YYYYMMDD>, "
+            "e.g. 0.5.0-20261009 or 0.1.0-ue5-dev-20260915")
     version, sep, rest = tag.partition("-")
-    ref, sep2, date_s = rest.rpartition("-")
-    if not (sep and sep2 and ref):
+    if re.fullmatch(r"\d{8}", rest):
+        ref: str | None = None
+        date_s = rest
+    else:
+        ref, sep2, date_s = rest.rpartition("-")
+        if not (sep2 and ref):
+            raise TagError(f"malformed tag {tag!r}: {form}")
+    if not sep:
         raise TagError(f"malformed tag {tag!r}: {form}")
     if not _VERSION.fullmatch(version):
         raise TagError(f"malformed version {version!r} in tag {tag!r}: {form}")
@@ -138,10 +196,11 @@ def parse(tag: str, expected_version: str) -> ReleaseTag:
         date = datetime.datetime.strptime(date_s, "%Y%m%d").date()
     except ValueError:
         raise TagError(f"{date_s!r} in tag {tag!r} is not a calendar date") from None
-    try:
-        check_ref(ref)
-    except TagError as e:
-        raise TagError(f"{e} in tag {tag!r}") from None
+    if ref is not None:
+        try:
+            check_ref(ref)
+        except TagError as e:
+            raise TagError(f"{e} in tag {tag!r}") from None
     if version != expected_version:
         raise TagError(f"tag version {version} != package version {expected_version}")
     return ReleaseTag(version, ref, date)
@@ -245,60 +304,111 @@ def make_tag(ref: str, version: str, fetch: Fetch = github_fetch) -> tuple[Relea
     return parse(str(ReleaseTag(version, ref, commit.day)), version), commit
 
 
-def _outputs(tag: ReleaseTag, commit: Commit | None) -> dict[str, str]:
-    out = {"tag": str(tag), "version": tag.version, "carla_ref": tag.carla_ref}
-    if commit is not None:
-        out["carla_commit"] = commit.sha
-        out["carla_commit_date"] = commit.date.isoformat()
+Resolved = list[tuple[str, Commit]]  # (ref, commit), the default ref first
+
+
+def resolve_refs(refs: list[str], day: datetime.date | None = None,
+                 fetch: Fetch = github_fetch) -> Resolved:
+    """Each ref's latest commit (on or before ``day``, if given)."""
+    for ref in refs:
+        check_ref(ref)
+    return [(ref, resolve_commit(ref, day, fetch)) for ref in refs]
+
+
+def make_multi_tag(version: str, refs: list[str],
+                   fetch: Fetch = github_fetch) -> tuple[ReleaseTag, Resolved]:
+    """The tag for ``version`` and the latest commit of every ref, dated with
+    the newest of them: each ref's last commit by that day is the one found."""
+    resolved = resolve_refs(refs, None, fetch)
+    day = max(commit.day for _, commit in resolved)
+    return parse(str(ReleaseTag(version, None, day)), version), resolved
+
+
+def _matrix(resolved: Resolved) -> str:
+    return json.dumps([{"index": i, "ref": ref, "commit": c.sha, "date": c.date.isoformat()}
+                       for i, (ref, c) in enumerate(resolved)], separators=(",", ":"))
+
+
+def _outputs(tag: ReleaseTag | None, resolved: Resolved | None,
+             refs: list[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if tag is not None:
+        out = {"tag": str(tag), "version": tag.version}
+        if tag.carla_ref is not None:
+            out["carla_ref"] = tag.carla_ref
+            if resolved:
+                out["carla_commit"] = resolved[0][1].sha
+                out["carla_commit_date"] = resolved[0][1].date.isoformat()
+    out["carla_refs"] = ",".join(refs)
+    if resolved is not None:
+        out["carla_matrix"] = _matrix(resolved)
     return out
 
 
 def main(argv: list[str] | None = None, fetch: Fetch = github_fetch,
-         status: Status = http_status, today: datetime.date | None = None) -> int:
+         status: Status = http_status, today: datetime.date | None = None,
+         refs_file: Path = REFS_FILE) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     check = sub.add_parser("check", help="parse and check a tag, resolve its CARLA commit")
     check.add_argument("tag")
     check.add_argument("--offline", action="store_true",
                        help="only parse and check the tag; do not resolve the commit")
-    make = sub.add_parser("make", help="form the tag for the package version and a ref's "
-                                       "latest commit")
-    make.add_argument("ref")
+    make = sub.add_parser("make", help="form the tag for the package version and the latest "
+                                       "commit of a ref (default: of every listed ref)")
+    make.add_argument("ref", nargs="?")
+    refs_cmd = sub.add_parser("refs", help="resolve refs (default: the listed ones) to their "
+                                           "current commits")
+    refs_cmd.add_argument("refs", nargs="*")
     unpublished = sub.add_parser("unpublished", help="fail if the version is already on "
                                                      "the index")
     unpublished.add_argument("--version", help="default: the package version")
     unpublished.add_argument("--index", choices=sorted(INDEX_JSON), default="pypi")
-    for p in (check, make, unpublished):
+    for p in (check, make, refs_cmd, unpublished):
         p.add_argument("--github-output", metavar="FILE",
                        help="append key=value outputs to FILE instead of printing them")
     args = parser.parse_args(argv)
     log = sys.stdout if args.github_output else sys.stderr  # stdout carries outputs otherwise
+    tag: ReleaseTag | None = None
+    resolved: Resolved | None = None
     try:
         if args.command == "unpublished":
             version = args.version or package_version()
             check_unpublished(version, args.index, status)
             print(f"{PACKAGE} {version} is not on {args.index} yet", file=log)
             return 0
-        if args.command == "make":
-            tag, commit = make_tag(args.ref, package_version(), fetch)
-            print(f"{tag}: CARLA {tag.carla_ref} = {commit.sha} ({commit.date.isoformat()})",
-                  file=log)
+        if args.command == "refs":
+            refs = args.refs or release_refs(refs_file)
+            check_bundled(refs)
+            resolved = resolve_refs(refs, None, fetch)
+        elif args.command == "make":
+            if args.ref is not None:
+                tag, commit = make_tag(args.ref, package_version(), fetch)
+                refs, resolved = [args.ref], [(args.ref, commit)]
+            else:
+                refs = release_refs(refs_file)
+                tag, resolved = make_multi_tag(package_version(), refs, fetch)
+            print(f"{tag}:", file=log)
         else:
             tag = parse(args.tag, package_version())
             check_past(tag, today)
-            commit = None
+            refs = [tag.carla_ref] if tag.carla_ref is not None else release_refs(refs_file)
             if not args.offline:
-                commit = resolve_commit(tag.carla_ref, tag.date, fetch)
-                print(f"CARLA {tag.carla_ref} as of {tag.date.isoformat()}: "
-                      f"{commit.sha} ({commit.date.isoformat()})", file=log)
-                if commit.day < tag.date:
+                resolved = resolve_refs(refs, tag.date, fetch)
+                print(f"CARLA as of {tag.date.isoformat()}:", file=log)
+                if tag.carla_ref is not None and resolved[0][1].day < tag.date:
                     print(f"::warning::{tag.carla_ref} has no commit on {tag.date.isoformat()}; "
-                          f"building its last earlier commit {commit.sha} from "
-                          f"{commit.day.isoformat()}", file=log)
+                          f"building its last earlier commit {resolved[0][1].sha} from "
+                          f"{resolved[0][1].day.isoformat()}", file=log)
+                elif all(commit.day < tag.date for _, commit in resolved):
+                    print(f"::warning::none of {', '.join(refs)} has a commit on "
+                          f"{tag.date.isoformat()}; building the last earlier ones", file=log)
+        for ref, commit in resolved or []:
+            print(f"  {ref} = {commit.sha} ({commit.date.isoformat()})", file=log)
     except TagError as e:
         print(f"::error::{e}" if args.github_output else f"ERROR: {e}", file=sys.stderr)
         return 1
-    lines = "".join(f"{k}={v}\n" for k, v in _outputs(tag, commit).items())
+    lines = "".join(f"{k}={v}\n" for k, v in _outputs(tag, resolved, refs).items())
     if args.github_output:
         with open(args.github_output, "a") as f:
             f.write(lines)

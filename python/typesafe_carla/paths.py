@@ -6,6 +6,14 @@ Two layouts are supported:
 
       site-packages/typesafe_carla/_codon/typesafe_carla/__init__.codon
       site-packages/typesafe_carla/_native/libtypesafe_carla_ffi.so
+      site-packages/typesafe_carla/_native/refs/<CARLA ref>/libtypesafe_carla_ffi.so
+
+  A release wheel carries one native library per CARLA ref it was built
+  for (``tools/release_carla_refs.txt``): the default ref's in ``_native/``,
+  every other one's in ``_native/refs/<ref>/``, each with its own
+  ``BUILD_INFO.json`` and license notices. ``TYPESAFE_CARLA_CARLA_REF``
+  selects one (default: the one in ``_native/``). A client must match the
+  server's CARLA branch: their RPC messages differ.
 
 * source checkout (development)::
 
@@ -22,6 +30,9 @@ LIBRARY_NAME = "libtypesafe_carla_ffi.so"
 
 ENV_LIB = "TYPESAFE_CARLA_LIB"
 ENV_BUILD_DIR = "TYPESAFE_CARLA_BUILD_DIR"
+ENV_CARLA_REF = "TYPESAFE_CARLA_CARLA_REF"
+# _native/<REFS_DIR>/<ref>/: the native libraries of the non-default CARLA refs.
+REFS_DIR = "refs"
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 
@@ -68,14 +79,50 @@ def codon_modules_dir() -> Path:
     raise PathError("typesafe_carla Codon sources not found; the installation is incomplete")
 
 
+def _recorded_ref(directory: Path) -> str | None:
+    """The CARLA ref BUILD_INFO.json in `directory` names, if any."""
+    import json
+
+    try:
+        return json.loads((directory / "BUILD_INFO.json").read_text()).get("carla_git_ref")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _native_dirs(native: Path) -> dict[str, Path]:
+    """{CARLA ref: directory of its library} of one ``_native`` directory, the
+    default ref (``_native/`` itself) first."""
+    found: dict[str, Path] = {}
+    if (native / LIBRARY_NAME).is_file():
+        found[_recorded_ref(native) or ""] = native
+    refs = native / REFS_DIR
+    if refs.is_dir():
+        for d in sorted(refs.iterdir()):
+            if (d / LIBRARY_NAME).is_file():
+                found.setdefault(d.name, d)
+    return found
+
+
+def carla_refs() -> dict[str, Path]:
+    """The CARLA refs this installation has a native library for, the default
+    first: {ref: library}. Empty if there is none (a checkout without a build)."""
+    for candidate in _installed_dirs("_native"):
+        found = _native_dirs(candidate)
+        if found:
+            return {ref: d / LIBRARY_NAME for ref, d in found.items()}
+    return {}
+
+
 def native_library() -> Path:
-    """Absolute path of libtypesafe_carla_ffi.so."""
+    """Absolute path of libtypesafe_carla_ffi.so (of the CARLA ref
+    ``TYPESAFE_CARLA_CARLA_REF`` selects, if set)."""
     override = os.environ.get(ENV_LIB)
     if override:
         path = Path(override).expanduser().resolve()
         if not path.is_file():
             raise PathError(f"{ENV_LIB}={override} does not exist")
         return path
+    wanted = os.environ.get(ENV_CARLA_REF) or None
     # In a source checkout the developer's CMake build wins over whatever an
     # (editable) install compiled, so that rebuilding is enough to test changes.
     root = _source_root()
@@ -83,12 +130,24 @@ def native_library() -> Path:
         explicit = os.environ.get(ENV_BUILD_DIR)
         build_dir = Path(explicit).expanduser().resolve() if explicit else root / "build"
         if (build_dir / LIBRARY_NAME).is_file():
+            built = _recorded_ref(build_dir)
+            if wanted is not None and built != wanted:
+                raise PathError(f"{ENV_CARLA_REF}={wanted}, but {build_dir} is built from "
+                                f"CARLA {built}; configure it with -DTSC_CARLA_GIT_REF={wanted} "
+                                f"or unset {ENV_CARLA_REF}")
             return (build_dir / LIBRARY_NAME).resolve()
         if explicit:
             raise PathError(f"{ENV_BUILD_DIR}={explicit}: no {LIBRARY_NAME} in {build_dir}")
     for candidate in _installed_dirs("_native"):
-        if (candidate / LIBRARY_NAME).is_file():
-            return (candidate / LIBRARY_NAME).resolve()
+        found = _native_dirs(candidate)
+        if not found:
+            continue
+        if wanted is None:
+            return (next(iter(found.values())) / LIBRARY_NAME).resolve()
+        if wanted in found:
+            return (found[wanted] / LIBRARY_NAME).resolve()
+        raise PathError(f"{ENV_CARLA_REF}={wanted}: this installation has native libraries for "
+                        f"CARLA {', '.join(r or '?' for r in found)} only")
     hint = "run `cmake -S . -B build && cmake --build build`" if root else "reinstall typesafe-carla"
     raise PathError(f"{LIBRARY_NAME} not found; {hint} or set {ENV_LIB}")
 

@@ -230,9 +230,14 @@ latest `ue5-dev`; any branch, tag or commit SHA can be selected:
 | other repository (fork) | `-DTSC_CARLA_GIT_REPOSITORY=https://github.com/<you>/carla.git` |
 | ref name to record for a SHA | `-DTSC_CARLA_REF_NAME=ue5-dev` (or `CARLA_REF_NAME`) |
 
-Released wheels name their CARLA ref in the release tag,
-`<version>-<CARLA ref>-<YYYYMMDD>` (e.g. `0.1.0-ue5-dev-20260915`: `ue5-dev`
-as of its last commit on that day); see [docs/releasing.md](docs/releasing.md).
+Released wheels carry LibCarla of every ref in
+[`tools/release_carla_refs.txt`](tools/release_carla_refs.txt) (`ue5-dev`, the
+default, and `ue58-dev`), selected with `TYPESAFE_CARLA_CARLA_REF`
+([docs/usage.md](docs/usage.md#which-carla)). The release tag
+`<version>-<YYYYMMDD>` (e.g. `0.5.0-20261009`) builds each ref as of its last
+commit on or before that day; `<version>-<CARLA ref>-<YYYYMMDD>` (e.g.
+`0.1.0-ue5-dev-20260915`) builds one ref alone; see
+[docs/releasing.md](docs/releasing.md).
 
 Only `CMakeLists.txt`, `CMake/` and `LibCarla/` are fetched, as a shallow,
 blob-filtered, sparse checkout (a few MB, not the multi-GB repository). A
