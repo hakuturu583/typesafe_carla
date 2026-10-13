@@ -210,7 +210,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/pycarla
-          key: pycarla-${{ runner.os }}-${{ runner.arch }}-${{ steps.carla.outputs.sha }}-${{ hashFiles('codon/**', 'tools/pycarla.py', 'python/typesafe_carla/pycarla/**', 'toolchain/**') }}
+          # "portable": entries before it were built for the saving runner's CPU
+          # (SIGILL on a runner without its AVX-512).
+          key: pycarla-portable-${{ runner.os }}-${{ runner.arch }}-${{ steps.carla.outputs.sha }}-${{ hashFiles('codon/**', 'tools/pycarla.py', 'python/typesafe_carla/pycarla/**', 'toolchain/**') }}
       - name: CARLA PythonAPI unit tests (${{ matrix.carla_ref }}, ${{ matrix.os.runner == 'ubuntu-24.04' && 'cpython + codon' || 'codon' }})
         env:
           PYTHONPATH: python

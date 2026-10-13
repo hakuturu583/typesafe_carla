@@ -851,7 +851,9 @@ def pycarla_dir(build: bool = True) -> Path | None:
         if not build:
             return None
         print(f"building the carla CPython package in {out} (tools/pycarla, 15-50 min) ...", flush=True)
-        pycarla.build(out)
+        # A TSC_PYCARLA_DIR build is cached and restored on other runners (ci.yml):
+        # build it for any CPU of the architecture, not this one's.
+        pycarla.build(out, portable=bool(explicit))
     return out
 
 
