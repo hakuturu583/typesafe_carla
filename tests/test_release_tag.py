@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 
 import pytest
 
@@ -23,12 +24,23 @@ from tools.release_tag import TagError, parse
 ])
 def test_valid_tags(tag, version, ref, date):
     assert parse(tag, version) == (version, ref, date)
+    assert str(parse(tag, version)) == tag
+
+
+@pytest.mark.parametrize("tag, version, date", [
+    ("0.1.0-20261003", "0.1.0", datetime.date(2026, 10, 3)),
+    ("0.2.0rc1-20240229", "0.2.0rc1", datetime.date(2024, 2, 29)),
+])
+def test_valid_tags_of_every_listed_ref(tag, version, date):
+    assert parse(tag, version) == (version, None, date)
+    assert str(parse(tag, version)) == tag
 
 
 @pytest.mark.parametrize("tag", [
     "v0.1.0",
     "0.1.0",
-    "0.1.0-20261003",          # no ref
+    "0.1.0-2026103",           # no ref, 7 digits
+    "0.1.0-20261003-",         # empty date
     "0.1.0--20261003",         # empty ref
     "0.1.0-ue5-dev",           # no date
     "0.1.0-ue5-dev-2026103",   # 7 digits
@@ -208,9 +220,13 @@ def test_check_writes_github_output(tmp_path, capsys):
     tag = f"{version}-ue5-dev-20260915"
     fetch = fake_github([commit_json()])
     assert release_tag.main(["check", tag, "--github-output", str(out)], fetch) == 0
-    assert out.read_text() == (f"tag={tag}\nversion={version}\ncarla_ref=ue5-dev\n"
-                               f"carla_commit={SHA}\n"
-                               "carla_commit_date=2026-09-15T18:30:00+00:00\n")
+    assert out.read_text() == (
+        f"tag={tag}\nversion={version}\ncarla_ref=ue5-dev\n"
+        f"carla_commit={SHA}\n"
+        "carla_commit_date=2026-09-15T18:30:00+00:00\n"
+        "carla_refs=ue5-dev\n"
+        f'carla_matrix=[{{"index":0,"ref":"ue5-dev","commit":"{SHA}",'
+        '"date":"2026-09-15T18:30:00+00:00"}]\n')
     assert "::warning::" not in capsys.readouterr().out
 
 
@@ -240,7 +256,8 @@ def test_check_offline_prints_outputs(capsys):
     fetch = fake_github(error="no network in tests")
     tag = f"{version}-0.10.0-20250320"
     assert release_tag.main(["check", tag, "--offline"], fetch) == 0
-    assert capsys.readouterr().out == f"tag={tag}\nversion={version}\ncarla_ref=0.10.0\n"
+    assert capsys.readouterr().out == (f"tag={tag}\nversion={version}\ncarla_ref=0.10.0\n"
+                                       "carla_refs=0.10.0\n")
     assert fetch.calls == []
 
 
@@ -271,3 +288,119 @@ def test_make_cli(tmp_path):
 def test_make_unknown_ref(capsys):
     assert release_tag.main(["make", "nope"], fake_github(error="422")) == 1
     assert "not found" in capsys.readouterr().err
+
+
+SHA2 = "89abcdef0123456789abcdef0123456789abcdef"
+
+
+def fake_github_per_ref(commits):
+    """A fetch() answering each ref (``sha=<ref>``) with its own commit list."""
+    calls = []
+
+    def fetch(url):
+        calls.append(url)
+        for ref, answer in commits.items():
+            if f"sha={ref}&" in url:
+                return answer
+        raise release_tag.RefNotFound(url)
+
+    fetch.calls = calls
+    return fetch
+
+
+@pytest.fixture
+def refs_file(tmp_path):
+    path = tmp_path / "refs.txt"
+    path.write_text("# comment\nue5-dev\n\nue58-dev  # the newer one\n")
+    return path
+
+
+def test_release_refs(refs_file):
+    assert release_tag.release_refs(refs_file) == ["ue5-dev", "ue58-dev"]
+
+
+def test_the_repository_lists_release_refs():
+    assert release_tag.release_refs()[0] == "ue5-dev"
+
+
+@pytest.mark.parametrize("text, message", [
+    ("# nothing\n", "no CARLA ref"),
+    ("ue5-dev\nue5-dev\n", "twice"),
+    ("feature/x\n", "directory"),
+    ("ue4-dev\n", "UE4"),
+])
+def test_bad_release_refs(tmp_path, text, message):
+    path = tmp_path / "refs.txt"
+    path.write_text(text)
+    with pytest.raises(TagError, match=message):
+        release_tag.release_refs(path)
+
+
+def test_make_multi_tag_is_dated_with_the_newest_commit():
+    fetch = fake_github_per_ref({"ue5-dev": [commit_json(date="2026-09-02T17:42:40Z")],
+                                 "ue58-dev": [commit_json(SHA2, "2026-10-09T09:40:31Z")]})
+    tag, resolved = release_tag.make_multi_tag("0.5.0", ["ue5-dev", "ue58-dev"], fetch)
+    assert str(tag) == "0.5.0-20261009"
+    assert [(ref, c.sha) for ref, c in resolved] == [("ue5-dev", SHA), ("ue58-dev", SHA2)]
+
+
+def test_make_cli_without_ref_builds_every_listed_ref(tmp_path, refs_file):
+    out = tmp_path / "github_output"
+    version = release_tag.package_version()
+    fetch = fake_github_per_ref({"ue5-dev": [commit_json(date="2026-09-02T17:42:40Z")],
+                                 "ue58-dev": [commit_json(SHA2, "2026-10-09T09:40:31Z")]})
+    assert release_tag.main(["make", "--github-output", str(out)], fetch,
+                            refs_file=refs_file) == 0
+    lines = dict(ln.split("=", 1) for ln in out.read_text().splitlines())
+    assert lines["tag"] == f"{version}-20261009"
+    assert "carla_ref" not in lines and "carla_commit" not in lines
+    assert lines["carla_refs"] == "ue5-dev,ue58-dev"
+    assert json.loads(lines["carla_matrix"]) == [
+        {"index": 0, "ref": "ue5-dev", "commit": SHA, "date": "2026-09-02T17:42:40+00:00"},
+        {"index": 1, "ref": "ue58-dev", "commit": SHA2, "date": "2026-10-09T09:40:31+00:00"}]
+
+
+def test_check_multi_tag_resolves_every_ref_by_the_date(tmp_path, refs_file, capsys):
+    out = tmp_path / "github_output"
+    version = release_tag.package_version()
+    fetch = fake_github_per_ref({"ue5-dev": [commit_json(date="2026-09-02T17:42:40Z")],
+                                 "ue58-dev": [commit_json(SHA2, "2026-10-09T09:40:31Z")]})
+    assert release_tag.main(["check", f"{version}-20261009", "--github-output", str(out)],
+                            fetch, today=datetime.date(2026, 10, 12), refs_file=refs_file) == 0
+    assert all("until=2026-10-09T23" in url for url in fetch.calls)
+    matrix = json.loads(dict(ln.split("=", 1) for ln in out.read_text().splitlines())
+                        ["carla_matrix"])
+    assert [(m["ref"], m["commit"]) for m in matrix] == [("ue5-dev", SHA), ("ue58-dev", SHA2)]
+    # ue5-dev has no commit that day, but ue58-dev does: no warning.
+    assert "::warning::" not in capsys.readouterr().out
+
+
+def test_check_multi_tag_warns_when_no_ref_has_a_commit_that_day(tmp_path, refs_file, capsys):
+    out = tmp_path / "github_output"
+    version = release_tag.package_version()
+    fetch = fake_github_per_ref({"ue5-dev": [commit_json(date="2026-09-02T17:42:40Z")],
+                                 "ue58-dev": [commit_json(SHA2, "2026-10-09T09:40:31Z")]})
+    assert release_tag.main(["check", f"{version}-20261010", "--github-output", str(out)],
+                            fetch, today=datetime.date(2026, 10, 12), refs_file=refs_file) == 0
+    assert "::warning::none of ue5-dev, ue58-dev has a commit on 2026-10-10" in \
+        capsys.readouterr().out
+
+
+def test_check_multi_tag_fails_if_a_ref_is_missing(refs_file, capsys):
+    version = release_tag.package_version()
+    fetch = fake_github_per_ref({"ue5-dev": [commit_json(date="2026-09-02T17:42:40Z")]})
+    assert release_tag.main(["check", f"{version}-20261009"], fetch,
+                            today=datetime.date(2026, 10, 12), refs_file=refs_file) == 1
+    assert "ue58-dev" in capsys.readouterr().err
+
+
+def test_refs_cli(refs_file, capsys):
+    fetch = fake_github_per_ref({"ue5-dev": [commit_json(date="2026-09-02T17:42:40Z")],
+                                 "ue58-dev": [commit_json(SHA2, "2026-10-09T09:40:31Z")],
+                                 "0.10.0": [commit_json(date="2025-03-20T12:00:00Z")]})
+    assert release_tag.main(["refs"], fetch, refs_file=refs_file) == 0
+    out = dict(ln.split("=", 1) for ln in capsys.readouterr().out.splitlines())
+    assert "tag" not in out and out["carla_refs"] == "ue5-dev,ue58-dev"
+    assert release_tag.main(["refs", "0.10.0"], fetch, refs_file=refs_file) == 0
+    out = dict(ln.split("=", 1) for ln in capsys.readouterr().out.splitlines())
+    assert json.loads(out["carla_matrix"])[0]["ref"] == "0.10.0"

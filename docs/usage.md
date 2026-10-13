@@ -34,11 +34,27 @@ was built from still exists.
 
 ## Which CARLA
 
-The published wheel contains LibCarla built from a CARLA UE5 ref.
-`typesafe-codon info` shows which one, under `carla ref` and `carla commit`.
-Use a client built from the same ref as your server (for example `0.10.0`
-for a CARLA 0.10.0 server). To build one for another ref, have uv build
-typesafe-carla from its source distribution:
+Use a client built from the same CARLA branch as your server: the RPC
+messages differ between branches (for example, `EpisodeSettings` gained a
+field in `ue58-dev`), so a mismatched client fails on such calls.
+
+The published wheel contains LibCarla built from each CARLA UE5 ref listed in
+[`tools/release_carla_refs.txt`](../tools/release_carla_refs.txt): `ue5-dev`
+(the default) and `ue58-dev`. Select one with `TYPESAFE_CARLA_CARLA_REF`:
+
+```sh
+TYPESAFE_CARLA_CARLA_REF=ue58-dev typesafe-codon run main.py
+TYPESAFE_CARLA_CARLA_REF=ue58-dev python main.py   # import typesafe_carla.carla
+```
+
+`typesafe-codon info` lists the refs the installation has (`carla refs`) and
+shows the selected one under `carla ref` and `carla commit`. A program built
+with `typesafe-codon build` keeps the ref it was built with (its RPATH names
+that library's directory). The Codon and Python APIs are the same for every
+ref; a method a ref's LibCarla lacks raises `CarlaError` there.
+
+To build a client for another ref (for example `0.10.0` for a CARLA 0.10.0
+server), have uv build typesafe-carla from its source distribution:
 
 ```toml
 [tool.uv]

@@ -1,6 +1,7 @@
 """Sanity checks for a built typesafe-carla wheel, run against the installed package.
 
     python tools/check_wheel.py [--backend libcarla] [--carla-ref REF] [--carla-commit SHA]
+                                [--carla-refs REF,REF...]
 
 Checks that the native library loads, exports the expected ABI, was built
 with the expected backend (and CARLA ref and commit), links no libpython, and
@@ -10,6 +11,11 @@ from) are present. For the libcarla backend it also checks
 that the license notices of the statically linked code ship next to the
 library (LICENSE.CARLA, THIRD_PARTY_NOTICES). Used by the release workflow
 before publishing.
+
+A release wheel carries a native library per CARLA ref
+(tools/merge_native_wheels.py): with TYPESAFE_CARLA_CARLA_REF set, the checks
+apply to that ref's library; --carla-refs checks which refs the wheel
+carries, the default first.
 """
 
 from __future__ import annotations
@@ -37,6 +43,9 @@ def main() -> int:
                              "built from a SHA resolved from it)")
     parser.add_argument("--carla-commit", default=None,
                         help="the CARLA commit SHA LibCarla must have been built from")
+    parser.add_argument("--carla-refs", default=None,
+                        help="the CARLA refs the wheel must carry a native library for, "
+                             "comma-separated, the default first")
     parser.add_argument("--pycarla", action="store_true",
                         help="the wheel must carry a prebuilt typesafe_carla.carla that matches "
                              "its sources and toolchain (tools/add_pycarla_to_wheel.py)")
@@ -55,6 +64,11 @@ def main() -> int:
     print(f"libcarla {native['libcarla_version']} ({ref} {commit})")
 
     errors = []
+    if args.carla_refs is not None:
+        bundled = list(paths.carla_refs())
+        print(f"refs     {', '.join(bundled)}")
+        if bundled != args.carla_refs.split(","):
+            errors.append(f"the wheel carries CARLA {bundled}, expected {args.carla_refs}")
     if backend != args.backend:
         errors.append(f"backend is {backend!r}, expected {args.backend!r}")
     if args.carla_ref is not None and ref != args.carla_ref:

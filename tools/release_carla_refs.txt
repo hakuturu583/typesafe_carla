@@ -1,0 +1,8 @@
+# The carla-simulator/carla refs a release builds LibCarla from, one per line
+# (tools/release_tag.py, docs/releasing.md). Every released wheel carries a
+# native library for each: the first is the default (typesafe_carla/_native/),
+# the others go to typesafe_carla/_native/refs/<ref>/ and are selected with
+# TYPESAFE_CARLA_CARLA_REF. A client must match its server's branch: their RPC
+# messages differ (e.g. EpisodeSettings gained a field in ue58-dev).
+ue5-dev
+ue58-dev

@@ -4,7 +4,7 @@ typesafe_carla publishes two distributions:
 
 | Distribution | Contents | Version | Built by |
 |---|---|---|---|
-| `typesafe-carla` | Codon sources, `libtypesafe_carla_ffi.so` (LibCarla linked in statically), the `typesafe-codon` launcher, the prebuilt `typesafe_carla.carla` CPython package (`typesafe_carla/carla/_prebuilt`) | `python/typesafe_carla/__init__.py` | scikit-build-core (+ cibuildwheel, manylinux_2_28); then `tools/add_pycarla_to_wheel.py` (release job `wheel-pycarla`) |
+| `typesafe-carla` | Codon sources, `libtypesafe_carla_ffi.so` (LibCarla linked in statically) for each CARLA ref of `tools/release_carla_refs.txt`, the `typesafe-codon` launcher, the prebuilt `typesafe_carla.carla` CPython package (`typesafe_carla/carla/_prebuilt`) | `python/typesafe_carla/__init__.py` | scikit-build-core (+ cibuildwheel, manylinux_2_28), once per CARLA ref; `tools/merge_native_wheels.py` (release job `wheel-merge`); then `tools/add_pycarla_to_wheel.py` (release job `wheel-pycarla`) |
 | `typesafe-carla-toolchain` | The pinned Codon compiler | `toolchain/pyproject.toml` (= Codon version, `.postN` for repackaging) | hatchling + `toolchain/hatch_build.py` |
 
 Both are built for Linux x86_64 and aarch64, each natively on its own runner
@@ -26,24 +26,59 @@ two differs (`carla_build.explain_prebuilt_mismatch()`, against the wheel's
 RECORD) and builds one into the cache shared by every installation with the
 same sources and Codon.
 
+## CARLA refs in a release
+
+A release builds LibCarla from every carla-simulator/carla ref listed in
+`tools/release_carla_refs.txt` (of the commit it releases), one per line,
+currently `ue5-dev` and `ue58-dev`. The wheel of each platform carries a
+native library for each:
+
+```
+typesafe_carla/_native/libtypesafe_carla_ffi.so              the first ref (the default)
+typesafe_carla/_native/BUILD_INFO.json, LICENSE.CARLA, THIRD_PARTY_NOTICES
+typesafe_carla/_native/refs/<ref>/libtypesafe_carla_ffi.so    every other ref
+typesafe_carla/_native/refs/<ref>/BUILD_INFO.json, ...        (its own notices)
+```
+
+`TYPESAFE_CARLA_CARLA_REF=<ref>` selects one at run time
+(`typesafe_carla.paths.native_library()`); `typesafe-codon info` lists them.
+Only the native library differs between refs: the C ABI, the Codon sources and
+the prebuilt `typesafe_carla.carla` (which loads the native library at run
+time) are shared, so a second ref adds about 4 MB, not another pycarla build.
+A client must match its server's branch, because their RPC messages differ
+(`EpisodeSettings` gained a field in `ue58-dev`).
+
+API differences between the refs are absorbed as for 0.10.0: the C ABI and
+the Codon API are their union; a LibCarla method one ref lacks is generated
+with `optional: {..., missing_in: [<refs>]}` (`TSC_CALL_OPTIONAL`, a
+`CarlaError` at run time there), and `tools.bindgen validate` accepts it
+missing only on a build of a listed ref.
+
+To add or drop a ref, edit the file (and CI's `libcarla` matrix in
+`ci.yml`); the next release builds it. The first ref stays the default for
+users who set nothing, so changing it changes what they get.
+
 ## Release tags
 
-A release tag is `<version>-<CARLA ref>-<YYYYMMDD>`:
+A release tag is `<version>-<YYYYMMDD>`, which builds every listed ref, or
+`<version>-<CARLA ref>-<YYYYMMDD>`, which builds that ref alone:
 
 | Part | Meaning | Example |
 |---|---|---|
 | `<version>` | the package version, `__version__` in `python/typesafe_carla/__init__.py` (and `codon/typesafe_carla/__init__.codon`) | `0.1.0` |
 | `<CARLA ref>` | the carla-simulator/carla branch, tag or commit SHA LibCarla is built from; may contain `-`, `.` and `/`; UE4 refs (`0.9.x`, `ue4-dev`) are rejected | `ue5-dev`, `0.10.0` |
-| `<YYYYMMDD>` | the date (UTC, committer date) of the CARLA ref's **last commit** to build | `20260915` |
+| `<YYYYMMDD>` | the date (UTC, committer date) of the CARLA ref's **last commit** to build (with several refs: of the newest of their last commits) | `20260915` |
 
-So `0.1.0-ue5-dev-20260915` means "typesafe_carla 0.1.0 with LibCarla from
-`ue5-dev` as of its last commit on 2026-09-15", and `0.1.0-0.10.0-20250320`
-pins the `0.10.0` tag. The workflow resolves the tag to a commit SHA — the
-latest commit reachable from the ref with a committer date on or before the
-end of that day (UTC) — and builds LibCarla from that SHA, so even a release
-of the moving `ue5-dev` branch is reproducible. It fails if the ref does not
-exist or has no commit by that date, and logs a warning if the commit is from
-an earlier day (the ref had no commit on the tag date).
+So `0.5.0-20261009` means "typesafe_carla 0.5.0 with LibCarla from each
+listed ref as of its last commit on or before 2026-10-09" (`ue58-dev` from
+that day, `ue5-dev` from its last commit, 2026-09-02),
+`0.1.0-ue5-dev-20260915` means "LibCarla from `ue5-dev` alone as of its last
+commit on 2026-09-15", and `0.1.0-0.10.0-20250320` pins the `0.10.0` tag. The
+workflow resolves each ref to a commit SHA — the latest commit reachable from
+the ref with a committer date on or before the end of that day (UTC) — and
+builds LibCarla from that SHA, so even a release of moving branches is
+reproducible. It fails if a ref does not exist or has no commit by that date,
+and logs a warning if no ref has a commit on the tag date.
 
 - **The date must be over.** A hand-cut tag's date must be before today
   (UTC); otherwise commits landing later that day would change what the tag
@@ -68,9 +103,11 @@ git log -1 --format=%cd --date=format:%Y%m%d origin/ue5-dev
 `--date=format:` prints the date in the committer's own time zone; the tag
 date is UTC, so near midnight use
 `TZ=UTC git log -1 --format=%cd --date=format-local:%Y%m%d origin/ue5-dev`.
-`python tools/release_tag.py check <tag>` parses a tag and prints the commit
-it resolves to; `python tools/release_tag.py make <ref>` forms the tag for the
-current package version and the ref's latest commit;
+`python tools/release_tag.py check <tag>` parses a tag and prints the commits
+it resolves to; `python tools/release_tag.py make` forms the tag for the
+current package version and the listed refs' latest commits (`make <ref>`:
+for that ref alone); `python tools/release_tag.py refs [<ref>...]` resolves
+refs (default: the listed ones) to their current commits;
 `python tools/release_tag.py unpublished` fails if the package version is
 already on PyPI.
 
@@ -91,8 +128,9 @@ building anything:
 
 What a wheel was built from is
 recorded in it: `typesafe_carla/_native/BUILD_INFO.json` and
-`typesafe-codon info` show the CARLA ref (the resolved SHA, for a release)
-and commit; the annotated tag and the GitHub release name the ref and SHA.
+`typesafe-codon info` show the CARLA ref and commit (of each ref's
+library, `_native/refs/<ref>/BUILD_INFO.json`); the annotated tag and the
+GitHub release name every ref and SHA.
 
 ## One-time setup
 
@@ -135,9 +173,9 @@ and commit; the annotated tag and the GitHub release name the ref and SHA.
 5. The `release` job pushes the version bump to `main` and the tag with
    `GITHUB_TOKEN`: if `main` is protected, allow GitHub Actions to push to it
    (or the release job fails before tagging).
-6. Optionally set the repository variable `CARLA_RELEASE_REF` (Settings →
-   Secrets and variables → Actions → Variables) to the CARLA ref automatic
-   releases build from. The default is `ue5-dev`.
+6. The CARLA refs releases build are listed in `tools/release_carla_refs.txt`
+   (see "CARLA refs in a release"). The repository variable
+   `CARLA_RELEASE_REF` of earlier versions is no longer read.
 
 No API tokens are needed: `release.yml` authenticates through OIDC.
 
@@ -161,11 +199,12 @@ SHA. UE4 refs (`0.9.x`, `ue4-dev`) are rejected.
   `carla.libcarla_git_commit()` in Codon;
 - `typesafe_carla/_native/BUILD_INFO.json` inside the wheel.
 
-Releases build from the commit SHA resolved from the release tag (a dry
-run, from the current commit of its `carla_ref`) and pass the ref itself as
-`TSC_CARLA_REF_NAME`, so a wheel records e.g. ref `ue5-dev` and commit
-`1360bb9…`; `tools/check_wheel.py --carla-ref <ref> --carla-commit <sha>`
-checks both. `tools.bindgen validate` matches `missing_in` against that ref
+Releases build each ref from the commit SHA resolved from the release tag (a
+dry run, from the current commits of its `carla_refs`) and pass the ref
+itself as `TSC_CARLA_REF_NAME`, so a wheel records e.g. ref `ue5-dev` and
+commit `1360bb9…`; `tools/check_wheel.py --carla-ref <ref> --carla-commit
+<sha>` checks both (with `TYPESAFE_CARLA_CARLA_REF=<ref>` for a ref other than
+the default). `tools.bindgen validate` matches `missing_in` against that ref
 name.
 
 ### LibCarla build cache
@@ -210,7 +249,8 @@ with `actions/cache`, keyed by the resolved CARLA commit SHA:
   CARLA SHA may get newer ones.
 
 An entry is about 275 MB compressed (1.1 GB unpacked, mostly Boost sources),
-so CI's six legs hold about 1.7 GB; a new `ue5-dev` commit adds three.
+so CI's twelve legs (four runners times `ue5-dev`, `ue58-dev` and `0.10.0`)
+hold about 3.3 GB; a new commit of a moving branch adds four.
 GitHub evicts the least recently used entries beyond 10 GB per repository.
 
 The wheel also ships `_native/THIRD_PARTY_NOTICES`, the license notices of
@@ -346,15 +386,18 @@ ubuntu-22.04 leg's prefix even if a newer libstdc++ runtime is installed;
 ```
 push to main ──► release ──┐  (bump, tag, push, draft GitHub release; only with a release:* label)
 push a tag ────────────────┤
-workflow_dispatch ─────────┴─► resolve ──► verify ──┬─► sdist ─────┐
-                                                    ├─► wheel ─────┼─► publish-toolchain ──► publish ──┬─► github-release
-                                                    └─► toolchain ─┘                                     └─► verify-published
+workflow_dispatch ─────────┴─► resolve ──► verify ──┬─► sdist ─────────────────────────────────┐
+                                                    ├─► wheel ──► wheel-merge ──► wheel-pycarla ─┼─► publish-toolchain ──► publish ──┬─► github-release
+                                                    └─► toolchain ───────────────────────────────┘                                     └─► verify-published
 ```
 
-`wheel` (and `wheel-pycarla` after it) and `toolchain` run once per
-architecture (x86_64, aarch64). `verify-published` installs the uploaded
+`wheel` runs once per architecture (x86_64, aarch64) and CARLA ref;
+`wheel-merge` makes one wheel per architecture of them, with every ref's
+native library (`tools/merge_native_wheels.py`), and checks each ref as
+installed. `wheel-pycarla` and `toolchain` run once per architecture. `verify-published` installs the uploaded
 version from the index it went to, and nothing else, on each architecture,
-and checks it as a user gets it: `check_wheel.py --pycarla`,
+and checks it as a user gets it, for every CARLA ref it carries
+(`TYPESAFE_CARLA_CARLA_REF`): `check_wheel.py --pycarla`,
 `import typesafe_carla.carla` with building disabled, and a
 `typesafe-codon build -release`.
 
@@ -375,38 +418,41 @@ Give the PR exactly one of `release:major`, `release:minor` or
 1. reads the merged PR's labels (none: nothing happens; more than one: error);
 2. bumps `__version__` in `python/typesafe_carla/__init__.py` **and**
    `codon/typesafe_carla/__init__.codon` with `tools/bump_version.py <level>`;
-3. resolves the latest commit of `CARLA_RELEASE_REF` (default `ue5-dev`)
-   and forms the tag `<new version>-<ref>-<date of that commit>`, failing if
-   the version is already tagged or on PyPI;
+3. resolves the latest commit of every ref of `tools/release_carla_refs.txt`
+   and forms the tag `<new version>-<date of the newest of those commits>`,
+   failing if the version is already tagged or on PyPI;
 4. commits `chore(release): <tag>` as github-actions[bot] on top of the
-   merged commit, creates the annotated tag (its message names the CARLA
-   SHA), pushes `main` (without force: if `main` moved meanwhile, the push
-   fails) and the tag, and drafts a GitHub release with generated notes.
+   merged commit, creates the annotated tag (its message names each CARLA
+   ref and SHA), pushes `main` (without force: if `main` moved meanwhile, the
+   push fails) and the tag, and drafts a GitHub release with generated notes.
 
-The rest of the run builds and publishes that tag, from the CARLA SHA the
+The rest of the run builds and publishes that tag, from the CARLA SHAs the
 `release` job resolved; `github-release` publishes the draft once the
 packages are on PyPI. Release cuts never run concurrently. Bump `TSC_ABI_VERSION_*` in `ffi.h` and `_ffi.codon`
 in the PR itself if the C ABI changed.
 
-### Hand-cut tag: another CARLA ref or date
+### Hand-cut tag: another date or CARLA ref
 
 1. Make sure `__version__` on the commit to tag is a version not yet on PyPI
    (`python tools/bump_version.py patch|minor|major|X.Y.Z` bumps both files;
    merge that without a release label).
 2. Tag and push, for example:
    ```sh
-   git tag -a 0.2.0-0.10.0-20250320 -m "Release 0.2.0-0.10.0-20250320"
+   git tag -a 0.5.0-20261009 -m "Release 0.5.0-20261009"          # every listed ref
+   git push origin 0.5.0-20261009
+   git tag -a 0.2.0-0.10.0-20250320 -m "Release 0.2.0-0.10.0-20250320"   # 0.10.0 alone
    git push origin 0.2.0-0.10.0-20250320
    ```
    The `release` job is skipped; `resolve` checks the tag
-   (`tools/release_tag.py check`) and resolves its CARLA commit. The date
+   (`tools/release_tag.py check`) and resolves its CARLA commits. The date
    must be before today (UTC). After the upload, `github-release` creates a
    GitHub release for the tag.
 
 ### Dry run
 
-Run **Release** manually (workflow_dispatch) with the `carla_ref` you want
-(resolved to its current commit SHA, which is what is built). It builds and checks every artifact
+Run **Release** manually (workflow_dispatch), with the `carla_refs` you want
+(space-separated, the default first; empty: the listed refs), each resolved to
+its current commit SHA, which is what is built. It builds and checks every artifact
 and uploads them as workflow artifacts; with `publish=true` it also uploads to
 TestPyPI (then `verify-published` installs it from there). With
 `verify_only=true` it builds and uploads nothing and only runs
@@ -422,8 +468,10 @@ and no Codon, CARLA Python package or `CODON_PATH` set up by hand.
 - `verify`: the tag's version equals both `__version__`s, and the mock suite
   (C++ build, `ctest`, `pytest`) passes on the tagged commit;
 - builds the sdist;
-- builds the wheel in manylinux_2_28 with `TSC_BACKEND=libcarla`, then runs
-  `tools/check_wheel.py`. That fails the release if the backend is not
+- builds a wheel per CARLA ref in manylinux_2_28 with
+  `TSC_BACKEND=libcarla`, then runs `tools/check_wheel.py`; merges them and
+  runs it again on the result for every ref, and checks the wheel carries
+  exactly the listed refs (`--carla-refs`). That fails the release if the backend is not
   `libcarla`, the CARLA ref or commit differs from the resolved one, libpython
   is linked, the library exports anything besides `tsc_*`, or
   `_native/LICENSE.CARLA` or `_native/THIRD_PARTY_NOTICES` is missing or

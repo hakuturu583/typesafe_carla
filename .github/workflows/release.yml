@@ -1,29 +1,34 @@
 # Cuts releases of typesafe-carla and publishes them (with
 # typesafe-carla-toolchain) to PyPI.
 #
-# Release tags are <version>-<CARLA ref>-<YYYYMMDD>, e.g. 0.1.0-ue5-dev-20260915
-# or 0.1.0-0.10.0-20250320: the package version, the carla-simulator/carla ref
-# LibCarla is built from, and the (UTC committer) date of that ref's last
-# commit to build. LibCarla is built from the resolved commit SHA, so a release
-# of a moving branch such as ue5-dev is reproducible. tools/release_tag.py
-# parses the tags and resolves the commits. The PyPI version is <version>
-# alone: PyPI accepts a version once, so every release bumps it, and a run
-# fails early (in `release` and `resolve`) if the version is already published.
+# Release tags are <version>-<YYYYMMDD>, e.g. 0.5.0-20261009: the package
+# version and a (UTC committer) date. Every carla-simulator/carla ref listed in
+# tools/release_carla_refs.txt (ue5-dev, ue58-dev) is built from its last
+# commit on or before that date, and the wheel of each platform carries a
+# native library per ref (tools/merge_native_wheels.py; the first ref is the
+# default, TYPESAFE_CARLA_CARLA_REF selects another at run time). A tag
+# <version>-<CARLA ref>-<YYYYMMDD>, e.g. 0.1.0-0.10.0-20250320, builds that one
+# ref alone. LibCarla is built from the resolved commit SHAs, so a release of
+# moving branches is reproducible. tools/release_tag.py parses the tags and
+# resolves the commits. The PyPI version is <version> alone: PyPI accepts a
+# version once, so every release bumps it, and a run fails early (in `release`
+# and `resolve`) if the version is already published.
 #
 # There are three ways in, and the first is the everyday one:
 #
 #   push to main   the auto-release path. When the merged PR carries exactly one
 #                  `release:major|minor|patch` label, the `release` job bumps the
 #                  version (tools/bump_version.py), resolves the latest commit of
-#                  the CARLA release ref (repository variable CARLA_RELEASE_REF,
-#                  default ue5-dev), tags it and drafts a GitHub release; the
+#                  every CARLA release ref (tools/release_carla_refs.txt),
+#                  tags them and drafts a GitHub release; the
 #                  tag is built and published, all in this one run, and the
 #                  GitHub release is published last. No label, no release.
-#   push a release tag   a hand-cut tag (another CARLA ref, a hotfix) is built
+#   push a release tag   a hand-cut tag (another date or CARLA ref, a hotfix) is built
 #                  and published directly, then gets a GitHub release; the
 #                  `release` job is skipped.
 #   workflow_dispatch    a dry run: builds and checks everything from the
-#                  `carla_ref` input without tagging; with publish=true it also
+#                  `carla_refs` input (default: the listed refs) at their
+#                  current commits, without tagging; with publish=true it also
 #                  uploads to TestPyPI. With verify_only=true it builds nothing
 #                  and only checks the package version already on TestPyPI.
 #
@@ -49,15 +54,15 @@ name: Release
 on:
   push:
     branches: [main]
-    # <version>-<CARLA ref>-<YYYYMMDD>. "**" because a ref may contain "/";
+    # <version>-<YYYYMMDD> or <version>-<CARLA ref>-<YYYYMMDD>. "**" because a ref may contain "/";
     # the exact format is checked by tools/release_tag.py.
     tags: ["[0-9]*.[0-9]*.[0-9]*-**"]
   workflow_dispatch:
     inputs:
-      carla_ref:
-        description: "CARLA branch, tag or commit SHA to build LibCarla from (UE5 only)"
-        default: "ue5-dev"
-        required: true
+      carla_refs:
+        description: "CARLA branches, tags or commit SHAs to build LibCarla from, space-separated, the default first (UE5 only; empty: tools/release_carla_refs.txt)"
+        default: ""
+        required: false
       publish:
         description: "Upload to TestPyPI (otherwise build and check only)"
         type: boolean
@@ -89,8 +94,7 @@ jobs:
     outputs:
       bump: ${{ steps.pr.outputs.bump }}
       tag: ${{ steps.tag.outputs.tag }}
-      carla_ref: ${{ steps.tag.outputs.carla_ref }}
-      carla_commit: ${{ steps.tag.outputs.carla_commit }}
+      carla_matrix: ${{ steps.tag.outputs.carla_matrix }}
     steps:
       - name: Read the release label off the merged PR
         id: pr
@@ -155,13 +159,26 @@ jobs:
           fi
           python3 tools/release_tag.py unpublished --version "$NEXT"
 
-      - name: Resolve the CARLA ref's latest commit and form the tag
+      - name: Resolve the CARLA refs' latest commits and form the tag
         if: steps.pr.outputs.bump != 'none'
         id: tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CARLA_RELEASE_REF: ${{ vars.CARLA_RELEASE_REF || 'ue5-dev' }}
-        run: python3 tools/release_tag.py make "$CARLA_RELEASE_REF" --github-output "$GITHUB_OUTPUT"
+        run: python3 tools/release_tag.py make --github-output "$GITHUB_OUTPUT"
+
+      # One line per ref, for the annotated tag and the GitHub release.
+      - name: Describe the CARLA commits
+        if: steps.pr.outputs.bump != 'none'
+        id: notes
+        env:
+          MATRIX: ${{ steps.tag.outputs.carla_matrix }}
+        run: |
+          set -euo pipefail
+          {
+            echo "notes<<EOF"
+            echo "$MATRIX" | jq -r '.[] | "LibCarla: carla-simulator/carla `\(.ref)` at carla-simulator/carla@\(.commit)\(if .index == 0 then " (default)" else "" end)"'
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Fail if the tag already exists
         if: steps.pr.outputs.bump != 'none'
@@ -177,16 +194,14 @@ jobs:
         if: steps.pr.outputs.bump != 'none'
         env:
           TAG: ${{ steps.tag.outputs.tag }}
-          CARLA_REF: ${{ steps.tag.outputs.carla_ref }}
-          CARLA_COMMIT: ${{ steps.tag.outputs.carla_commit }}
+          NOTES: ${{ steps.notes.outputs.notes }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add python/typesafe_carla/__init__.py codon/typesafe_carla/__init__.codon
           git commit -m "chore(release): ${TAG}"
-          git tag -a "${TAG}" -m "Release ${TAG}" \
-            -m "LibCarla: carla-simulator/carla ${CARLA_REF} @ ${CARLA_COMMIT}"
+          git tag -a "${TAG}" -m "Release ${TAG}" -m "${NOTES//\`/}"
           git push origin "HEAD:main"
           git push origin "${TAG}"
 
@@ -196,11 +211,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.tag.outputs.tag }}
-          CARLA_REF: ${{ steps.tag.outputs.carla_ref }}
-          CARLA_COMMIT: ${{ steps.tag.outputs.carla_commit }}
+          NOTES: ${{ steps.notes.outputs.notes }}
         run: |
           gh release create "${TAG}" --draft --verify-tag --title "${TAG}" --generate-notes \
-            --notes "LibCarla built from carla-simulator/carla \`${CARLA_REF}\` at carla-simulator/carla@${CARLA_COMMIT}."
+            --notes "$NOTES"
 
   # One place to work out, for all three entry points, which commit to check
   # out, which CARLA commit to build, and whether and where to publish. Runs
@@ -218,9 +232,10 @@ jobs:
       ref: ${{ steps.r.outputs.ref }}
       tag: ${{ steps.r.outputs.tag }}
       version: ${{ steps.r.outputs.version }}
-      carla_ref: ${{ steps.r.outputs.carla_ref }}
-      carla_build_ref: ${{ steps.r.outputs.carla_build_ref }}
-      carla_commit: ${{ steps.r.outputs.carla_commit }}
+      # JSON: one {index, ref, commit, date} per CARLA ref, the default first.
+      carla_matrix: ${{ steps.r.outputs.carla_matrix }}
+      carla_refs: ${{ steps.r.outputs.carla_refs }}
+      carla_notes: ${{ steps.r.outputs.carla_notes }}
       verify_only: ${{ steps.r.outputs.verify_only }}
     steps:
       # For a tag push this is the tag, so the tag is checked against its own
@@ -237,43 +252,40 @@ jobs:
           RELEASE_RESULT: ${{ needs.release.result }}
           BUMP: ${{ needs.release.outputs.bump }}
           TAG: ${{ needs.release.outputs.tag }}
-          TAG_CARLA_REF: ${{ needs.release.outputs.carla_ref }}
-          TAG_CARLA_COMMIT: ${{ needs.release.outputs.carla_commit }}
-          INPUT_CARLA_REF: ${{ inputs.carla_ref }}
+          TAG_CARLA_MATRIX: ${{ needs.release.outputs.carla_matrix }}
+          INPUT_CARLA_REFS: ${{ inputs.carla_refs }}
           INPUT_PUBLISH: ${{ inputs.publish }}
           INPUT_VERIFY_ONLY: ${{ inputs.verify_only }}
         run: |
           set -euo pipefail
           proceed=false; publish=false; index=pypi; ref="$SHA"; tag=""; version=""
-          carla_ref=""; carla_commit=""; verify_only=false
+          carla_matrix="[]"; verify_only=false
+          out=$(mktemp)
           if [ "$EVENT" = push ] && [[ "$REF" == refs/tags/* ]]; then
-            # A hand-cut tag: check it, resolve its CARLA commit, build and publish.
-            out=$(mktemp)
+            # A hand-cut tag: check it, resolve its CARLA commits, build and publish.
             python3 tools/release_tag.py check "$REF_NAME" --github-output "$out"
-            while IFS='=' read -r k v; do
-              case "$k" in
-                version) version="$v" ;;
-                carla_ref) carla_ref="$v" ;;
-                carla_commit) carla_commit="$v" ;;
-              esac
-            done < "$out"
             proceed=true; publish=true; ref="$REF_NAME"; tag="$REF_NAME"
           elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
             # The auto-release path: build and publish only if a tag was cut.
-            # The CARLA commit comes from `release`, not resolved a second time.
+            # The CARLA commits come from `release`, not resolved a second time.
             if [ "$RELEASE_RESULT" = success ] && [ "$BUMP" != none ] && [ -n "$TAG" ]; then
               proceed=true; publish=true; ref="$TAG"; tag="$TAG"; version="${TAG%%-*}"
-              carla_ref="$TAG_CARLA_REF"; carla_commit="$TAG_CARLA_COMMIT"
+              echo "carla_matrix=$TAG_CARLA_MATRIX" > "$out"
             fi
           elif [ "$EVENT" = workflow_dispatch ]; then
-            # A dry run from the carla_ref input, built from the ref's current
-            # commit (which also keys the LibCarla build cache); publish=true
-            # uploads to TestPyPI.
-            proceed=true; index=testpypi; carla_ref="${INPUT_CARLA_REF:-ue5-dev}"
-            carla_commit=$(tools/resolve_carla_ref.sh "$carla_ref")
+            # A dry run from the carla_refs input (default: the listed refs),
+            # built from their current commits (which also key the LibCarla
+            # build cache); publish=true uploads to TestPyPI.
+            proceed=true; index=testpypi
             if [ "$INPUT_PUBLISH" = true ]; then publish=true; fi
-            # Only `verify-published`, against what TestPyPI already has.
-            if [ "$INPUT_VERIFY_ONLY" = true ]; then proceed=false; publish=false; verify_only=true; fi
+            if [ "$INPUT_VERIFY_ONLY" = true ]; then
+              # Only `verify-published`, against what TestPyPI already has (its
+              # refs and commits are whatever that upload was built from).
+              proceed=false; publish=false; verify_only=true
+            else
+              # shellcheck disable=SC2086  # word splitting: one argument per ref
+              python3 tools/release_tag.py refs $INPUT_CARLA_REFS --github-output "$out"
+            fi
           fi
           # PyPI accepts a version once: fail now, not after the build. A re-run
           # (attempt > 1) may be finishing a partial upload, so it is let through.
@@ -284,15 +296,26 @@ jobs:
               python3 tools/release_tag.py unpublished --index "$index" ${version:+--version "$version"}
             fi
           fi
-          # What CMake fetches (CARLA_GIT_REF): the resolved SHA.
-          carla_build_ref="${carla_commit:-$carla_ref}"
+          while IFS='=' read -r k v; do
+            case "$k" in
+              version) version="$v" ;;
+              carla_matrix) carla_matrix="$v" ;;
+            esac
+          done < "$out"
+          if [ "$proceed" = true ] && [ "$(echo "$carla_matrix" | jq length)" -eq 0 ]; then
+            echo "::error::no CARLA ref to build"; exit 1
+          fi
+          carla_refs=$(echo "$carla_matrix" | jq -r '[.[].ref] | join(",")')
           upload_url=https://upload.pypi.org/legacy/
           if [ "$index" = testpypi ]; then upload_url=https://test.pypi.org/legacy/; fi
           {
             echo "proceed=$proceed"; echo "publish=$publish"; echo "index=$index"; echo "upload_url=$upload_url"
-            echo "ref=$ref"; echo "tag=$tag"; echo "version=$version"; echo "carla_ref=$carla_ref"
-            echo "carla_build_ref=$carla_build_ref"; echo "carla_commit=$carla_commit"
+            echo "ref=$ref"; echo "tag=$tag"; echo "version=$version"
+            echo "carla_matrix=$carla_matrix"; echo "carla_refs=$carla_refs"
             echo "verify_only=$verify_only"
+            echo "carla_notes<<EOF"
+            echo "$carla_matrix" | jq -r '.[] | "LibCarla: carla-simulator/carla `\(.ref)` at carla-simulator/carla@\(.commit)\(if .index == 0 then " (default)" else "" end)"'
+            echo "EOF"
           } | tee -a "$GITHUB_OUTPUT"
 
   verify:
@@ -345,14 +368,15 @@ jobs:
         with: { name: dist-sdist, path: dist/*.tar.gz }
 
   wheel:
-    # LibCarla is built from CARLA sources at $CARLA_GIT_REF (the resolved
-    # commit SHA) inside the manylinux_2_28 image of each architecture; the
-    # wheel is py3-none (no CPython extension).
+    # One wheel per architecture and CARLA ref: LibCarla is built from CARLA
+    # sources at $CARLA_GIT_REF (the ref's resolved commit SHA) inside the
+    # manylinux_2_28 image of each architecture; the wheel is py3-none (no
+    # CPython extension). `wheel-merge` makes one wheel per architecture of them.
     #
     # The build directory is cached keyed by that exact SHA, the image and the
     # architecture, in a host directory bind-mounted into the container at
     # /libcarla-build (docs/releasing.md, "LibCarla build cache").
-    name: wheel (${{ matrix.arch.name }})
+    name: wheel (${{ matrix.arch.name }}, ${{ matrix.carla.ref }})
     needs: [resolve, verify]
     if: always() && needs.verify.result == 'success'
     strategy:
@@ -362,13 +386,14 @@ jobs:
         arch:
           - { name: x86_64, runner: ubuntu-24.04 }
           - { name: aarch64, runner: ubuntu-24.04-arm }
+        carla: ${{ fromJSON(needs.resolve.outputs.carla_matrix) }}
     runs-on: ${{ matrix.arch.runner }}
     env:
-      CARLA_GIT_REF: ${{ needs.resolve.outputs.carla_build_ref }}
-      CARLA_COMMIT: ${{ needs.resolve.outputs.carla_commit }}
-      CARLA_REF: ${{ needs.resolve.outputs.carla_ref }}
+      CARLA_GIT_REF: ${{ matrix.carla.commit }}
+      CARLA_COMMIT: ${{ matrix.carla.commit }}
+      CARLA_REF: ${{ matrix.carla.ref }}
       # Recorded in the wheel as its CARLA ref, next to the commit SHA.
-      CARLA_REF_NAME: ${{ needs.resolve.outputs.carla_ref }}
+      CARLA_REF_NAME: ${{ matrix.carla.ref }}
       # Shared by cibuildwheel and the cache key. cibuildwheel is pinned
       # exactly (and named in the key) because each release pins its own
       # manylinux image, i.e. its own compiler.
@@ -387,7 +412,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/libcarla-build
           # Keep the cibuildwheel version in step with `uses:` below.
-          key: libcarla-wheel-${{ env.MANYLINUX_IMAGE }}-${{ matrix.arch.name }}-cibuildwheel-v3.1.4-${{ needs.resolve.outputs.carla_build_ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'pyproject.toml') }}
+          key: libcarla-wheel-${{ env.MANYLINUX_IMAGE }}-${{ matrix.arch.name }}-cibuildwheel-v3.1.4-${{ matrix.carla.commit }}-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'pyproject.toml') }}
       - uses: pypa/cibuildwheel@v3.1.4
         env:
           CIBW_BUILD: cp312-manylinux_${{ matrix.arch.name }}
@@ -421,8 +446,56 @@ jobs:
           python -m venv /tmp/check
           /tmp/check/bin/pip install --no-deps dist/*.whl
           cd /tmp && /tmp/check/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" \
-            --backend libcarla --carla-ref "$CARLA_REF_NAME" \
-            ${CARLA_COMMIT:+--carla-commit "$CARLA_COMMIT"}
+            --backend libcarla --carla-ref "$CARLA_REF_NAME" --carla-commit "$CARLA_COMMIT"
+      - uses: actions/upload-artifact@v4
+        with: { name: "dist-native-${{ matrix.arch.name }}-${{ matrix.carla.index }}", path: dist/*.whl }
+
+  wheel-merge:
+    # One wheel per architecture with a native library per CARLA ref: the
+    # default ref's (index 0) in typesafe_carla/_native/, the others' in
+    # typesafe_carla/_native/refs/<ref>/ (tools/merge_native_wheels.py), each
+    # checked as installed, selected with TYPESAFE_CARLA_CARLA_REF.
+    name: wheel-merge (${{ matrix.arch.name }})
+    needs: [resolve, wheel]
+    if: always() && needs.wheel.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - { name: x86_64, runner: ubuntu-24.04 }
+          - { name: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.arch.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+      - uses: actions/download-artifact@v4
+        with: { pattern: "dist-native-${{ matrix.arch.name }}-*", path: native }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Merge the wheels of every CARLA ref and check each ref
+        env:
+          MATRIX: ${{ needs.resolve.outputs.carla_matrix }}
+          REFS: ${{ needs.resolve.outputs.carla_refs }}
+          ARCH: ${{ matrix.arch.name }}
+        run: |
+          set -euo pipefail
+          count=$(echo "$MATRIX" | jq length)
+          mkdir dist
+          cp native/dist-native-"$ARCH"-0/*.whl dist/
+          others=()
+          for i in $(seq 1 $((count - 1))); do others+=(native/dist-native-"$ARCH"-"$i"/*.whl); done
+          python tools/merge_native_wheels.py dist/*.whl "${others[@]}"
+          python -m venv /tmp/check
+          /tmp/check/bin/pip install --no-deps dist/*.whl
+          cd /tmp
+          /tmp/check/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" --backend libcarla --carla-refs "$REFS"
+          echo "$MATRIX" | jq -r '.[] | "\(.ref) \(.commit)"' | while read -r ref commit; do
+            echo "::group::$ref"
+            TYPESAFE_CARLA_CARLA_REF="$ref" /tmp/check/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" \
+              --backend libcarla --carla-ref "$ref" --carla-commit "$commit"
+            echo "::endgroup::"
+          done
       - uses: actions/upload-artifact@v4
         with: { name: "dist-wheel-${{ matrix.arch.name }}", path: dist/*.whl }
 
@@ -440,8 +513,8 @@ jobs:
     # than the 16 GB runner leaves free, so the host gets swap and the image
     # runs under `docker run` (a job container cannot add swap).
     name: wheel-pycarla (${{ matrix.arch.name }})
-    needs: [resolve, wheel, toolchain]
-    if: always() && needs.wheel.result == 'success' && needs.toolchain.result == 'success'
+    needs: [resolve, wheel-merge, toolchain]
+    if: always() && needs.wheel-merge.result == 'success' && needs.toolchain.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -525,13 +598,13 @@ jobs:
   # lookup unambiguous.
   publish-toolchain:
     name: publish typesafe-carla-toolchain to ${{ needs.resolve.outputs.index }}
-    needs: [resolve, sdist, wheel, wheel-pycarla, toolchain]
+    needs: [resolve, sdist, wheel-merge, wheel-pycarla, toolchain]
     # Decided by `resolve`, from the event: a release goes to PyPI; a manual
     # run (even one started from a tag) only with publish=true, to TestPyPI.
     # Waits for every build, so nothing is uploaded unless all of it built.
     if: >-
       always() && needs.resolve.outputs.publish == 'true' &&
-      needs.sdist.result == 'success' && needs.wheel.result == 'success' &&
+      needs.sdist.result == 'success' && needs.wheel-merge.result == 'success' &&
       needs.wheel-pycarla.result == 'success' && needs.toolchain.result == 'success'
     runs-on: ubuntu-24.04
     environment: ${{ needs.resolve.outputs.index }}-toolchain
@@ -628,15 +701,30 @@ jobs:
             sleep 30
           done
           /tmp/user/bin/pip list | grep -i typesafe
-      - name: Check it as installed (prebuilt typesafe_carla.carla, a Codon build)
+      - name: Check it as installed (prebuilt typesafe_carla.carla, a Codon build), for every CARLA ref
+        env:
+          MATRIX: ${{ needs.resolve.outputs.carla_matrix }}
+          REFS: ${{ needs.resolve.outputs.carla_refs }}
         run: |
           set -euo pipefail
           cd /tmp
           export TYPESAFE_CARLA_PYCARLA_BUILD=0
-          /tmp/user/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" --backend libcarla --pycarla
-          /tmp/user/bin/python -c "import sys, typesafe_carla.carla as carla; t = carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(yaw=90.0)); assert \"carla\" not in sys.modules and t.location.y == 2.0; print(\"typesafe_carla.carla OK\", carla.__path__)"
-          /tmp/user/bin/typesafe-codon build -release -o /tmp/connect "$GITHUB_WORKSPACE/examples/connect.py"
-          file /tmp/connect
+          check_refs=()
+          if [ -n "$REFS" ]; then check_refs=(--carla-refs "$REFS"); fi
+          /tmp/user/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" --backend libcarla --pycarla "${check_refs[@]}"
+          # verify_only has no matrix: check the refs the wheel carries.
+          refs=$(/tmp/user/bin/python -c "from typesafe_carla import paths; print(' '.join(paths.carla_refs()))")
+          for ref in $refs; do
+            echo "::group::$ref"
+            export TYPESAFE_CARLA_CARLA_REF="$ref"
+            commit=$(echo "$MATRIX" | jq -r --arg ref "$ref" '.[] | select(.ref == $ref) | .commit')
+            /tmp/user/bin/python "$GITHUB_WORKSPACE/tools/check_wheel.py" --backend libcarla \
+              --carla-ref "$ref" ${commit:+--carla-commit "$commit"}
+            /tmp/user/bin/python -c "import sys, typesafe_carla.carla as carla; t = carla.Transform(carla.Location(1.0, 2.0, 3.0), carla.Rotation(yaw=90.0)); assert \"carla\" not in sys.modules and t.location.y == 2.0; print(\"typesafe_carla.carla OK\", carla.__path__)"
+            /tmp/user/bin/typesafe-codon build -release -o "/tmp/connect-$ref" "$GITHUB_WORKSPACE/examples/connect.py"
+            file "/tmp/connect-$ref"
+            echo "::endgroup::"
+          done
 
   # Last: the GitHub release appears only once the packages are on PyPI. The
   # auto-release path drafted it in `release`; a hand-cut tag gets one here.
@@ -652,13 +740,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           TAG: ${{ needs.resolve.outputs.tag }}
-          CARLA_REF: ${{ needs.resolve.outputs.carla_ref }}
-          CARLA_COMMIT: ${{ needs.resolve.outputs.carla_commit }}
+          NOTES: ${{ needs.resolve.outputs.carla_notes }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
             gh release edit "$TAG" --repo "$REPO" --draft=false
           else
             gh release create "$TAG" --repo "$REPO" --verify-tag --title "$TAG" --generate-notes \
-              --notes "LibCarla built from carla-simulator/carla \`${CARLA_REF}\` at carla-simulator/carla@${CARLA_COMMIT}."
+              --notes "$NOTES"
           fi

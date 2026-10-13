@@ -31,18 +31,19 @@ def _record_line(name: str, data: bytes) -> str:
     return f"{name},sha256={digest},{len(data)}"
 
 
-def add(wheel: Path, prebuilt: Path) -> None:
-    """Rewrites `wheel` with the files of `prebuilt` under PREBUILT."""
-    added = {f"{PREBUILT}/{p.name}": p.read_bytes() for p in sorted(prebuilt.iterdir()) if p.is_file()}
+def replace_dir(wheel: Path, prefix: str, files: dict[str, bytes]) -> None:
+    """Rewrites `wheel` in place with `files` ({path under `prefix`: contents})
+    as the whole of `prefix`/, updating RECORD."""
+    added = {f"{prefix}/{name}": data for name, data in files.items()}
     tmp = wheel.with_suffix(".tmp")
     with zipfile.ZipFile(wheel) as src, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as dst:
         record_name = next(n for n in src.namelist() if n.endswith(".dist-info/RECORD"))
         for info in src.infolist():
-            if info.filename == record_name or info.filename.startswith(PREBUILT + "/"):
+            if info.filename == record_name or info.filename.startswith(prefix + "/"):
                 continue
             dst.writestr(info, src.read(info.filename))
         record = [ln for ln in src.read(record_name).decode().splitlines()
-                  if ln and not ln.startswith(PREBUILT + "/") and not ln.startswith(record_name + ",")]
+                  if ln and not ln.startswith(prefix + "/") and not ln.startswith(record_name + ",")]
         for name, data in added.items():
             info = zipfile.ZipInfo(name, date_time=(2020, 1, 1, 0, 0, 0))
             info.external_attr = (0o755 if name.endswith(".so") else 0o644) << 16
@@ -52,6 +53,12 @@ def add(wheel: Path, prebuilt: Path) -> None:
         record.append(f"{record_name},,")
         dst.writestr(record_name, "\n".join(record) + "\n")
     tmp.replace(wheel)
+
+
+def add(wheel: Path, prebuilt: Path) -> None:
+    """Rewrites `wheel` with the files of `prebuilt` under PREBUILT."""
+    replace_dir(wheel, PREBUILT,
+                {p.name: p.read_bytes() for p in sorted(prebuilt.iterdir()) if p.is_file()})
 
 
 def main(argv: list[str] | None = None) -> int:

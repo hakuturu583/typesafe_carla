@@ -34,7 +34,9 @@ The launcher sets:
 
 * ``CODON_PATH``: a generated directory with the typesafe_carla Codon sources
   and the build configuration (``paths.codon_path_dir``);
-* ``TYPESAFE_CARLA_LIB``: the native library the Codon module loads;
+* ``TYPESAFE_CARLA_LIB``: the native library the Codon module loads (of the
+  CARLA ref ``TYPESAFE_CARLA_CARLA_REF`` selects, when the installation has
+  more than one: ``typesafe-codon info`` lists them);
 * ``CODON_DIR``, ``LD_LIBRARY_PATH``: for the Codon runtime.
 
 For ``build``, the executable also gets an RPATH to the native library's
@@ -446,6 +448,10 @@ def _info(tc: toolchain.Toolchain | None, error: str | None, strict: bool) -> in
         print(f"native library     NOT FOUND: {e}")
         return 1
     print(f"native library     {lib}")
+    refs = paths.carla_refs()
+    if len(refs) > 1:
+        names = [f"{r} (default)" if i == 0 else r for i, r in enumerate(refs)]
+        print(f"carla refs         {', '.join(names)}; {paths.ENV_CARLA_REF} selects one")
     try:
         native = paths.native_info(lib)
     except OSError as e:
