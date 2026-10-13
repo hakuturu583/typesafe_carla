@@ -6,4 +6,4 @@ Codon sources and the native library, and provides the ``typesafe-codon``
 launcher. It never imports the CARLA Python package.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
