@@ -46,6 +46,7 @@ from C import GC_get_stack_base(cobj) -> i32
 from C import GC_register_my_thread(cobj) -> i32
 from C import GC_unregister_my_thread() -> i32
 from C import GC_thread_is_registered() -> i32
+from C import GC_gcollect() -> None
 
 class _Listener:
     actor_id: int  # the sensor actor; -1 for a tick callback
@@ -317,6 +318,29 @@ def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
             left = max(deadline - time.time(), 0.0)
             _check(tsc_tick_listener_wait_for_frame(l.handle.ptr, u64(frame), left, reached))
 
+# A delivered item is a small Codon object over a native measurement (a
+# 1920x1080 image is 8 MB of LibCarla's), released when the collector
+# finalizes it. The collector runs as Codon's own heap grows, and a program
+# that only receives data grows it by a few bytes an item: it never ran, and
+# every measurement ever delivered stayed in memory. So deliveries (to a
+# callback, and Sensor.poll / wait_for_data) collect every _COLLECT_EVERY
+# items. A collection marks all of Codon's heap: a few MB in a program that
+# receives sensor data and drives a vehicle, against the 16 measurements'
+# native memory it frees. Not on a thread the collector does not know (a
+# Python thread polling through pycarla without attach_current_thread):
+# collecting there aborts. It may run under _Locked (a callback polling
+# another sensor): finalizers must never take _Locked. The count is not
+# locked; a lost increment only delays a collection.
+_COLLECT_EVERY = 16
+_since_collect = 0
+
+def _collect_delivered(count: int):
+    global _since_collect
+    _since_collect += count
+    if _since_collect >= _COLLECT_EVERY and GC_thread_is_registered() != i32(0):
+        _since_collect = 0
+        GC_gcollect()
+
 def _deliver(listener: _Listener, on_thread: bool = False) -> int:
     """Delivers what was queued when the listener's turn began, in arrival
     order, one item at a time under _Locked: a stop() (or any other
@@ -330,18 +354,21 @@ def _deliver(listener: _Listener, on_thread: bool = False) -> int:
         if not listener.active:
             return 0
         n = _pending(listener)
-    for _ in range(n):
-        with _Locked():
-            if not listener.active or (on_thread and _thread_stop):
-                break
-            p = _pop_item(listener)
-            if p == cobj():
-                break
-            count += 1
-            if on_thread:
-                _call_reporting(listener, p)
-            else:
-                listener.callback(p)
+    try:
+        for _ in range(n):
+            with _Locked():
+                if not listener.active or (on_thread and _thread_stop):
+                    break
+                p = _pop_item(listener)
+                if p == cobj():
+                    break
+                count += 1
+                if on_thread:
+                    _call_reporting(listener, p)
+                else:
+                    listener.callback(p)
+    finally:  # a raising callback's items count too
+        _collect_delivered(count)
     return count
 
 def dispatch_callbacks() -> int:
