@@ -46,6 +46,7 @@ from C import GC_get_stack_base(cobj) -> i32
 from C import GC_register_my_thread(cobj) -> i32
 from C import GC_unregister_my_thread() -> i32
 from C import GC_thread_is_registered() -> i32
+from C import GC_gcollect() -> None
 
 class _Listener:
     actor_id: int  # the sensor actor; -1 for a tick callback
@@ -317,6 +318,23 @@ def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
             left = max(deadline - time.time(), 0.0)
             _check(tsc_tick_listener_wait_for_frame(l.handle.ptr, u64(frame), left, reached))
 
+# A delivered item is a small Codon object over a native measurement (a
+# 1920x1080 image is 8 MB of LibCarla's), released when the collector
+# finalizes it. The collector runs as Codon's own heap grows, and a program
+# that only receives data grows it by a few bytes an item: it never ran, and
+# every measurement ever delivered stayed in memory. So deliveries collect
+# every _COLLECT_EVERY items (a collection of a heap this small takes well
+# under a millisecond).
+_COLLECT_EVERY = 16
+_since_collect = 0
+
+def _collect_delivered(count: int):
+    global _since_collect
+    _since_collect += count
+    if _since_collect >= _COLLECT_EVERY:
+        _since_collect = 0
+        GC_gcollect()
+
 def _deliver(listener: _Listener, on_thread: bool = False) -> int:
     """Delivers what was queued when the listener's turn began, in arrival
     order, one item at a time under _Locked: a stop() (or any other
@@ -342,6 +360,7 @@ def _deliver(listener: _Listener, on_thread: bool = False) -> int:
                 _call_reporting(listener, p)
             else:
                 listener.callback(p)
+    _collect_delivered(count)
     return count
 
 def dispatch_callbacks() -> int:

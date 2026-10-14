@@ -267,6 +267,37 @@ print('OK')
 """)
 
 
+def test_callbacks_release_what_they_were_given(pycarla):
+    """A measurement handed to a callback is released once Python drops it.
+    Codon's pyobj.__call__ kept the argument tuple, so every frame a callback
+    had received stayed alive with its native handle (8 MB a 1920x1080 image);
+    and Boehm, which sees none of that native memory, never collected the rest.
+    Up to two collection intervals (_callbacks._COLLECT_EVERY) may be pending."""
+    _run_ok(pycarla, _SETUP % 0 + """
+import gc
+live = ctypes.CDLL(os.environ['TYPESAFE_CARLA_LIB']).tsc_live_handle_count
+live.restype = ctypes.c_uint64
+frames = []
+camera = sensor('sensor.camera.rgb')
+camera.listen(lambda image: frames.append(image.frame))
+for _ in range(5):
+    world.tick()
+gc.collect()
+before = live()
+for _ in range(200):
+    world.tick()
+deadline = time.time() + 20
+while len(frames) < 205 and time.time() < deadline:
+    time.sleep(0.05)
+gc.collect()
+after = live()
+assert len(frames) >= 205, len(frames)
+assert after - before < 32, (before, after)
+camera.stop(); camera.destroy()
+print('OK')
+""")
+
+
 def test_instances_take_arbitrary_attributes(pycarla):
     """As Boost.Python's: upstream tests set UE4-era fields (e.g.
     WheelPhysicsControl.tire_friction) and read them back."""

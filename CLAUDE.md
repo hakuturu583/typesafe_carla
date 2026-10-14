@@ -84,6 +84,11 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
 
 - Exceptions are `Static[Exception]`; no catchable hierarchy.
 - `__del__` is not auto-registered; `_ffi.Handle` calls `register_finalizer`.
+- `pyobj.__call__` never releases the argument tuple it builds nor its
+  result: call `PyObject_Call` and decref both (pycarla's `_PyCallback`).
+- The collector runs only as Codon's own heap grows, so small Codon objects
+  over large native memory (sensor data) are never finalized unless something
+  collects (`_callbacks._collect_delivered` calls `GC_gcollect`).
 - Forward references in return types: define later and attach with `@extend`.
 - `str.__copy__` does not copy; use `str.memcpy` into a new buffer.
 - No `f"{x:.6f}"` (needs a locale); use `str(float)`.
