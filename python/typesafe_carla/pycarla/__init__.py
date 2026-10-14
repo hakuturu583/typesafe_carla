@@ -1134,11 +1134,13 @@ class _PyCallback:
     """A Python callable, called by the library with its own objects
     (converted to Python by their __to_py__).
 
-    Not through pyobj.__call__: Codon 0.19's never releases the argument tuple
-    it builds (args.__to_py__()), nor the result (pyobj registers no __del__),
-    and the tuple holds the box of the measurement, which holds its native
-    handle -- every sensor frame a callback ever received stayed in memory (a
-    1920x1080 camera: 8 MB a tick). This call owns both and releases them."""
+    Not through pyobj.__call__: Codon 0.19's pyobj.__call__ never releases the
+    argument tuple it builds (args.__to_py__()), nor the result (Codon never
+    registers pyobj's __del__), and the tuple holds the box of the
+    measurement, which holds its native handle -- every sensor frame a
+    callback ever received stayed in memory (a 1920x1080 camera: 8 MB a
+    tick). This call owns both and releases them. `data` must be a library
+    object whose __to_py__ returns a new reference (a box), not a pyobj."""
     f: pyobj
     def __init__(self, f: pyobj):
         self.f = f

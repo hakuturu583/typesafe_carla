@@ -278,8 +278,13 @@ import gc
 live = ctypes.CDLL(os.environ['TYPESAFE_CARLA_LIB']).tsc_live_handle_count
 live.restype = ctypes.c_uint64
 frames = []
+kept = []  # what a callback keeps stays usable across collections
+def on_image(image):
+    frames.append(image.frame)
+    if len(kept) < 3:
+        kept.append(image)
 camera = sensor('sensor.camera.rgb')
-camera.listen(lambda image: frames.append(image.frame))
+camera.listen(on_image)
 for _ in range(5):
     world.tick()
 gc.collect()
@@ -293,6 +298,7 @@ gc.collect()
 after = live()
 assert len(frames) >= 205, len(frames)
 assert after - before < 32, (before, after)
+assert [k.frame for k in kept] == frames[:3] and all(k.width > 0 and len(k.raw_data) for k in kept)
 camera.stop(); camera.destroy()
 print('OK')
 """)

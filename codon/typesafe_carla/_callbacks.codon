@@ -322,9 +322,11 @@ def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
 # 1920x1080 image is 8 MB of LibCarla's), released when the collector
 # finalizes it. The collector runs as Codon's own heap grows, and a program
 # that only receives data grows it by a few bytes an item: it never ran, and
-# every measurement ever delivered stayed in memory. So deliveries collect
-# every _COLLECT_EVERY items (a collection of a heap this small takes well
-# under a millisecond).
+# every measurement ever delivered stayed in memory. So deliveries (to a
+# callback, and Sensor.poll / wait_for_data) collect every _COLLECT_EVERY
+# items. A collection marks all of Codon's heap: a few MB in a program that
+# receives sensor data and drives a vehicle, against the 16 measurements'
+# native memory it frees.
 _COLLECT_EVERY = 16
 _since_collect = 0
 
@@ -348,19 +350,21 @@ def _deliver(listener: _Listener, on_thread: bool = False) -> int:
         if not listener.active:
             return 0
         n = _pending(listener)
-    for _ in range(n):
-        with _Locked():
-            if not listener.active or (on_thread and _thread_stop):
-                break
-            p = _pop_item(listener)
-            if p == cobj():
-                break
-            count += 1
-            if on_thread:
-                _call_reporting(listener, p)
-            else:
-                listener.callback(p)
-    _collect_delivered(count)
+    try:
+        for _ in range(n):
+            with _Locked():
+                if not listener.active or (on_thread and _thread_stop):
+                    break
+                p = _pop_item(listener)
+                if p == cobj():
+                    break
+                count += 1
+                if on_thread:
+                    _call_reporting(listener, p)
+                else:
+                    listener.callback(p)
+    finally:  # a raising callback's items count too
+        _collect_delivered(count)
     return count
 
 def dispatch_callbacks() -> int:

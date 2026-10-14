@@ -88,7 +88,8 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   result: call `PyObject_Call` and decref both (pycarla's `_PyCallback`).
 - The collector runs only as Codon's own heap grows, so small Codon objects
   over large native memory (sensor data) are never finalized unless something
-  collects (`_callbacks._collect_delivered` calls `GC_gcollect`).
+  collects: sensor data deliveries (callbacks, `poll`, `wait_for_data`) call
+  `_callbacks._collect_delivered`, which calls `GC_gcollect`.
 - Forward references in return types: define later and attach with `@extend`.
 - `str.__copy__` does not copy; use `str.memcpy` into a new buffer.
 - No `f"{x:.6f}"` (needs a locale); use `str(float)`.

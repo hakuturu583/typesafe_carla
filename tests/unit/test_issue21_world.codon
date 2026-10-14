@@ -286,18 +286,27 @@ def test_on_tick_exception():
     world.remove_on_tick(bad)
     world.remove_on_tick(good)
 
+def _use_world_handles():
+    world.get_traffic_lights_from_waypoint(unwrap(world.get_map().get_waypoint(carla.Location(90.0, 0.0, 0.0))), 20.0)
+    world.get_spectator()
+    world.get_lightmanager().get_all_lights()
+    cid = world.on_tick(lambda s: None)
+    world.tick()
+    world.remove_on_tick(cid)
+
 def test_no_handle_leak():
-    before = carla._live_handle_count()
-    for _ in range(3):
-        world.get_traffic_lights_from_waypoint(unwrap(world.get_map().get_waypoint(carla.Location(90.0, 0.0, 0.0))), 20.0)
-        world.get_spectator()
-        world.get_lightmanager().get_all_lights()
-        cid = world.on_tick(lambda s: None)
-        world.tick()
-        world.remove_on_tick(cid)
+    # Once first: what the world keeps (its map, its light manager) is not a
+    # leak, and deliveries collect, so nothing else is left to hide it.
+    _use_world_handles()
     for _ in range(3):
         GC_gcollect()
-    assert carla._live_handle_count() <= before + 1
+    before = carla._live_handle_count()
+    for _ in range(3):
+        _use_world_handles()
+    for _ in range(3):
+        GC_gcollect()
+    after = carla._live_handle_count()
+    assert after <= before + 1, str(before) + " -> " + str(after)
 
 test_spectator_and_traffic_lights()
 test_vehicle_light_states()
