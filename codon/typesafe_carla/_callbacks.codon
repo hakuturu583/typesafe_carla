@@ -326,14 +326,18 @@ def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
 # callback, and Sensor.poll / wait_for_data) collect every _COLLECT_EVERY
 # items. A collection marks all of Codon's heap: a few MB in a program that
 # receives sensor data and drives a vehicle, against the 16 measurements'
-# native memory it frees.
+# native memory it frees. Not on a thread the collector does not know (a
+# Python thread polling through pycarla without attach_current_thread):
+# collecting there aborts. It may run under _Locked (a callback polling
+# another sensor): finalizers must never take _Locked. The count is not
+# locked; a lost increment only delays a collection.
 _COLLECT_EVERY = 16
 _since_collect = 0
 
 def _collect_delivered(count: int):
     global _since_collect
     _since_collect += count
-    if _since_collect >= _COLLECT_EVERY:
+    if _since_collect >= _COLLECT_EVERY and GC_thread_is_registered() != i32(0):
         _since_collect = 0
         GC_gcollect()
 
