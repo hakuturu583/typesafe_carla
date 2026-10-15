@@ -304,6 +304,33 @@ print('OK')
 """)
 
 
+def test_returned_dicts_release_their_keys_and_values(pycarla):
+    """A dict the library returns owns its keys and values alone. Codon's
+    Dict.__to_py__ (PyDict_SetItem takes its own references) never released
+    the ones its conversions made, so every attributes read (dozens of
+    strings, which ACS reads every tick) stayed in memory for good."""
+    _run_ok(pycarla, _SETUP % 0 + """
+import sys
+attrs = vehicle.attributes
+assert attrs and all(isinstance(k, str) and isinstance(v, str) for k, v in attrs.items()), attrs
+# (Not a one-character value: CPython's are shared, immortal.)
+value = next(v for v in attrs.values() if len(v) > 1)
+# Held by attrs and by `value` alone, as a value of a dict made here.
+control = {'k': ''.join(['con', 'trol'])}
+c = control['k']
+assert sys.getrefcount(value) == sys.getrefcount(c), (sys.getrefcount(value), sys.getrefcount(c))
+del attrs, value, control, c
+for _ in range(50):
+    vehicle.attributes
+before = sys.getallocatedblocks()
+for _ in range(2000):
+    vehicle.attributes
+after = sys.getallocatedblocks()
+assert after - before < 200, (before, after)
+print('OK')
+""")
+
+
 def test_instances_take_arbitrary_attributes(pycarla):
     """As Boost.Python's: upstream tests set UE4-era fields (e.g.
     WheelPhysicsControl.tire_friction) and read them back."""
