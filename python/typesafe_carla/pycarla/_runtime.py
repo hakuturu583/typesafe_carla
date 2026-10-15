@@ -188,6 +188,39 @@ def _actor_id(v):
     return v.id if _ACTOR is not None and isinstance(v, _ACTOR) else v
 
 
+_U64 = 1 << 64
+
+
+def _unsigned(v):
+    """A LibCarla uint64 (spec "uint64"), which the extension returns
+    bit-for-bit in a signed int, unsigned as CARLA's Python API gives it."""
+    return v + _U64 if type(v) is int and v < 0 else v
+
+
+def _signed(v):
+    """A uint64 argument (spec "uint64_param") as the extension takes it, an
+    int of [2**63, 2**64) bit-for-bit as a negative one; a collection of them
+    as a list (CARLA's Python API takes a list or a set). A signed one passes
+    as it is."""
+    if type(v) is int and 1 << 63 <= v < _U64:
+        return v - _U64
+    if isinstance(v, (list, tuple, set, frozenset)):
+        return [_signed(x) for x in v]
+    return v
+
+
+def _signed_param(param, args: tuple, kwargs: dict) -> tuple[tuple, dict]:
+    """`args` / `kwargs` with the parameter `param` ([position, name]) _signed."""
+    if param is None:
+        return args, kwargs
+    pos, name = param
+    if name in kwargs:
+        kwargs = {**kwargs, name: _signed(kwargs[name])}
+    elif len(args) > pos:
+        args = args[:pos] + (_signed(args[pos]),) + args[pos + 1:]
+    return args, kwargs
+
+
 def _stub(qualname: str, reason: str):
     def stub(*args, **kwargs):
         raise NotImplementedError(f"pycarla: {qualname} not wrapped: {reason}")
@@ -203,10 +236,14 @@ def _method(cls: str, name: str, entry: dict):
     if entry.get("fn") is None:
         return _stub(f"{cls}.{name}", entry.get("reason", "unknown"))
     fn = _fn(entry["fn"])
+    unsigned = entry.get("uint64", False)
+    param = entry.get("uint64_param")
 
     def method(self, *args, **kwargs):
+        args, kwargs = _signed_param(param, args, kwargs)
         try:
-            return _call(fn, (self,) + args, kwargs)
+            result = _call(fn, (self,) + args, kwargs)
+            return _unsigned(result) if unsigned else result
         except TypeError:
             if name in _BINARY:
                 return NotImplemented
@@ -278,9 +315,11 @@ def _make_class(name: str, spec: dict, bases: tuple) -> type:
     if init:
         fn = _fn(init)
         known = _known_keywords(spec) if name in _LENIENT_INIT else None
+        param = spec.get("init_uint64")
 
         def __init__(self, *args, **kwargs):
             args, kwargs = _redirect(name, args, kwargs)
+            args, kwargs = _signed_param(param, args, kwargs)
             if known is not None:
                 kwargs = _lenient(name, known, kwargs)
             self._o = _call(fn, args, kwargs)._o
@@ -291,6 +330,11 @@ def _make_class(name: str, spec: dict, bases: tuple) -> type:
     for f in spec.get("fields", []):
         get = _fn(f["get"])
         sett = _fn(f["set"]) if f.get("set") else None
+        if f.get("uint64"):
+            ns[f["name"]] = property(
+                lambda self, g=get: _unsigned(g(self._o)),
+                (lambda self, v, s=sett: s(self._o, _signed(v))) if sett else None)
+            continue
         ns[f["name"]] = property(
             lambda self, g=get: _wrap(g(self._o)),
             (lambda self, v, s=sett: s(self._o, _unwrap(v))) if sett else None)

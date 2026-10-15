@@ -331,6 +331,40 @@ print('OK')
 """)
 
 
+def test_uint64_values_are_unsigned(pycarla):
+    """LibCarla's uint64 values (an episode id, an environment object's id)
+    are unsigned, as CARLA's Python API gives them. typesafe_carla carries
+    them bit-for-bit in a signed int: half of all episode ids read as
+    negative, and a client took them for unknown. The mock's ids, as CARLA's,
+    spread over all 64 bits: its first episode's is above 2**63."""
+    _run_ok(pycarla, _SETUP % 0 + """
+client = carla.Client('localhost', 2000)
+first = world.id
+assert first >= 2 ** 63 and first < 2 ** 64, first
+assert world.get_snapshot().id == first, (world.get_snapshot().id, first)
+assert str(world) == 'World(id=%d)' % first, str(world)
+second = client.load_world('Town10HD_Opt').id
+assert 0 <= second < 2 ** 63 and client.get_world().id == second, (first, second)
+assert 0 <= world.get_map().get_waypoint(vehicle.get_location()).id < 2 ** 64
+
+world = client.get_world()
+building = world.get_environment_objects(carla.CityObjectLabel.Buildings)[0]
+big = building.id
+assert big >= 2 ** 63 and big < 2 ** 64, big
+# Taken back, in a list or a set as CARLA's Python API takes them.
+world.enable_environment_objects([big], False)
+world.enable_environment_objects({big}, True)
+o = carla.EnvironmentObject(big, 'x', building.transform, building.bounding_box,
+                            carla.CityObjectLabel.Buildings)
+assert o.id == big, o.id
+o.id = 2 ** 64 - 1
+assert o.id == 2 ** 64 - 1, o.id
+o.id = 7
+assert o.id == 7, o.id
+print('OK')
+""")
+
+
 def test_instances_take_arbitrary_attributes(pycarla):
     """As Boost.Python's: upstream tests set UE4-era fields (e.g.
     WheelPhysicsControl.tire_friction) and read them back."""

@@ -140,6 +140,14 @@ BYTES_KEYS = {"Bytes"}
 # Optional of its most general type instead of one overload per type (the
 # product would explode, e.g. WheelPhysicsControl's six vectors).
 MAX_EXPANDED = 2
+# LibCarla's uint64 values that typesafe_carla carries bit-for-bit in an int
+# (a signed 64-bit integer: half of all episode ids read as negative). The
+# runtime gives them unsigned, as CARLA's Python API, and takes them back
+# (UINT64_PARAMS: the parameter's position after self, and its name). Actor
+# ids are uint32 and frames, though uint64, never reach 2**63.
+UINT64 = {"World.id", "WorldSnapshot.id", "Waypoint.id", "EnvironmentObject.id"}
+UINT64_PARAMS = {"World.enable_environment_objects": (0, "env_objects_ids"),
+                 "EnvironmentObject.__init__": (0, "id")}
 
 
 # ---------------------------------------------------------------------------
@@ -964,9 +972,30 @@ class Gen:
         self.converters()
         self.functions()
         self.realize()
+        self.mark_uint64()
         self.body_start = len("\n".join(head) + "\n\n")
         self.text = self.assemble("\n".join(head) + "\n\n")
         return self.text
+
+    def mark_uint64(self) -> None:
+        """Flags UINT64's results and UINT64_PARAMS's parameters in the spec."""
+        for qual in sorted(UINT64):
+            cls, name = qual.split(".")
+            api = self.api.get(cls, {})
+            entry = api.get("members", {}).get(name) or next(
+                (f for f in api.get("fields", []) if f["name"] == name), None)
+            if entry is None:
+                raise ValueError(f"pycarla.UINT64: carla.{qual} is not wrapped")
+            entry["uint64"] = True
+        for qual, param in sorted(UINT64_PARAMS.items()):
+            cls, name = qual.split(".")
+            api = self.api.get(cls, {})
+            if name == "__init__" and cls in self.api:
+                api["init_uint64"] = list(param)
+            elif name in api.get("members", {}):
+                api["members"][name]["uint64_param"] = list(param)
+            else:
+                raise ValueError(f"pycarla.UINT64_PARAMS: carla.{qual} is not wrapped")
 
     def dict_views(self) -> list[str]:
         """The Python API's dicts (V2X get(), issue #85). typesafe_carla
