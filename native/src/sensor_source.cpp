@@ -69,9 +69,14 @@ void *get_proc(const char *name) {
   return dlsym(self, name);
 }
 
-using PluginInit = int32_t (*)(uint32_t, void *(*)(const char *), const char **);
-
-void load_plugin(const std::string &path) {
+void load_plugin(const std::string &given) {
+  // One load at a time, so a plugin's init never runs twice concurrently. Not
+  // the state mutex: init installs its source, which takes that one.
+  static std::mutex load_mutex;
+  std::lock_guard<std::mutex> load_lock(load_mutex);
+  char *real = realpath(given.c_str(), nullptr);  // the same file under another name
+  const std::string path = real != nullptr ? std::string(real) : given;
+  std::free(real);
   {
     std::lock_guard<std::mutex> lock(state().mutex);
     if (state().loaded.count(path) != 0) return;
@@ -82,7 +87,7 @@ void load_plugin(const std::string &path) {
     const char *error = dlerror();
     fail(TSC_ERROR, "cannot load sensor plugin '" + path + "': " + (error ? error : "dlopen failed"));
   }
-  auto init = reinterpret_cast<PluginInit>(dlsym(library, "tsc_sensor_plugin_init"));
+  auto init = reinterpret_cast<tsc_sensor_plugin_init_fn>(dlsym(library, "tsc_sensor_plugin_init"));
   if (init == nullptr) {
     fail(TSC_ERROR, "sensor plugin '" + path + "' does not export tsc_sensor_plugin_init");
   }
@@ -343,7 +348,16 @@ bool listen(tsc_sensor &handle, const std::shared_ptr<SensorQueue> &queue) {
   if (start && source->start != nullptr) {
     const int32_t status = source->start(source->user, &handle, id);
     if (status != TSC_OK) {
-      forget_actor(id);
+      {
+        // This handle's stream only (another handle's listen() may have
+        // registered meanwhile); the next listen() starts again.
+        std::lock_guard<std::mutex> lock(s.mutex);
+        auto &streams = s.streams;
+        streams.erase(std::remove_if(streams.begin(), streams.end(),
+                                     [&](const Stream &st) { return st.handle == &handle; }),
+                      streams.end());
+        s.started.erase(id);
+      }
       check_callback(*source, status, "start");
     }
   }
@@ -506,9 +520,10 @@ tsc_status_t tsc_sensor_source_push(uint32_t actor_id, const tsc_sensor_data_t *
       }
       if (queues.empty()) s.started.erase(actor_id);
     }
-    for (size_t i = 0; i < queues.size(); ++i) {
-      queues[i]->push(i == 0 ? measurement : copy_for_stream(measurement));
-    }
+    // Copies first: once queued, a consumer may convert the original in place.
+    std::vector<MeasurementPtr> items{measurement};
+    for (size_t i = 1; i < queues.size(); ++i) items.push_back(copy_for_stream(measurement));
+    for (size_t i = 0; i < queues.size(); ++i) queues[i]->push(std::move(items[i]));
     store_if(out_delivered, queues.size());
   });
 }

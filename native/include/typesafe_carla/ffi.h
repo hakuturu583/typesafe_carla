@@ -2542,16 +2542,14 @@ TSC_API tsc_status_t tsc_queue_signal_notify(void);
  *
  * At most one source is installed. It is either installed directly
  * (tsc_sensor_source_install) or by a plugin: a shared library that exports
- *
- *     int32_t tsc_sensor_plugin_init(uint32_t abi_version,
- *                                    void *(*get_proc)(const char *name));
- *
- * loaded by tsc_sensor_source_load or, at the first sensor operation that
- * consults the source, from the path in TYPESAFE_CARLA_SENSOR_PLUGIN.
- * get_proc returns this library's tsc_* functions by name (the plugin need
- * not link against it). The init function returns a tsc_status_t; it usually
- * calls tsc_sensor_source_install, or installs nothing when the plugin is not
- * configured.
+ * `tsc_sensor_plugin_init` (tsc_sensor_plugin_init_fn, below), loaded by
+ * tsc_sensor_source_load or, at the first sensor operation that consults the
+ * source, from the path in TYPESAFE_CARLA_SENSOR_PLUGIN. A file is
+ * initialized once (whatever path names it). get_proc returns this library's
+ * tsc_* functions by name (the plugin need not link against it). The init
+ * function returns a tsc_status_t, with a message in *out_error (static
+ * storage) on failure; it usually calls tsc_sensor_source_install, or
+ * installs nothing when the plugin is not configured.
  *
  * The callbacks run on the thread of the program's call that triggers them,
  * without any lock of the library held; they may call tsc_* functions. A
@@ -2585,6 +2583,12 @@ typedef struct tsc_sensor_source {
   /* The message of this thread's last failed callback (never NULL). */
   const char *(*last_error)(void *user);
 } tsc_sensor_source_t;
+
+/* A plugin's entry point, exported as `tsc_sensor_plugin_init`. abi_version is
+ * this library's TSC_ABI_VERSION. */
+typedef int32_t (*tsc_sensor_plugin_init_fn)(uint32_t abi_version,
+                                             void *(*get_proc)(const char *name),
+                                             const char **out_error);
 
 /* Installs a copy of *source, replacing any installed one; NULL uninstalls.
  * TSC_VERSION_ERROR if source->abi_major differs from this library's, or

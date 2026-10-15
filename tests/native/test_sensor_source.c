@@ -351,6 +351,17 @@ static void test_plugin(void) {
   CHECK_OK(tsc_sensor_source_installed(&installed));
   CHECK(installed == 1);
   CHECK_OK(tsc_sensor_source_install(NULL));
+  {
+    /* The same file under another name is not initialized again. */
+    char other[4096];
+    const char *slash = strrchr(path, '/');
+    int n = slash != NULL ? (int)(slash - path) : 0;
+    snprintf(other, sizeof other, "%.*s/./%s", n, path, slash != NULL ? slash + 1 : path);
+    CHECK_OK(tsc_sensor_source_load(other, strlen(other)));
+    int32_t again = 1;
+    CHECK_OK(tsc_sensor_source_installed(&again));
+    CHECK(again == 0);
+  }
 }
 #endif
 
