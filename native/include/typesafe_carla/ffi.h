@@ -70,9 +70,11 @@ extern "C" {
  * 4.6: batch commands APPLY_VEHICLE_PHYSICS_CONTROL and APPLY_WALKER_STATE;
  *      tsc_command_t.physics_control shares storage with blueprint (#79).
  * 4.7: tsc_queue_signal_count / _wait / _notify, for a background callback
- *      dispatcher (#86). */
+ *      dispatcher (#86).
+ * 5.3: sensor sources: tsc_sensor_source_t, tsc_sensor_source_install / _load /
+ *      _push, tsc_sensor_data_new_image / _lidar / _semantic_lidar. */
 #define TSC_ABI_VERSION_MAJOR 5
-#define TSC_ABI_VERSION_MINOR 2
+#define TSC_ABI_VERSION_MINOR 3
 #define TSC_ABI_VERSION ((TSC_ABI_VERSION_MAJOR << 16) | TSC_ABI_VERSION_MINOR)
 
 /* ------------------------------------------------------------------------ */
@@ -376,7 +378,7 @@ TSC_API tsc_status_t tsc_actor_get_acceleration(tsc_actor_t *actor, tsc_vector3d
 TSC_API tsc_status_t tsc_actor_get_angular_velocity(tsc_actor_t *actor, tsc_vector3d_t *out);
 /* END GENERATED actor */
 /* BEGIN GENERATED actor_destroy from bindings/actor.yaml, do not edit */
-/* out_destroyed may be NULL. */
+/* out_destroyed may be NULL. Tells the sensor source (ABI 5.3). */
 TSC_API tsc_status_t tsc_actor_destroy(tsc_actor_t *actor, int32_t *out_destroyed);
 /* END GENERATED actor_destroy */
 /* Checked downcast. TSC_TYPE_ERROR if the actor is not a vehicle. */
@@ -2527,6 +2529,115 @@ TSC_API tsc_status_t tsc_queue_signal_wait(uint64_t seen, double timeout_seconds
                                            uint64_t *out);
 /* Increments the count and wakes every waiter (e.g. to stop a dispatcher). */
 TSC_API tsc_status_t tsc_queue_signal_notify(void);
+
+/* ------------------------------------------------------------------------ */
+/* Sensor sources (ABI 5.3)                                                 */
+/* ------------------------------------------------------------------------ */
+
+/* A sensor source supplies the measurements (and the ROS 2 output) of some
+ * sensors in place of the CARLA server, e.g. a client-side renderer such as
+ * carla_canvas (docs/design.md, "Sensor sources"). The program's API does not
+ * change: listen(), poll(), wait_for_data() and the callbacks read the same
+ * queue, filled by tsc_sensor_source_push instead of LibCarla's stream.
+ *
+ * At most one source is installed. It is either installed directly
+ * (tsc_sensor_source_install) or by a plugin: a shared library that exports
+ * `tsc_sensor_plugin_init` (tsc_sensor_plugin_init_fn, below), loaded by
+ * tsc_sensor_source_load or, at the first sensor operation that consults the
+ * source, from the path in TYPESAFE_CARLA_SENSOR_PLUGIN. A file is
+ * initialized once (whatever path names it). get_proc returns this library's
+ * tsc_* functions by name (the plugin need not link against it). The init
+ * function returns a tsc_status_t, with a message in *out_error (static
+ * storage) on failure; it usually calls tsc_sensor_source_install, or
+ * installs nothing when the plugin is not configured.
+ *
+ * The callbacks run on the thread of the program's call that triggers them,
+ * without any lock of the library held; they may call tsc_* functions. A
+ * callback returning a tsc_status_t other than TSC_OK fails the triggering
+ * call with TSC_ERROR and the message from last_error. Handles passed to the
+ * callbacks are borrowed for the call (tsc_handle_retain to keep one). */
+typedef struct tsc_sensor_source {
+  uint32_t abi_major;   /* TSC_ABI_VERSION_MAJOR the source was built against */
+  uint32_t struct_size; /* sizeof(tsc_sensor_source_t) */
+  void *user;
+  /* 1 if the source supplies the sensor (asked at each listen() and ROS
+   * call, so it may cache the answer per actor id), 0 to leave it to CARLA. */
+  int32_t (*claims)(void *user, tsc_actor_t *sensor, uint32_t actor_id, const char *type_id,
+                    size_t type_id_len);
+  /* The first stream of a claimed sensor started (listen()). */
+  int32_t (*start)(void *user, tsc_actor_t *sensor, uint32_t actor_id);
+  /* Its last stream stopped (stop(), or every listening handle released;
+   * the latter is reported by tsc_sensor_source_push delivering to none). */
+  void (*stop)(void *user, uint32_t actor_id);
+  /* enable_for_ros (enabled = 1) / disable_for_ros (0) of a claimed sensor. */
+  int32_t (*set_ros_enabled)(void *user, tsc_actor_t *sensor, uint32_t actor_id,
+                             int32_t enabled);
+  /* is_enabled_for_ros of a claimed sensor: 1 or 0. */
+  int32_t (*is_ros_enabled)(void *user, uint32_t actor_id);
+  /* An actor was destroyed through this library (Actor.destroy(), a batch
+   * DestroyActor). */
+  void (*actor_destroyed)(void *user, uint32_t actor_id);
+  /* World.tick() returned `frame`. A source that renders synchronously pushes
+   * that frame's measurements before it returns, so the tick's dispatch
+   * delivers them. */
+  int32_t (*world_ticked)(void *user, tsc_world_t *world, uint64_t frame);
+  /* The message of this thread's last failed callback (never NULL). */
+  const char *(*last_error)(void *user);
+} tsc_sensor_source_t;
+
+/* A plugin's entry point, exported as `tsc_sensor_plugin_init`. abi_version is
+ * this library's TSC_ABI_VERSION. */
+typedef int32_t (*tsc_sensor_plugin_init_fn)(uint32_t abi_version,
+                                             void *(*get_proc)(const char *name),
+                                             const char **out_error);
+
+/* Installs a copy of *source, replacing any installed one; NULL uninstalls.
+ * TSC_VERSION_ERROR if source->abi_major differs from this library's, or
+ * struct_size is smaller than the version's. Streams already started stay
+ * with the source that started them only in that their queues stay: later
+ * pushes go through the new source. It does not wait for callbacks running
+ * on other threads: `user` must stay valid after it is replaced. */
+TSC_API tsc_status_t tsc_sensor_source_install(const tsc_sensor_source_t *source);
+/* *out = 1 if a source is installed (loading TYPESAFE_CARLA_SENSOR_PLUGIN
+ * first, if it is set and not loaded yet). */
+TSC_API tsc_status_t tsc_sensor_source_installed(int32_t *out);
+/* Loads a plugin (see above) and runs its init function. Loading the same
+ * path again does nothing. TSC_ERROR from a plugin's init function. */
+TSC_API tsc_status_t tsc_sensor_source_load(const char *path, size_t path_len);
+/* Queues `data` (release it as usual; an image is handed over: the program
+ * may convert it in place, so the source must not read it afterwards, and a
+ * second stream gets its own copy) on every stream of the
+ * claimed sensor `actor_id`, waking their consumers as LibCarla's stream
+ * does. *out_delivered (may be NULL) = the number of streams it reached; 0
+ * means the sensor has no stream any more (the source should stop rendering
+ * it for clients, keeping only its ROS output if enabled). Thread-safe. */
+TSC_API tsc_status_t tsc_sensor_source_push(uint32_t actor_id, const tsc_sensor_data_t *data,
+                                            size_t *out_delivered);
+
+/* Measurements built by a source, read back exactly like the server's
+ * (tsc_sensor_data_as_image & co., type TSC_SENSOR_DATA_IMAGE / _LIDAR /
+ * _SEMANTIC_LIDAR). The bytes are copied. */
+/* BGRA pixels, size == width * height * 4. Every camera kind (RGB, depth,
+ * semantic segmentation, ...) delivers an Image. As with the server's images,
+ * LibCarla sets every pixel's alpha to 255. */
+TSC_API tsc_status_t tsc_sensor_data_new_image(uint64_t frame, double timestamp,
+                                               const tsc_transform_t *sensor_transform,
+                                               uint32_t width, uint32_t height, float fov,
+                                               const uint8_t *bgra, size_t size,
+                                               tsc_sensor_data_t **out);
+/* points: {x, y, z, intensity} floats, point_count of them, grouped by
+ * channel: points_per_channel[i] of channel i (their sum == point_count).
+ * horizontal_angle in radians. */
+TSC_API tsc_status_t tsc_sensor_data_new_lidar(uint64_t frame, double timestamp,
+                                               const tsc_transform_t *sensor_transform,
+                                               float horizontal_angle,
+                                               const uint32_t *points_per_channel,
+                                               uint32_t channel_count, const float *points,
+                                               size_t point_count, tsc_sensor_data_t **out);
+TSC_API tsc_status_t tsc_sensor_data_new_semantic_lidar(
+    uint64_t frame, double timestamp, const tsc_transform_t *sensor_transform,
+    float horizontal_angle, const uint32_t *points_per_channel, uint32_t channel_count,
+    const tsc_semantic_lidar_detection_t *points, size_t point_count, tsc_sensor_data_t **out);
 
 #ifdef __cplusplus
 } /* extern "C" */

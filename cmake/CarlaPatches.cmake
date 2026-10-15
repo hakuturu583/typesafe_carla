@@ -9,7 +9,9 @@
 #
 #   tsc_apply_carla_patches(<dir>)
 #     Applies them, in that order, to the CARLA checkout <dir> with
-#     `git apply`; fails the configure step naming a patch that does not apply.
+#     `git apply`, skipping one the checkout already has (upstream took the
+#     fix: it applies in reverse); fails the configure step naming a patch
+#     that does neither.
 #
 # _TSC_CARLA_PATCH_DIR (the patches' directory) may be set before including
 # this file, or changed after, e.g. by tests.
@@ -57,6 +59,17 @@ function(tsc_apply_carla_patches dir)
       ERROR_VARIABLE _err
       ERROR_STRIP_TRAILING_WHITESPACE)
     if(NOT _rc EQUAL 0)
+      execute_process(
+        COMMAND "${GIT_EXECUTABLE}" -c "safe.directory=${_real}" apply --reverse --check
+                "${_TSC_CARLA_PATCH_DIR}/${_f}"
+        WORKING_DIRECTORY "${dir}"
+        RESULT_VARIABLE _rc_rev
+        OUTPUT_QUIET ERROR_QUIET)
+      if(_rc_rev EQUAL 0)
+        message(STATUS "typesafe_carla: CARLA ${TSC_CARLA_GIT_REF} already has the LibCarla "
+                       "patch ${_f}: skipped")
+        continue()
+      endif()
       message(FATAL_ERROR
         "typesafe_carla: the LibCarla patch cmake/carla-patches/${_f} does not apply to "
         "CARLA ${TSC_CARLA_GIT_REF} (${dir}):\n${_err}\n"

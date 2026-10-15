@@ -14,12 +14,13 @@ Rules:
 - A patch is a `git diff` (paths `LibCarla/...` from the CARLA root),
   optionally preceded by a description, which `git apply` ignores.
 - It must apply to every ref in `tools/release_carla_refs.txt` (and to the
-  other refs CI builds, e.g. `0.10.0`); CI's `libcarla` job fails to configure
-  otherwise. `TSC_CARLA_PATCH_CHECK_DIRS=<carla checkout>[:...] uv run pytest
+  other refs CI builds, e.g. `0.10.0`), or be in it already (a ref that took
+  the fix upstream: the patch applies in reverse and is skipped); CI's
+  `libcarla` job fails to configure otherwise. `TSC_CARLA_PATCH_CHECK_DIRS=<carla checkout>[:...] uv run pytest
   tests/test_carla_patches.py` checks local checkouts.
 - Each is proposed upstream, and is removed once every ref we build has the
   fix.
 
 | Patch | Why | Upstream |
 |---|---|---|
-| `0001-trafficmanager-free-inmemorymap.patch` | The Traffic Manager's `InMemoryMap` leaks its whole waypoint graph (shared_ptr cycles between `SimpleWaypoint`s; ~400 MB on a large map) on every TM shut down and map change. | being proposed to carla-simulator/carla |
+| `0001-trafficmanager-free-inmemorymap.patch` | The Traffic Manager's `InMemoryMap` leaks its whole waypoint graph (shared_ptr cycles between `SimpleWaypoint`s; ~400 MB on a large map) on every TM shut down and map change. | in ue58-dev (carla-simulator/carla#9975); still needed by ue5-dev and 0.10.0 |

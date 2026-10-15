@@ -24,6 +24,7 @@ Two layouts are supported:
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 LIBRARY_NAME = "libtypesafe_carla_ffi.so"
@@ -80,6 +81,18 @@ def codon_modules_dir() -> Path:
         if (candidate / "typesafe_carla" / "__init__.codon").is_file():
             return candidate
     raise PathError("typesafe_carla Codon sources not found; the installation is incomplete")
+
+
+def include_dir() -> Path:
+    """Directory holding ``typesafe_carla/ffi.h``, the C ABI header (for sensor
+    plugins: docs/design.md "Sensor sources")."""
+    root = _source_root()
+    if root is not None:
+        return root / "native" / "include"
+    for candidate in _installed_dirs("_include"):
+        if (candidate / "typesafe_carla" / "ffi.h").is_file():
+            return candidate
+    raise PathError("typesafe_carla C header not found; the installation is incomplete")
 
 
 def _recorded_ref(directory: Path) -> str | None:
@@ -202,6 +215,47 @@ def native_info(lib: Path | None = None) -> dict[str, str]:
             fn.restype = ctypes.c_char_p
             info[key] = fn().decode()
     return info
+
+
+ENV_SENSOR_PLUGIN = "TYPESAFE_CARLA_SENSOR_PLUGIN"
+SENSOR_PLUGIN_GROUP = "typesafe_carla.sensor_plugins"
+
+
+def sensor_plugin() -> tuple[str, str] | None:
+    """The sensor plugin to load (ABI 5.3, docs/design.md "Sensor sources"), as
+    (path, origin): ``TYPESAFE_CARLA_SENSOR_PLUGIN`` if set (empty: none), else
+    the first installed package whose ``typesafe_carla.sensor_plugins`` entry
+    point (a callable returning the plugin's path, or None when the package is
+    not configured, e.g. carla_canvas without ``CARLA_CANVAS_CONFIG``) gives one.
+    """
+    if ENV_SENSOR_PLUGIN in os.environ:
+        path = os.environ[ENV_SENSOR_PLUGIN]
+        return (path, ENV_SENSOR_PLUGIN) if path else None
+    from importlib.metadata import entry_points
+
+    for ep in sorted(entry_points(group=SENSOR_PLUGIN_GROUP), key=lambda e: e.name):
+        try:
+            path = ep.load()()
+        except Exception as e:  # a broken plugin package must not break the launcher
+            print(f"typesafe_carla: sensor plugin entry point {ep.name!r} failed: {e}",
+                  file=sys.stderr)
+            continue
+        if path:
+            return str(path), f"entry point {ep.name!r} ({ep.value})"
+    return None
+
+
+def set_sensor_plugin_environment(env: dict[str, str] | None = None) -> str | None:
+    """Sets TYPESAFE_CARLA_SENSOR_PLUGIN in env (default os.environ) from
+    sensor_plugin() unless already set; returns the path, or None."""
+    env = os.environ if env is None else env
+    if ENV_SENSOR_PLUGIN in env:
+        return env[ENV_SENSOR_PLUGIN] or None
+    found = sensor_plugin()
+    if found is None:
+        return None
+    env[ENV_SENSOR_PLUGIN] = found[0]
+    return found[0]
 
 
 ENV_CACHE_DIR = "TYPESAFE_CARLA_CACHE_DIR"

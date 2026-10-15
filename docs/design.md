@@ -785,6 +785,68 @@ message is copied on access into flat C structs (`tsc_cam_message_t`, with
 the two variable-length ITS lists behind their own two-call getters) and then
 into typed Codon classes.
 
+### Sensor sources (ABI 5.3)
+
+A *sensor source* supplies the measurements and the ROS 2 output of some
+sensors in place of the CARLA server, without changing the program: it is
+how a client-side renderer (e.g. [carla_canvas](https://github.com/hakuturu583/carla_canvas):
+3D Gaussian splatting or another neural renderer behind gRPC) replaces
+CARLA's cameras and LiDARs.
+
+```
+program: sensor.listen(cb) / poll() / wait_for_data() / enable_for_ros()
+   │                                   ▲
+   ▼                                   │ same per-handle queue (§15)
+tsc_sensor_listen ── claims? ──yes──▶ source.start(actor)      source renders
+   │ no                               world.tick() ─▶ source.world_ticked(frame)
+   ▼                                   tsc_sensor_source_push(actor, data)
+LibCarla Listen (server stream)
+```
+
+- **Installing.** One source at a time (`tsc_sensor_source_t`: callbacks plus
+  `user`). A plugin (a shared library exporting `tsc_sensor_plugin_init`) is
+  loaded from `TYPESAFE_CARLA_SENSOR_PLUGIN` at the first operation that
+  consults the source, or by `tsc_sensor_source_load`. It gets the library's
+  functions through a `get_proc` callback, so it does not link against one
+  CARLA ref's library. The launcher (`typesafe-codon run`, `env`, and the
+  CPython package) fills `TYPESAFE_CARLA_SENSOR_PLUGIN` from the
+  `typesafe_carla.sensor_plugins` entry point of an installed package when
+  it is unset; a built executable reads the variable only.
+- **Claiming.** At `listen()` and at the ROS calls the source is asked whether
+  it supplies the sensor (`claims`, given the actor handle, id and type id).
+  If it does, LibCarla's stream is not started (the server does not send
+  that sensor's data), the handle's queue is registered under the actor id,
+  and the first stream of the actor calls `start`. `enable_for_ros`,
+  `disable_for_ros` and `is_enabled_for_ros` of a claimed sensor go to the
+  source, which publishes the ROS 2 topics itself. `is_listening` is true for
+  a source stream.
+- **Delivery.** `tsc_sensor_source_push(actor_id, data)` (any thread) queues a
+  measurement on each live stream of the actor; an image is handed over (the
+  source must not read it afterwards) and a second stream gets its own copy,
+  since `Image.convert` changes pixels in place. It reports how many streams
+  it reached: 0 means every stream is gone (stopped, or its handles
+  released), which is how a source learns that a released sensor no longer
+  listens. Measurements are built with `tsc_sensor_data_new_image` /
+  `_lidar` / `_semantic_lidar`: with LibCarla they are deserialized from the
+  server's wire format (sensor header and serializer payload, with the
+  `SensorRegistry` index of `ASceneCaptureCamera`, `ARayCastLidar` or
+  `ARayCastSemanticLidar`), so they are LibCarla's own `Image` /
+  `LidarMeasurement` objects and every reader works on them unchanged.
+- **Ticks.** `World.tick()` (`tsc_world_tick`) calls `world_ticked(world,
+  frame)` after the server answered and before the program's dispatch: a
+  source that renders frame N there and pushes it has it delivered by that
+  tick's callbacks, deterministically in synchronous mode. A source may also
+  render from its own thread (e.g. on `wait_for_tick`) for asynchronous mode.
+  `Actor.destroy()` and a batch `DestroyActor` (`apply_batch`; `apply_batch_sync`:
+  when it succeeds) call `actor_destroyed`.
+- **Generated entry points.** The entry points a source can take over stay
+  generated: their specs name a `via` helper (`actor_destroy`, `world_tick`,
+  `sensor_is_listening`, `sensor_*_for_ros`) in `sensor_source.cpp`.
+- **Errors.** A callback returns a `tsc_status_t`; a failure fails the
+  triggering call (`listen()`, `tick()`: after the simulation advanced) with
+  `TSC_ERROR` and the source's `last_error` message. A plugin that cannot be
+  loaded fails every such call with the `dlopen` error.
+
 ## 17. Threading
 
 Rules:

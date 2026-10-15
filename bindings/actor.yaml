@@ -6,8 +6,9 @@ blocks:
   actor_destroy:
     destroy:
       call: Destroy
+      via: actor_destroy
       out: {type: nullable_bool, name: out_destroyed}
-      doc: "out_destroyed may be NULL."
+      doc: "out_destroyed may be NULL. Tells the sensor source (ABI 5.3)."
   actor:
     get_id: {call: GetId, out: {type: uint32, name: out_id}}
     get_type_id: {call: GetTypeId, out: string}

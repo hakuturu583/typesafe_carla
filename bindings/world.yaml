@@ -28,6 +28,7 @@ blocks:
       doc: "TSC_OK with *out_actor == NULL if the spawn fails; bad attachment_type: TSC_INVALID_ARGUMENT."
     tick:
       call: Tick
+      via: world_tick
       args: {timeout_seconds: timeout}
       out: {type: uint64, name: out_frame}
   world_snapshots:

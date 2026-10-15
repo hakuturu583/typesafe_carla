@@ -82,6 +82,7 @@ add_library(typesafe_carla_ffi SHARED
   native/src/queue_signal.cpp
   native/src/sensor.cpp
   native/src/sensor_image.cpp
+  native/src/sensor_source.cpp
   native/src/snapshot.cpp
   native/src/traffic_manager.cpp
   native/src/vehicle.cpp
@@ -105,6 +106,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   set_property(TARGET typesafe_carla_ffi APPEND PROPERTY LINK_DEPENDS
                "${CMAKE_CURRENT_SOURCE_DIR}/native/src/exports.map")
 endif()
+# Sensor plugins are loaded with dlopen (ABI 5.3, sensor_source.cpp).
+target_link_libraries(typesafe_carla_ffi PRIVATE ${CMAKE_DL_LIBS})
 # Dependencies are found next to the library ($ORIGIN), never in /usr/lib.
 set_target_properties(typesafe_carla_ffi PROPERTIES
   BUILD_RPATH "$ORIGIN"
@@ -285,6 +288,21 @@ if(TSC_BUILD_TESTS AND NOT SKBUILD)
 
   # Generated with the bindings (tools/bindgen): NULL-handle checks for every
   # generated function.
+  # ABI 5.3: sensor sources, and a plugin loaded through get_proc only.
+  add_library(test_sensor_plugin MODULE tests/native/test_sensor_plugin.c)
+  target_include_directories(test_sensor_plugin PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
+  add_executable(test_sensor_source tests/native/test_sensor_source.c)
+  target_link_libraries(test_sensor_source PRIVATE typesafe_carla_ffi)
+  target_compile_definitions(test_sensor_source PRIVATE
+    TSC_TEST_PLUGIN_PATH="$<TARGET_FILE:test_sensor_plugin>")
+  add_dependencies(test_sensor_source test_sensor_plugin)
+  if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_sensor_source PRIVATE -Wall -Wextra -Werror -std=c99)
+    target_compile_options(test_sensor_plugin PRIVATE -Wall -Wextra -Werror -std=c99)
+  endif()
+  add_test(NAME test_sensor_source COMMAND test_sensor_source)
+  set_tests_properties(test_sensor_source PROPERTIES LABELS "${TSC_BACKEND}")
+
   add_executable(test_generated tests/native/test_generated.c)
   target_link_libraries(test_generated PRIVATE typesafe_carla_ffi)
   if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
@@ -319,6 +337,10 @@ install(TARGETS typesafe_carla_ffi
         LIBRARY DESTINATION typesafe_carla/_native COMPONENT typesafe_carla)
 install(DIRECTORY codon/typesafe_carla DESTINATION typesafe_carla/_codon
         COMPONENT typesafe_carla FILES_MATCHING PATTERN "*.codon")
+# The C ABI header, for sensor plugins built against an installation (ABI 5.3;
+# typesafe_carla.paths.include_dir()).
+install(FILES native/include/typesafe_carla/ffi.h DESTINATION typesafe_carla/_include/typesafe_carla
+        COMPONENT typesafe_carla)
 # What this wheel was built from; read by `typesafe-codon info` and
 # typesafe_carla.paths.build_info() without loading the library.
 if(NOT TSC_BACKEND STREQUAL "libcarla")

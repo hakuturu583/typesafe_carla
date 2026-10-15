@@ -7,9 +7,9 @@ prefix: sensor
 self: {type: tsc_sensor_t, name: sensor, get: server_side_sensor_of}
 blocks:
   sensor_ros:
-    enable_for_ros: {call: EnableForROS}
-    disable_for_ros: {call: DisableForROS}
-    is_enabled_for_ros: {call: IsEnabledForROS, out: bool}
+    enable_for_ros: {call: EnableForROS, via: sensor_enable_for_ros}
+    disable_for_ros: {call: DisableForROS, via: sensor_disable_for_ros}
+    is_enabled_for_ros: {call: IsEnabledForROS, via: sensor_is_enabled_for_ros, out: bool}
   sensor_gbuffer:
     is_listening_gbuffer:
       call: IsListeningGBuffer

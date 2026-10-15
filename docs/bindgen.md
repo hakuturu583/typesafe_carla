@@ -334,7 +334,10 @@ Validation and conversions belong in the type, not in a hand-written
 function: a struct input converts and validates in its `to_carla` overload
 (`vehicle_control`, `walker_control`, `opendrive_parameters`), a checked
 scalar names a `check_*` helper (`positive`, `timeout`), and
-an output the caller may omit is `nullable_bool` (`store_if`).
+an output the caller may omit is `nullable_bool` (`store_if`). A call that
+something else may take over names a `via` helper that wraps the LibCarla
+call (the sensor source hooks of ABI 5.3: `actor_destroy`, `world_tick`,
+`sensor_is_listening`, `sensor_*_for_ros`; docs/design.md "Sensor sources").
 
 Anything more involved stays hand-written in `native/src/*.cpp` (issue #31
 reviewed every remaining function):

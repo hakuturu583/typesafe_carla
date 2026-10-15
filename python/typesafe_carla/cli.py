@@ -40,10 +40,14 @@ The launcher sets:
 * ``TYPESAFE_CARLA_LIB``: the native library the Codon module loads (of the
   CARLA ref ``TYPESAFE_CARLA_CARLA_REF`` selects, when the installation has
   more than one: ``typesafe-codon info`` lists them);
-* ``CODON_DIR``, ``LD_LIBRARY_PATH``: for the Codon runtime.
+* ``CODON_DIR``, ``LD_LIBRARY_PATH``: for the Codon runtime;
+* ``TYPESAFE_CARLA_SENSOR_PLUGIN``, unless set: the sensor plugin an installed
+  package offers through the ``typesafe_carla.sensor_plugins`` entry point
+  (e.g. carla_canvas, when ``CARLA_CANVAS_CONFIG`` names its configuration).
 
 For ``build``, the executable also gets an RPATH to the native library's
-directory, so it runs without the launcher.
+directory, so it runs without the launcher. It loads a sensor plugin only
+from ``TYPESAFE_CARLA_SENSOR_PLUGIN`` (``eval "$(typesafe-codon env)"``).
 """
 
 from __future__ import annotations
@@ -94,6 +98,7 @@ def build_environment(tc: toolchain.Toolchain, strict: bool = False) -> dict[str
     env[paths.ENV_LIB] = str(lib)
     ld = [str(lib.parent)] + [str(d) for d in tc.library_dirs()]
     env["LD_LIBRARY_PATH"] = _prepend(os.pathsep.join(ld), env.get("LD_LIBRARY_PATH"))
+    paths.set_sensor_plugin_environment(env)
     return env
 
 
@@ -455,6 +460,10 @@ def _info(tc: toolchain.Toolchain | None, error: str | None, strict: bool) -> in
         print(f"native library     NOT FOUND: {e}")
         return 1
     print(f"native library     {lib}")
+    try:
+        print(f"C header           {paths.include_dir() / 'typesafe_carla' / 'ffi.h'}")
+    except paths.PathError as e:
+        print(f"C header           NOT FOUND: {e}")
     refs = paths.carla_refs()
     if len(refs) > 1:
         names = [f"{r} (default)" if i == 0 else r for i, r in enumerate(refs)]
@@ -473,6 +482,8 @@ def _info(tc: toolchain.Toolchain | None, error: str | None, strict: bool) -> in
     patches = paths._read_build_info(lib.parent).get("carla_patches", "n/a")
     print(f"carla patches      {patches} (cmake/carla-patches)")
     print(f"build commit       {native['build_commit']}")
+    plugin = paths.sensor_plugin()
+    print(f"sensor plugin      {f'{plugin[0]} (from {plugin[1]})' if plugin else 'none'}")
     return 0 if tc is not None else 1
 
 
@@ -505,8 +516,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args[0] == "env":
-        for key in ("CODON_DIR", "CODON_PATH", paths.ENV_LIB, "LD_LIBRARY_PATH"):
-            print(f"export {key}={shlex.quote(env[key])}")
+        for key in ("CODON_DIR", "CODON_PATH", paths.ENV_LIB, "LD_LIBRARY_PATH",
+                    paths.ENV_SENSOR_PLUGIN):
+            if key in env:
+                print(f"export {key}={shlex.quote(env[key])}")
         return 0
 
     codon = str(tc.executable)
