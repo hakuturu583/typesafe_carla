@@ -1,4 +1,5 @@
 /build/
+/build-carla/
 /.venv/
 __pycache__/
 *.egg-info/
