@@ -1,0 +1,28 @@
+Traffic Manager: forget a removed vehicle's junction entrance
+
+LocalizationStage keeps, for each vehicle at the entrance of a junction, the
+junction's end point and a safe point after it (vehicles_at_junction_entrance,
+handed on to the motion plan stage), but neither RemoveActor() nor Reset() cleared
+it: it kept the SimpleWaypoints of removed vehicles alive after their
+InMemoryMap was destroyed, and a later vehicle that reused the actor id got
+the old junction's points. RemoveActor() now erases the vehicle's entry and
+Reset() clears them all.
+
+Applied by typesafe_carla's cmake/FetchCarla.cmake to the fetched LibCarla;
+being proposed upstream (carla-simulator/carla). Drop this patch once every
+ref in tools/release_carla_refs.txt has the fix.
+
+diff --git a/LibCarla/source/carla/trafficmanager/LocalizationStage.cpp b/LibCarla/source/carla/trafficmanager/LocalizationStage.cpp
+index 8fd7b17..075752a 100644
+--- a/LibCarla/source/carla/trafficmanager/LocalizationStage.cpp
++++ b/LibCarla/source/carla/trafficmanager/LocalizationStage.cpp
+@@ -438,3 +438,4 @@ void LocalizationStage::HandleLargeVehicleJunction(const ActorId actor_id,
+ void LocalizationStage::RemoveActor(ActorId actor_id) {
+     last_lane_change_swpt.erase(actor_id);
++    vehicles_at_junction_entrance.erase(actor_id);
+     vehicles_at_junction.erase(actor_id);
+@@ -445,3 +446,4 @@ void LocalizationStage::RemoveActor(ActorId actor_id) {
+ void LocalizationStage::Reset() {
+   last_lane_change_swpt.clear();
++  vehicles_at_junction_entrance.clear();
+   vehicles_at_junction.clear();
