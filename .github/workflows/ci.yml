@@ -112,7 +112,7 @@ jobs:
       CC: gcc-${{ matrix.os.gcc }}
       CXX: g++-${{ matrix.os.gcc }}
       # What the source build and the build from the prebuilt both build.
-      SHIM_TARGETS: typesafe_carla_ffi test_ffi test_generated test_image_converter
+      SHIM_TARGETS: typesafe_carla_ffi test_ffi test_generated test_image_converter test_sensor_source
     strategy:
       fail-fast: false
       matrix:
