@@ -311,6 +311,7 @@ def test_returned_dicts_release_their_keys_and_values(pycarla):
     strings, which ACS reads every tick) stayed in memory for good."""
     _run_ok(pycarla, _SETUP % 0 + """
 import sys
+vehicle = world.spawn_actor(lib.find('vehicle.lincoln.mkz_2020'), carla.Transform(carla.Location(x=30)))
 attrs = vehicle.attributes
 assert attrs and all(isinstance(k, str) and isinstance(v, str) for k, v in attrs.items()), attrs
 # (Not a one-character value: CPython's are shared, immortal.)
@@ -343,9 +344,9 @@ first = world.id
 assert first >= 2 ** 63 and first < 2 ** 64, first
 assert world.get_snapshot().id == first, (world.get_snapshot().id, first)
 assert str(world) == 'World(id=%d)' % first, str(world)
+assert 0 <= world.get_map().get_waypoint(vehicle.get_location()).id < 2 ** 64
 second = client.load_world('Town10HD_Opt').id
 assert 0 <= second < 2 ** 63 and client.get_world().id == second, (first, second)
-assert 0 <= world.get_map().get_waypoint(vehicle.get_location()).id < 2 ** 64
 
 world = client.get_world()
 building = world.get_environment_objects(carla.CityObjectLabel.Buildings)[0]
