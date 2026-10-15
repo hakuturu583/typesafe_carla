@@ -821,8 +821,8 @@ LibCarla Listen (server stream)
   source, which publishes the ROS 2 topics itself. `is_listening` is true for
   a source stream.
 - **Delivery.** `tsc_sensor_source_push(actor_id, data)` (any thread) queues a
-  measurement on each live stream of the actor; a second stream gets a copy,
-  since `Image.convert` changes pixels in place. It reports how many streams
+  measurement on each live stream of the actor; a second stream gets its own
+  copy of an image, since `Image.convert` changes pixels in place. It reports how many streams
   it reached: 0 means every stream is gone (stopped, or its handles
   released), which is how a source learns that a released sensor no longer
   listens. Measurements are built with `tsc_sensor_data_new_image` /

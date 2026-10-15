@@ -42,8 +42,7 @@ struct Stream {
 
 struct State {
   std::mutex mutex;
-  bool installed = false;
-  tsc_sensor_source_t source{};
+  std::optional<tsc_sensor_source_t> source;  // the installed one
   std::vector<Stream> streams;
   std::set<uint32_t> started;  // actors whose source stream was started
   std::set<std::string> loaded;  // plugin paths
@@ -117,11 +116,15 @@ void load_from_environment() {
 }
 
 // A copy of the installed source, or nullopt.
+std::optional<tsc_sensor_source_t> installed_source() {
+  std::lock_guard<std::mutex> lock(state().mutex);
+  return state().source;
+}
+
+// The same, loading TYPESAFE_CARLA_SENSOR_PLUGIN first.
 std::optional<tsc_sensor_source_t> current_source() {
   load_from_environment();
-  std::lock_guard<std::mutex> lock(state().mutex);
-  if (!state().installed) return std::nullopt;
-  return state().source;
+  return installed_source();
 }
 
 void check_callback(const tsc_sensor_source_t &source, int32_t status, const char *what) {
@@ -292,37 +295,15 @@ MeasurementPtr make_semantic_lidar(uint64_t frame, double timestamp,
 
 #endif
 
-template <typename Measurement>
-std::vector<uint32_t> points_per_channel(const Measurement &m) {
-  std::vector<uint32_t> counts(m.GetChannelCount());
-  for (uint32_t i = 0; i < counts.size(); ++i) counts[i] = m.GetPointCount(i);
-  return counts;
-}
-
-// A copy for a second stream (Image.convert changes the pixels in place, so
-// streams never share a measurement); other types are shared.
-MeasurementPtr copy_measurement(const MeasurementPtr &m) {
-  const auto &t = m->GetSensorTransform();
-  if (auto image = dynamic_cast<const data::Image *>(m.get())) {
-    return make_image(m->GetFrame(), m->GetTimestamp(), t,
-                      static_cast<uint32_t>(image->GetWidth()),
-                      static_cast<uint32_t>(image->GetHeight()), image->GetFOVAngle(),
-                      reinterpret_cast<const uint8_t *>(image->data()));
-  }
-  if (auto lidar = dynamic_cast<const data::LidarMeasurement *>(m.get())) {
-    const auto counts = points_per_channel(*lidar);
-    return make_lidar(m->GetFrame(), m->GetTimestamp(), t, lidar->GetHorizontalAngle(),
-                      counts.data(), static_cast<uint32_t>(counts.size()),
-                      reinterpret_cast<const float *>(lidar->data()), lidar->size());
-  }
-  if (auto lidar = dynamic_cast<const data::SemanticLidarMeasurement *>(m.get())) {
-    const auto counts = points_per_channel(*lidar);
-    return make_semantic_lidar(
-        m->GetFrame(), m->GetTimestamp(), t, lidar->GetHorizontalAngle(), counts.data(),
-        static_cast<uint32_t>(counts.size()),
-        reinterpret_cast<const tsc_semantic_lidar_detection_t *>(lidar->data()), lidar->size());
-  }
-  return m;
+// A copy of an image for a second stream (Image.convert changes the pixels
+// in place); other measurements are never changed, so streams share them.
+MeasurementPtr copy_for_stream(const MeasurementPtr &m) {
+  auto image = dynamic_cast<const data::Image *>(m.get());
+  if (image == nullptr) return m;
+  return make_image(m->GetFrame(), m->GetTimestamp(), m->GetSensorTransform(),
+                    static_cast<uint32_t>(image->GetWidth()),
+                    static_cast<uint32_t>(image->GetHeight()), image->GetFOVAngle(),
+                    reinterpret_cast<const uint8_t *>(image->data()));
 }
 
 template <typename F>
@@ -386,11 +367,7 @@ void stop(tsc_sensor &handle) {
     if (last) last = s.started.erase(id) != 0;
   }
   if (last) {
-    std::optional<tsc_sensor_source_t> source;
-    {
-      std::lock_guard<std::mutex> lock(s.mutex);
-      if (s.installed) source = s.source;
-    }
+    const auto source = installed_source();
     if (source && source->stop != nullptr) source->stop(source->user, id);
   }
 }
@@ -402,11 +379,7 @@ bool actor_destroy(carla::client::Actor &actor) {
   const bool destroyed = actor.Destroy();
   if (destroyed) {
     forget_actor(id);
-    std::optional<tsc_sensor_source_t> source;
-    {
-      std::lock_guard<std::mutex> lock(state().mutex);
-      if (state().installed) source = state().source;
-    }
+    const auto source = installed_source();
     if (source && source->actor_destroyed != nullptr) source->actor_destroyed(source->user, id);
   }
   return destroyed;
@@ -492,8 +465,7 @@ tsc_status_t tsc_sensor_source_install(const tsc_sensor_source_t *source) {
       }
     }
     std::lock_guard<std::mutex> lock(state().mutex);
-    state().installed = source != nullptr;
-    state().source = source != nullptr ? *source : tsc_sensor_source_t{};
+    state().source = source != nullptr ? std::optional(*source) : std::nullopt;
   });
 }
 
@@ -535,7 +507,7 @@ tsc_status_t tsc_sensor_source_push(uint32_t actor_id, const tsc_sensor_data_t *
       if (queues.empty()) s.started.erase(actor_id);
     }
     for (size_t i = 0; i < queues.size(); ++i) {
-      queues[i]->push(i == 0 ? measurement : copy_measurement(measurement));
+      queues[i]->push(i == 0 ? measurement : copy_for_stream(measurement));
     }
     store_if(out_delivered, queues.size());
   });
