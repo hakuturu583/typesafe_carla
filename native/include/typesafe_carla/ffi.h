@@ -2594,15 +2594,17 @@ typedef int32_t (*tsc_sensor_plugin_init_fn)(uint32_t abi_version,
  * TSC_VERSION_ERROR if source->abi_major differs from this library's, or
  * struct_size is smaller than the version's. Streams already started stay
  * with the source that started them only in that their queues stay: later
- * pushes go through the new source. */
+ * pushes go through the new source. It does not wait for callbacks running
+ * on other threads: `user` must stay valid after it is replaced. */
 TSC_API tsc_status_t tsc_sensor_source_install(const tsc_sensor_source_t *source);
 /* *out = 1 if a source is installed (loading TYPESAFE_CARLA_SENSOR_PLUGIN
  * first, if it is set and not loaded yet). */
 TSC_API tsc_status_t tsc_sensor_source_installed(int32_t *out);
 /* Loads a plugin (see above) and runs its init function. Loading the same
- * path again does nothing. */
+ * path again does nothing. TSC_ERROR from a plugin's init function. */
 TSC_API tsc_status_t tsc_sensor_source_load(const char *path, size_t path_len);
-/* Queues `data` (not consumed: release it as usual) on every stream of the
+/* Queues `data` (not consumed: release it as usual; each stream gets its own
+ * copy of an image, which the program may convert in place) on every stream of the
  * claimed sensor `actor_id`, waking their consumers as LibCarla's stream
  * does. *out_delivered (may be NULL) = the number of streams it reached; 0
  * means the sensor has no stream any more (the source should stop rendering

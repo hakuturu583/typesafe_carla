@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <memory>
 #include <mutex>
+#include <mutex>
 #include <set>
 
 using namespace tsc;
@@ -300,8 +301,8 @@ MeasurementPtr make_semantic_lidar(uint64_t frame, double timestamp,
 
 #endif
 
-// A copy of an image for a second stream (Image.convert changes the pixels
-// in place); other measurements are never changed, so streams share them.
+// A stream's copy of an image (Image.convert changes the pixels in place);
+// other measurements are never changed, so streams share them.
 MeasurementPtr copy_for_stream(const MeasurementPtr &m) {
   auto image = dynamic_cast<const data::Image *>(m.get());
   if (image == nullptr) return m;
@@ -324,8 +325,17 @@ namespace tsc {
 
 namespace sensor_source {
 
+// Held across a stream change and the start/stop callback it calls, so that
+// the callbacks reach the source in the order of the changes. Recursive: a
+// callback may stop a stream itself.
+std::recursive_mutex &lifecycle_mutex() {
+  static std::recursive_mutex mutex;
+  return mutex;
+}
+
 bool listen(tsc_sensor &handle, const std::shared_ptr<SensorQueue> &queue) {
   auto source = current_source();
+  std::lock_guard<std::recursive_mutex> lifecycle(lifecycle_mutex());
   auto &sensor = static_cast<carla::client::Sensor &>(*handle.actor);
   const uint32_t id = sensor.GetId();
   if (!source || !claims(*source, &handle, sensor)) {
@@ -349,8 +359,7 @@ bool listen(tsc_sensor &handle, const std::shared_ptr<SensorQueue> &queue) {
     const int32_t status = source->start(source->user, &handle, id);
     if (status != TSC_OK) {
       {
-        // This handle's stream only (another handle's listen() may have
-        // registered meanwhile); the next listen() starts again.
+        // The next listen() starts again.
         std::lock_guard<std::mutex> lock(s.mutex);
         auto &streams = s.streams;
         streams.erase(std::remove_if(streams.begin(), streams.end(),
@@ -365,6 +374,7 @@ bool listen(tsc_sensor &handle, const std::shared_ptr<SensorQueue> &queue) {
 }
 
 void stop(tsc_sensor &handle) {
+  std::lock_guard<std::recursive_mutex> lifecycle(lifecycle_mutex());
   auto &s = state();
   uint32_t id = 0;
   bool last = false;
@@ -400,8 +410,8 @@ bool actor_destroy(carla::client::Actor &actor) {
 }
 
 uint64_t world_tick(carla::client::World &world, carla::time_duration timeout) {
+  auto source = current_source();  // a plugin that fails to load: before the server advances
   const uint64_t frame = world.Tick(timeout);
-  auto source = current_source();
   if (source && source->world_ticked != nullptr) {
     TempHandle handle(new tsc_world(world));
     check_callback(*source,
@@ -494,6 +504,7 @@ tsc_status_t tsc_sensor_source_load(const char *path, size_t path_len) {
   return TSC_GUARD({
     const std::string p = to_string(path, path_len, "path");
     if (p.empty()) fail(TSC_INVALID_ARGUMENT, "path is empty");
+    if (tl_loading) fail(TSC_ERROR, "a sensor plugin's init cannot load another plugin");
     load_plugin(p);
   });
 }
@@ -520,10 +531,9 @@ tsc_status_t tsc_sensor_source_push(uint32_t actor_id, const tsc_sensor_data_t *
       }
       if (queues.empty()) s.started.erase(actor_id);
     }
-    // Copies first: once queued, a consumer may convert the original in place.
-    std::vector<MeasurementPtr> items{measurement};
-    for (size_t i = 1; i < queues.size(); ++i) items.push_back(copy_for_stream(measurement));
-    for (size_t i = 0; i < queues.size(); ++i) queues[i]->push(std::move(items[i]));
+    // A copy per stream: a consumer may convert its image in place, while the
+    // source still holds `data`.
+    for (auto &queue : queues) queue->push(copy_for_stream(measurement));
     store_if(out_delivered, queues.size());
   });
 }
