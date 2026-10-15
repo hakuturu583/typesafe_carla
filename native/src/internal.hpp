@@ -1106,3 +1106,29 @@ inline tsc_walker_control_t from_carla(const carla::rpc::WalkerControl &c) {
 carla::rpc::WalkerBoneControlIn to_bone_control(const tsc_bone_transform_t *bones, size_t count,
                                                 const char *name);
 }  // namespace tsc
+
+// ---------------------------------------------------------------------------
+// Sensor sources (ABI 5.3, sensor_source.cpp): an installed source (e.g. a
+// client-side renderer plugin) supplies the measurements of the sensors it
+// claims. The helpers below are the `via` functions of the generated entry
+// points a source can take over (bindings/*.yaml).
+// ---------------------------------------------------------------------------
+
+namespace tsc {
+
+bool actor_destroy(carla::client::Actor &actor);
+uint64_t world_tick(carla::client::World &world, carla::time_duration timeout);
+bool sensor_is_listening(carla::client::Sensor &sensor);
+void sensor_enable_for_ros(carla::client::ServerSideSensor &sensor);
+void sensor_disable_for_ros(carla::client::ServerSideSensor &sensor);
+bool sensor_is_enabled_for_ros(carla::client::ServerSideSensor &sensor);
+
+namespace sensor_source {
+// listen(): true if a source claimed the sensor; it then feeds `queue`, and
+// LibCarla's stream must not be started.
+bool listen(tsc_sensor &handle, const std::shared_ptr<SensorQueue> &queue);
+// stop(): ends the handle's source stream, if it has one.
+void stop(tsc_sensor &handle);
+}  // namespace sensor_source
+
+}  // namespace tsc

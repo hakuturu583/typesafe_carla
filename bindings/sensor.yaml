@@ -5,4 +5,4 @@ prefix: sensor
 self: {type: tsc_sensor_t, name: sensor, get: sensor_of}
 blocks:
   sensor:
-    is_listening: {call: IsListening, out: bool}
+    is_listening: {call: IsListening, via: sensor_is_listening, out: bool}

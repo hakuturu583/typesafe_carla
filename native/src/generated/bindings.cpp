@@ -9,7 +9,7 @@ extern "C" {
 // bindings/actor.yaml: carla::client::Actor
 
 tsc_status_t tsc_actor_destroy(tsc_actor_t *actor, int32_t *out_destroyed) {
-  return TSC_GUARD({ store_if(out_destroyed, actor_of(actor).Destroy() ? 1 : 0); });
+  return TSC_GUARD({ store_if(out_destroyed, actor_destroy(actor_of(actor)) ? 1 : 0); });
 }
 
 tsc_status_t tsc_actor_get_id(tsc_actor_t *actor, uint32_t *out_id) {
@@ -1228,23 +1228,23 @@ tsc_status_t tsc_road_get_waypoints(const tsc_road_t *road, double distance, int
 
 tsc_status_t tsc_sensor_is_listening(tsc_sensor_t *sensor, int32_t *out) {
   return TSC_GUARD({
-    assign_out(out, "out", [&] { return sensor_of(sensor).IsListening() ? 1 : 0; });
+    assign_out(out, "out", [&] { return sensor_is_listening(sensor_of(sensor)) ? 1 : 0; });
   });
 }
 
 // bindings/server_side_sensor.yaml: carla::client::ServerSideSensor
 
 tsc_status_t tsc_sensor_enable_for_ros(tsc_sensor_t *sensor) {
-  return TSC_GUARD({ server_side_sensor_of(sensor).EnableForROS(); });
+  return TSC_GUARD({ sensor_enable_for_ros(server_side_sensor_of(sensor)); });
 }
 
 tsc_status_t tsc_sensor_disable_for_ros(tsc_sensor_t *sensor) {
-  return TSC_GUARD({ server_side_sensor_of(sensor).DisableForROS(); });
+  return TSC_GUARD({ sensor_disable_for_ros(server_side_sensor_of(sensor)); });
 }
 
 tsc_status_t tsc_sensor_is_enabled_for_ros(tsc_sensor_t *sensor, int32_t *out) {
   return TSC_GUARD({
-    assign_out(out, "out", [&] { return server_side_sensor_of(sensor).IsEnabledForROS() ? 1 : 0; });
+    assign_out(out, "out", [&] { return sensor_is_enabled_for_ros(server_side_sensor_of(sensor)) ? 1 : 0; });
   });
 }
 
@@ -1886,7 +1886,7 @@ tsc_status_t tsc_world_try_spawn_actor(tsc_world_t *world, const tsc_actor_bluep
 
 tsc_status_t tsc_world_tick(tsc_world_t *world, double timeout_seconds, uint64_t *out_frame) {
   return TSC_GUARD({
-    assign_out(out_frame, "out_frame", [&] { return world_of(world).Tick(seconds_to_duration(timeout_seconds)); });
+    assign_out(out_frame, "out_frame", [&] { return [&](auto &self_) { return world_tick(self_, seconds_to_duration(timeout_seconds)); }(world_of(world)); });
   });
 }
 

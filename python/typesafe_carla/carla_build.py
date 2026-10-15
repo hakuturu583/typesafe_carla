@@ -219,6 +219,7 @@ def prepare_runtime() -> None:
 
     if not os.environ.get(paths.ENV_LIB):
         os.environ[paths.ENV_LIB] = str(paths.native_library())
+    paths.set_sensor_plugin_environment()  # read by the native library (ABI 5.3)
     for directory in toolchain.find_codon().library_dirs():
         runtime = directory / "libcodonrt.so"
         if runtime.is_file():

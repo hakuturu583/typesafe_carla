@@ -311,6 +311,12 @@ tsc_status_t tsc_sensor_listen(tsc_sensor_t *sensor, size_t queue_capacity) {
     // LibCarla does not replace an existing subscription: a second Listen()
     // would leave an orphaned stream that Stop() cannot reach. Stop first.
     if (s.IsListening()) s.Stop();
+    // ABI 5.3: a sensor source that claims the sensor feeds the queue instead.
+    auto queue = std::make_shared<SensorQueue>(queue_capacity);
+    if (sensor_source::listen(h, queue)) {
+      h.set_queue(std::move(queue));
+      return;
+    }
     h.set_queue(listen_into_queue(queue_capacity, [&](auto cb) { s.Listen(std::move(cb)); }));
   });
 }
@@ -319,6 +325,7 @@ tsc_status_t tsc_sensor_stop(tsc_sensor_t *sensor) {
   return TSC_GUARD({
     // Idempotent (LibCarla logs a warning when stopping a stopped sensor).
     auto &s = sensor_of(sensor);
+    sensor_source::stop(sensor_handle(sensor));
     if (s.IsListening()) s.Stop();
   });
 }

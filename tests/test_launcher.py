@@ -62,7 +62,7 @@ def test_environment(launcher):
 def test_info(launcher):
     result = launcher("info")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "native ABI         5.2" in result.stdout
+    assert "native ABI         5.3" in result.stdout
     assert "carla ref" in result.stdout
 
 
@@ -288,3 +288,46 @@ def test_run_without_gpp_falls_back_to_jit(launcher, tmp_path):
     assert "compile-time warning: Actor.set_autopilot() without as_vehicle()" in result.stderr
     assert "typesafe_carla: warning: Actor.set_autopilot()" in result.stderr
     assert os.path.basename(result.stdout.split("argv0", 1)[1].strip()) == "compat.codon"
+
+
+class _EntryPoint:
+    def __init__(self, name, fn):
+        self.name, self.value, self._fn = name, f"fake:{name}", fn
+
+    def load(self):
+        return self._fn
+
+
+def _fake_entry_points(monkeypatch, *eps):
+    import importlib.metadata
+
+    monkeypatch.setattr(importlib.metadata, "entry_points",
+                        lambda group=None: list(eps) if group == paths.SENSOR_PLUGIN_GROUP else [])
+
+
+def test_sensor_plugin_from_environment_wins(monkeypatch):
+    _fake_entry_points(monkeypatch, _EntryPoint("a", lambda: "/from/entry.so"))
+    monkeypatch.setenv(paths.ENV_SENSOR_PLUGIN, "/from/env.so")
+    assert paths.sensor_plugin() == ("/from/env.so", paths.ENV_SENSOR_PLUGIN)
+    monkeypatch.setenv(paths.ENV_SENSOR_PLUGIN, "")  # explicitly none
+    assert paths.sensor_plugin() is None
+    env = {paths.ENV_SENSOR_PLUGIN: ""}
+    assert paths.set_sensor_plugin_environment(env) is None
+
+
+def test_sensor_plugin_from_entry_points(monkeypatch, capsys):
+    monkeypatch.delenv(paths.ENV_SENSOR_PLUGIN, raising=False)
+
+    def broken():
+        raise RuntimeError("boom")
+
+    _fake_entry_points(monkeypatch, _EntryPoint("c", lambda: "/c.so"),
+                       _EntryPoint("a", lambda: None), _EntryPoint("b", broken))
+    path, origin = paths.sensor_plugin()
+    assert path == "/c.so" and "'c'" in origin  # unconfigured and broken ones skipped
+    assert "boom" in capsys.readouterr().err
+    env: dict[str, str] = {}
+    assert paths.set_sensor_plugin_environment(env) == "/c.so"
+    assert env[paths.ENV_SENSOR_PLUGIN] == "/c.so"
+    _fake_entry_points(monkeypatch)
+    assert paths.set_sensor_plugin_environment({}) is None
