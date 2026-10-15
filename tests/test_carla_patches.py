@@ -237,6 +237,18 @@ def test_a_patch_that_does_not_apply_fails_and_is_retried(fetch):
 
 
 @needs_cmake
+def test_a_patch_the_ref_already_has_is_skipped(fetch):
+    configure, patches, upstream, _, _ = fetch
+    # Upstream took the fix.
+    (upstream / "LibCarla/source/Leak.cpp").write_text("fixed\n")
+    _git(upstream, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "fix")
+    (patches / "0001-a.patch").write_text(PATCH_A)
+    pid, src, out = configure()
+    assert pid != "none" and src == "fixed"
+    assert "already has the LibCarla patch 0001-a.patch: skipped" in " ".join(out.split())
+
+
+@needs_cmake
 def test_a_local_source_tree_is_not_patched(fetch, tmp_path):
     configure, patches, upstream, _, _ = fetch
     (patches / "0001-a.patch").write_text(PATCH_A)
@@ -255,7 +267,8 @@ _CHECK_DIRS = [Path(d).expanduser() for d in
                     reason="set TSC_CARLA_PATCH_CHECK_DIRS to CARLA checkouts to check")
 @pytest.mark.parametrize("carla", _CHECK_DIRS, ids=str)
 def test_patches_apply_to_carla(carla):
-    """Every patch applies, in order, to the CARLA checkout (left unchanged)."""
+    """Every patch applies, in order, to the CARLA checkout (left unchanged),
+    or the checkout has it already."""
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
         # A copy of the files the patches touch, so that they apply one after
@@ -269,4 +282,8 @@ def test_patches_apply_to_carla(carla):
         for p in carla_patches.patch_files():
             res = subprocess.run([GIT, "apply", "--verbose", str(p)], cwd=copy,
                                  capture_output=True, text=True)
+            if res.returncode != 0 and subprocess.run(
+                    [GIT, "apply", "--reverse", "--check", str(p)], cwd=copy,
+                    capture_output=True).returncode == 0:
+                continue  # upstream has it
             assert res.returncode == 0, f"{p.name} does not apply to {carla}:\n{res.stderr}"
