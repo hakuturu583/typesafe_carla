@@ -267,11 +267,14 @@ jobs:
             echo "::error::the prefix refers to $GITHUB_WORKSPACE"; exit 1
           fi
           name=$(python3 tools/fetch_libcarla_prebuilt.py --print-name "$SHA")
-          # The name's ABI hash is the one the manifest records.
-          hash=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["abi_hash"])' "$prefix/prebuilt.json")
+          # The name's ABI hash and LibCarla patch id (cmake/carla-patches) are
+          # the ones the manifest records.
+          read -r hash patches < <(python3 -c 'import json, sys; m = json.load(open(sys.argv[1])); print(m["abi_hash"], m["carla_patches"])' "$prefix/prebuilt.json")
+          tail="$hash-$SHA"
+          if [ "$patches" != none ]; then tail="$tail-p$patches"; fi
           case "$name" in
-            *-"$hash"-"$SHA") ;;
-            *) echo "::error::$name does not carry the manifest's ABI hash $hash"; exit 1 ;;
+            *-"$tail") ;;
+            *) echo "::error::$name does not end in the manifest's ABI hash, commit and patches ($tail)"; exit 1 ;;
           esac
           echo "name=${name}" >> "$GITHUB_OUTPUT"
       - name: Build the shim from the prebuilt alone

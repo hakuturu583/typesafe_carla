@@ -5,9 +5,17 @@
 # CMake/, LibCarla/, LICENSE), so it is a few MB instead of the multi-GB
 # repository, and works for branches, tags and commit SHAs alike.
 #
+# The fetched checkout gets the LibCarla patches in cmake/carla-patches
+# (fixes upstream does not have yet; cmake/carla-patches/README.md), applied
+# once, right after the checkout: the stamp of a fetch names the patch id, so
+# a checkout fetched with other patches (or before there were any) is fetched
+# and patched again. A TSC_CARLA_SOURCE_DIR tree is the user's and is never
+# patched: it is recorded as patches "none". A prebuilt records the patch id
+# it was built with, which must be this checkout's (cmake/LibCarlaPrebuilt.cmake).
+#
 # Inputs (cache variables; the environment variables in brackets give defaults):
 #   TSC_CARLA_SOURCE_DIR      [CARLA_SOURCE_DIR] Use this local CARLA checkout
-#                             instead of fetching.
+#                             instead of fetching (as it is: not patched).
 #   TSC_CARLA_GIT_REPOSITORY  Repository to fetch from.
 #   TSC_CARLA_GIT_REF         [CARLA_GIT_REF] Branch, tag or commit SHA to fetch
 #                             (default: ue5-dev).
@@ -36,6 +44,11 @@
 #   TSC_CARLA_RESOLVED_REF  The ref recorded: TSC_CARLA_REF_NAME, else the
 #                           requested ref ("local" for TSC_CARLA_SOURCE_DIR).
 #   TSC_CARLA_COMMIT        Resolved commit SHA ("unknown" if not a git tree).
+#   TSC_CARLA_PATCHES       The patch id of the LibCarla patches applied
+#                           (cmake/CarlaPatches.cmake), "none" if none (always
+#                           for TSC_CARLA_SOURCE_DIR). For a prebuilt, the
+#                           expected id; tsc_import_libcarla_prebuilt sets the
+#                           prebuilt's (the same, or configuring fails).
 #   TSC_CARLA_PREBUILT_PREFIX  The LibCarla prebuilt to use, or empty to build
 #                           LibCarla from TSC_CARLA_DIR (then unset).
 #   TSC_CARLA_PREBUILT_SHA  For a prebuilt TSC_CARLA_PREBUILT=auto found: the
@@ -96,6 +109,13 @@ function(_tsc_check_ue5 dir)
 endfunction()
 
 find_package(Git QUIET)
+include("${CMAKE_CURRENT_LIST_DIR}/CarlaPatches.cmake")
+tsc_carla_patch_id(TSC_CARLA_PATCHES)
+# A patch added, changed or removed configures again (and re-fetches, or
+# checks a prebuilt again).
+file(GLOB _tsc_patch_files "${_TSC_CARLA_PATCH_DIR}/*.patch")
+set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+             "${_TSC_CARLA_PATCH_DIR}" ${_tsc_patch_files})
 
 # A full SHA is immutable; branches and tags are re-fetched (and a prebuilt
 # re-checked) only when the requested ref changes (pass -DTSC_CARLA_REFRESH=ON
@@ -135,6 +155,8 @@ if(TSC_CARLA_SOURCE_DIR)
   _tsc_check_ue5("${TSC_CARLA_DIR}")
   _tsc_set_resolved_ref("local")
   set(TSC_CARLA_COMMIT "unknown")
+  # The user's tree, as it is: not patched.
+  set(TSC_CARLA_PATCHES "none")
   if(GIT_FOUND AND EXISTS "${TSC_CARLA_DIR}/.git")
     execute_process(
       COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
@@ -151,7 +173,7 @@ endif()
 
 set(_tsc_carla_dir "${CMAKE_BINARY_DIR}/_deps/carla-src")
 set(_tsc_stamp "${CMAKE_BINARY_DIR}/_deps/carla-src.ref")
-set(_tsc_want "${TSC_CARLA_GIT_REPOSITORY}@${TSC_CARLA_GIT_REF}")
+set(_tsc_want "${TSC_CARLA_GIT_REPOSITORY}@${TSC_CARLA_GIT_REF} patches=${TSC_CARLA_PATCHES}")
 
 set(_tsc_have "")
 if(EXISTS "${_tsc_stamp}" AND EXISTS "${_tsc_carla_dir}/.git")
@@ -160,6 +182,9 @@ endif()
 
 if(NOT _tsc_have STREQUAL _tsc_want OR TSC_CARLA_REFRESH)
   message(STATUS "typesafe_carla: fetching CARLA ${TSC_CARLA_GIT_REF} from ${TSC_CARLA_GIT_REPOSITORY}")
+  # No stamp until the checkout is complete and patched: an interrupted fetch
+  # or a patch that fails is fetched again.
+  file(REMOVE "${_tsc_stamp}")
   file(REMOVE_RECURSE "${_tsc_carla_dir}")
   file(MAKE_DIRECTORY "${_tsc_carla_dir}")
   _tsc_git(init -q)
@@ -167,6 +192,8 @@ if(NOT _tsc_have STREQUAL _tsc_want OR TSC_CARLA_REFRESH)
   _tsc_git(sparse-checkout set --no-cone /CMakeLists.txt /CMake/ /LibCarla/ /LICENSE /.clangd.in)
   _tsc_git(fetch -q --depth 1 --filter=blob:none origin "${TSC_CARLA_GIT_REF}")
   _tsc_git(checkout -q FETCH_HEAD)
+  # Once, on the fresh checkout; an unchanged stamp means it is patched.
+  tsc_apply_carla_patches("${_tsc_carla_dir}")
   file(WRITE "${_tsc_stamp}" "${_tsc_want}")
   set_property(CACHE TSC_CARLA_REFRESH PROPERTY VALUE OFF)
 endif()
@@ -176,4 +203,5 @@ set(TSC_CARLA_DIR "${_tsc_carla_dir}")
 _tsc_set_resolved_ref("${TSC_CARLA_GIT_REF}")
 set(TSC_CARLA_COMMIT "${_tsc_git_out}")
 _tsc_check_ue5("${TSC_CARLA_DIR}")
-message(STATUS "typesafe_carla: CARLA ${TSC_CARLA_RESOLVED_REF} = ${TSC_CARLA_COMMIT}")
+message(STATUS "typesafe_carla: CARLA ${TSC_CARLA_RESOLVED_REF} = ${TSC_CARLA_COMMIT} "
+               "(LibCarla patches: ${TSC_CARLA_PATCHES})")

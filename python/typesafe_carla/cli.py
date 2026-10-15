@@ -478,6 +478,9 @@ def _info(tc: toolchain.Toolchain | None, error: str | None, strict: bool) -> in
     print(f"libcarla           {native['libcarla_version']}")
     print(f"carla ref          {native['carla_git_ref']}")
     print(f"carla commit       {native['carla_git_commit']}")
+    # Not compiled in: BUILD_INFO.json (absent before the LibCarla patches).
+    patches = paths._read_build_info(lib.parent).get("carla_patches", "n/a")
+    print(f"carla patches      {patches} (cmake/carla-patches)")
     print(f"build commit       {native['build_commit']}")
     plugin = paths.sensor_plugin()
     print(f"sensor plugin      {f'{plugin[0]} (from {plugin[1]})' if plugin else 'none'}")

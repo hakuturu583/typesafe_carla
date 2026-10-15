@@ -181,7 +181,8 @@ def build_info() -> dict[str, str]:
     """Contents of BUILD_INFO.json next to the native library (empty if absent).
 
     Keys: typesafe_carla, build_commit, backend, carla_version, carla_git_ref,
-    carla_git_commit.
+    carla_git_commit, carla_patches (the LibCarla patch id, cmake/carla-patches;
+    absent in older builds).
     """
     return _read_build_info(native_library().parent)
 
