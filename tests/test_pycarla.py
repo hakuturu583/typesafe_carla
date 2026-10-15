@@ -321,7 +321,9 @@ control = {'k': ''.join(['con', 'trol'])}
 c = control['k']
 assert sys.getrefcount(value) == sys.getrefcount(c), (sys.getrefcount(value), sys.getrefcount(c))
 del attrs, value, control, c
-for _ in range(50):
+# (On Python 3.10 the first 2000 or so reads take a block each and the rest
+# none, with or without the fix: warm up past them.)
+for _ in range(3000):
     vehicle.attributes
 before = sys.getallocatedblocks()
 for _ in range(2000):
