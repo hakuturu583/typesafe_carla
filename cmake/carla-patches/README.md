@@ -24,3 +24,4 @@ Rules:
 | Patch | Why | Upstream |
 |---|---|---|
 | `0001-trafficmanager-free-inmemorymap.patch` | The Traffic Manager's `InMemoryMap` leaks its whole waypoint graph (shared_ptr cycles between `SimpleWaypoint`s; ~400 MB on a large map) on every TM shut down and map change. | in ue58-dev (carla-simulator/carla#9975); still needed by ue5-dev and 0.10.0 |
+| `0002-trafficmanager-clear-junction-entrances.patch` | The Traffic Manager's `LocalizationStage` never forgets a vehicle's junction entrance (`vehicles_at_junction_entrance`) on `RemoveActor`/`Reset`: it keeps removed vehicles' waypoints (of a destroyed `InMemoryMap`) alive and hands them to a vehicle that reuses the actor id. | proposed for ue58-dev (carla-simulator/carla#9977, draft); ue5-dev is no longer developed upstream |
