@@ -154,7 +154,7 @@ check(str(carla.ActorAttribute("v", 5, True, "1,2,3")),
 
 # Server objects (the mock server).
 world = carla.Client("localhost", 2000).get_world()
-check(str(world), "World(id=" + str(world.id) + ")")
+check(str(world), "World(id=" + str(u64(world.id)) + ")")  # LibCarla's uint64
 check(str(world.get_map()), "Map(name=Carla/Maps/MockTown)")
 check(str(world.get_actors()), "[Actor(id=1, type=vehicle.tesla.model3), Actor(id=2, type=spectator), "
       "Actor(id=3, type=traffic.traffic_light), Actor(id=4, type=traffic.stop)]")

@@ -304,6 +304,70 @@ print('OK')
 """)
 
 
+def test_returned_dicts_release_their_keys_and_values(pycarla):
+    """A dict the library returns owns its keys and values alone. Codon's
+    Dict.__to_py__ (PyDict_SetItem takes its own references) never released
+    the ones its conversions made, so every attributes read (dozens of
+    strings, which ACS reads every tick) stayed in memory for good."""
+    _run_ok(pycarla, _SETUP % 0 + """
+import sys
+vehicle = world.spawn_actor(lib.find('vehicle.lincoln.mkz_2020'), carla.Transform(carla.Location(x=30)))
+attrs = vehicle.attributes
+assert attrs and all(isinstance(k, str) and isinstance(v, str) for k, v in attrs.items()), attrs
+# (Not a one-character value: CPython's are shared, immortal.)
+value = next(v for v in attrs.values() if len(v) > 1)
+# Held by attrs and by `value` alone, as a value of a dict made here.
+control = {'k': ''.join(['con', 'trol'])}
+c = control['k']
+assert sys.getrefcount(value) == sys.getrefcount(c), (sys.getrefcount(value), sys.getrefcount(c))
+del attrs, value, control, c
+# (On Python 3.10 the first 2000 or so reads take a block each and the rest
+# none, with or without the fix: warm up past them.)
+for _ in range(3000):
+    vehicle.attributes
+before = sys.getallocatedblocks()
+for _ in range(2000):
+    vehicle.attributes
+after = sys.getallocatedblocks()
+assert after - before < 200, (before, after)
+print('OK')
+""")
+
+
+def test_uint64_values_are_unsigned(pycarla):
+    """LibCarla's uint64 values (an episode id, an environment object's id)
+    are unsigned, as CARLA's Python API gives them. typesafe_carla carries
+    them bit-for-bit in a signed int: half of all episode ids read as
+    negative, and a client took them for unknown. The mock's ids, as CARLA's,
+    spread over all 64 bits: its first episode's is above 2**63."""
+    _run_ok(pycarla, _SETUP % 0 + """
+client = carla.Client('localhost', 2000)
+first = world.id
+assert first >= 2 ** 63 and first < 2 ** 64, first
+assert world.get_snapshot().id == first, (world.get_snapshot().id, first)
+assert str(world) == 'World(id=%d)' % first, str(world)
+assert 0 <= world.get_map().get_waypoint(vehicle.get_location()).id < 2 ** 64
+second = client.load_world('Town10HD_Opt').id
+assert 0 <= second < 2 ** 63 and client.get_world().id == second, (first, second)
+
+world = client.get_world()
+building = world.get_environment_objects(carla.CityObjectLabel.Buildings)[0]
+big = building.id
+assert big >= 2 ** 63 and big < 2 ** 64, big
+# Taken back, in a list or a set as CARLA's Python API takes them.
+world.enable_environment_objects([big], False)
+world.enable_environment_objects({big}, True)
+o = carla.EnvironmentObject(big, 'x', building.transform, building.bounding_box,
+                            carla.CityObjectLabel.Buildings)
+assert o.id == big, o.id
+o.id = 2 ** 64 - 1
+assert o.id == 2 ** 64 - 1, o.id
+o.id = 7
+assert o.id == 7, o.id
+print('OK')
+""")
+
+
 def test_instances_take_arbitrary_attributes(pycarla):
     """As Boost.Python's: upstream tests set UE4-era fields (e.g.
     WheelPhysicsControl.tire_friction) and read them back."""

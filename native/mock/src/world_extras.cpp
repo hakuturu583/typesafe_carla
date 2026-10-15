@@ -63,7 +63,8 @@ std::shared_ptr<Extras> NewExtras() {
       geom::Location(60.0f, 12.0f, 3.0f),  // a building light, off
       LightState(500.0f, Color(255, 255, 255), LightState::LightGroup::Building, false)};
   x->objects = {
-      Object(101, "SM_Building_1", rpc::CityObjectLabel::Buildings,
+      // As a level's ids (hashes): above 2**63 too.
+      Object(0xF00DCAFE00000065ull, "SM_Building_1", rpc::CityObjectLabel::Buildings,
              geom::Location(60.0f, 20.0f, 5.0f), geom::Vector3D(10.0f, 5.0f, 5.0f)),
       Object(102, "SM_StreetLight_1", rpc::CityObjectLabel::Poles,
              geom::Location(50.0f, -4.0f, 3.0f), geom::Vector3D(0.2f, 0.2f, 3.0f)),

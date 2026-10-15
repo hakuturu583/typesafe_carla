@@ -140,6 +140,14 @@ BYTES_KEYS = {"Bytes"}
 # Optional of its most general type instead of one overload per type (the
 # product would explode, e.g. WheelPhysicsControl's six vectors).
 MAX_EXPANDED = 2
+# LibCarla's uint64 values that typesafe_carla carries bit-for-bit in an int
+# (a signed 64-bit integer: half of all episode ids read as negative). The
+# runtime gives them unsigned, as CARLA's Python API, and takes them back
+# (UINT64_PARAMS: the parameter's position after self, and its name). Actor
+# ids are uint32 and frames, though uint64, never reach 2**63.
+UINT64 = {"World.id", "WorldSnapshot.id", "Waypoint.id", "EnvironmentObject.id"}
+UINT64_PARAMS = {"World.enable_environment_objects": (0, "env_objects_ids"),
+                 "EnvironmentObject.__init__": (0, "id")}
 
 
 # ---------------------------------------------------------------------------
@@ -673,8 +681,8 @@ class Gen:
                 return f"_pyo(({', '.join(parts)}{',' if len(parts) == 1 else ''}).__to_py__())"
             if kind == "Dict":
                 k, v = f"_k{depth}", f"_v{depth}"
-                return (f"_pyo({{{self._conv(items[0], k, depth + 1)}: {self._conv(items[1], v, depth + 1)} "
-                        f"for {k}, {v} in {var}.items()}}.__to_py__())")
+                return (f"_pydict([({self._conv(items[0], k, depth + 1)}, {self._conv(items[1], v, depth + 1)}) "
+                        f"for {k}, {v} in {var}.items()])")
         raise Unsupported(f"result type {ast.unparse(node)}")
 
     def converters(self) -> None:
@@ -964,9 +972,30 @@ class Gen:
         self.converters()
         self.functions()
         self.realize()
+        self.mark_uint64()
         self.body_start = len("\n".join(head) + "\n\n")
         self.text = self.assemble("\n".join(head) + "\n\n")
         return self.text
+
+    def mark_uint64(self) -> None:
+        """Flags UINT64's results and UINT64_PARAMS's parameters in the spec."""
+        for qual in sorted(UINT64):
+            cls, name = qual.split(".")
+            api = self.api.get(cls, {})
+            entry = api.get("members", {}).get(name) or next(
+                (f for f in api.get("fields", []) if f["name"] == name), None)
+            if entry is None:
+                raise ValueError(f"pycarla.UINT64: carla.{qual} is not wrapped")
+            entry["uint64"] = True
+        for qual, param in sorted(UINT64_PARAMS.items()):
+            cls, name = qual.split(".")
+            api = self.api.get(cls, {})
+            if name == "__init__" and cls in self.api:
+                api["init_uint64"] = list(param)
+            elif name in api.get("members", {}):
+                api["members"][name]["uint64_param"] = list(param)
+            else:
+                raise ValueError(f"pycarla.UINT64_PARAMS: carla.{qual} is not wrapped")
 
     def dict_views(self) -> list[str]:
         """The Python API's dicts (V2X get(), issue #85). typesafe_carla
@@ -981,7 +1010,7 @@ class Gen:
             lines = [f"@extend\nclass {name}:", "    def _tsc_py(self) -> pyobj:",
                      "        d = _pyo(_ipy.PyDict_New())"]
             for k in keys:
-                value = f"d[{k!r}] = {_view_conv(k)}(self[{k!r}])"
+                value = f"_pydict_set(d, {k!r}, {_view_conv(k)}(self[{k!r}]))"
                 lines += (["        try:", f"            {value}", "        except KeyError:", "            pass"]
                           if k in optional else [f"        {value}"])
             lines.append("        return d")
@@ -1096,6 +1125,42 @@ def _boxtype(name: str) -> Ptr[byte]:
 
 def _pyo(p: Ptr[byte]) -> pyobj:
     return pyobj(p, steal=True)
+
+def _pydict_set(d: pyobj, key: str, value: pyobj):
+    """d[key] = value, handing value's reference to d.
+
+    Not `d[key] = value`: Codon 0.19's pyobj.__setitem__ (PyObject_SetItem)
+    takes its own references and releases neither the key it converts nor
+    value, so both stayed in memory for good."""
+    k = _pyo(key.__to_py__())
+    _ipy.PyDict_SetItem(d.p, k.p, value.p)
+    pyobj.decref(k.p)
+    pyobj.decref(value.p)
+    pyobj.exc_check()
+
+def _pydict(items: List[Tuple[pyobj, pyobj]]) -> pyobj:
+    """A Python dict of converted keys and values, which it takes over.
+
+    Not Dict.__to_py__: Codon 0.19's calls PyDict_SetItem, which takes its
+    own references, and never releases the ones its conversions made -- every
+    key and value of every dict returned (an actor's attributes: dozens of
+    strings, read every tick) stayed in memory for good."""
+    d = _pyo(_ipy.PyDict_New())
+    pyobj.exc_check()
+    for i, (k, v) in enumerate(items):
+        _ipy.PyDict_SetItem(d.p, k.p, v.p)
+        pyobj.decref(k.p)
+        pyobj.decref(v.p)
+        try:
+            pyobj.exc_check()
+        except:
+            # (A MemoryError: the keys are str and int.) Release the rest.
+            for k2, v2 in items[i + 1:]:
+                pyobj.decref(k2.p)
+                pyobj.decref(v2.p)
+            pyobj.decref(d.p)
+            raise
+    return d
 
 def _pynone() -> pyobj:
     return pyobj(_ipy.Py_None, steal=False)

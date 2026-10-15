@@ -165,7 +165,10 @@ rpc::VehiclePhysicsControl DefaultPhysics() {
 
 struct Episode : std::enable_shared_from_this<Episode> {
   std::mutex mutex;
-  uint64_t id = 1;
+  // As CARLA's server, an episode id spread over all 64 bits (there a
+  // random number): the first is above 2**63, the next below, and so on.
+  static constexpr uint64_t kEpisodeIdStep = 0x9E3779B97F4A7C15ull;
+  uint64_t id = 0;
   uint64_t frame = 0;
   rpc::ActorId next_actor_id = 1;
   rpc::EpisodeSettings settings;
@@ -300,7 +303,7 @@ struct Episode : std::enable_shared_from_this<Episode> {
   }
 
   void ResetLocked(bool reset_settings, bool with_parked_vehicle) {
-    ++id;
+    id += kEpisodeIdStep;
     actors.clear();
     destroyed.clear();
     listeners.clear();
