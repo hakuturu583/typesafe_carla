@@ -113,6 +113,7 @@ set_target_properties(typesafe_carla_ffi PROPERTIES
 if(TSC_BACKEND STREQUAL "mock")
   set(TSC_CARLA_RESOLVED_REF "mock")
   set(TSC_CARLA_COMMIT "mock")
+  set(TSC_CARLA_PATCHES "none")
   add_library(carla_mock STATIC native/mock/src/mock.cpp native/mock/src/weather.cpp
               native/mock/src/world_extras.cpp)
   target_include_directories(carla_mock PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/native/mock/include")
@@ -329,7 +330,8 @@ file(WRITE "${CMAKE_BINARY_DIR}/BUILD_INFO.json" "{
   \"backend\": \"${TSC_BACKEND}\",
   \"carla_version\": \"${TSC_CARLA_VERSION}\",
   \"carla_git_ref\": \"${TSC_CARLA_RESOLVED_REF}\",
-  \"carla_git_commit\": \"${TSC_CARLA_COMMIT}\"
+  \"carla_git_commit\": \"${TSC_CARLA_COMMIT}\",
+  \"carla_patches\": \"${TSC_CARLA_PATCHES}\"
 }
 ")
 install(FILES "${CMAKE_BINARY_DIR}/BUILD_INFO.json" DESTINATION typesafe_carla/_native

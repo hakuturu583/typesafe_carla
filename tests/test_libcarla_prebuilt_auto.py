@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from tools import carla_patches
+
 ROOT = Path(__file__).resolve().parent.parent
 SHA = "ada75f920642e18cace0a9f85ecf9d4077ddb531"
 
@@ -81,15 +83,18 @@ def project(tmp_path):
         calls = (work / "calls.log").read_text().count("\n") if (work / "calls.log").exists() else 0
         return m.group(1), res.stdout + res.stderr, calls
 
-    def make_prefix(abi: str) -> Path:
+    def make_prefix(abi: str, patches: str | None = carla_patches.patch_id()) -> Path:
         prefix = work / "prefix"
         for rel in ("cmake/libcarla-targets.cmake", "licenses/LICENSE.CARLA",
                     "licenses/THIRD_PARTY_NOTICES.components"):
             (prefix / rel).parent.mkdir(parents=True, exist_ok=True)
             (prefix / rel).write_text("x\n")
-        (prefix / "prebuilt.json").write_text(json.dumps({
+        manifest = {
             "format": 1, "abi": abi, "carla_repository": "https://github.com/carla-simulator/carla.git",
-            "carla_ref": "0.10.0", "carla_commit": SHA, "carla_version": "0.10.0", "files": {}}))
+            "carla_ref": "0.10.0", "carla_commit": SHA, "carla_version": "0.10.0", "files": {}}
+        if patches is not None:  # None: a manifest from before the patches
+            manifest["carla_patches"] = patches
+        (prefix / "prebuilt.json").write_text(json.dumps(manifest))
         return prefix
 
     return configure, make_prefix, build
@@ -120,3 +125,19 @@ def test_auto_caches_and_falls_back(project):
     # A download that does not fit is not used either.
     prefix, out, calls = configure("found", "-DTSC_CARLA_REFRESH=ON")
     assert prefix == "" and calls == 4 and "does not fit" in out
+
+
+def test_auto_rejects_other_libcarla_patches(project):
+    configure, make_prefix, build = project
+    configure("none")
+    abi = (build / "abi.txt").read_text()
+    # An unpatched prebuilt of the same commit (from before the patches, or
+    # built with none) and one with other patches do not fit.
+    for patches in (None, "none", "0" * 12):
+        make_prefix(abi, patches)
+        prefix, out, _ = configure("found", "-DTSC_CARLA_REFRESH=ON")
+        assert prefix == "" and "does not fit" in out, patches
+        assert "LibCarla patches" in " ".join(out.split())
+    make_prefix(abi)
+    prefix, out, _ = configure("found", "-DTSC_CARLA_REFRESH=ON")
+    assert prefix != "", out

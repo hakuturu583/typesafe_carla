@@ -12,13 +12,16 @@
 # Consumer (TSC_CARLA_PREBUILT_DIR):
 #   tsc_import_libcarla_prebuilt(<prefix> <verified SHA or "">)
 #     Checks the prefix's manifest against this build (compiler ABI, CARLA
-#     repository and commit) and defines the imported target carla-client.
-#     Sets TSC_CARLA_RESOLVED_REF, TSC_CARLA_COMMIT, TSC_CARLA_VERSION,
+#     repository and commit, LibCarla patch id) and defines the imported
+#     target carla-client.
+#     Sets TSC_CARLA_RESOLVED_REF, TSC_CARLA_COMMIT, TSC_CARLA_PATCHES, TSC_CARLA_VERSION,
 #     TSC_CARLA_LICENSE_FILE and TSC_CARLA_NOTICES_COMPONENTS_TEXT in the caller.
 #
 # Prefix layout:
 #   prebuilt.json                    manifest: CARLA repository, ref, commit and
-#                                    version, ABI fingerprint, sha256 of every file
+#                                    version, the LibCarla patch id (carla_patches;
+#                                    "none" if absent), ABI fingerprint, sha256 of
+#                                    every file
 #   include/                         headers of every include directory carla-client
 #                                    passes on (LibCarla, Boost, rpclib, ...), merged
 #   lib/*.a                          carla-client and the static libraries it links
@@ -30,6 +33,10 @@
 
 include_guard(GLOBAL)
 
+include("${CMAKE_CURRENT_LIST_DIR}/CarlaPatches.cmake")
+
+# carla_patches was added without a new format: a manifest without it reads as
+# "none" (it predates the patches), which no build with patches accepts.
 set(_TSC_PB_FORMAT 1)
 set(_TSC_PB_GUARD "${CMAKE_CURRENT_LIST_DIR}/../tools/libcarla_cache_guard.sh")
 set(_TSC_PB_RESOLVE "${CMAKE_CURRENT_LIST_DIR}/../tools/resolve_carla_ref.sh")
@@ -201,6 +208,11 @@ function(tsc_add_libcarla_prebuilt_target dest)
   _tsc_pb_set(PB_CARLA_REPOSITORY "${TSC_CARLA_GIT_REPOSITORY}")
   _tsc_pb_set(PB_CARLA_REF "${TSC_CARLA_RESOLVED_REF}")
   _tsc_pb_set(PB_CARLA_COMMIT "${TSC_CARLA_COMMIT}")
+  if(NOT "${TSC_CARLA_PATCHES}" STREQUAL "")
+    _tsc_pb_set(PB_CARLA_PATCHES "${TSC_CARLA_PATCHES}")
+  else()
+    _tsc_pb_set(PB_CARLA_PATCHES "none")
+  endif()
   _tsc_pb_set(PB_CARLA_VERSION "${TSC_CARLA_VERSION}")
   _tsc_pb_set(PB_BUILT_BY "typesafe_carla ${PROJECT_VERSION} (${TSC_BUILD_COMMIT})")
   _tsc_pb_set(PB_LICENSE "${TSC_CARLA_LICENSE_FILE}")
@@ -265,7 +277,7 @@ function(_tsc_pb_resolve_ref out)
 endfunction()
 
 # Sets <out_err> to why the prefix cannot be used for this build (format,
-# compiler ABI, CARLA repository or commit, missing files), or to "" if it
+# compiler ABI, CARLA repository, LibCarla patches or commit, missing files), or to "" if it
 # can. <verified_sha>: the commit the requested ref was already resolved to,
 # or "" to resolve it (cached per ref like a fetch).
 function(_tsc_pb_check prefix verified_sha out_err)
@@ -304,6 +316,21 @@ function(_tsc_pb_check prefix verified_sha out_err)
   if(NOT _repo_n STREQUAL _want_repo)
     string(CONCAT _e "the LibCarla prebuilt in ${prefix} is from ${_m_carla_repository}, not "
                    "TSC_CARLA_GIT_REPOSITORY (${TSC_CARLA_GIT_REPOSITORY})")
+    set(${out_err} "${_e}" PARENT_SCOPE)
+    return()
+  endif()
+  # ... with the LibCarla patches this checkout applies (cmake/carla-patches).
+  # A manifest from before the patches has none.
+  string(JSON _m_carla_patches ERROR_VARIABLE _jerr GET "${_json}" carla_patches)
+  if(_jerr)
+    set(_m_carla_patches "none")
+  endif()
+  tsc_carla_patch_id(_want_patches)
+  if(NOT _m_carla_patches STREQUAL _want_patches)
+    string(CONCAT _e "the LibCarla prebuilt in ${prefix} was built with LibCarla patches "
+        "${_m_carla_patches}, but this typesafe_carla applies ${_want_patches} "
+        "(cmake/carla-patches). Use a prebuilt made with them "
+        "(tools/fetch_libcarla_prebuilt.py ${TSC_CARLA_GIT_REF}).")
     set(${out_err} "${_e}" PARENT_SCOPE)
     return()
   endif()
@@ -352,6 +379,10 @@ function(tsc_import_libcarla_prebuilt prefix verified_sha)
   _tsc_pb_json("${_json}" _ref carla_ref)
   _tsc_pb_json("${_json}" _commit carla_commit)
   _tsc_pb_json("${_json}" _version carla_version)
+  string(JSON _patches ERROR_VARIABLE _jerr GET "${_json}" carla_patches)
+  if(_jerr)
+    set(_patches "none")
+  endif()
   include("${prefix}/cmake/libcarla-targets.cmake")
   if(NOT TARGET carla-client)
     message(FATAL_ERROR "typesafe_carla: ${prefix}/cmake/libcarla-targets.cmake defined no carla-client")
@@ -363,13 +394,15 @@ function(tsc_import_libcarla_prebuilt prefix verified_sha)
   set(_rec "${TSC_CARLA_RESOLVED_REF}")
   set(TSC_CARLA_RESOLVED_REF "${_rec}" PARENT_SCOPE)
   set(TSC_CARLA_COMMIT "${_commit}" PARENT_SCOPE)
+  set(TSC_CARLA_PATCHES "${_patches}" PARENT_SCOPE)
   set(TSC_CARLA_VERSION "${_version}" PARENT_SCOPE)
   set(TSC_CARLA_LICENSE_FILE "${prefix}/licenses/LICENSE.CARLA" PARENT_SCOPE)
   # LibCarla's entry names the ref and commit; name this build's ref.
   file(READ "${prefix}/licenses/THIRD_PARTY_NOTICES.components" _notices)
   string(REPLACE "(${_ref}, ${_commit})" "(${_rec}, ${_commit})" _notices "${_notices}")
   set(TSC_CARLA_NOTICES_COMPONENTS_TEXT "${_notices}" PARENT_SCOPE)
-  message(STATUS "typesafe_carla: LibCarla prebuilt ${prefix} (CARLA ${_rec} = ${_commit})")
+  message(STATUS "typesafe_carla: LibCarla prebuilt ${prefix} (CARLA ${_rec} = ${_commit}, "
+                 "LibCarla patches: ${_patches})")
 endfunction()
 
 # ---------------------------------------------------------------------------
@@ -383,7 +416,7 @@ endfunction()
 # configure step: a prefix that does not fit (_tsc_pb_check; e.g. the
 # compiler was upgraded since) is looked up again, then given up on. The
 # answer is kept until the ref, repository or ABI fingerprint changes, or
-# TSC_CARLA_REFRESH.
+# TSC_CARLA_REFRESH, or the LibCarla patches change.
 #
 # _TSC_PB_FETCH (the helper's path) may be overridden, e.g. by tests.
 function(tsc_fetch_libcarla_prebuilt out_prefix out_sha)
@@ -396,7 +429,8 @@ function(tsc_fetch_libcarla_prebuilt out_prefix out_sha)
     return()
   endif()
   string(SHA256 _abi_hash "${_abi}")
-  set(_key "${TSC_CARLA_GIT_REPOSITORY}@${TSC_CARLA_GIT_REF}|${_abi_hash}")
+  tsc_carla_patch_id(_patches)
+  set(_key "${TSC_CARLA_GIT_REPOSITORY}@${TSC_CARLA_GIT_REF}|${_abi_hash}|${_patches}")
   if(_TSC_CARLA_PREBUILT_AUTO_KEY STREQUAL _key AND NOT TSC_CARLA_REFRESH)
     if(_TSC_CARLA_PREBUILT_AUTO_DIR STREQUAL "")
       message(STATUS "typesafe_carla: no LibCarla prebuilt (as before; "
