@@ -1,0 +1,69 @@
+Traffic Manager: free the InMemoryMap's waypoint graph
+
+SimpleWaypoint objects link to their neighbours (next, previous, left and
+right) with shared_ptr, so the dense topology of an InMemoryMap is a graph of
+reference cycles, and ~InMemoryMap() was empty: every Traffic Manager shut
+down and every map change leaked the whole map (~400 MB on a large map).
+~InMemoryMap() now clears every waypoint's links (SimpleWaypoint::ClearLinks)
+so the graph is freed with the map.
+
+Applied by typesafe_carla's cmake/FetchCarla.cmake to the fetched LibCarla;
+being proposed upstream (carla-simulator/carla). Drop this patch once every
+ref in tools/release_carla_refs.txt has the fix.
+
+diff --git a/LibCarla/source/carla/trafficmanager/InMemoryMap.cpp b/LibCarla/source/carla/trafficmanager/InMemoryMap.cpp
+index 3b52a50..bd2c8b5 100644
+--- a/LibCarla/source/carla/trafficmanager/InMemoryMap.cpp
++++ b/LibCarla/source/carla/trafficmanager/InMemoryMap.cpp
+@@ -19,7 +19,16 @@ namespace traffic_manager {
+   using RawNodeList = std::vector<WaypointPtr>;
+ 
+   InMemoryMap::InMemoryMap(WorldMap world_map) : _world_map(world_map) {}
+-  InMemoryMap::~InMemoryMap() {}
++  InMemoryMap::~InMemoryMap() {
++    // The waypoints link to each other with shared pointers: without breaking
++    // the cycles, the whole dense topology would outlive the map, leaking it on
++    // every Traffic Manager shut down and every map change.
++    for (auto &simple_waypoint : dense_topology) {
++      if (simple_waypoint != nullptr) {
++        simple_waypoint->ClearLinks();
++      }
++    }
++  }
+ 
+   SegmentId InMemoryMap::GetSegmentId(const WaypointPtr &wp) const {
+     return std::make_tuple(wp->GetRoadId(), wp->GetLaneId(), wp->GetSectionId());
+diff --git a/LibCarla/source/carla/trafficmanager/SimpleWaypoint.cpp b/LibCarla/source/carla/trafficmanager/SimpleWaypoint.cpp
+index d15adea..fe9b9b5 100644
+--- a/LibCarla/source/carla/trafficmanager/SimpleWaypoint.cpp
++++ b/LibCarla/source/carla/trafficmanager/SimpleWaypoint.cpp
+@@ -20,6 +20,13 @@ namespace traffic_manager {
+   }
+   SimpleWaypoint::~SimpleWaypoint() {}
+ 
++  void SimpleWaypoint::ClearLinks() {
++    next_waypoints.clear();
++    previous_waypoints.clear();
++    next_left_waypoint.reset();
++    next_right_waypoint.reset();
++  }
++
+   std::vector<SimpleWaypointPtr> SimpleWaypoint::GetNextWaypoint() const {
+     return next_waypoints;
+   }
+diff --git a/LibCarla/source/carla/trafficmanager/SimpleWaypoint.h b/LibCarla/source/carla/trafficmanager/SimpleWaypoint.h
+index 4f29b32..73f0cad 100644
+--- a/LibCarla/source/carla/trafficmanager/SimpleWaypoint.h
++++ b/LibCarla/source/carla/trafficmanager/SimpleWaypoint.h
+@@ -93,6 +93,11 @@ namespace traffic_manager {
+     /// This method is used to set the closest right waypoint for a lane change.
+     void SetRightWaypoint(SimpleWaypointPtr &waypoint);
+ 
++    /// Drops the links to the neighbouring waypoints (next, previous, left and
++    /// right). They are shared pointers that point at each other, so a graph of
++    /// waypoints is freed only once they are dropped.
++    void ClearLinks();
++
+     /// This method is used to get the closest left waypoint for a lane change.
+     SimpleWaypointPtr GetLeftWaypoint();
+ 

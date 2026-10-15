@@ -77,6 +77,13 @@ cmake -S . -B build-carla -DTSC_CARLA_GIT_REF=ue5-dev && cmake --build build-car
   library's ref into `_tsc_build_config`; `TYPESAFE_CARLA_CHECK_REF` overrides
   it, `none` for no check). `tests/test_architecture.py` checks the pairing;
   a `tests/compile/fail` case uses a `# carla-ref: <ref>` line.
+- LibCarla patches live in `cmake/carla-patches/*.patch` (applied by
+  `cmake/FetchCarla.cmake` to the fetched sources, never to
+  `TSC_CARLA_SOURCE_DIR`; README there). Each must apply to every ref in
+  `tools/release_carla_refs.txt` (and `0.10.0`, which CI builds), is proposed
+  upstream, and is removed once upstream has the fix. Their patch id
+  (`tools/carla_patches.py` = `tsc_carla_patch_id`) keys the fetch stamp, the
+  LibCarla prebuilt's manifest and name, and `BUILD_INFO.json`.
 - Versions: `python/typesafe_carla/__init__.py` and
   `codon/typesafe_carla/__init__.codon` must agree.
 

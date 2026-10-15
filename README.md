@@ -250,6 +250,13 @@ from a branch or tag (CI and releases build that way), `TSC_CARLA_REF_NAME`
 names that branch or tag, and it is what is recorded as the ref: e.g.
 `ue5-dev` with commit `1360bb9…`.
 
+The fetched LibCarla gets the fixes in
+[`cmake/carla-patches`](cmake/carla-patches/README.md) that upstream does not
+have yet (e.g. the Traffic Manager's `InMemoryMap` leak); a
+`TSC_CARLA_SOURCE_DIR` tree is used as it is. The patch id is recorded next to
+the commit (`BUILD_INFO.json`, `typesafe-codon info`, a LibCarla prebuilt's
+manifest and name).
+
 | typesafe_carla | ABI | Codon | Python | CARLA | Platform | Tested |
 |---|---|---|---|---|---|---|
 | 0.1.0 | 4.5 | 0.19.x | ≥ 3.10 (launcher only) | UE5: `ue5-dev` (default), `0.10.0` | Linux x86_64: Ubuntu 22.04 (GCC 11), 24.04 (GCC 13), 26.04 (GCC 15); Linux aarch64: Ubuntu 24.04 (GCC 13); PyPI wheels for both (manylinux_2_28) | `0.10.0`: integration and compatibility tests pass against a CARLA 0.10.0 server (x86_64). `ue5-dev` and `0.10.0`: build, link and pass the C ABI tests in CI on each of those Ubuntu LTS releases with its default GCC |
@@ -445,6 +452,7 @@ context for new sessions is in `CLAUDE.md`.
 
 ```
 cmake/FetchCarla.cmake     fetches CARLA UE5 sources at a ref (default ue5-dev)
+cmake/carla-patches/       LibCarla fixes applied to the fetched sources until upstream has them
 codon/typesafe_carla/      Codon API (what users import)
   _ffi.codon               raw C declarations, POD mirrors, handle ownership
 native/include/.../ffi.h   the C ABI

@@ -10,10 +10,12 @@ CI's `libcarla` job publishes, from its runs on main (push and the daily
 schedule), one workflow artifact per Ubuntu LTS leg and CARLA commit
 (docs/releasing.md, "LibCarla prebuilt"), named
 
-    libcarla-prebuilt-<os>-<compiler><major>-<ABI hash>-<CARLA commit SHA>
+    libcarla-prebuilt-<os>-<compiler><major>-<ABI hash>-<CARLA commit SHA>[-p<patch id>]
 
 where the ABI hash is of `tools/libcarla_cache_guard.sh --abi` (compilers,
-C++ standard library, glibc) for CC/CXX (default cc/c++). This script:
+C++ standard library, glibc) for CC/CXX (default cc/c++), and the patch id
+that of the LibCarla patches in cmake/carla-patches (tools/carla_patches.py;
+no suffix when there are none, as before there were patches). This script:
 
 1. resolves <ref> to its commit (tools/resolve_carla_ref.sh);
 2. forms the name for this machine (--print-name prints it; CI names its
@@ -22,7 +24,7 @@ C++ standard library, glibc) for CC/CXX (default cc/c++). This script:
    repository itself (`gh api`; artifacts need a token even for a public
    repository);
 4. downloads it, checks the archive against the digest the API reports
-   (required), the manifest (commit, ABI) and the sha256 of every file, and
+   (required), the manifest (commit, ABI, patch id) and the sha256 of every file, and
    unpacks it into <cache>/libcarla-prebuilt/<name> (or [dest]), where later
    calls find it, re-check every file, and download it again if anything
    changed. <cache> is typesafe_carla's cache root:
@@ -56,6 +58,11 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
+
+if __package__:
+    from . import carla_patches
+else:  # run as a script: tools/ is on sys.path
+    import carla_patches
 
 TOOLS = Path(__file__).resolve().parent
 ARTIFACT_REPO = "hakuturu583/typesafe_carla"
@@ -98,13 +105,16 @@ def os_label() -> str:
     return f"{fields.get('ID', 'linux')}-{fields.get('VERSION_ID', 'unknown')}"
 
 
-def artifact_name(sha: str, abi: str) -> str:
+def artifact_name(sha: str, abi: str, patches: str) -> str:
+    """<patches>: the LibCarla patch id (carla_patches.patch_id()); an unpatched
+    prebuilt ("none") keeps the name it had before there were patches."""
     # "cxx=gcc 11.4.0, ..." -> "gcc11"
     cxx = next((l for l in abi.splitlines() if l.startswith("cxx=")), "cxx=unknown 0")
     compiler, _, version = cxx[4:].split(",")[0].partition(" ")
     major = version.split(".")[0]
     digest = hashlib.sha256(abi.encode()).hexdigest()[:12]
-    return f"libcarla-prebuilt-{os_label()}-{compiler}{major}-{digest}-{sha}"
+    suffix = "" if patches == carla_patches.NONE else f"-p{patches}"
+    return f"libcarla-prebuilt-{os_label()}-{compiler}{major}-{digest}-{sha}{suffix}"
 
 
 def gh(*args: str, out=None):
@@ -158,13 +168,18 @@ def norm_repo(url: str) -> str:
     return url.rstrip("/").removesuffix(".git")
 
 
-def check_manifest(prefix: Path, sha: str, abi: str, repository: str) -> dict:
+def check_manifest(prefix: Path, sha: str, abi: str, repository: str, patches: str) -> dict:
     """Fails (ValueError) unless the prefix is the prebuilt asked for."""
     manifest = json.loads((prefix / "prebuilt.json").read_text())
     if manifest.get("format") != FORMAT:
         raise ValueError(f"prebuilt format {manifest.get('format')}, expected {FORMAT}")
     if manifest.get("carla_commit") != sha:
         raise ValueError(f"prebuilt is CARLA {manifest.get('carla_commit')}, expected {sha}")
+    # A manifest from before the LibCarla patches has none.
+    have = manifest.get("carla_patches", carla_patches.NONE)
+    if have != patches:
+        raise ValueError(f"prebuilt has LibCarla patches {have}, expected {patches} "
+                         "(cmake/carla-patches)")
     if manifest.get("abi", "") + "\n" != abi:
         raise ValueError(f"prebuilt ABI\n{manifest.get('abi')}\ndiffers from this compiler's\n{abi}")
     if norm_repo(manifest.get("carla_repository", "")) != norm_repo(repository):
@@ -184,7 +199,8 @@ def verify_files(prefix: Path, manifest: dict) -> None:
             raise ValueError(f"{rel}: sha256 mismatch")
 
 
-def download(repo: str, art: dict, dest: Path, sha: str, abi: str, repository: str) -> None:
+def download(repo: str, art: dict, dest: Path, sha: str, abi: str, repository: str,
+             patches: str) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=".download-", dir=dest.parent))
     try:
@@ -208,7 +224,7 @@ def download(repo: str, art: dict, dest: Path, sha: str, abi: str, repository: s
                     raise ValueError(f"archive member outside the prefix: {member}")
             z.extractall(unpacked)
         archive.unlink()
-        manifest = check_manifest(unpacked, sha, abi, repository)
+        manifest = check_manifest(unpacked, sha, abi, repository, patches)
         verify_files(unpacked, manifest)
         try:
             unpacked.rename(dest)
@@ -275,7 +291,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         sha = resolve(args.ref, args.repository)
         abi = abi_fingerprint()
-        name = artifact_name(sha, abi)
+        patches = carla_patches.patch_id()
+        name = artifact_name(sha, abi, patches)
         if args.print_name:
             print(name)
             return 0
@@ -285,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
         dest = args.dest or cache_root() / name
         if (dest / "prebuilt.json").exists():
             try:
-                verify_files(dest, check_manifest(dest, sha, abi, args.repository))
+                verify_files(dest, check_manifest(dest, sha, abi, args.repository, patches))
                 print(f"LibCarla prebuilt {name} (cached)", file=sys.stderr)
             except (ValueError, OSError) as e:
                 # Changed since it was downloaded: download it again.
@@ -293,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
                 shutil.rmtree(dest)
         if not (dest / "prebuilt.json").exists():
             art = find_artifact(args.artifact_repo, name)
-            download(args.artifact_repo, art, dest, sha, abi, args.repository)
+            download(args.artifact_repo, art, dest, sha, abi, args.repository, patches)
             print(f"LibCarla prebuilt {name} -> {dest}", file=sys.stderr)
         os.utime(dest)  # last used, for prune()
         if args.dest is None:

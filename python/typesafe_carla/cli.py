@@ -469,6 +469,9 @@ def _info(tc: toolchain.Toolchain | None, error: str | None, strict: bool) -> in
     print(f"libcarla           {native['libcarla_version']}")
     print(f"carla ref          {native['carla_git_ref']}")
     print(f"carla commit       {native['carla_git_commit']}")
+    # Not compiled in: BUILD_INFO.json (absent before the LibCarla patches).
+    patches = paths._read_build_info(lib.parent).get("carla_patches", "n/a")
+    print(f"carla patches      {patches} (cmake/carla-patches)")
     print(f"build commit       {native['build_commit']}")
     return 0 if tc is not None else 1
 

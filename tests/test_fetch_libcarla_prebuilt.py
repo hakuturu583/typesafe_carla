@@ -17,12 +17,13 @@ SHA = "ada75f920642e18cace0a9f85ecf9d4077ddb531"
 ABI = ("target=x86_64-linux-gnu\ncc=gcc 11.4.0, glibc 2.35\n"
        "cxx=gcc 11.4.0, libstdc++ 11 (20230528) cxx11-abi=1, glibc 2.35\n")
 REPO = "https://github.com/carla-simulator/carla.git"
+PATCHES = "7844e61c5231"
 
 
 def make_zip(contents: dict[str, bytes], **manifest_overrides) -> bytes:
     manifest = {
         "format": 1, "carla_repository": REPO, "carla_ref": "0.10.0", "carla_commit": SHA,
-        "carla_version": "0.10.0", "abi": ABI.rstrip("\n"),
+        "carla_version": "0.10.0", "abi": ABI.rstrip("\n"), "carla_patches": PATCHES,
         "files": {k: hashlib.sha256(v).hexdigest() for k, v in contents.items()},
     }
     manifest.update(manifest_overrides)
@@ -52,14 +53,58 @@ def artifact(archive: bytes) -> dict:
 def test_artifact_name(monkeypatch):
     monkeypatch.setattr(fp, "os_label", lambda: "ubuntu-22.04")
     digest = hashlib.sha256(ABI.encode()).hexdigest()[:12]
-    assert fp.artifact_name(SHA, ABI) == f"libcarla-prebuilt-ubuntu-22.04-gcc11-{digest}-{SHA}"
+    # Unpatched: the name prebuilts had before there were LibCarla patches.
+    assert fp.artifact_name(SHA, ABI, "none") == f"libcarla-prebuilt-ubuntu-22.04-gcc11-{digest}-{SHA}"
+    assert (fp.artifact_name(SHA, ABI, PATCHES)
+            == f"libcarla-prebuilt-ubuntu-22.04-gcc11-{digest}-{SHA}-p{PATCHES}")
+    assert fp.artifact_name(SHA, ABI, "0" * 12) != fp.artifact_name(SHA, ABI, PATCHES)
+
+
+def test_main_names_the_checkouts_patches(monkeypatch, capsys):
+    from tools import carla_patches
+
+    monkeypatch.setattr(fp, "os_label", lambda: "ubuntu-22.04")
+    monkeypatch.setattr(fp, "resolve", lambda ref, repo: SHA)
+    monkeypatch.setattr(fp, "abi_fingerprint", lambda: ABI)
+    assert fp.main(["--print-name", "ue5-dev"]) == 0
+    name = capsys.readouterr().out.strip()
+    assert name == fp.artifact_name(SHA, ABI, carla_patches.patch_id())
+    assert name.endswith(f"-{SHA}-p{carla_patches.patch_id()}")
+
+
+def _prefix(tmp_path, **manifest):
+    prefix = tmp_path / "prefix"
+    prefix.mkdir()
+    base = {"format": 1, "carla_repository": REPO, "carla_commit": SHA,
+            "abi": ABI.rstrip("\n"), "carla_patches": PATCHES}
+    base.update(manifest)
+    (prefix / "prebuilt.json").write_text(json.dumps({k: v for k, v in base.items()
+                                                      if v is not None}))
+    return prefix
+
+
+def test_check_manifest_patches(tmp_path):
+    prefix = _prefix(tmp_path)
+    assert fp.check_manifest(prefix, SHA, ABI, REPO, PATCHES)["carla_patches"] == PATCHES
+    with pytest.raises(ValueError, match=f"LibCarla patches {PATCHES}, expected none"):
+        fp.check_manifest(prefix, SHA, ABI, REPO, "none")
+    with pytest.raises(ValueError, match="LibCarla patches"):
+        fp.check_manifest(prefix, SHA, ABI, REPO, "0" * 12)
+
+
+def test_check_manifest_from_before_the_patches(tmp_path):
+    # No carla_patches: built unpatched.
+    prefix = _prefix(tmp_path, carla_patches=None)
+    fp.check_manifest(prefix, SHA, ABI, REPO, "none")
+    with pytest.raises(ValueError, match=f"LibCarla patches none, expected {PATCHES}"):
+        fp.check_manifest(prefix, SHA, ABI, REPO, PATCHES)
 
 
 def test_download_verifies_and_unpacks(tmp_path, monkeypatch):
     archive = make_zip(FILES)
     monkeypatch.setattr(fp, "gh", fake_gh(archive))
     dest = tmp_path / "cache" / "name"
-    fp.download("o/r", artifact(archive), dest, SHA, ABI, REPO)
+    fp.download("o/r", artifact(archive), dest, SHA, ABI, REPO, PATCHES)
     assert (dest / "prebuilt.json").is_file()
     assert (dest / "lib" / "libcarla-client.a").read_bytes() == b"!<arch>\n"
     assert [p.name for p in dest.parent.iterdir()] == ["name"]  # no leftovers
@@ -68,6 +113,7 @@ def test_download_verifies_and_unpacks(tmp_path, monkeypatch):
 @pytest.mark.parametrize("archive, art_digest, message", [
     (make_zip(FILES, carla_commit="0" * 40), None, "expected " + SHA),
     (make_zip(FILES, abi="target=x86_64-linux-gnu\ncc=gcc 13.3.0"), None, "differs"),
+    (make_zip(FILES, carla_patches="none"), None, "LibCarla patches none"),
     (make_zip(FILES, files={"lib/libcarla-client.a": "0" * 64,
                             "include/carla/Version.h": "0" * 64}), None, "sha256 mismatch"),
     (make_zip(FILES, files={"lib/libcarla-client.a": "0" * 64}), None, "extra"),
@@ -81,7 +127,7 @@ def test_download_rejects(tmp_path, monkeypatch, archive, art_digest, message):
         art["digest"] = art_digest
     dest = tmp_path / "name"
     with pytest.raises(ValueError, match=message):
-        fp.download("o/r", art, dest, SHA, ABI, REPO)
+        fp.download("o/r", art, dest, SHA, ABI, REPO, PATCHES)
     assert not dest.exists()
     assert list(tmp_path.iterdir()) == []
 
@@ -130,7 +176,7 @@ def test_download_requires_a_digest(tmp_path, monkeypatch):
     art = artifact(archive)
     del art["digest"]
     with pytest.raises(ValueError, match="no sha256 digest"):
-        fp.download("o/r", art, tmp_path / "name", SHA, ABI, REPO)
+        fp.download("o/r", art, tmp_path / "name", SHA, ABI, REPO, PATCHES)
 
 
 def test_cache_root_matches_typesafe_carla(monkeypatch, tmp_path):
@@ -165,6 +211,7 @@ def test_cached_prefix_is_reverified(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("TYPESAFE_CARLA_CACHE_DIR", str(tmp_path))
     monkeypatch.setattr(fp, "resolve", lambda ref, repo: SHA)
     monkeypatch.setattr(fp, "abi_fingerprint", lambda: ABI)
+    monkeypatch.setattr(fp.carla_patches, "patch_id", lambda: PATCHES)
     monkeypatch.setattr(fp, "find_artifact", lambda repo, name: artifact(archive))
     assert fp.main(["0.10.0"]) == 0
     dest = Path(capsys.readouterr().out.strip())

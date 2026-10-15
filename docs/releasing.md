@@ -193,11 +193,24 @@ comes from, in order of precedence:
 instead of fetching. A ref may be a branch, a tag (e.g. `0.10.0`) or a commit
 SHA. UE4 refs (`0.9.x`, `ue4-dev`) are rejected.
 
+The fetched sources get the LibCarla patches in
+[`cmake/carla-patches`](../cmake/carla-patches/README.md): fixes upstream does
+not have yet (e.g. the Traffic Manager's `InMemoryMap` leak), each proposed
+upstream and dropped once every ref we build has it. They are applied with
+`git apply` right after the fetch, and configuring fails if one does not
+apply, so each must apply to every ref in `tools/release_carla_refs.txt` (and
+`0.10.0`, which CI also builds). Their patch id (a hash of the patch files,
+`tools/carla_patches.py`; `none` without patches) is part of the fetch's
+stamp, so changing the patches fetches and patches the sources again. A
+`TSC_CARLA_SOURCE_DIR` tree is the user's and is never patched (patch id
+`none`).
+
 `ue5-dev` moves, so every build records what it actually used:
 
 - `typesafe-codon info`, or `carla.libcarla_git_ref()` /
   `carla.libcarla_git_commit()` in Codon;
-- `typesafe_carla/_native/BUILD_INFO.json` inside the wheel.
+- `typesafe_carla/_native/BUILD_INFO.json` inside the wheel, which also
+  records the LibCarla patch id (`carla_patches`; `typesafe-codon info` shows it).
 
 Releases build each ref from the commit SHA resolved from the release tag (a
 dry run, from the current commits of its `carla_refs`) and pass the ref
@@ -269,13 +282,17 @@ built. CI's `libcarla` job publishes, on pushes to `main` and the daily run
 (not on pull requests), after its tests pass, one **workflow artifact** per
 leg (`actions/cache` entries cannot be downloaded outside a workflow):
 
-    libcarla-prebuilt-<os>-<compiler><major>-<ABI hash>-<CARLA commit SHA>
-    e.g. libcarla-prebuilt-ubuntu-22.04-gcc11-e2d542790b19-ada75f920642e18cace0a9f85ecf9d4077ddb531
+    libcarla-prebuilt-<os>-<compiler><major>-<ABI hash>-<CARLA commit SHA>[-p<patch id>]
+    e.g. libcarla-prebuilt-ubuntu-22.04-gcc11-e2d542790b19-ada75f920642e18cace0a9f85ecf9d4077ddb531-p7844e61c5231
 
 kept for 14 days (the daily run republishes an unchanged commit, so a
-commit CI still builds always has one). The name is formed by
+commit CI still builds always has one). The patch id is that of the LibCarla
+patches (`cmake/carla-patches`, see [Choosing the CARLA ref](#choosing-the-carla-ref));
+without patches there is no suffix, the name prebuilts had before there were
+any. So an unpatched prebuilt of the same commit is never picked by a build
+that patches, nor the reverse. The name is formed by
 `tools/fetch_libcarla_prebuilt.py --print-name <ref>`, both by CI and by the
-downloader; CI checks that its ABI hash is the manifest's.
+downloader; CI checks that its ABI hash and patch id are the manifest's.
 
 **Contents.** The build tree is not relocatable, so `cmake --build <dir>
 --target libcarla_prebuilt` (defined by source builds,
@@ -296,8 +313,13 @@ installing CARLA's own rules:
   collected from the sources when the prefix was built (the configure step of
   a prebuilt build writes `THIRD_PARTY_NOTICES` from them, with this
   version's header);
-- `prebuilt.json`: the CARLA repository, ref, commit and version, the ABI
-  fingerprint, and the sha256 of every file.
+- `prebuilt.json`: the CARLA repository, ref, commit and version, the
+  LibCarla patch id (`carla_patches`), the ABI fingerprint, and the sha256 of
+  every file. `carla_patches` came without a new `format`: a manifest without
+  it was built before the patches and counts as `none`, which a build with
+  patches rejects; an older typesafe_carla ignores the field, and its
+  downloader never asks for a patched prebuilt's name. A new format would
+  only have discarded every existing prebuilt, unpatched ones included.
 
 CI moves the prefix out of the build tree, fails if any of its text files
 names the checkout, moves the build tree aside, builds the shim and the C ABI
@@ -314,7 +336,7 @@ configure time, which:
    a successful `ci.yml` run on `main` (push or schedule) of this repository
    itself, the newest first;
 4. downloads it, checks the archive against the digest the API reports
-   (required), the manifest's commit and ABI, and the sha256 of every file,
+   (required), the manifest's commit, ABI and patch id, and the sha256 of every file,
    and unpacks it into `<cache>/libcarla-prebuilt/<name>`, where later
    configures find it without downloading (every file is checked again; a
    changed prefix is downloaded again). `<cache>` is typesafe_carla's cache
@@ -346,7 +368,8 @@ exactly as trustworthy as CI on `main`, which also builds the released wheels.
 
 `-DTSC_CARLA_PREBUILT_DIR=<prefix>` uses a given prefix (from the script, or
 assembled locally). Configuring then fails, rather than linking something
-else, if the prefix's ABI fingerprint is not this build's or its commit is
+else, if the prefix's ABI fingerprint is not this build's, its patch id is not
+that of this checkout's `cmake/carla-patches`, or its commit is
 not the one `TSC_CARLA_GIT_REF` resolves to (a full SHA is compared directly;
 a branch or tag needs `git ls-remote`, once per ref like a fetch).
 
