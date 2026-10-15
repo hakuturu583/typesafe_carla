@@ -2574,7 +2574,8 @@ typedef struct tsc_sensor_source {
                              int32_t enabled);
   /* is_enabled_for_ros of a claimed sensor: 1 or 0. */
   int32_t (*is_ros_enabled)(void *user, uint32_t actor_id);
-  /* An actor was destroyed through this library (Actor.destroy()). */
+  /* An actor was destroyed through this library (Actor.destroy(), a batch
+   * DestroyActor). */
   void (*actor_destroyed)(void *user, uint32_t actor_id);
   /* World.tick() returned `frame`. A source that renders synchronously pushes
    * that frame's measurements before it returns, so the tick's dispatch

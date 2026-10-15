@@ -837,7 +837,8 @@ LibCarla Listen (server stream)
   source that renders frame N there and pushes it has it delivered by that
   tick's callbacks, deterministically in synchronous mode. A source may also
   render from its own thread (e.g. on `wait_for_tick`) for asynchronous mode.
-  `Actor.destroy()` calls `actor_destroyed`.
+  `Actor.destroy()` and a batch `DestroyActor` (`apply_batch`; `apply_batch_sync`:
+  when it succeeds) call `actor_destroyed`.
 - **Generated entry points.** The entry points a source can take over stay
   generated: their specs name a `via` helper (`actor_destroy`, `world_tick`,
   `sensor_is_listening`, `sensor_*_for_ros`) in `sensor_source.cpp`.

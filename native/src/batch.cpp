@@ -114,6 +114,18 @@ void register_autopilot(carla::client::Client &client, const std::vector<Command
   }
 }
 
+// A sensor source stops supplying a destroyed sensor (as Actor.destroy() tells
+// it). `responses`: only the commands that succeeded; none: all of them.
+void notify_destroyed(const std::vector<Command> &top,
+                      const std::vector<carla::rpc::CommandResponse> *responses) {
+  for (size_t i = 0; i < top.size(); ++i) {
+    const auto *destroy = std::get_if<Command::DestroyActor>(&top[i].command);
+    if (destroy == nullptr) continue;
+    if (responses != nullptr && (i >= responses->size() || (*responses)[i].HasError())) continue;
+    sensor_source::destroyed(destroy->actor);
+  }
+}
+
 }  // namespace
 
 extern "C" {
@@ -122,7 +134,9 @@ tsc_status_t tsc_client_apply_batch(tsc_client_t *client, const tsc_command_t *c
                                     size_t count, int32_t do_tick) {
   return TSC_GUARD({
     auto &c = client_of(client);
-    c.ApplyBatch(build(commands, count), do_tick != 0);
+    std::vector<Command> top = build(commands, count);
+    c.ApplyBatch(top, do_tick != 0);
+    notify_destroyed(top, nullptr);
   });
 }
 
@@ -156,6 +170,7 @@ tsc_status_t tsc_client_apply_batch_sync(tsc_client_t *client, const tsc_command
         *out_count = i + 1;
       }
       register_autopilot(c, top, responses);
+      notify_destroyed(top, &responses);
     } catch (...) {
       for (size_t i = 0; i < *out_count; ++i) tsc_string_free(&out[i].error);
       *out_count = 0;

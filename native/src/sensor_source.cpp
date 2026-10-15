@@ -392,16 +392,18 @@ void stop(tsc_sensor &handle) {
   }
 }
 
+void destroyed(uint32_t actor_id) {
+  forget_actor(actor_id);
+  const auto source = installed_source();
+  if (source && source->actor_destroyed != nullptr) source->actor_destroyed(source->user, actor_id);
+}
+
 }  // namespace sensor_source
 
 bool actor_destroy(carla::client::Actor &actor) {
   const uint32_t id = actor.GetId();
   const bool destroyed = actor.Destroy();
-  if (destroyed) {
-    forget_actor(id);
-    const auto source = installed_source();
-    if (source && source->actor_destroyed != nullptr) source->actor_destroyed(source->user, id);
-  }
+  if (destroyed) sensor_source::destroyed(id);
   return destroyed;
 }
 

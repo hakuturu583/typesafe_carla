@@ -1129,6 +1129,9 @@ namespace sensor_source {
 bool listen(tsc_sensor &handle, const std::shared_ptr<SensorQueue> &queue);
 // stop(): ends the handle's source stream, if it has one.
 void stop(tsc_sensor &handle);
+// destroyed(): the actor was destroyed (Actor.destroy(), a batch DestroyActor):
+// its streams end and the source is told.
+void destroyed(uint32_t actor_id);
 }  // namespace sensor_source
 
 }  // namespace tsc

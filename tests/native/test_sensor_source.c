@@ -326,6 +326,28 @@ static void test_mock_stream(void) {
   CHECK_OK(tsc_world_tick(world, 1.0, &frame));
   CHECK(g_rec.last_delivered == 0);
 
+  /* A batch DestroyActor tells the source too. */
+  {
+    tsc_actor_t *actor3 = NULL;
+    tsc_sensor_t *camera3 = spawn(world, library, "sensor.camera.rgb", &actor3);
+    uint32_t id3 = 0;
+    CHECK_OK(tsc_actor_get_id(actor3, &id3));
+    CHECK_OK(tsc_sensor_listen(camera3, 0));
+    tsc_command_t cmd;
+    memset(&cmd, 0, sizeof cmd);
+    cmd.type = TSC_COMMAND_DESTROY_ACTOR;
+    cmd.actor_id = id3;
+    cmd.then_of = -1;
+    tsc_command_response_t response;
+    size_t responses = 0;
+    CHECK_OK(tsc_client_apply_batch_sync(client, &cmd, 1, 0, &response, 1, &responses));
+    CHECK(responses == 1 && response.has_error == 0 && g_rec.destroyed == id3);
+    CHECK_OK(tsc_sensor_is_listening(camera3, &listening));
+    CHECK(listening == 0);
+    tsc_handle_release(H(camera3));
+    tsc_handle_release(H(actor3));
+  }
+
   CHECK_OK(tsc_sensor_source_install(NULL));
   CHECK_OK(tsc_sensor_source_installed(&installed));
   CHECK(installed == 0);
