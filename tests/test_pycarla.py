@@ -665,7 +665,7 @@ lidar.stop(); lidar.destroy()
 # and the library collects every 16 deliveries on a registered thread. The
 # main thread only waits meanwhile (no Codon code).
 gnss = world.spawn_actor(lib.find('sensor.other.gnss'), carla.Transform(), attach_to=vehicle)
-gnss.listen(None, 0)  # polling mode, unbounded
+gnss.listen(queue_size=0)  # polling mode, unbounded
 mock.tsc_mock_set_call_delay_ms(ctypes.c_uint32(0))
 for _ in range(64):
     world.tick()
