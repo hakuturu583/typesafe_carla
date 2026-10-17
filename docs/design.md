@@ -765,10 +765,13 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   collection it starts while the collector does not know it aborts the
   process ("Collecting from unknown thread"). CPython has no hook at a
   thread's exit to unregister it, and an exited thread left registered would
-  have its stack scanned. So the runtime registers such a thread
-  (`attach_current_thread()`) for the duration of each call and unregisters
-  it afterwards. The main thread and the dispatcher are registered already,
-  and their calls skip this.
+  have its stack scanned. So the runtime registers such a thread for the
+  duration of each call and unregisters it afterwards. The main thread and
+  the dispatcher are registered already, and their calls skip this. The
+  collector is called through ctypes: the exported
+  `detach_current_thread()` converts its result to Python after the thread
+  is unregistered. That allocates on an unknown thread, which crashes if
+  finalizers are pending.
 
 The callback type is `Callable[[SensorData], None]`. Functions, bound methods,
 lambdas and closures are all accepted (Codon 0.19 cannot convert a capturing

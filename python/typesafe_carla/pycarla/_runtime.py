@@ -49,16 +49,14 @@ _MEMORYVIEWS = frozenset(_SPEC.get("memoryviews", ()))
 class _Overloads:
     """An exported function's overloads (`<name>__v<i>`), tried in order."""
 
-    __slots__ = ("name", "fns", "attach")
+    __slots__ = ("name", "fns")
 
     def __init__(self, name: str):
         self.name = name
         self.fns = [getattr(_ext, n) for n in _SPEC["variants"].get(name, [])]
-        # (Not around the collector's own registration functions.)
-        self.attach = name not in ("_f__attach_current_thread", "_f__detach_current_thread")
 
     def __call__(self, *args, **kwargs):
-        attached = self.attach and _attach()
+        attached = _attach()
         try:
             for f in self.fns:
                 try:
@@ -68,7 +66,7 @@ class _Overloads:
                         raise
         finally:
             if attached:
-                _GC_HOOKS[1]()
+                _GC[3]()  # GC_unregister_my_thread
         raise TypeError(f"could not find callable method '{self.name}' for given arguments "
                         f"{[type(a).__name__ for a in args]} {sorted(kwargs)}")
 
@@ -82,25 +80,54 @@ class _Overloads:
 # it, and an exited thread left registered would have its stack scanned. Between
 # calls it holds no Codon object the collector must see (every object handed to
 # Python is boxed in uncollectable memory).
-_GC_HOOKS = None    # (attach_current_thread, detach_current_thread), raw exports
+#
+# The collector is called through ctypes, not through the extension's
+# attach_current_thread() / detach_current_thread(): the exported wrapper of
+# the latter converts its result (None) to Python after the thread is
+# unregistered, and that allocates a Codon object on an unknown thread (a
+# crash if finalizers are pending).
+_GC = None  # (GC_thread_is_registered, GC_get_stack_base, GC_register_my_thread,
+            #  GC_unregister_my_thread) of the extension's Codon runtime
 _thread = threading.local()  # .attach: True (per call), False (registered for good)
 
 
-def _gc_hooks():
-    def raw(name):
-        variants = _SPEC["variants"].get(_SPEC["functions"].get(name, {}).get("fn") or "", [])
-        return getattr(_ext, variants[0]) if variants else None
-    attach, detach = raw("attach_current_thread"), raw("detach_current_thread")
-    return (attach, detach) if attach is not None and detach is not None else None
+def _gc_functions():
+    try:
+        # dlsym on the extension's handle also searches its dependencies,
+        # the Codon runtime among them. PyDLL: the calls keep the GIL (CDLL
+        # would release and re-take it around each, four times a call).
+        lib = ctypes.PyDLL(_ext.__file__)
+        fns = (lib.GC_thread_is_registered, lib.GC_get_stack_base, lib.GC_register_my_thread,
+               lib.GC_unregister_my_thread)
+    except (OSError, AttributeError):
+        return None
+    for f in fns:
+        f.restype = ctypes.c_int
+    fns[0].argtypes = fns[3].argtypes = []
+    fns[1].argtypes = fns[2].argtypes = [ctypes.c_void_p]
+    return fns
+
+
+def _gc_attach() -> bool:
+    """Registers the calling thread with Codon's collector (as the library's
+    attach_current_thread()); False if it was registered already or its
+    stack cannot be found."""
+    registered, stack_base, register, _ = _GC
+    if registered():
+        return False
+    base = (ctypes.c_void_p * 4)()  # a GC_stack_base
+    if stack_base(base) != 0:
+        return False
+    return register(base) == 0
 
 
 def _attach() -> bool:
     """Registers this thread with Codon's collector for one call if it is not
-    registered; returns whether it did (the caller detaches it afterwards)."""
+    registered; returns whether it did (the caller unregisters it afterwards)."""
     per_call = getattr(_thread, "attach", None)
-    if per_call is False or _GC_HOOKS is None:
+    if per_call is False or _GC is None:
         return False
-    attached = bool(_GC_HOOKS[0]())  # False: already registered
+    attached = _gc_attach()
     if per_call is None:
         # First call on this thread: registered already (the main thread, the
         # dispatcher) means registered for good.
@@ -414,8 +441,8 @@ def _enum(name: str, members: dict[str, int]):
 
 
 def install(g: dict) -> None:
-    global _GC_HOOKS
-    _GC_HOOKS = _gc_hooks()
+    global _GC
+    _GC = _gc_functions()
     classes = _SPEC["classes"]
     made: dict[str, type] = {}
 
@@ -544,10 +571,12 @@ def _ensure_dispatcher() -> None:
 
     def loop() -> None:
         # Codon's collector must know the thread before it runs Codon code.
+        # (Through ctypes where possible: see _GC.)
         try:
-            ok.append(bool(g["attach_current_thread"]()))
+            ok.append(_gc_attach() if _GC is not None else bool(g["attach_current_thread"]()))
         except Exception:
             ok.append(False)
+        _thread.attach = False  # registered for good (until the loop ends)
         attached.set()
         if not ok[0]:
             return
@@ -565,7 +594,10 @@ def _ensure_dispatcher() -> None:
                 if wait(seen.value, _DISPATCH_WAIT, ctypes.byref(out)) != 0:
                     time.sleep(_DISPATCH_WAIT)
         finally:
-            g["detach_current_thread"]()
+            if _GC is not None:
+                _GC[3]()  # GC_unregister_my_thread: no Codon code runs after it
+            else:
+                g["detach_current_thread"]()
 
     thread = threading.Thread(target=loop, name="carla-callbacks", daemon=True)
     thread.start()
