@@ -44,6 +44,7 @@ from ._ffi import (Handle, CString, CSensorDataInfo, CImage, CLidar, CLidarPoint
                    tsc_sensor_data_as_optical_flow, tsc_optical_flow_color_coded, take_string,
                    TSC_DVS_EVENT_SIZE, TSC_INVALID_ARGUMENT, TSC_ERROR)
 from .errors import _check, CarlaError, _normalize_index
+from ._blocking import _blocking_begin, _blocking_end
 from .geometry import Location, Transform, Vector3D, _location_arg, _Owned, _raw_vector
 from ._fmt import fmt_f, fmt_f32, fmt_b01, fmt_fields
 from .blueprint import Color
@@ -1220,7 +1221,10 @@ class Sensor(Actor):
         out = Ptr[cobj](1)
         # Not under _Locked: it blocks. The shim waits on its own reference to
         # the queue, so a concurrent listen() or stop() is safe.
-        _check(tsc_sensor_wait_for_data(self._h.ptr, seconds, out))
+        blk = _blocking_begin()  # issue #122
+        rc = tsc_sensor_wait_for_data(self._h.ptr, seconds, out)
+        _blocking_end(blk)
+        _check(rc)
         data = SensorData(Handle(out[0]))
         _collect_delivered(1)
         return data

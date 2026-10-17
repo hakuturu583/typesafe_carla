@@ -42,6 +42,10 @@ TSC_MOCK_HOOK size_t tsc_mock_gbuffer_subscriptions(void);
 // ticking call). Models LibCarla's streaming threads, whose data can arrive
 // after World::Tick has returned.
 TSC_MOCK_HOOK void tsc_mock_set_delivery_delay_ms(uint32_t milliseconds);
+// Issue #122: World::Tick, World::WaitForTick and Client::LoadWorld /
+// ReloadWorld take that many milliseconds more (0, the default: none), as
+// they do on a real server, outside any lock of the mock.
+TSC_MOCK_HOOK void tsc_mock_set_call_delay_ms(uint32_t milliseconds);
 #undef TSC_MOCK_HOOK
 
 namespace carla {

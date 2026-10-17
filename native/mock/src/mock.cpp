@@ -93,6 +93,15 @@ using Delivery = std::function<void()>;  // run after the episode lock is releas
 // a real server's data can arrive after World::Tick has returned.
 std::atomic<uint32_t> g_delivery_delay_ms{0};
 
+// Issue #122: how long the calls that wait for the server take
+// (tsc_mock_set_call_delay_ms); slept outside every lock.
+std::atomic<uint32_t> g_call_delay_ms{0};
+
+void CallDelay() {
+  const uint32_t delay = g_call_delay_ms;
+  if (delay != 0) std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+}
+
 class DeliveryWorker {
  public:
   void post(std::vector<Delivery> batch, std::chrono::milliseconds delay) {
@@ -915,6 +924,7 @@ SharedPtr<Actor> World::TrySpawnActor(const ActorBlueprint &blueprint,
 }
 
 uint64_t World::Tick(time_duration) {
+  mock::CallDelay();
   std::vector<mock::Delivery> deliveries;
   uint64_t frame;
   {
@@ -934,6 +944,7 @@ WorldSnapshot World::GetSnapshot() const {
 }
 
 WorldSnapshot World::WaitForTick(time_duration timeout) const {
+  mock::CallDelay();
   std::vector<mock::Delivery> deliveries;
   std::optional<WorldSnapshot> snapshot;
   {
@@ -983,6 +994,7 @@ World Client::GetWorld() const { return World(mock::Connect(_endpoint, _timeout)
 World Actor::GetWorld() const { return World(_episode); }
 
 World Client::ReloadWorld(bool reset_settings) const {
+  mock::CallDelay();
   auto episode = mock::Connect(_endpoint, _timeout);
   {
     std::lock_guard<std::mutex> lock(episode->mutex);
@@ -993,6 +1005,7 @@ World Client::ReloadWorld(bool reset_settings) const {
 
 World Client::LoadWorld(std::string map_name, bool reset_settings,
                         rpc::MapLayer map_layers) const {
+  mock::CallDelay();
   g_last_map_layers = static_cast<uint16_t>(map_layers);
   if (map_name.empty()) throw std::invalid_argument("map name must not be empty");
   if (map_name.rfind("Town", 0) != 0 && map_name.rfind("/Game/", 0) != 0) {
@@ -3016,6 +3029,9 @@ extern "C" size_t tsc_mock_last_worker_threads(void) {
 extern "C" uint16_t tsc_mock_last_map_layers(void) { return carla::client::g_last_map_layers; }
 extern "C" void tsc_mock_set_delivery_delay_ms(uint32_t milliseconds) {
   carla::client::mock::g_delivery_delay_ms = milliseconds;
+}
+extern "C" void tsc_mock_set_call_delay_ms(uint32_t milliseconds) {
+  carla::client::mock::g_call_delay_ms = milliseconds;
 }
 extern "C" size_t tsc_mock_gbuffer_subscriptions(void) {
   return carla::client::g_gbuffer_subscriptions;

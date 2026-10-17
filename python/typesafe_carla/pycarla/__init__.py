@@ -1112,6 +1112,26 @@ import internal.python as _ipy
 import internal.static as static
 ''' + STR_FROM_PY + '''
 
+from typesafe_carla._blocking import _set_blocking_hooks
+
+def _install_gil_hooks():
+    """Issue #122: the library's blocking calls (World.tick(), Client.load_world(),
+    ...; typesafe_carla/_blocking.codon) release the GIL while they wait in
+    LibCarla, as CARLA's Python API does, and take it back before they touch
+    Codon or Python state again. CPython calls this module's functions with
+    the GIL held, and Codon's exporter has no option to release it.
+    TYPESAFE_CARLA_HOLD_GIL=1 keeps it held (the behaviour before #122)."""
+    import os as _os
+    from C import PyGILState_Check() -> i32 as _gil_held
+    from C import PyEval_SaveThread() -> cobj as _gil_release
+    from C import PyEval_RestoreThread(cobj) as _gil_acquire
+    if _os.getenv("TYPESAFE_CARLA_HOLD_GIL", "") not in ("", "0"):
+        _set_blocking_hooks(cobj(), cobj(), cobj())
+    else:
+        _set_blocking_hooks(_gil_held.__raw__(), _gil_release.__raw__(), _gil_acquire.__raw__())
+
+_install_gil_hooks()
+
 def _runtime_error() -> pyobj:
     return pyobj(_ipy.PyExc_RuntimeError, steal=False)
 
