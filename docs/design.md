@@ -717,7 +717,9 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   timeout)` (or `tsc_queue_signal_wait` directly, without holding the GIL).
   A thread not made by Codon first calls `attach_current_thread()`
   (`GC_register_my_thread`) so the collector scans its stack, and
-  `detach_current_thread()` before it exits. In Codon, that mode is locked
+  `detach_current_thread()` before it exits. (Under pycarla a Python thread
+  needs neither: each call registers it, see "Other Python threads" below.
+  There the two functions keep their meaning, implemented in the runtime.) In Codon, that mode is locked
   like the callback thread. Under CPython it must not be: a Python callback
   may release the GIL while holding the lock, and the main thread would then
   block on the lock while holding the GIL (deadlock). The wrapper therefore
@@ -771,7 +773,23 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   collector is called through ctypes: the exported
   `detach_current_thread()` converts its result to Python after the thread
   is unregistered. That allocates on an unknown thread, which crashes if
-  finalizers are pending.
+  finalizers are pending. So pycarla's `attach_current_thread()` and
+  `detach_current_thread()` are the runtime's own: they register the thread
+  until detach (its calls then skip the per-call registration). Two limits:
+  - A daemon thread that is in a call when the interpreter finalizes is
+    ended by CPython (`pthread_exit`) as it takes the GIL back. It stays
+    registered, which is harmless only because the process is exiting.
+  - The GIL hooks use `PyGILState_Check`. In a sub-interpreter it always
+    returns 1. A thread that does not hold the GIL (a Codon-made one) would
+    then release a GIL it does not hold, a fatal error. pycarla does not
+    support sub-interpreters: it is a single-phase-init extension with
+    process-wide state.
+- **A blocking wait on a callback's own state (issue #122).** The dispatch
+  points' wait for `on_tick` snapshots runs with the GIL released, while
+  another thread may `remove_on_tick()` that callback, releasing its
+  listener handle. The wait therefore holds its own reference
+  (`tsc_handle_retain`), and the shim waits on its own reference to the
+  frame watch.
 
 The callback type is `Callable[[SensorData], None]`. Functions, bound methods,
 lambdas and closures are all accepted (Codon 0.19 cannot convert a capturing
@@ -901,7 +919,8 @@ Rules:
   that enter Codon code are the optional callback thread (section 15, issue
   #86), created through the GC, and an external dispatcher thread
   (`set_auto_dispatch(False)`), registered with `attach_current_thread()`
-  unless Codon made it. Both are serialized with the program's stream
+  unless Codon made it (under pycarla, any Python thread calling in is
+  registered for the call, issue #122). Both are serialized with the program's stream
   operations by one lock (or, with `lock=False`, by CPython's GIL).
   A thread waiting in a blocking call with the GIL released (issue #122)
   runs only shim and LibCarla code meanwhile, never Codon code.

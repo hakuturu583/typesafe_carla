@@ -130,9 +130,35 @@ def _attach() -> bool:
     attached = _gc_attach()
     if per_call is None:
         # First call on this thread: registered already (the main thread, the
-        # dispatcher) means registered for good.
-        _thread.attach = attached
+        # dispatcher) means registered for good. A registration that failed
+        # (no stack base) is tried again at the next call.
+        if attached:
+            _thread.attach = True
+        elif _GC[0]():
+            _thread.attach = False
     return attached
+
+
+def _attach_current_thread() -> bool:
+    """carla.attach_current_thread(): registers this thread with Codon's
+    collector until detach_current_thread(), so its calls skip the per-call
+    registration. Returns False if it was registered already (or cannot be).
+    Not needed under pycarla: any thread calling in is registered per call."""
+    if _GC[0]():
+        return False
+    if not _gc_attach():
+        return False
+    _thread.attach = False  # registered for good, until detach_current_thread()
+    return True
+
+
+def _detach_current_thread() -> None:
+    """carla.detach_current_thread(): undoes attach_current_thread() (call it
+    only where that returned True, after the thread's last call in). On a
+    thread that is not registered it does nothing."""
+    if _GC[0]():
+        _GC[3]()
+    _thread.attach = None  # per call again, if the thread calls in later
 
 
 def _fn(name: str) -> _Overloads:
@@ -488,6 +514,12 @@ def install(g: dict) -> None:
     if "Command" in g:
         command.Command = g["Command"]
     g["command"] = command
+    if _GC is not None:
+        # Not the exported functions: they would race with the per-call
+        # registration (_attach), and detach's exported wrapper allocates
+        # after unregistering (see _GC).
+        g["attach_current_thread"] = _attach_current_thread
+        g["detach_current_thread"] = _detach_current_thread
     sys.modules[f"{_PACKAGE}.command"] = command
     g["CarlaObject"] = CarlaObject
     global _ACTOR

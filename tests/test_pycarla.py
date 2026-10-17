@@ -661,5 +661,98 @@ assert len(done) == 3 and not errors, errors
 assert getattr(_runtime._thread, 'attach', None) is False  # the main thread: for good
 assert got
 lidar.stop(); lidar.destroy()
+# Collections on the worker itself: a polled measurement is delivered there,
+# and the library collects every 16 deliveries on a registered thread. The
+# main thread only waits meanwhile (no Codon code).
+gnss = world.spawn_actor(lib.find('sensor.other.gnss'), carla.Transform(), attach_to=vehicle)
+gnss.listen(None, 0)  # polling mode, unbounded
+mock.tsc_mock_set_call_delay_ms(ctypes.c_uint32(0))
+for _ in range(64):
+    world.tick()
+gc_no = ctypes.PyDLL(_runtime._ext.__file__).GC_get_gc_no
+gc_no.restype = ctypes.c_size_t
+polled = []
+def poller():
+    try:
+        while gnss.poll() is not None:
+            polled.append(1)
+    except BaseException as e:
+        errors.append(repr(e))
+before = gc_no()
+t = threading.Thread(target=poller)
+t.start(); t.join()
+assert not errors and len(polled) >= 64, (errors, len(polled))
+assert gc_no() >= before + 3, (before, gc_no())  # 64 deliveries: 4 collections there
+gnss.stop(); gnss.destroy()
 print('OK')
 """, timeout=600)
+
+
+def test_attach_current_thread_under_pycarla(pycarla):
+    """carla.attach_current_thread() / detach_current_thread() on a Python
+    thread: registered until detach (its calls skip the per-call
+    registration), then per call again; neither crashes nor undoes the
+    other's registration."""
+    _run_ok(pycarla, _GIL_PROBE + """
+from carla import _runtime
+registered = ctypes.PyDLL(_runtime._ext.__file__).GC_thread_is_registered
+assert carla.attach_current_thread() is False  # the main thread already is
+errors = []
+def worker():
+    try:
+        assert not registered()
+        carla.detach_current_thread()  # not registered: nothing to undo
+        assert carla.attach_current_thread() is True
+        assert carla.attach_current_thread() is False
+        for _ in range(2000):
+            world.get_blueprint_library().filter('vehicle.*')
+        assert registered()  # the calls did not unregister it
+        carla.detach_current_thread()
+        assert not registered()
+        for _ in range(2000):  # per call again
+            world.get_blueprint_library().filter('vehicle.*')
+        assert not registered()
+    except BaseException as e:
+        import traceback
+        errors.append(traceback.format_exc())
+threads = [threading.Thread(target=worker) for _ in range(3)]
+for t in threads:
+    t.start()
+for t in threads:
+    t.join()
+assert not errors, errors
+print('OK')
+""")
+
+
+def test_remove_on_tick_during_a_gil_free_wait(pycarla):
+    """At the dispatch points, tick() waits (GIL released) for the on_tick
+    snapshot; another thread removing that callback meanwhile must not free
+    the listener under the wait (issue #122 review)."""
+    _run_ok(pycarla, _GIL_PROBE + """
+from carla import _runtime
+mock.tsc_mock_set_call_delay_ms(ctypes.c_uint32(0))
+ids = [world.on_tick(lambda s: None) for _ in range(4)]
+assert _runtime._stop_dispatcher('the test stopped it')
+carla.set_auto_dispatch(True)
+mock.tsc_mock_set_delivery_delay_ms(ctypes.c_uint32(300))  # tick() then waits for them
+live = mock.tsc_live_handle_count
+live.restype = ctypes.c_uint64
+kept = []
+def remove(callback_id):
+    # tick() is waiting on this callback's listener (the first one left).
+    before = live()
+    world.remove_on_tick(callback_id)
+    kept.append(live() == before)  # the wait's own reference keeps it
+for callback_id in ids:
+    remover = threading.Timer(0.1, remove, (callback_id,))
+    remover.start()
+    start = time.monotonic()
+    world.tick(1.0)  # (a removed callback's frame never comes: waits out the 1 s)
+    remover.join()
+    assert time.monotonic() - start < 3
+assert all(kept), kept
+mock.tsc_mock_set_delivery_delay_ms(ctypes.c_uint32(0))
+world.tick()
+print('OK')
+""")

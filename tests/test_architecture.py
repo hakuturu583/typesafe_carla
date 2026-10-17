@@ -202,6 +202,8 @@ def test_blocking_calls_bracket_only_the_native_call():
         r"^(?P<ind>\s*)blk = _blocking_begin\(\)[^\n]*\n"
         r"(?P=ind)rc = (?P<fn>tsc_\w+)\([^\n]*(?:\n(?P=ind) [^\n]*)*\)\n"
         r"(?P=ind)_blocking_end\(blk\)\n"
+        # (a reference taken for the wait may be dropped first: native only)
+        r"(?:(?P=ind)tsc_handle_release\(\w+\)\n)?"
         r"(?P=ind)_check\(rc\)\n", re.MULTILINE)
     found, stray = set(), []
     for p in CODON_SOURCES:

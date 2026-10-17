@@ -30,7 +30,7 @@ from ._ffi import (Handle, tsc_sensor_poll, tsc_sensor_pending_count, tsc_sensor
                    tsc_world_get_client_token)
 from ._ffi import tsc_queue_signal_count, tsc_queue_signal_wait, tsc_queue_signal_notify
 from .errors import _check, CarlaError, TimeoutError
-from ._ffi import last_error
+from ._ffi import last_error, tsc_handle_retain, tsc_handle_release
 from ._blocking import _blocking_begin, _blocking_end
 import threading
 import os
@@ -317,9 +317,17 @@ def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
     for l in list(_listeners):
         if l.tick and l.active and l.client_token == int(token[0]):
             left = max(deadline - time.time(), 0.0)
+            p = l.handle.ptr
+            if p == cobj():
+                continue  # released meanwhile (removed)
+            # Our own reference for the wait: with an embedding runtime's lock
+            # released (issue #122), another thread may remove this callback
+            # (_remove releases the listener's handle) while we wait.
+            tsc_handle_retain(p)
             blk = _blocking_begin()  # issue #122
-            rc = tsc_tick_listener_wait_for_frame(l.handle.ptr, u64(frame), left, reached)
+            rc = tsc_tick_listener_wait_for_frame(p, u64(frame), left, reached)
             _blocking_end(blk)
+            tsc_handle_release(p)
             _check(rc)
 
 # A delivered item is a small Codon object over a native measurement (a

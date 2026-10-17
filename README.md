@@ -728,8 +728,9 @@ Deliberate differences, all in favour of static checking:
   `carla.set_auto_dispatch(False)`, then loop on `seen =
   carla.queue_signal_count()`, `carla.dispatch_callbacks()`,
   `carla.wait_queue_signal(seen, timeout)`; the registry is then locked as
-  with the callback thread. A thread not created by Codon (e.g. a CPython
-  thread) calls `carla.attach_current_thread()` first. pycarla, serialized
+  with the callback thread. A thread not created by Codon calls
+  `carla.attach_current_thread()` first (under pycarla any Python thread
+  calling in is registered for each call anyway, issue #122). pycarla, serialized
   by the GIL, passes `set_auto_dispatch(False, lock=False)`: then `stop()`
   does not wait for a callback already running, and
   `start_callback_thread()` / `TYPESAFE_CARLA_CALLBACK_THREAD` are refused

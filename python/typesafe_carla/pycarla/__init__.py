@@ -1120,7 +1120,10 @@ def _install_gil_hooks():
     LibCarla, as CARLA's Python API does, and take it back before they touch
     Codon or Python state again. CPython calls this module's functions with
     the GIL held, and Codon's exporter has no option to release it.
-    TYPESAFE_CARLA_HOLD_GIL=1 keeps it held (the behaviour before #122)."""
+    TYPESAFE_CARLA_HOLD_GIL=1 keeps it held (the behaviour before #122).
+    PyGILState_Check tells whether this thread holds the GIL; in a
+    sub-interpreter it always says so, which this single-phase-init module
+    does not support (docs/design.md, "Other Python threads")."""
     import os as _os
     from C import PyGILState_Check() -> i32 as _gil_held
     from C import PyEval_SaveThread() -> cobj as _gil_release
