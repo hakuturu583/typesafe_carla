@@ -31,6 +31,7 @@ from ._ffi import (Handle, tsc_sensor_poll, tsc_sensor_pending_count, tsc_sensor
 from ._ffi import tsc_queue_signal_count, tsc_queue_signal_wait, tsc_queue_signal_notify
 from .errors import _check, CarlaError, TimeoutError
 from ._ffi import last_error
+from ._blocking import _blocking_begin, _blocking_end
 import threading
 import os
 
@@ -316,7 +317,10 @@ def _await_tick_callbacks(world_ptr: cobj, frame: int, seconds: float):
     for l in list(_listeners):
         if l.tick and l.active and l.client_token == int(token[0]):
             left = max(deadline - time.time(), 0.0)
-            _check(tsc_tick_listener_wait_for_frame(l.handle.ptr, u64(frame), left, reached))
+            blk = _blocking_begin()  # issue #122
+            rc = tsc_tick_listener_wait_for_frame(l.handle.ptr, u64(frame), left, reached)
+            _blocking_end(blk)
+            _check(rc)
 
 # A delivered item is a small Codon object over a native measurement (a
 # 1920x1080 image is 8 MB of LibCarla's), released when the collector

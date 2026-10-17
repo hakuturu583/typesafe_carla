@@ -17,6 +17,7 @@ from .blueprint import ActorBlueprint, BlueprintLibrary
 from .map import Map
 from .snapshot import WorldSnapshot
 from ._callbacks import _dispatch_point, _await_tick_callbacks
+from ._blocking import _blocking_begin, _blocking_end
 from ._fmt import fmt_g, fmt_g32, fmt_bool
 
 def _fixed_step(fixed: Optional[float]) -> float:
@@ -239,7 +240,10 @@ class World:
 
     def get_map(self) -> Map:
         out = Ptr[cobj](1)
-        _check(tsc_world_get_map(self._h.ptr, out))
+        blk = _blocking_begin()  # downloads and parses the OpenDRIVE map (issue #122)
+        rc = tsc_world_get_map(self._h.ptr, out)
+        _blocking_end(blk)
+        _check(rc)
         return Map(Handle(out[0]))
 
     def get_snapshot(self) -> WorldSnapshot:
@@ -259,7 +263,10 @@ class World:
         import time
         start = time.time()
         out = Ptr[cobj](1)
-        _check(tsc_world_wait_for_tick(self._h.ptr, seconds, out))
+        blk = _blocking_begin()  # issue #122
+        rc = tsc_world_wait_for_tick(self._h.ptr, seconds, out)
+        _blocking_end(blk)
+        _check(rc)
         snapshot = WorldSnapshot(Handle(out[0]))
         _await_tick_callbacks(self._h.ptr, snapshot.frame, seconds - (time.time() - start))
         _dispatch_point()
@@ -276,7 +283,10 @@ class World:
         import time
         start = time.time()
         out = Ptr[u64](1)
-        _check(tsc_world_tick(self._h.ptr, seconds, out))
+        blk = _blocking_begin()  # issue #122
+        rc = tsc_world_tick(self._h.ptr, seconds, out)
+        _blocking_end(blk)
+        _check(rc)
         frame = int(out[0])
         _await_tick_callbacks(self._h.ptr, frame, seconds - (time.time() - start))
         _dispatch_point()
@@ -295,7 +305,10 @@ class World:
         ext = Ptr[CWorldSettingsExt](1)
         ext[0] = settings._ext_to_c()
         out = Ptr[u64](1)
-        _check(tsc_world_apply_settings_ext(self._h.ptr, s, ext, seconds, out))
+        blk = _blocking_begin()  # issue #122
+        rc = tsc_world_apply_settings_ext(self._h.ptr, s, ext, seconds, out)
+        _blocking_end(blk)
+        _check(rc)
         return int(out[0])
 
     def __repr__(self) -> str:

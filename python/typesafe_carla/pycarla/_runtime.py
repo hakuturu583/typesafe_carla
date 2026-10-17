@@ -15,7 +15,10 @@ Environment:
   TYPESAFE_CARLA_LIB      the native library (default: the one built against);
   TSC_PYCARLA_REDIRECT    host:port; every carla.Client connects there instead
                           (the upstream-test harness uses it to point tests that
-                          hard-code their address at the test server).
+                          hard-code their address at the test server);
+  TYPESAFE_CARLA_HOLD_GIL "1": the blocking calls (World.tick(), Client.load_world(),
+                          ...) keep the GIL while they wait, as before issue #122
+                          (read when the extension is loaded).
 """
 
 from __future__ import annotations

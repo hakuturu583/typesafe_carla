@@ -1,0 +1,55 @@
+# Issue #122: calls that block in LibCarla (World.tick(), Client.load_world(),
+# ...) let an embedding runtime release its own lock while they wait.
+#
+# A Codon program has no such lock, and nothing here changes it. A wrapper
+# that calls typesafe_carla with a lock held has one. typesafe_carla.pycarla's
+# CPython package (`codon build --pyext`) holds CPython's GIL: CPython calls an
+# extension function with the GIL held, and Codon's exporter has no option to
+# release it. That wrapper installs the hooks below, as plain C function
+# pointers, at import. The library itself stays free of CPython.
+#
+# Each blocking call brackets only its native call with _blocking_begin() and
+# _blocking_end(). Between the two the thread runs C++ alone (the shim and
+# LibCarla), never Codon code: no Codon state, no Python object, no callback.
+# The lock is taken back before the call's result is checked (_check, which
+# may raise: the C ABI's error is thread-local), before its result is
+# converted, and before the dispatch points run callbacks. Everything
+# typesafe_carla does in Codon therefore still happens under the lock, as
+# docs/design.md "External dispatchers" relies on.
+
+# `held() -> i32`: nonzero if the calling thread holds the lock;
+# `release() -> cobj`: releases it, returning a token;
+# `acquire(token: cobj)`: takes it back.
+_held = Function[[], i32](cobj())
+_release = Function[[], cobj](cobj())
+_acquire = Function[[cobj], NoneType](cobj())
+_installed = False
+
+def _set_blocking_hooks(held: cobj, release: cobj, acquire: cobj):
+    """Installs the embedding runtime's lock hooks (C function pointers; see
+    above). All three or none: a null pointer uninstalls them. Call it once,
+    before any thread makes a blocking call (pycarla does at import)."""
+    global _held, _release, _acquire, _installed
+    _installed = False
+    _held = Function[[], i32](held)
+    _release = Function[[], cobj](release)
+    _acquire = Function[[cobj], NoneType](acquire)
+    _installed = held != cobj() and release != cobj() and acquire != cobj()
+
+def _blocking_begin() -> cobj:
+    """Before a blocking native call: releases the embedding runtime's lock if
+    hooks are installed and this thread holds it. Returns the token for
+    _blocking_end() (null: nothing was released). Nothing between the two
+    may run Codon code that touches shared state, allocate Python objects or
+    raise."""
+    if not _installed:
+        return cobj()
+    if _held() == i32(0):
+        return cobj()  # e.g. a thread Codon made: it never had the lock
+    return _release()
+
+def _blocking_end(token: cobj):
+    """After the native call: takes the lock back (if _blocking_begin()
+    released it)."""
+    if token != cobj():
+        _acquire(token)

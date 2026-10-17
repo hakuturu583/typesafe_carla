@@ -34,9 +34,9 @@ def pycarla(backend):
     return pydir
 
 
-def _run_ok(pydir, program: str, timeout: float = 120) -> str:
-    """Runs `program` with the generated `carla`; checks it printed only OK and
-    returns its stderr."""
+def _run_ok(pydir, program: str, timeout: float = 120, env: dict | None = None) -> str:
+    """Runs `program` with the generated `carla` (`env`: added to its
+    environment); checks it printed only OK and returns its stderr."""
     # As the upstream-test driver: load the generated package explicitly (an
     # installed official `carla` must not win).
     head = (
@@ -46,7 +46,8 @@ def _run_ok(pydir, program: str, timeout: float = 120) -> str:
         " submodule_search_locations=[pkg])\n"
         "carla = importlib.util.module_from_spec(spec); sys.modules['carla'] = carla\n"
         "spec.loader.exec_module(carla)\n")
-    result = subprocess.run([up._python(), "-c", head + program], env=up._cpython_env(pydir, False),
+    result = subprocess.run([up._python(), "-c", head + program],
+                            env={**up._cpython_env(pydir, False), **(env or {})},
                             capture_output=True, text=True, timeout=timeout)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.split() == ["OK"], result.stdout
@@ -498,3 +499,129 @@ assert bool(sticky) is True and raises(lambda: int(sticky))
 assert raises(lambda: 1 if bp.get_attribute('role_name') else 0)  # truthiness is bool()
 print('OK')
 """)
+
+
+# Issue #122: the blocking calls release the GIL while they wait in LibCarla.
+# The mock's calls that wait for a server take DELAY ms more
+# (tsc_mock_set_call_delay_ms); a probe thread counts how far it gets meanwhile,
+# against how far it gets while the main thread sleeps.
+_GIL_PROBE = """
+import ctypes, queue, threading, time
+mock = ctypes.CDLL(os.environ['TYPESAFE_CARLA_LIB'])
+DELAY = 0.3
+mock.tsc_mock_set_call_delay_ms(ctypes.c_uint32(int(DELAY * 1000)))
+client = carla.Client('localhost', 2000)
+world = client.get_world()
+main = threading.get_ident()
+count = [0]
+stop = threading.Event()
+def probe():
+    while not stop.is_set():
+        count[0] += 1
+threading.Thread(target=probe, daemon=True).start()
+time.sleep(0.05)
+def progress(call):
+    before, start = count[0], time.monotonic()
+    try:
+        call()
+    finally:
+        took = time.monotonic() - start
+    assert took >= DELAY * 0.9, took  # the call did block
+    return (count[0] - before) / took
+free = progress(lambda: time.sleep(DELAY))
+"""
+
+
+def test_blocking_calls_release_the_gil(pycarla):
+    _run_ok(pycarla, _GIL_PROBE + """
+def raises(call, text):
+    try:
+        call()
+    except RuntimeError as e:
+        assert text in str(e), e
+    else:
+        raise AssertionError('no error')
+rates = {
+    'tick': progress(world.tick),
+    'load_world': progress(lambda: client.load_world('Town10HD_Opt')),
+    'reload_world': progress(client.reload_world),
+    # Raising after the GIL is taken back (the mock refuses the map after the delay).
+    'load_world raising': progress(lambda: raises(lambda: client.load_world('Nowhere'),
+                                                  'not found')),
+}
+world = client.get_world()
+settings = world.get_settings()
+settings.synchronous_mode = True
+world.apply_settings(settings)
+rates['wait_for_tick raising'] = progress(lambda: raises(lambda: world.wait_for_tick(5.0),
+                                                         'synchronous mode'))
+slow = {k: round(v / free, 2) for k, v in rates.items() if v < 0.3 * free}
+assert not slow, (free, slow)
+print('OK')
+""")
+
+
+def test_blocking_calls_hold_the_gil_on_request(pycarla):
+    """TYPESAFE_CARLA_HOLD_GIL=1: as before #122 (and the probe does measure it)."""
+    _run_ok(pycarla, _GIL_PROBE + """
+rate = progress(world.tick)
+assert rate < 0.1 * free, (rate, free)
+print('OK')
+""", env={"TYPESAFE_CARLA_HOLD_GIL": "1"})
+
+
+def test_callbacks_during_gil_free_ticks(pycarla):
+    """Callbacks on the dispatch thread run while the main thread waits in
+    tick() without the GIL (the mock delivers each tick's data 50 ms late, so
+    during the next tick); at the dispatch points (no dispatch thread) they
+    run inside tick(), on the main thread, once the GIL is taken back."""
+    stderr = _run_ok(pycarla, _GIL_PROBE + """
+mock.tsc_mock_set_delivery_delay_ms(ctypes.c_uint32(50))
+lib = world.get_blueprint_library()
+vehicle = world.get_actors()[0]
+def spawn(type_id):
+    return world.spawn_actor(lib.find(type_id), carla.Transform(), attach_to=vehicle)
+q = queue.Queue()
+fail = []
+def put(kind, frame):
+    q.put((kind, frame, threading.get_ident()))
+    if fail:
+        raise ValueError('boom at a dispatch point')
+camera = spawn('sensor.camera.rgb')
+lidar = spawn('sensor.lidar.ray_cast')
+camera.listen(lambda image: put('camera', image.frame + 0 * len(bytes(image.raw_data))))
+lidar.listen(lambda data: put('lidar', data.frame))
+world.on_tick(lambda snapshot: put('tick', snapshot.frame))
+def expect(frames, on_main):
+    want = {(k, f) for f in frames for k in ('camera', 'lidar', 'tick')}
+    deadline = time.time() + 10
+    while want:
+        kind, frame, thread = q.get(timeout=max(deadline - time.time(), 0.01))
+        if (kind, frame) in want:
+            want.discard((kind, frame))
+            assert (thread == main) == on_main, (kind, thread, main)
+frames = []
+for _ in range(5):
+    rate = progress(lambda: frames.append(world.tick()))
+    assert rate > 0.3 * free, (rate, free)
+expect(frames, False)
+# The dispatch points: no dispatch thread.
+from carla import _runtime
+assert _runtime._stop_dispatcher('the test stopped it')
+carla.set_auto_dispatch(True)
+mock.tsc_mock_set_delivery_delay_ms(ctypes.c_uint32(0))
+frames = []
+for _ in range(3):
+    rate = progress(lambda: frames.append(world.tick()))
+    assert rate > 0.3 * free, (rate, free)
+    expect(frames[-1:], True)
+# A callback raising at a dispatch point is printed; tick() goes on.
+fail.append(True)
+for _ in range(2):
+    frames.append(world.tick())
+    expect(frames[-1:], True)
+fail.clear()
+camera.stop(); lidar.stop(); camera.destroy(); lidar.destroy()
+print('OK')
+""")
+    assert "boom at a dispatch point" in stderr, stderr

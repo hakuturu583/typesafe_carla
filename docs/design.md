@@ -730,6 +730,35 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   `TYPESAFE_CARLA_CALLBACK_THREAD` no longer applies, so the environment
   cannot start a Codon thread that would run Python callbacks without the
   GIL.
+- **Blocking calls and an embedding runtime's lock (issue #122).** CPython
+  calls into the extension with the GIL held, and Codon's exporter cannot
+  release it. Without help, every Python thread would stop while
+  `World.tick()` or `Client.load_world()` waits for the server: a camera's
+  frames handed to a writer thread would be written only between ticks.
+  CARLA's Python API releases the GIL there. `_blocking.codon` holds three
+  hooks a wrapper installs as C function pointers: *held*, *release* (returns
+  a token) and *acquire(token)*. The pycarla package installs
+  `PyGILState_Check`, `PyEval_SaveThread` and `PyEval_RestoreThread` at
+  import (`TYPESAFE_CARLA_HOLD_GIL=1` opts out). The calls that wait for the
+  server or parse a map bracket only their native call:
+  `blk = _blocking_begin(); rc = tsc_...(...); _blocking_end(blk); _check(rc)`.
+  `tests/test_architecture.py` (`BLOCKING_CALLS`) lists them: `World.tick`,
+  `wait_for_tick`, `apply_settings` and `get_map`; the dispatch points' wait
+  for `on_tick` snapshots; `Client.get_world`, `load_world`, `reload_world`,
+  `load_world_if_different`, `generate_opendrive_world`, `replay_file` and
+  `apply_batch_sync`; and `Sensor.wait_for_data`.
+  Between the two calls the thread runs C++ only (the shim, which is
+  thread-safe as listed below, and LibCarla). It runs no Codon code, touches
+  no Python object and runs no callback. The lock is back before the status is
+  checked (`tsc_last_error` is thread-local, so raising afterwards is
+  safe), before the result is converted, and before the dispatch points run
+  callbacks. So every piece of Codon code still runs under the GIL, and the
+  `lock=False` mode above keeps its guarantee. A thread that does not hold
+  the lock (a Codon-made thread) releases nothing. Codon's collector is
+  unaffected. The waiting thread is a registered thread (the main thread, or
+  a Python thread already attached to call into Codon). If another thread
+  collects meanwhile, the collector stops the waiting thread as usual. A Codon
+  program installs no hooks, and the brackets cost it two branches.
 
 The callback type is `Callable[[SensorData], None]`. Functions, bound methods,
 lambdas and closures are all accepted (Codon 0.19 cannot convert a capturing
@@ -861,6 +890,8 @@ Rules:
   (`set_auto_dispatch(False)`), registered with `attach_current_thread()`
   unless Codon made it. Both are serialized with the program's stream
   operations by one lock (or, with `lock=False`, by CPython's GIL).
+  A thread waiting in a blocking call with the GIL released (issue #122)
+  runs only shim and LibCarla code meanwhile, never Codon code.
 * no global Python interpreter lock exists or should be introduced.
 * the core library must not initialize CPython.
 
