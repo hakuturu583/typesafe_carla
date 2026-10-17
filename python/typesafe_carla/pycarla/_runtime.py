@@ -28,6 +28,7 @@ import enum
 import json
 import os
 import sys
+import threading
 import traceback
 import types
 from pathlib import Path
@@ -48,21 +49,63 @@ _MEMORYVIEWS = frozenset(_SPEC.get("memoryviews", ()))
 class _Overloads:
     """An exported function's overloads (`<name>__v<i>`), tried in order."""
 
-    __slots__ = ("name", "fns")
+    __slots__ = ("name", "fns", "attach")
 
     def __init__(self, name: str):
         self.name = name
         self.fns = [getattr(_ext, n) for n in _SPEC["variants"].get(name, [])]
+        # (Not around the collector's own registration functions.)
+        self.attach = name not in ("_f__attach_current_thread", "_f__detach_current_thread")
 
     def __call__(self, *args, **kwargs):
-        for f in self.fns:
-            try:
-                return f(*args, **kwargs)
-            except TypeError as e:
-                if not str(e).startswith("could not find callable method"):
-                    raise
+        attached = self.attach and _attach()
+        try:
+            for f in self.fns:
+                try:
+                    return f(*args, **kwargs)
+                except TypeError as e:
+                    if not str(e).startswith("could not find callable method"):
+                        raise
+        finally:
+            if attached:
+                _GC_HOOKS[1]()
         raise TypeError(f"could not find callable method '{self.name}' for given arguments "
                         f"{[type(a).__name__ for a in args]} {sorted(kwargs)}")
+
+
+# Codon's garbage collector must know every thread that runs Codon code: it
+# scans their stacks, and a collection started on a thread it does not know
+# aborts the process ("Collecting from unknown thread"). The thread that
+# loaded the extension and the callback dispatcher are registered for good.
+# Any other Python thread calling into the package is registered for the
+# duration of each call: CPython has no hook at a thread's exit to unregister
+# it, and an exited thread left registered would have its stack scanned. Between
+# calls it holds no Codon object the collector must see (every object handed to
+# Python is boxed in uncollectable memory).
+_GC_HOOKS = None    # (attach_current_thread, detach_current_thread), raw exports
+_thread = threading.local()  # .attach: True (per call), False (registered for good)
+
+
+def _gc_hooks():
+    def raw(name):
+        variants = _SPEC["variants"].get(_SPEC["functions"].get(name, {}).get("fn") or "", [])
+        return getattr(_ext, variants[0]) if variants else None
+    attach, detach = raw("attach_current_thread"), raw("detach_current_thread")
+    return (attach, detach) if attach is not None and detach is not None else None
+
+
+def _attach() -> bool:
+    """Registers this thread with Codon's collector for one call if it is not
+    registered; returns whether it did (the caller detaches it afterwards)."""
+    per_call = getattr(_thread, "attach", None)
+    if per_call is False or _GC_HOOKS is None:
+        return False
+    attached = bool(_GC_HOOKS[0]())  # False: already registered
+    if per_call is None:
+        # First call on this thread: registered already (the main thread, the
+        # dispatcher) means registered for good.
+        _thread.attach = attached
+    return attached
 
 
 def _fn(name: str) -> _Overloads:
@@ -371,6 +414,8 @@ def _enum(name: str, members: dict[str, int]):
 
 
 def install(g: dict) -> None:
+    global _GC_HOOKS
+    _GC_HOOKS = _gc_hooks()
     classes = _SPEC["classes"]
     made: dict[str, type] = {}
 

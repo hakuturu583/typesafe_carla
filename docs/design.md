@@ -759,6 +759,16 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   a Python thread already attached to call into Codon). If another thread
   collects meanwhile, the collector stops the waiting thread as usual. A Codon
   program installs no hooks, and the brackets cost it two branches.
+- **Other Python threads (pycarla).** With the GIL released during ticks,
+  other Python threads can do work, and some of them call into the package
+  (a thread reading actor states, say). Such a thread runs Codon code, and a
+  collection it starts while the collector does not know it aborts the
+  process ("Collecting from unknown thread"). CPython has no hook at a
+  thread's exit to unregister it, and an exited thread left registered would
+  have its stack scanned. So the runtime registers such a thread
+  (`attach_current_thread()`) for the duration of each call and unregisters
+  it afterwards. The main thread and the dispatcher are registered already,
+  and their calls skip this.
 
 The callback type is `Callable[[SensorData], None]`. Functions, bound methods,
 lambdas and closures are all accepted (Codon 0.19 cannot convert a capturing

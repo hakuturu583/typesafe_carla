@@ -625,3 +625,41 @@ camera.stop(); lidar.stop(); camera.destroy(); lidar.destroy()
 print('OK')
 """)
     assert "boom at a dispatch point" in stderr, stderr
+
+
+def test_other_python_threads_may_call_in(pycarla):
+    """A Python thread other than the importing one and the dispatcher calls
+    into Codon: it is registered with Codon's collector for each call, so a
+    collection it starts does not abort ("Collecting from unknown thread"),
+    while the main thread ticks without the GIL."""
+    _run_ok(pycarla, _GIL_PROBE + """
+from carla import _runtime
+mock.tsc_mock_set_call_delay_ms(ctypes.c_uint32(5))
+lib = world.get_blueprint_library()
+vehicle = world.get_actors()[0]
+lidar = world.spawn_actor(lib.find('sensor.lidar.ray_cast'), carla.Transform(), attach_to=vehicle)
+got = []
+lidar.listen(lambda data: got.append(data.frame))
+done, errors = [], []
+def worker():
+    try:
+        for _ in range(3000):  # allocates enough for several collections
+            world.get_blueprint_library().filter('vehicle.*')
+            world.get_actors()
+            vehicle.get_transform()
+        done.append(True)
+    except BaseException as e:
+        errors.append(repr(e))
+threads = [threading.Thread(target=worker) for _ in range(3)]
+for t in threads:
+    t.start()
+while any(t.is_alive() for t in threads):
+    world.tick()
+for t in threads:
+    t.join()
+assert len(done) == 3 and not errors, errors
+assert getattr(_runtime._thread, 'attach', None) is False  # the main thread: for good
+assert got
+lidar.stop(); lidar.destroy()
+print('OK')
+""", timeout=600)
