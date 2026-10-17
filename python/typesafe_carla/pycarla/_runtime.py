@@ -15,7 +15,10 @@ Environment:
   TYPESAFE_CARLA_LIB      the native library (default: the one built against);
   TSC_PYCARLA_REDIRECT    host:port; every carla.Client connects there instead
                           (the upstream-test harness uses it to point tests that
-                          hard-code their address at the test server).
+                          hard-code their address at the test server);
+  TYPESAFE_CARLA_HOLD_GIL "1": the blocking calls (World.tick(), Client.load_world(),
+                          ...) keep the GIL while they wait, as before issue #122
+                          (read when the extension is loaded).
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ import enum
 import json
 import os
 import sys
+import threading
 import traceback
 import types
 from pathlib import Path
@@ -52,14 +56,109 @@ class _Overloads:
         self.fns = [getattr(_ext, n) for n in _SPEC["variants"].get(name, [])]
 
     def __call__(self, *args, **kwargs):
-        for f in self.fns:
-            try:
-                return f(*args, **kwargs)
-            except TypeError as e:
-                if not str(e).startswith("could not find callable method"):
-                    raise
+        attached = _attach()
+        try:
+            for f in self.fns:
+                try:
+                    return f(*args, **kwargs)
+                except TypeError as e:
+                    if not str(e).startswith("could not find callable method"):
+                        raise
+        finally:
+            if attached:
+                _GC[3]()  # GC_unregister_my_thread
         raise TypeError(f"could not find callable method '{self.name}' for given arguments "
                         f"{[type(a).__name__ for a in args]} {sorted(kwargs)}")
+
+
+# Codon's garbage collector must know every thread that runs Codon code: it
+# scans their stacks, and a collection started on a thread it does not know
+# aborts the process ("Collecting from unknown thread"). The thread that
+# loaded the extension and the callback dispatcher are registered for good.
+# Any other Python thread calling into the package is registered for the
+# duration of each call: CPython has no hook at a thread's exit to unregister
+# it, and an exited thread left registered would have its stack scanned. Between
+# calls it holds no Codon object the collector must see (every object handed to
+# Python is boxed in uncollectable memory).
+#
+# The collector is called through ctypes, not through the extension's
+# attach_current_thread() / detach_current_thread(): the exported wrapper of
+# the latter converts its result (None) to Python after the thread is
+# unregistered, and that allocates a Codon object on an unknown thread (a
+# crash if finalizers are pending).
+_GC = None  # (GC_thread_is_registered, GC_get_stack_base, GC_register_my_thread,
+            #  GC_unregister_my_thread) of the extension's Codon runtime
+_thread = threading.local()  # .attach: True (per call), False (registered for good)
+
+
+def _gc_functions():
+    try:
+        # dlsym on the extension's handle also searches its dependencies,
+        # the Codon runtime among them. PyDLL: the calls keep the GIL (CDLL
+        # would release and re-take it around each, four times a call).
+        lib = ctypes.PyDLL(_ext.__file__)
+        fns = (lib.GC_thread_is_registered, lib.GC_get_stack_base, lib.GC_register_my_thread,
+               lib.GC_unregister_my_thread)
+    except (OSError, AttributeError):
+        return None
+    for f in fns:
+        f.restype = ctypes.c_int
+    fns[0].argtypes = fns[3].argtypes = []
+    fns[1].argtypes = fns[2].argtypes = [ctypes.c_void_p]
+    return fns
+
+
+def _gc_attach() -> bool:
+    """Registers the calling thread with Codon's collector (as the library's
+    attach_current_thread()); False if it was registered already or its
+    stack cannot be found."""
+    registered, stack_base, register, _ = _GC
+    if registered():
+        return False
+    base = (ctypes.c_void_p * 4)()  # a GC_stack_base
+    if stack_base(base) != 0:
+        return False
+    return register(base) == 0
+
+
+def _attach() -> bool:
+    """Registers this thread with Codon's collector for one call if it is not
+    registered; returns whether it did (the caller unregisters it afterwards)."""
+    per_call = getattr(_thread, "attach", None)
+    if per_call is False or _GC is None:
+        return False
+    attached = _gc_attach()
+    if per_call is None:
+        # First call on this thread: registered already (the main thread, the
+        # dispatcher) means registered for good. A registration that failed
+        # (no stack base) is tried again at the next call.
+        if attached:
+            _thread.attach = True
+        elif _GC[0]():
+            _thread.attach = False
+    return attached
+
+
+def _attach_current_thread() -> bool:
+    """carla.attach_current_thread(): registers this thread with Codon's
+    collector until detach_current_thread(), so its calls skip the per-call
+    registration. Returns False if it was registered already (or cannot be).
+    Not needed under pycarla: any thread calling in is registered per call."""
+    if _GC[0]():
+        return False
+    if not _gc_attach():
+        return False
+    _thread.attach = False  # registered for good, until detach_current_thread()
+    return True
+
+
+def _detach_current_thread() -> None:
+    """carla.detach_current_thread(): undoes attach_current_thread() (call it
+    only where that returned True, after the thread's last call in). On a
+    thread that is not registered it does nothing."""
+    if _GC[0]():
+        _GC[3]()
+    _thread.attach = None  # per call again, if the thread calls in later
 
 
 def _fn(name: str) -> _Overloads:
@@ -368,6 +467,8 @@ def _enum(name: str, members: dict[str, int]):
 
 
 def install(g: dict) -> None:
+    global _GC
+    _GC = _gc_functions()
     classes = _SPEC["classes"]
     made: dict[str, type] = {}
 
@@ -413,6 +514,12 @@ def install(g: dict) -> None:
     if "Command" in g:
         command.Command = g["Command"]
     g["command"] = command
+    if _GC is not None:
+        # Not the exported functions: they would race with the per-call
+        # registration (_attach), and detach's exported wrapper allocates
+        # after unregistering (see _GC).
+        g["attach_current_thread"] = _attach_current_thread
+        g["detach_current_thread"] = _detach_current_thread
     sys.modules[f"{_PACKAGE}.command"] = command
     g["CarlaObject"] = CarlaObject
     global _ACTOR
@@ -496,10 +603,12 @@ def _ensure_dispatcher() -> None:
 
     def loop() -> None:
         # Codon's collector must know the thread before it runs Codon code.
+        # (Through ctypes where possible: see _GC.)
         try:
-            ok.append(bool(g["attach_current_thread"]()))
+            ok.append(_gc_attach() if _GC is not None else bool(g["attach_current_thread"]()))
         except Exception:
             ok.append(False)
+        _thread.attach = False  # registered for good (until the loop ends)
         attached.set()
         if not ok[0]:
             return
@@ -517,7 +626,10 @@ def _ensure_dispatcher() -> None:
                 if wait(seen.value, _DISPATCH_WAIT, ctypes.byref(out)) != 0:
                     time.sleep(_DISPATCH_WAIT)
         finally:
-            g["detach_current_thread"]()
+            if _GC is not None:
+                _GC[3]()  # GC_unregister_my_thread: no Codon code runs after it
+            else:
+                g["detach_current_thread"]()
 
     thread = threading.Thread(target=loop, name="carla-callbacks", daemon=True)
     thread.start()

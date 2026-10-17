@@ -179,3 +179,40 @@ def test_optional_methods_are_checked_against_the_carla_ref():
         if call not in sources:
             missing.append(call)
     assert not missing, f"not in codon/typesafe_carla: {missing}"
+
+
+# Issue #122: the native calls that wait for the server (or parse a map), and
+# so release an embedding runtime's lock while they run (pycarla: the GIL; see
+# codon/typesafe_carla/_blocking.codon). Adding one is a deliberate change.
+BLOCKING_CALLS = {
+    "tsc_world_tick", "tsc_world_wait_for_tick", "tsc_world_apply_settings_ext",
+    "tsc_world_get_map", "tsc_tick_listener_wait_for_frame",
+    "tsc_client_get_world", "tsc_client_load_world", "tsc_client_reload_world",
+    "tsc_client_load_world_if_different", "tsc_client_generate_opendrive_world",
+    "tsc_client_replay_file", "tsc_client_replay_file_ex", "tsc_client_apply_batch_sync",
+    "tsc_sensor_wait_for_data",
+}
+
+
+def test_blocking_calls_bracket_only_the_native_call():
+    """Each blocking call releases the lock for its native call alone: the next
+    statement takes it back, before the status is checked (which may raise)
+    and before anything else runs Codon code."""
+    bracket = re.compile(
+        r"^(?P<ind>\s*)blk = _blocking_begin\(\)[^\n]*\n"
+        r"(?P=ind)rc = (?P<fn>tsc_\w+)\([^\n]*(?:\n(?P=ind) [^\n]*)*\)\n"
+        r"(?P=ind)_blocking_end\(blk\)\n"
+        # (a reference taken for the wait may be dropped first: native only)
+        r"(?:(?P=ind)tsc_handle_release\(\w+\)\n)?"
+        r"(?P=ind)_check\(rc\)\n", re.MULTILINE)
+    found, stray = set(), []
+    for p in CODON_SOURCES:
+        text = p.read_text()
+        calls = [m["fn"] for m in bracket.finditer(text)]
+        found.update(calls)
+        uses = re.findall(r"=\s*_blocking_begin\(\)", text)  # (not the definition)
+        if len(uses) != len(calls):
+            stray.append(p.name)
+    assert not stray, f"_blocking_begin() not in the `blk = ...; rc = tsc_...(...); " \
+                      f"_blocking_end(blk); _check(rc)` pattern: {stray}"
+    assert found == BLOCKING_CALLS, (sorted(found - BLOCKING_CALLS), sorted(BLOCKING_CALLS - found))

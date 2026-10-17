@@ -25,6 +25,7 @@ from .world import World
 from .geometry import Transform
 from .world_queries import MapLayer, _map_layer
 from ._callbacks import _dispatch_point, _unregister_callback, _stop_gbuffers
+from ._blocking import _blocking_begin, _blocking_end
 from .command import Command, CommandResponse, _flatten, _responses, _DESTROY_ACTOR
 
 class ContentPackInfo:
@@ -137,20 +138,30 @@ class Client:
 
     def get_world(self) -> World:
         out = Ptr[cobj](1)
-        _check(tsc_client_get_world(self._h.ptr, out))
+        blk = _blocking_begin()  # connects (issue #122)
+        rc = tsc_client_get_world(self._h.ptr, out)
+        _blocking_end(blk)
+        _check(rc)
         return World(Handle(out[0]))
 
     def load_world(self, map_name: str, reset_settings: bool = True,
                    map_layers: int = MapLayer.All) -> World:
         """`map_layers`: the MapLayer flags to load (for the "_Opt" maps)."""
         out = Ptr[cobj](1)
-        _check(tsc_client_load_world(self._h.ptr, map_name.ptr, map_name.len,
-                                     i32(int(reset_settings)), _map_layer(map_layers), out))
+        layers = _map_layer(map_layers)
+        blk = _blocking_begin()  # issue #122
+        rc = tsc_client_load_world(self._h.ptr, map_name.ptr, map_name.len,
+                                   i32(int(reset_settings)), layers, out)
+        _blocking_end(blk)
+        _check(rc)
         return World(Handle(out[0]))
 
     def reload_world(self, reset_settings: bool = True) -> World:
         out = Ptr[cobj](1)
-        _check(tsc_client_reload_world(self._h.ptr, i32(int(reset_settings)), out))
+        blk = _blocking_begin()  # issue #122
+        rc = tsc_client_reload_world(self._h.ptr, i32(int(reset_settings)), out)
+        _blocking_end(blk)
+        _check(rc)
         return World(Handle(out[0]))
 
     def load_world_if_different(self, map_name: str, reset_settings: bool = True,
@@ -159,9 +170,12 @@ class Client:
         "Carla/Maps/" prefix). Returns the new World, or None when nothing was
         loaded (the Python API always returns None)."""
         out = Ptr[cobj](1)
-        _check(tsc_client_load_world_if_different(self._h.ptr, map_name.ptr, map_name.len,
-                                                  i32(int(reset_settings)),
-                                                  _map_layer(map_layers), out))
+        layers = _map_layer(map_layers)
+        blk = _blocking_begin()  # issue #122
+        rc = tsc_client_load_world_if_different(self._h.ptr, map_name.ptr, map_name.len,
+                                                i32(int(reset_settings)), layers, out)
+        _blocking_end(blk)
+        _check(rc)
         if out[0] == cobj():
             return None
         return World(Handle(out[0]))
@@ -243,8 +257,11 @@ class Client:
         buf = Ptr[CCommandResponse](top if top > 0 else 1)
         count = Ptr[int](1)
         _stop_destroyed_gbuffers(commands)  # registry steps lock themselves (#86)
-        _check(tsc_client_apply_batch_sync(self._h.ptr, records, n, i32(int(do_tick)), buf, top,
-                                           count))
+        blk = _blocking_begin()  # issue #122
+        rc = tsc_client_apply_batch_sync(self._h.ptr, records, n, i32(int(do_tick)), buf, top,
+                                         count)
+        _blocking_end(blk)
+        _check(rc)
         responses = _responses(buf, count[0])
         for i in range(len(responses)):
             if commands[i]._type == _DESTROY_ACTOR and not responses[i].has_error():
@@ -260,8 +277,11 @@ class Client:
         p = Ptr[COpendriveParameters](1)
         p[0] = (parameters if parameters is not None else OpendriveGenerationParameters())._to_c()
         out = Ptr[cobj](1)
-        _check(tsc_client_generate_opendrive_world(self._h.ptr, opendrive.ptr, opendrive.len, p,
-                                                   i32(int(reset_settings)), out))
+        blk = _blocking_begin()  # issue #122
+        rc = tsc_client_generate_opendrive_world(self._h.ptr, opendrive.ptr, opendrive.len, p,
+                                                 i32(int(reset_settings)), out)
+        _blocking_end(blk)
+        _check(rc)
         return World(Handle(out[0]))
 
     # --- Recorder (files are written on the server) -----------------------------
@@ -314,15 +334,21 @@ class Client:
         off = offset if offset is not None else Transform()
         # At the defaults, the call LibCarla 0.10.0 also has (same behaviour).
         if not replay_weather and off == Transform() and not map_override:
-            _check(tsc_client_replay_file(self._h.ptr, name.ptr, name.len, time_start, duration,
-                                          u32(follow_id), i32(int(replay_sensors)), out))
+            blk = _blocking_begin()  # issue #122
+            rc = tsc_client_replay_file(self._h.ptr, name.ptr, name.len, time_start, duration,
+                                        u32(follow_id), i32(int(replay_sensors)), out)
+            _blocking_end(blk)
+            _check(rc)
         else:
             t = Ptr[CTransform](1)
             t[0] = off._to_c()
-            _check(tsc_client_replay_file_ex(self._h.ptr, name.ptr, name.len, time_start,
-                                             duration, u32(follow_id), i32(int(replay_sensors)),
-                                             i32(int(replay_weather)), t, map_override.ptr,
-                                             map_override.len, out))
+            blk = _blocking_begin()  # issue #122
+            rc = tsc_client_replay_file_ex(self._h.ptr, name.ptr, name.len, time_start,
+                                           duration, u32(follow_id), i32(int(replay_sensors)),
+                                           i32(int(replay_weather)), t, map_override.ptr,
+                                           map_override.len, out)
+            _blocking_end(blk)
+            _check(rc)
         return take_string(out)
 
     def stop_replayer(self, keep_actors: bool = False):

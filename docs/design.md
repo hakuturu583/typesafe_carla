@@ -717,7 +717,9 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   timeout)` (or `tsc_queue_signal_wait` directly, without holding the GIL).
   A thread not made by Codon first calls `attach_current_thread()`
   (`GC_register_my_thread`) so the collector scans its stack, and
-  `detach_current_thread()` before it exits. In Codon, that mode is locked
+  `detach_current_thread()` before it exits. (Under pycarla a Python thread
+  needs neither: each call registers it, see "Other Python threads" below.
+  There the two functions keep their meaning, implemented in the runtime.) In Codon, that mode is locked
   like the callback thread. Under CPython it must not be: a Python callback
   may release the GIL while holding the lock, and the main thread would then
   block on the lock while holding the GIL (deadlock). The wrapper therefore
@@ -730,6 +732,64 @@ LibCarla thread ──▶ native queue ──push──▶ queue signal (counter
   `TYPESAFE_CARLA_CALLBACK_THREAD` no longer applies, so the environment
   cannot start a Codon thread that would run Python callbacks without the
   GIL.
+- **Blocking calls and an embedding runtime's lock (issue #122).** CPython
+  calls into the extension with the GIL held, and Codon's exporter cannot
+  release it. Without help, every Python thread would stop while
+  `World.tick()` or `Client.load_world()` waits for the server: a camera's
+  frames handed to a writer thread would be written only between ticks.
+  CARLA's Python API releases the GIL there. `_blocking.codon` holds three
+  hooks a wrapper installs as C function pointers: *held*, *release* (returns
+  a token) and *acquire(token)*. The pycarla package installs
+  `PyGILState_Check`, `PyEval_SaveThread` and `PyEval_RestoreThread` at
+  import (`TYPESAFE_CARLA_HOLD_GIL=1` opts out). The calls that wait for the
+  server or parse a map bracket only their native call:
+  `blk = _blocking_begin(); rc = tsc_...(...); _blocking_end(blk); _check(rc)`.
+  `tests/test_architecture.py` (`BLOCKING_CALLS`) lists them: `World.tick`,
+  `wait_for_tick`, `apply_settings` and `get_map`; the dispatch points' wait
+  for `on_tick` snapshots; `Client.get_world`, `load_world`, `reload_world`,
+  `load_world_if_different`, `generate_opendrive_world`, `replay_file` and
+  `apply_batch_sync`; and `Sensor.wait_for_data`.
+  Between the two calls the thread runs C++ only (the shim, which is
+  thread-safe as listed below, and LibCarla). It runs no Codon code, touches
+  no Python object and runs no callback. The lock is back before the status is
+  checked (`tsc_last_error` is thread-local, so raising afterwards is
+  safe), before the result is converted, and before the dispatch points run
+  callbacks. So every piece of Codon code still runs under the GIL, and the
+  `lock=False` mode above keeps its guarantee. A thread that does not hold
+  the lock (a Codon-made thread) releases nothing. Codon's collector is
+  unaffected. The waiting thread is a registered thread (the main thread, or
+  a Python thread already attached to call into Codon). If another thread
+  collects meanwhile, the collector stops the waiting thread as usual. A Codon
+  program installs no hooks, and the brackets cost it two branches.
+- **Other Python threads (pycarla).** With the GIL released during ticks,
+  other Python threads can do work, and some of them call into the package
+  (a thread reading actor states, say). Such a thread runs Codon code, and a
+  collection it starts while the collector does not know it aborts the
+  process ("Collecting from unknown thread"). CPython has no hook at a
+  thread's exit to unregister it, and an exited thread left registered would
+  have its stack scanned. So the runtime registers such a thread for the
+  duration of each call and unregisters it afterwards. The main thread and
+  the dispatcher are registered already, and their calls skip this. The
+  collector is called through ctypes: the exported
+  `detach_current_thread()` converts its result to Python after the thread
+  is unregistered. That allocates on an unknown thread, which crashes if
+  finalizers are pending. So pycarla's `attach_current_thread()` and
+  `detach_current_thread()` are the runtime's own: they register the thread
+  until detach (its calls then skip the per-call registration). Two limits:
+  - A daemon thread that is in a call when the interpreter finalizes is
+    ended by CPython (`pthread_exit`) as it takes the GIL back. It stays
+    registered, which is harmless only because the process is exiting.
+  - The GIL hooks use `PyGILState_Check`. In a sub-interpreter it always
+    returns 1. A thread that does not hold the GIL (a Codon-made one) would
+    then release a GIL it does not hold, a fatal error. pycarla does not
+    support sub-interpreters: it is a single-phase-init extension with
+    process-wide state.
+- **A blocking wait on a callback's own state (issue #122).** The dispatch
+  points' wait for `on_tick` snapshots runs with the GIL released, while
+  another thread may `remove_on_tick()` that callback, releasing its
+  listener handle. The wait therefore holds its own reference
+  (`tsc_handle_retain`), and the shim waits on its own reference to the
+  frame watch.
 
 The callback type is `Callable[[SensorData], None]`. Functions, bound methods,
 lambdas and closures are all accepted (Codon 0.19 cannot convert a capturing
@@ -859,8 +919,11 @@ Rules:
   that enter Codon code are the optional callback thread (section 15, issue
   #86), created through the GC, and an external dispatcher thread
   (`set_auto_dispatch(False)`), registered with `attach_current_thread()`
-  unless Codon made it. Both are serialized with the program's stream
+  unless Codon made it (under pycarla, any Python thread calling in is
+  registered for the call, issue #122). Both are serialized with the program's stream
   operations by one lock (or, with `lock=False`, by CPython's GIL).
+  A thread waiting in a blocking call with the GIL released (issue #122)
+  runs only shim and LibCarla code meanwhile, never Codon code.
 * no global Python interpreter lock exists or should be introduced.
 * the core library must not initialize CPython.
 

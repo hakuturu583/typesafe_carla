@@ -140,11 +140,13 @@ tsc_status_t tsc_world_get_client_token(tsc_world_t *world, uint64_t *out) {
 tsc_status_t tsc_tick_listener_wait_for_frame(const tsc_tick_listener_t *listener, uint64_t frame,
                                               double timeout_seconds, int32_t *out_reached) {
   return TSC_GUARD({
-    auto &l = listener_of(listener);
+    // Its own reference to the frame watch: the wait outlives a concurrent
+    // tsc_tick_listener_stop (the callers keep the handle itself alive).
+    const auto frames = listener_of(listener).frames;
     require_ptr(out_reached, "out_reached");
     const auto timeout =
         std::chrono::milliseconds(seconds_to_duration(timeout_seconds).milliseconds());
-    *out_reached = l.frames->wait_for(frame, timeout) ? 1 : 0;
+    *out_reached = frames->wait_for(frame, timeout) ? 1 : 0;
   });
 }
 

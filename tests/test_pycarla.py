@@ -34,9 +34,9 @@ def pycarla(backend):
     return pydir
 
 
-def _run_ok(pydir, program: str, timeout: float = 120) -> str:
-    """Runs `program` with the generated `carla`; checks it printed only OK and
-    returns its stderr."""
+def _run_ok(pydir, program: str, timeout: float = 120, env: dict | None = None) -> str:
+    """Runs `program` with the generated `carla` (`env`: added to its
+    environment); checks it printed only OK and returns its stderr."""
     # As the upstream-test driver: load the generated package explicitly (an
     # installed official `carla` must not win).
     head = (
@@ -46,7 +46,8 @@ def _run_ok(pydir, program: str, timeout: float = 120) -> str:
         " submodule_search_locations=[pkg])\n"
         "carla = importlib.util.module_from_spec(spec); sys.modules['carla'] = carla\n"
         "spec.loader.exec_module(carla)\n")
-    result = subprocess.run([up._python(), "-c", head + program], env=up._cpython_env(pydir, False),
+    result = subprocess.run([up._python(), "-c", head + program],
+                            env={**up._cpython_env(pydir, False), **(env or {})},
                             capture_output=True, text=True, timeout=timeout)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.split() == ["OK"], result.stdout
@@ -496,5 +497,262 @@ assert float(mass) == 1500.0 and raises(lambda: int(mass))
 sticky = bp.get_attribute('sticky_control')
 assert bool(sticky) is True and raises(lambda: int(sticky))
 assert raises(lambda: 1 if bp.get_attribute('role_name') else 0)  # truthiness is bool()
+print('OK')
+""")
+
+
+# Issue #122: the blocking calls release the GIL while they wait in LibCarla.
+# The mock's calls that wait for a server take DELAY ms more
+# (tsc_mock_set_call_delay_ms); a probe thread counts how far it gets meanwhile,
+# against how far it gets while the main thread sleeps.
+_GIL_PROBE = """
+import ctypes, queue, threading, time
+mock = ctypes.CDLL(os.environ['TYPESAFE_CARLA_LIB'])
+DELAY = 0.3
+mock.tsc_mock_set_call_delay_ms(ctypes.c_uint32(int(DELAY * 1000)))
+client = carla.Client('localhost', 2000)
+world = client.get_world()
+main = threading.get_ident()
+count = [0]
+stop = threading.Event()
+def probe():
+    while not stop.is_set():
+        count[0] += 1
+threading.Thread(target=probe, daemon=True).start()
+time.sleep(0.05)
+def progress(call):
+    before, start = count[0], time.monotonic()
+    try:
+        call()
+    finally:
+        took = time.monotonic() - start
+    assert took >= DELAY * 0.9, took  # the call did block
+    return (count[0] - before) / took
+free = progress(lambda: time.sleep(DELAY))
+"""
+
+
+def test_blocking_calls_release_the_gil(pycarla):
+    _run_ok(pycarla, _GIL_PROBE + """
+def raises(call, text):
+    try:
+        call()
+    except RuntimeError as e:
+        assert text in str(e), e
+    else:
+        raise AssertionError('no error')
+rates = {
+    'tick': progress(world.tick),
+    'load_world': progress(lambda: client.load_world('Town10HD_Opt')),
+    'reload_world': progress(client.reload_world),
+    # Raising after the GIL is taken back (the mock refuses the map after the delay).
+    'load_world raising': progress(lambda: raises(lambda: client.load_world('Nowhere'),
+                                                  'not found')),
+}
+world = client.get_world()
+settings = world.get_settings()
+settings.synchronous_mode = True
+world.apply_settings(settings)
+rates['wait_for_tick raising'] = progress(lambda: raises(lambda: world.wait_for_tick(5.0),
+                                                         'synchronous mode'))
+slow = {k: round(v / free, 2) for k, v in rates.items() if v < 0.3 * free}
+assert not slow, (free, slow)
+print('OK')
+""")
+
+
+def test_blocking_calls_hold_the_gil_on_request(pycarla):
+    """TYPESAFE_CARLA_HOLD_GIL=1: as before #122 (and the probe does measure it)."""
+    _run_ok(pycarla, _GIL_PROBE + """
+rate = progress(world.tick)
+assert rate < 0.1 * free, (rate, free)
+print('OK')
+""", env={"TYPESAFE_CARLA_HOLD_GIL": "1"})
+
+
+def test_callbacks_during_gil_free_ticks(pycarla):
+    """Callbacks on the dispatch thread run while the main thread waits in
+    tick() without the GIL (the mock delivers each tick's data 50 ms late, so
+    during the next tick); at the dispatch points (no dispatch thread) they
+    run inside tick(), on the main thread, once the GIL is taken back."""
+    stderr = _run_ok(pycarla, _GIL_PROBE + """
+mock.tsc_mock_set_delivery_delay_ms(ctypes.c_uint32(50))
+lib = world.get_blueprint_library()
+vehicle = world.get_actors()[0]
+def spawn(type_id):
+    return world.spawn_actor(lib.find(type_id), carla.Transform(), attach_to=vehicle)
+q = queue.Queue()
+fail = []
+def put(kind, frame):
+    q.put((kind, frame, threading.get_ident()))
+    if fail:
+        raise ValueError('boom at a dispatch point')
+camera = spawn('sensor.camera.rgb')
+lidar = spawn('sensor.lidar.ray_cast')
+camera.listen(lambda image: put('camera', image.frame + 0 * len(bytes(image.raw_data))))
+lidar.listen(lambda data: put('lidar', data.frame))
+world.on_tick(lambda snapshot: put('tick', snapshot.frame))
+def expect(frames, on_main):
+    want = {(k, f) for f in frames for k in ('camera', 'lidar', 'tick')}
+    deadline = time.time() + 10
+    while want:
+        kind, frame, thread = q.get(timeout=max(deadline - time.time(), 0.01))
+        if (kind, frame) in want:
+            want.discard((kind, frame))
+            assert (thread == main) == on_main, (kind, thread, main)
+frames = []
+for _ in range(5):
+    rate = progress(lambda: frames.append(world.tick()))
+    assert rate > 0.3 * free, (rate, free)
+expect(frames, False)
+# The dispatch points: no dispatch thread.
+from carla import _runtime
+assert _runtime._stop_dispatcher('the test stopped it')
+carla.set_auto_dispatch(True)
+mock.tsc_mock_set_delivery_delay_ms(ctypes.c_uint32(0))
+frames = []
+for _ in range(3):
+    rate = progress(lambda: frames.append(world.tick()))
+    assert rate > 0.3 * free, (rate, free)
+    expect(frames[-1:], True)
+# A callback raising at a dispatch point is printed; tick() goes on.
+fail.append(True)
+for _ in range(2):
+    frames.append(world.tick())
+    expect(frames[-1:], True)
+fail.clear()
+camera.stop(); lidar.stop(); camera.destroy(); lidar.destroy()
+print('OK')
+""")
+    assert "boom at a dispatch point" in stderr, stderr
+
+
+def test_other_python_threads_may_call_in(pycarla):
+    """A Python thread other than the importing one and the dispatcher calls
+    into Codon: it is registered with Codon's collector for each call, so a
+    collection it starts does not abort ("Collecting from unknown thread"),
+    while the main thread ticks without the GIL."""
+    _run_ok(pycarla, _GIL_PROBE + """
+from carla import _runtime
+mock.tsc_mock_set_call_delay_ms(ctypes.c_uint32(5))
+lib = world.get_blueprint_library()
+vehicle = world.get_actors()[0]
+lidar = world.spawn_actor(lib.find('sensor.lidar.ray_cast'), carla.Transform(), attach_to=vehicle)
+got = []
+lidar.listen(lambda data: got.append(data.frame))
+done, errors = [], []
+def worker():
+    try:
+        for _ in range(3000):  # allocates enough for several collections
+            world.get_blueprint_library().filter('vehicle.*')
+            world.get_actors()
+            vehicle.get_transform()
+        done.append(True)
+    except BaseException as e:
+        errors.append(repr(e))
+threads = [threading.Thread(target=worker) for _ in range(3)]
+for t in threads:
+    t.start()
+while any(t.is_alive() for t in threads):
+    world.tick()
+for t in threads:
+    t.join()
+assert len(done) == 3 and not errors, errors
+assert getattr(_runtime._thread, 'attach', None) is False  # the main thread: for good
+assert got
+lidar.stop(); lidar.destroy()
+# Collections on the worker itself: a polled measurement is delivered there,
+# and the library collects every 16 deliveries on a registered thread. The
+# main thread only waits meanwhile (no Codon code).
+gnss = world.spawn_actor(lib.find('sensor.other.gnss'), carla.Transform(), attach_to=vehicle)
+gnss.listen(queue_size=0)  # polling mode, unbounded
+mock.tsc_mock_set_call_delay_ms(ctypes.c_uint32(0))
+for _ in range(64):
+    world.tick()
+gc_no = ctypes.PyDLL(_runtime._ext.__file__).GC_get_gc_no
+gc_no.restype = ctypes.c_size_t
+polled = []
+def poller():
+    try:
+        while gnss.poll() is not None:
+            polled.append(1)
+    except BaseException as e:
+        errors.append(repr(e))
+before = gc_no()
+t = threading.Thread(target=poller)
+t.start(); t.join()
+assert not errors and len(polled) >= 64, (errors, len(polled))
+assert gc_no() >= before + 3, (before, gc_no())  # 64 deliveries: 4 collections there
+gnss.stop(); gnss.destroy()
+print('OK')
+""", timeout=600)
+
+
+def test_attach_current_thread_under_pycarla(pycarla):
+    """carla.attach_current_thread() / detach_current_thread() on a Python
+    thread: registered until detach (its calls skip the per-call
+    registration), then per call again; neither crashes nor undoes the
+    other's registration."""
+    _run_ok(pycarla, _GIL_PROBE + """
+from carla import _runtime
+registered = ctypes.PyDLL(_runtime._ext.__file__).GC_thread_is_registered
+assert carla.attach_current_thread() is False  # the main thread already is
+errors = []
+def worker():
+    try:
+        assert not registered()
+        carla.detach_current_thread()  # not registered: nothing to undo
+        assert carla.attach_current_thread() is True
+        assert carla.attach_current_thread() is False
+        for _ in range(2000):
+            world.get_blueprint_library().filter('vehicle.*')
+        assert registered()  # the calls did not unregister it
+        carla.detach_current_thread()
+        assert not registered()
+        for _ in range(2000):  # per call again
+            world.get_blueprint_library().filter('vehicle.*')
+        assert not registered()
+    except BaseException as e:
+        import traceback
+        errors.append(traceback.format_exc())
+threads = [threading.Thread(target=worker) for _ in range(3)]
+for t in threads:
+    t.start()
+for t in threads:
+    t.join()
+assert not errors, errors
+print('OK')
+""")
+
+
+def test_remove_on_tick_during_a_gil_free_wait(pycarla):
+    """At the dispatch points, tick() waits (GIL released) for the on_tick
+    snapshot; another thread removing that callback meanwhile must not free
+    the listener under the wait (issue #122 review)."""
+    _run_ok(pycarla, _GIL_PROBE + """
+from carla import _runtime
+mock.tsc_mock_set_call_delay_ms(ctypes.c_uint32(0))
+ids = [world.on_tick(lambda s: None) for _ in range(4)]
+assert _runtime._stop_dispatcher('the test stopped it')
+carla.set_auto_dispatch(True)
+mock.tsc_mock_set_delivery_delay_ms(ctypes.c_uint32(300))  # tick() then waits for them
+live = mock.tsc_live_handle_count
+live.restype = ctypes.c_uint64
+kept = []
+def remove(callback_id):
+    # tick() is waiting on this callback's listener (the first one left).
+    before = live()
+    world.remove_on_tick(callback_id)
+    kept.append(live() == before)  # the wait's own reference keeps it
+for callback_id in ids:
+    remover = threading.Timer(0.1, remove, (callback_id,))
+    remover.start()
+    start = time.monotonic()
+    world.tick(1.0)  # (a removed callback's frame never comes: waits out the 1 s)
+    remover.join()
+    assert time.monotonic() - start < 3
+assert all(kept), kept
+mock.tsc_mock_set_delivery_delay_ms(ctypes.c_uint32(0))
+world.tick()
 print('OK')
 """)
