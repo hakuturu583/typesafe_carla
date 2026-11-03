@@ -214,14 +214,15 @@ void set_adjust_signs_height_to_ground(S &s, int32_t value) {
   }(use, obj __VA_OPT__(, ) __VA_ARGS__)
 // The actor skeleton queries (bones, components, sockets, issue #19) are in
 // ue5-dev, not in CARLA 0.10.0's LibCarla; there they throw (TSC_ERROR).
-// LibCarla refs known to have every skeleton query (ue5-dev, ue58-dev; the
-// mock mirrors ue5-dev): there, a query that does not resolve is a compile error, so a
+// LibCarla refs known to have every skeleton query (ue5-dev, ue58-dev, 1.0;
+// the mock mirrors ue5-dev): there, a query that does not resolve is a compile error, so a
 // misspelled method name cannot silently become "unsupported".
 #if defined(TSC_MOCK_LIBCARLA)
 inline constexpr bool kSkeletonQueriesRequired = true;
 #elif defined(TSC_CARLA_GIT_REF)
 inline constexpr bool kSkeletonQueriesRequired =
-    std::string_view(TSC_CARLA_GIT_REF) == "ue5-dev" || std::string_view(TSC_CARLA_GIT_REF) == "ue58-dev";
+    std::string_view(TSC_CARLA_GIT_REF) == "ue5-dev" || std::string_view(TSC_CARLA_GIT_REF) == "ue58-dev" ||
+    std::string_view(TSC_CARLA_GIT_REF) == "1.0";
 #else
 inline constexpr bool kSkeletonQueriesRequired = false;
 #endif
