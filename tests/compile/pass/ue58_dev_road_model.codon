@@ -1,6 +1,7 @@
-# CARLA ue58-dev's road model (Road, LaneSection, Lane), built for ue58-dev,
-# with its static types.
+# CARLA ue58-dev's road model (Road, LaneSection, Lane), built for ue58-dev
+# and for 1.0 (a release of ue58-dev), with its static types.
 # carla-ref: ue58-dev
+# carla-ref: 1.0
 # strict
 import typesafe_carla as carla
 

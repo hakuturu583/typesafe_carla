@@ -3,7 +3,7 @@
 #
 # Release tags are <version>-<YYYYMMDD>, e.g. 0.5.0-20261009: the package
 # version and a (UTC committer) date. Every carla-simulator/carla ref listed in
-# tools/release_carla_refs.txt (ue5-dev, ue58-dev) is built from its last
+# tools/release_carla_refs.txt (ue5-dev, ue58-dev, 1.0) is built from its last
 # commit on or before that date, and the wheel of each platform carries a
 # native library per ref (tools/merge_native_wheels.py; the first ref is the
 # default, TYPESAFE_CARLA_CARLA_REF selects another at run time). A tag

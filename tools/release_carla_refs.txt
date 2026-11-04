@@ -3,6 +3,8 @@
 # native library for each: the first is the default (typesafe_carla/_native/),
 # the others go to typesafe_carla/_native/refs/<ref>/ and are selected with
 # TYPESAFE_CARLA_CARLA_REF. A client must match its server's branch: their RPC
-# messages differ (e.g. EpisodeSettings gained a field in ue58-dev).
+# messages differ (e.g. EpisodeSettings gained a field in ue58-dev). 1.0 is the
+# CARLA 1.0 release tag, cut from ue58-dev: a client for a CARLA 1.0 server.
 ue5-dev
 ue58-dev
+1.0

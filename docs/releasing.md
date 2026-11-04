@@ -30,7 +30,7 @@ same sources and Codon.
 
 A release builds LibCarla from every carla-simulator/carla ref listed in
 `tools/release_carla_refs.txt` (of the commit it releases), one per line,
-currently `ue5-dev` and `ue58-dev`. The wheel of each platform carries a
+currently `ue5-dev`, `ue58-dev` and `1.0` (the CARLA 1.0 release tag). The wheel of each platform carries a
 native library for each:
 
 ```
@@ -262,8 +262,8 @@ with `actions/cache`, keyed by the resolved CARLA commit SHA:
   CARLA SHA may get newer ones.
 
 An entry is about 275 MB compressed (1.1 GB unpacked, mostly Boost sources),
-so CI's twelve legs (four runners times `ue5-dev`, `ue58-dev` and `0.10.0`)
-hold about 3.3 GB; a new commit of a moving branch adds four.
+so CI's sixteen legs (four runners times `ue5-dev`, `ue58-dev`, `1.0` and
+`0.10.0`) hold about 4.4 GB; a new commit of a moving branch adds four.
 GitHub evicts the least recently used entries beyond 10 GB per repository.
 
 The wheel also ships `_native/THIRD_PARTY_NOTICES`, the license notices of

@@ -1,5 +1,7 @@
-# The CARLA ue58-dev additions, built for ue58-dev, with their static types.
+# The CARLA ue58-dev additions, built for ue58-dev and for 1.0 (a release of
+# ue58-dev, with the same LibCarla API), with their static types.
 # carla-ref: ue58-dev
+# carla-ref: 1.0
 # strict
 import typesafe_carla as carla
 

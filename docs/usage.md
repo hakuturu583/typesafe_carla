@@ -40,11 +40,14 @@ field in `ue58-dev`), so a mismatched client fails on such calls.
 
 The published wheel contains LibCarla built from each CARLA UE5 ref listed in
 [`tools/release_carla_refs.txt`](../tools/release_carla_refs.txt): `ue5-dev`
-(the default) and `ue58-dev`. Select one with `TYPESAFE_CARLA_CARLA_REF`:
+(the default), `ue58-dev`, and `1.0`, the CARLA 1.0 release tag (cut from
+`ue58-dev`, with its API: for a CARLA 1.0 release server). Select one with
+`TYPESAFE_CARLA_CARLA_REF`:
 
 ```sh
+TYPESAFE_CARLA_CARLA_REF=1.0 typesafe-codon run main.py
+TYPESAFE_CARLA_CARLA_REF=1.0 python main.py        # import typesafe_carla.carla
 TYPESAFE_CARLA_CARLA_REF=ue58-dev typesafe-codon run main.py
-TYPESAFE_CARLA_CARLA_REF=ue58-dev python main.py   # import typesafe_carla.carla
 ```
 
 `typesafe-codon info` lists the refs the installation has (`carla refs`) and

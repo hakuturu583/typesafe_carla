@@ -8,7 +8,9 @@ import) does not count as a pass. tests/compile/strict_fail/*.codon use a
 Python-API compatibility shortcut: they must compile normally and fail in
 strict mode with their `# expect-error:` message. A `# carla-ref: <ref>` line
 compiles the program for that CARLA ref (TYPESAFE_CARLA_CHECK_REF; otherwise
-the mock's: none). Programs are compiled to LLVM IR only; never run.
+the mock's: none); a pass program with several such lines must compile for
+each of them (e.g. ue58-dev and 1.0, which has its API). Programs are compiled
+to LLVM IR only; never run.
 """
 
 from __future__ import annotations
@@ -24,12 +26,25 @@ STRICT_PASS = [p for p in PASS if "# strict" in p.read_text().splitlines()]
 STRICT_FAIL = sorted((COMPILE_DIR / "strict_fail").glob("*.codon"))
 
 
-def _compile(launcher, source: Path, tmp_path: Path, strict: bool = False):
-    flags = ["--strict"] if strict else []
-    refs = [line.split(":", 1)[1].strip() for line in source.read_text().splitlines()
+def carla_refs(source: Path) -> list[str]:
+    """The refs of the program's `# carla-ref:` lines."""
+    return [line.split(":", 1)[1].strip() for line in source.read_text().splitlines()
             if line.startswith("# carla-ref:")]
+
+
+def _compile(launcher, source: Path, tmp_path: Path, strict: bool = False,
+             ref: str | None = None):
+    """Compiles `source` for `ref` (default: its first `# carla-ref:`, else none)."""
+    flags = ["--strict"] if strict else []
+    if ref is None:
+        refs = carla_refs(source)
+        ref = refs[0] if refs else "none"
     return launcher(*flags, "build", "--llvm", "-o", str(tmp_path / (source.stem + ".ll")),
-                    str(source), env={"TYPESAFE_CARLA_CHECK_REF": refs[0] if refs else "none"})
+                    str(source), env={"TYPESAFE_CARLA_CHECK_REF": ref})
+
+
+# (program, ref) for every `# carla-ref:` line of a pass program but its first.
+PASS_OTHER_REFS = [(p, ref) for p in PASS for ref in carla_refs(p)[1:]]
 
 
 def expected_error(source: Path) -> str:
@@ -47,6 +62,18 @@ def test_suites_are_not_empty():
 def test_compile_pass(launcher, source, tmp_path):
     result = _compile(launcher, source, tmp_path)
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("source, ref", PASS_OTHER_REFS,
+                         ids=[f"{p.stem}-{ref}" for p, ref in PASS_OTHER_REFS])
+def test_compile_pass_other_refs(launcher, source, ref, tmp_path):
+    result = _compile(launcher, source, tmp_path, ref=ref)
+    assert result.returncode == 0, result.stderr
+
+
+def test_fail_programs_name_one_carla_ref():
+    """A fail program is compiled for its first ref only: one line, no ambiguity."""
+    assert [p.name for p in FAIL if len(carla_refs(p)) > 1] == []
 
 
 @pytest.mark.parametrize("source", FAIL, ids=lambda p: p.stem)
