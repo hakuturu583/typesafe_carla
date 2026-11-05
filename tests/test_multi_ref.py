@@ -11,7 +11,7 @@ import zipfile
 
 import pytest
 
-from tools import merge_native_wheels
+from tools import check_wheel, merge_native_wheels, release_tag
 from typesafe_carla import paths
 
 WHEEL = "typesafe_carla-0.5.0-py3-none-manylinux_2_28_x86_64.whl"
@@ -93,6 +93,30 @@ def test_merge_rejects_another_version(tmp_path):
     other = other.rename(other.with_name(WHEEL.replace("0.5.0", "0.5.1")))
     with pytest.raises(merge_native_wheels.MergeError, match="same version"):
         merge_native_wheels.merge(base, [other])
+
+
+def test_the_check_accepts_a_merged_wheel_of_every_release_ref(tmp_path):
+    """What the release's wheel-merge job does with tools/release_carla_refs.txt,
+    which pull request CI does not run."""
+    refs = release_tag.release_refs()
+    base, *others = [make_wheel(tmp_path / str(i), ref) for i, ref in enumerate(refs)]
+    merge_native_wheels.merge(base, others)
+    with zipfile.ZipFile(base) as z:
+        z.extractall(tmp_path / "installed")
+    native = tmp_path / "installed" / NATIVE
+    assert check_wheel.refs_match(list(paths._native_dirs(native)), refs)
+
+
+@pytest.mark.parametrize(
+    "bundled",
+    [
+        pytest.param(["1.0", "ue5-dev", "ue58-dev"], id="another default"),
+        pytest.param(["ue5-dev", "1.0"], id="a missing ref"),
+        pytest.param(["ue5-dev", "1.0", "ue58-dev", "0.10.0"], id="an extra ref"),
+    ],
+)
+def test_the_check_rejects_other_refs(bundled):
+    assert not check_wheel.refs_match(bundled, ["ue5-dev", "ue58-dev", "1.0"])
 
 
 @pytest.fixture
