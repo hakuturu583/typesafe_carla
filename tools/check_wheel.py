@@ -67,7 +67,10 @@ def main() -> int:
     if args.carla_refs is not None:
         bundled = list(paths.carla_refs())
         print(f"refs     {', '.join(bundled)}")
-        if bundled != args.carla_refs.split(","):
+        # The default ref comes first; the others are in file-name order, not
+        # the order of tools/release_carla_refs.txt.
+        expected = args.carla_refs.split(",")
+        if bundled[:1] != expected[:1] or sorted(bundled) != sorted(expected):
             errors.append(f"the wheel carries CARLA {bundled}, expected {args.carla_refs}")
     if backend != args.backend:
         errors.append(f"backend is {backend!r}, expected {args.backend!r}")
