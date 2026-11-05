@@ -35,6 +35,13 @@ NON_BASELINE = {
 }
 
 
+def refs_match(bundled: list[str], expected: list[str]) -> bool:
+    """Whether a wheel carries the expected CARLA refs. The default ref comes first
+    in both; the others are in file-name order (typesafe_carla.paths) in `bundled`
+    and in the order of tools/release_carla_refs.txt in `expected`."""
+    return bundled[:1] == expected[:1] and sorted(bundled) == sorted(expected)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--backend", default="libcarla")
@@ -67,10 +74,7 @@ def main() -> int:
     if args.carla_refs is not None:
         bundled = list(paths.carla_refs())
         print(f"refs     {', '.join(bundled)}")
-        # The default ref comes first; the others are in file-name order, not
-        # the order of tools/release_carla_refs.txt.
-        expected = args.carla_refs.split(",")
-        if bundled[:1] != expected[:1] or sorted(bundled) != sorted(expected):
+        if not refs_match(bundled, args.carla_refs.split(",")):
             errors.append(f"the wheel carries CARLA {bundled}, expected {args.carla_refs}")
     if backend != args.backend:
         errors.append(f"backend is {backend!r}, expected {args.backend!r}")
