@@ -3,6 +3,7 @@
     tools/release_tag.py check <tag> [--github-output FILE] [--offline]
     tools/release_tag.py make [<CARLA ref>] [--github-output FILE]
     tools/release_tag.py refs [<CARLA ref>...] [--github-output FILE]
+    tools/release_tag.py drift [--github-output FILE]
 
 Examples: ``0.5.0-20261009`` (every ref of ``tools/release_carla_refs.txt``),
 ``0.1.0-ue5-dev-20260915``, ``0.1.0-0.10.0-20250320`` (that ref alone).
@@ -38,6 +39,16 @@ dated with the newest of them.
 
 ``refs`` resolves refs (default: the listed ones) to their current commits,
 without a tag (the release workflow's dry run).
+
+``drift`` decides whether the scheduled run re-releases: it reads the LibCarla
+commit of every ref from the latest GitHub release's notes (the
+``LibCarla: carla-simulator/carla `<ref>` at carla-simulator/carla@<sha>``
+lines the release workflow writes), resolves each listed ref's current commit,
+and asks GitHub which files differ between the two. A file under a prefix of
+``tools/release_drift_paths.txt`` (the wire format: RPC messages, sensor
+serializers, streaming), or a listed ref the release did not build, makes it a
+drift. Outputs ``bump`` (``patch`` on a drift, else ``none``) and ``reason``
+(one line, for the release notes).
 
 ``unpublished`` fails if the package version (or ``--version``) is already on
 PyPI (or ``--index testpypi``): PyPI accepts each version once.
@@ -75,6 +86,12 @@ except ImportError:
 CARLA_REPO = "carla-simulator/carla"
 PACKAGE = "typesafe-carla"
 REFS_FILE = Path(__file__).resolve().parent / "release_carla_refs.txt"
+DRIFT_PATHS_FILE = Path(__file__).resolve().parent / "release_drift_paths.txt"
+OWN_REPO = "hakuturu583/typesafe_carla"
+# The line the release workflow writes per ref into the GitHub release notes.
+_NOTES_LINE = re.compile(
+    r"^LibCarla: carla-simulator/carla `(?P<ref>[^`]+)` at "
+    r"carla-simulator/carla@(?P<sha>[0-9a-f]{40})", re.MULTILINE)
 INDEX_JSON = {"pypi": "https://pypi.org/pypi", "testpypi": "https://test.pypi.org/pypi"}
 
 # A PEP 440 public version in canonical form (it never contains "-").
@@ -324,6 +341,74 @@ def make_multi_tag(version: str, refs: list[str],
     return parse(str(ReleaseTag(version, None, day)), version), resolved
 
 
+def drift_paths(path: Path = DRIFT_PATHS_FILE) -> list[str]:
+    """The path prefixes of ``tools/release_drift_paths.txt``."""
+    prefixes = [line.strip() for line in path.read_text().splitlines()]
+    prefixes = [p for p in prefixes if p and not p.startswith("#")]
+    if not prefixes:
+        raise TagError(f"{path} lists no path")
+    return prefixes
+
+
+def released_commits(fetch: Fetch = github_fetch, repo: str = OWN_REPO) -> tuple[str, dict[str, str]]:
+    """The latest GitHub release's tag and the LibCarla commit of each of its refs."""
+    try:
+        release = fetch(f"https://api.github.com/repos/{repo}/releases/latest")
+        tag, body = release["tag_name"], release.get("body") or ""
+    except RefNotFound as e:
+        raise TagError(f"{repo} has no published release: {e}") from None
+    except (KeyError, TypeError) as e:
+        raise TagError(f"unexpected GitHub API response for {repo}'s latest release: {e!r}") from None
+    commits = {m["ref"]: m["sha"] for m in _NOTES_LINE.finditer(body)}
+    if not commits:
+        raise TagError(f"the notes of {repo}'s release {tag} name no LibCarla commit")
+    return tag, commits
+
+
+def changed_files(base: str, head: str, fetch: Fetch = github_fetch,
+                  repo: str = CARLA_REPO) -> list[str]:
+    """The files that differ between two commits (GitHub's compare, every page)."""
+    files: list[str] = []
+    page = 1
+    while True:
+        url = (f"https://api.github.com/repos/{repo}/compare/{base}...{head}"
+               f"?per_page=100&page={page}")
+        try:
+            answer = fetch(url)
+            batch = [f["filename"] for f in answer.get("files") or []]
+        except (KeyError, TypeError, AttributeError) as e:
+            raise TagError(f"unexpected GitHub API response for {url}: {e!r}") from None
+        files.extend(batch)
+        if len(batch) < 100:
+            return files
+        page += 1
+
+
+def drift(refs: list[str], prefixes: list[str], fetch: Fetch = github_fetch,
+          repo: str = OWN_REPO) -> tuple[Resolved, list[str]]:
+    """Each listed ref's current commit, and why it calls for a release (empty: no need).
+
+    A reason per ref whose current commit changes a file under one of
+    ``prefixes`` from the latest release's commit, or that the release did not
+    build."""
+    tag, released = released_commits(fetch, repo)
+    resolved = resolve_refs(refs, None, fetch)
+    reasons: list[str] = []
+    for ref, commit in resolved:
+        before = released.get(ref)
+        if before is None:
+            reasons.append(f"{ref} is not in {tag}")
+            continue
+        if before == commit.sha:
+            continue
+        hits = [f for f in changed_files(before, commit.sha, fetch)
+                if any(f.startswith(p) for p in prefixes)]
+        if hits:
+            shown = ", ".join(hits[:3]) + (f" and {len(hits) - 3} more" if len(hits) > 3 else "")
+            reasons.append(f"{ref} {before[:9]}..{commit.sha[:9]} changes {shown}")
+    return resolved, reasons
+
+
 def _matrix(resolved: Resolved) -> str:
     return json.dumps([{"index": i, "ref": ref, "commit": c.sha, "date": c.date.isoformat()}
                        for i, (ref, c) in enumerate(resolved)], separators=(",", ":"))
@@ -347,7 +432,7 @@ def _outputs(tag: ReleaseTag | None, resolved: Resolved | None,
 
 def main(argv: list[str] | None = None, fetch: Fetch = github_fetch,
          status: Status = http_status, today: datetime.date | None = None,
-         refs_file: Path = REFS_FILE) -> int:
+         refs_file: Path = REFS_FILE, drift_paths_file: Path = DRIFT_PATHS_FILE) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     check = sub.add_parser("check", help="parse and check a tag, resolve its CARLA commit")
@@ -360,11 +445,13 @@ def main(argv: list[str] | None = None, fetch: Fetch = github_fetch,
     refs_cmd = sub.add_parser("refs", help="resolve refs (default: the listed ones) to their "
                                            "current commits")
     refs_cmd.add_argument("refs", nargs="*")
+    drift_cmd = sub.add_parser("drift", help="whether the listed refs moved on from the latest "
+                                             "release's commits in the wire format")
     unpublished = sub.add_parser("unpublished", help="fail if the version is already on "
                                                      "the index")
     unpublished.add_argument("--version", help="default: the package version")
     unpublished.add_argument("--index", choices=sorted(INDEX_JSON), default="pypi")
-    for p in (check, make, refs_cmd, unpublished):
+    for p in (check, make, refs_cmd, drift_cmd, unpublished):
         p.add_argument("--github-output", metavar="FILE",
                        help="append key=value outputs to FILE instead of printing them")
     args = parser.parse_args(argv)
@@ -376,6 +463,25 @@ def main(argv: list[str] | None = None, fetch: Fetch = github_fetch,
             version = args.version or package_version()
             check_unpublished(version, args.index, status)
             print(f"{PACKAGE} {version} is not on {args.index} yet", file=log)
+            return 0
+        if args.command == "drift":
+            refs = release_refs(refs_file)
+            resolved, reasons = drift(refs, drift_paths(drift_paths_file), fetch)
+            for ref, commit in resolved:
+                print(f"  {ref} = {commit.sha} ({commit.date.isoformat()})", file=log)
+            if reasons:
+                print("Drift, a patch release is due:", file=log)
+                for reason in reasons:
+                    print(f"  {reason}", file=log)
+            else:
+                print("No drift in the wire format since the latest release", file=log)
+            out = {"bump": "patch" if reasons else "none", "reason": "; ".join(reasons)}
+            lines = "".join(f"{k}={v}\n" for k, v in out.items())
+            if args.github_output:
+                with open(args.github_output, "a") as f:
+                    f.write(lines)
+            else:
+                sys.stdout.write(lines)
             return 0
         if args.command == "refs":
             refs = args.refs or release_refs(refs_file)

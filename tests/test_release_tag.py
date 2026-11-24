@@ -413,3 +413,120 @@ def test_refs_cli_accepts_a_slash_only_in_the_first_ref(capsys):
     capsys.readouterr()
     assert release_tag.main(["refs", "ue58-dev", "feature/x"], fetch) == 1
     assert "only the first ref" in capsys.readouterr().err
+
+
+# --- drift: the scheduled re-release ------------------------------------------
+
+SHA3 = "fedcba9876543210fedcba9876543210fedcba98"
+
+
+def release_notes(*pairs):
+    lines = [f"LibCarla: carla-simulator/carla `{ref}` at carla-simulator/carla@{sha}"
+             + (" (default)" if i == 0 else "") for i, (ref, sha) in enumerate(pairs)]
+    return "\n".join(lines) + "\n\n## What's Changed\n* something\n"
+
+
+def fake_github_drift(released, current, changed, tag="0.8.7-20261105"):
+    """A fetch() for drift: the latest release's notes, each ref's current
+    commit, and the files GitHub compares as changed (100 to a page)."""
+    calls = []
+
+    def fetch(url):
+        calls.append(url)
+        if url.endswith("/releases/latest"):
+            return {"tag_name": tag, "body": release_notes(*released)}
+        if "/compare/" in url:
+            span = url.split("/compare/")[1].split("?")[0]
+            page = int(url.split("&page=")[1])
+            files = changed[span]
+            return {"files": [{"filename": f} for f in files[(page - 1) * 100:page * 100]]}
+        for ref, sha in current.items():
+            if f"sha={ref}&" in url:
+                return [commit_json(sha, "2026-11-17T12:15:27Z")]
+        raise release_tag.RefNotFound(url)
+
+    fetch.calls = calls
+    return fetch
+
+
+PREFIXES = ["LibCarla/source/carla/rpc/", "LibCarla/source/carla/sensor/"]
+
+
+def test_no_drift_when_the_refs_have_not_moved():
+    fetch = fake_github_drift([("ue5-dev", SHA), ("1.0", SHA2)],
+                              {"ue5-dev": SHA, "1.0": SHA2}, {})
+    _, reasons = release_tag.drift(["ue5-dev", "1.0"], PREFIXES, fetch)
+    assert reasons == []
+    assert not [u for u in fetch.calls if "/compare/" in u]
+
+
+def test_a_move_outside_the_wire_format_is_no_drift():
+    fetch = fake_github_drift([("ue5-dev", SHA), ("1.0", SHA2)],
+                              {"ue5-dev": SHA, "1.0": SHA3},
+                              {f"{SHA2}...{SHA3}": ["Docs/core_map.md", "Unreal/x.cpp",
+                                                    "LibCarla/source/carla/client/World.cpp"]})
+    _, reasons = release_tag.drift(["ue5-dev", "1.0"], PREFIXES, fetch)
+    assert reasons == []
+
+
+def test_a_retagged_ref_changing_an_rpc_message_is_a_drift():
+    """CARLA's 1.0 tag moved after typesafe-carla 0.8.7 built it (EpisodeSettings
+    and Actor gained fields)."""
+    fetch = fake_github_drift(
+        [("ue5-dev", SHA), ("1.0", SHA2)], {"ue5-dev": SHA, "1.0": SHA3},
+        {f"{SHA2}...{SHA3}": ["CHANGELOG.md", "LibCarla/source/carla/rpc/EpisodeSettings.h",
+                              "LibCarla/source/carla/rpc/Actor.h"]})
+    resolved, reasons = release_tag.drift(["ue5-dev", "1.0"], PREFIXES, fetch)
+    assert [(ref, c.sha) for ref, c in resolved] == [("ue5-dev", SHA), ("1.0", SHA3)]
+    assert reasons == [f"1.0 {SHA2[:9]}..{SHA3[:9]} changes "
+                       "LibCarla/source/carla/rpc/EpisodeSettings.h, "
+                       "LibCarla/source/carla/rpc/Actor.h"]
+
+
+def test_every_compare_page_is_read():
+    files = [f"Docs/{i}.md" for i in range(150)] + ["LibCarla/source/carla/sensor/s11n/X.h"]
+    fetch = fake_github_drift([("1.0", SHA2)], {"1.0": SHA3}, {f"{SHA2}...{SHA3}": files})
+    _, reasons = release_tag.drift(["1.0"], PREFIXES, fetch)
+    assert len(reasons) == 1 and "sensor/s11n/X.h" in reasons[0]
+    assert len([u for u in fetch.calls if "/compare/" in u]) == 2
+
+
+def test_a_ref_the_release_did_not_build_is_a_drift():
+    fetch = fake_github_drift([("ue5-dev", SHA)], {"ue5-dev": SHA, "1.0": SHA2}, {})
+    _, reasons = release_tag.drift(["ue5-dev", "1.0"], PREFIXES, fetch)
+    assert reasons == ["1.0 is not in 0.8.7-20261105"]
+
+
+def test_notes_naming_no_commit_are_refused():
+    def fetch(url):
+        return {"tag_name": "0.1.0-20260101", "body": "## What's Changed\n"}
+
+    with pytest.raises(TagError, match="name no LibCarla commit"):
+        release_tag.released_commits(fetch)
+
+
+def test_drift_cli_outputs_the_bump_and_the_reason(tmp_path, refs_file):
+    paths = tmp_path / "paths.txt"
+    paths.write_text("# wire format\nLibCarla/source/carla/rpc/\n")
+    out = tmp_path / "github_output"
+    fetch = fake_github_drift(
+        [("ue5-dev", SHA), ("ue58-dev", SHA2)], {"ue5-dev": SHA, "ue58-dev": SHA3},
+        {f"{SHA2}...{SHA3}": ["LibCarla/source/carla/rpc/Actor.h"]})
+    assert release_tag.main(["drift", "--github-output", str(out)], fetch,
+                            refs_file=refs_file, drift_paths_file=paths) == 0
+    lines = dict(ln.split("=", 1) for ln in out.read_text().splitlines())
+    assert lines["bump"] == "patch"
+    assert "ue58-dev" in lines["reason"] and "rpc/Actor.h" in lines["reason"]
+
+
+def test_drift_cli_without_drift_bumps_nothing(tmp_path, refs_file):
+    out = tmp_path / "github_output"
+    fetch = fake_github_drift([("ue5-dev", SHA), ("ue58-dev", SHA2)],
+                              {"ue5-dev": SHA, "ue58-dev": SHA2}, {})
+    assert release_tag.main(["drift", "--github-output", str(out)], fetch,
+                            refs_file=refs_file) == 0
+    assert out.read_text() == "bump=none\nreason=\n"
+
+
+def test_the_shipped_drift_paths_name_the_rpc_messages():
+    assert "LibCarla/source/carla/rpc/" in release_tag.drift_paths()
