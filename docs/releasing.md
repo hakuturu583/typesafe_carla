@@ -404,10 +404,11 @@ ubuntu-22.04 leg's prefix even if a newer libstdc++ runtime is installed;
 
 ## Cutting a release
 
-`.github/workflows/release.yml` has three entry points:
+`.github/workflows/release.yml` has four entry points:
 
 ```
-push to main ──► release ──┐  (bump, tag, push, draft GitHub release; only with a release:* label)
+schedule ──► drift ──┐
+push to main ────────┴► release ──┐  (bump, tag, push, draft GitHub release; only with a release:* label, or a drift)
 push a tag ────────────────┤
 workflow_dispatch ─────────┴─► resolve ──► verify ──┬─► sdist ─────────────────────────────────┐
                                                     ├─► wheel ──► wheel-merge ──► wheel-pycarla ─┼─► publish-toolchain ──► publish ──┬─► github-release
@@ -453,6 +454,44 @@ The rest of the run builds and publishes that tag, from the CARLA SHAs the
 `release` job resolved; `github-release` publishes the draft once the
 packages are on PyPI. Release cuts never run concurrently. Bump `TSC_ABI_VERSION_*` in `ffi.h` and `_ffi.codon`
 in the PR itself if the C ABI changed.
+
+### Scheduled: a CARLA ref drifted
+
+CARLA's branches move every day, and a tag can be re-pointed: `1.0` was
+built by 0.8.7 at `ecb0af47` and later moved twice, the last time to
+`3ea16611`, the commit the 1.0 package was built from. Between them
+`EpisodeSettings` and `Actor` gained fields. A client whose LibCarla
+predates such a change may misread the server's messages or be misread by it.
+So the workflow also runs daily (`schedule`). Its `drift` job
+(`python tools/release_tag.py drift`) does three things:
+
+1. reads the LibCarla commit of every ref from the latest GitHub release's
+   notes, from the `LibCarla: carla-simulator/carla `<ref>` at ...@<sha>`
+   lines the `release` job writes (keep their form);
+2. resolves each ref of `tools/release_carla_refs.txt` to its current commit;
+3. compares, for each path of `tools/release_drift_paths.txt`, its git
+   object SHA at the released commit and at the current one, through GitHub's
+   Git database API (`git/commits`, `git/trees`).
+
+A path whose SHA differs, or a listed ref the release did not build, is a
+drift. The paths cover the RPC messages, the sensor data and their
+serializers, and the streaming protocol. A tree's SHA is the hash of its
+content, so the two commits are compared as they are, whatever the history
+between them: a ref moved back to an ancestor, or to a diverged commit, is
+caught too. The compare API would miss both, because it follows
+`base..head` history, and it lists at most 300 changed files.
+Then `release` cuts a **patch** release, as a merged `release:patch` PR
+would, and adds `Re-released for CARLA's wire format: <reason>` to its notes.
+No drift, no release.
+
+Run it by hand to see what the next scheduled run would decide:
+
+```sh
+GITHUB_TOKEN=$(gh auth token) python tools/release_tag.py drift
+```
+
+To watch more of LibCarla (all of `LibCarla/source/carla/client/`, say),
+add its prefix to `tools/release_drift_paths.txt`.
 
 ### Hand-cut tag: another date or CARLA ref
 

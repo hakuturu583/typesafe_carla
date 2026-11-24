@@ -14,7 +14,7 @@
 # version once, so every release bumps it, and a run fails early (in `release`
 # and `resolve`) if the version is already published.
 #
-# There are three ways in, and the first is the everyday one:
+# There are four ways in, and the first is the everyday one:
 #
 #   push to main   the auto-release path. When the merged PR carries exactly one
 #                  `release:major|minor|patch` label, the `release` job bumps the
@@ -23,6 +23,17 @@
 #                  tags them and drafts a GitHub release; the
 #                  tag is built and published, all in this one run, and the
 #                  GitHub release is published last. No label, no release.
+#   schedule       the drift path, daily. CARLA's branches move, and a tag can be
+#                  re-pointed (1.0 was, after 0.8.7 built it): a client whose
+#                  LibCarla predates a change to the wire format may misread or
+#                  be misread. The `drift` job compares each listed ref's current
+#                  commit with the one the latest release built (from its GitHub
+#                  release notes, tools/release_tag.py drift); a change under
+#                  tools/release_drift_paths.txt (RPC messages, sensor
+#                  serializers, streaming), or a ref the release did not build,
+#                  makes `release` cut a patch release exactly as a merged
+#                  `release:patch` PR does, the reason in its notes. No drift, no
+#                  release.
 #   push a release tag   a hand-cut tag (another date or CARLA ref, a hotfix) is built
 #                  and published directly, then gets a GitHub release; the
 #                  `release` job is skipped.
@@ -52,6 +63,9 @@
 name: Release
 
 on:
+  # The drift check (the `drift` job).
+  schedule:
+    - cron: "37 5 * * *"
   push:
     branches: [main]
     # <version>-<YYYYMMDD> or <version>-<CARLA ref>-<YYYYMMDD>. "**" because a ref may contain "/";
@@ -76,12 +90,34 @@ permissions:
   contents: read
 
 jobs:
-  # Read the release label off the merged PR and, if there is one, bump the
-  # version and push the tag. Runs only on a push to main; a tag push or a
-  # manual dispatch skips it and falls straight through to `resolve`.
+  # On the schedule only: whether a listed CARLA ref moved on from the latest
+  # release's LibCarla in the wire format, so that `release` cuts a patch release.
+  drift:
+    name: check the CARLA refs for drift
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    outputs:
+      bump: ${{ steps.d.outputs.bump }}
+      reason: ${{ steps.d.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: d
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/release_tag.py drift --github-output "$GITHUB_OUTPUT"
+
+  # Read the release label off the merged PR (or, on the schedule, the drift
+  # check's verdict) and, if there is one, bump the version and push the tag.
+  # Runs only on a push to main and on the schedule; a tag push or a manual
+  # dispatch skips it and falls straight through to `resolve`.
   release:
     name: cut the release tag
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [drift]
+    if: >-
+      always() && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'schedule' && needs.drift.result == 'success' &&
+         needs.drift.outputs.bump == 'patch'))
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -100,8 +136,16 @@ jobs:
         id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          DRIFT_BUMP: ${{ needs.drift.outputs.bump }}
         run: |
           set -euo pipefail
+          if [ "$EVENT" = schedule ]; then
+            # The drift check decided; there is no PR.
+            echo "bump=${DRIFT_BUMP}" >> "$GITHUB_OUTPUT"
+            echo "Resolved bump level: ${DRIFT_BUMP} (drift)"
+            exit 0
+          fi
           # An API error fails the job; only an empty list means "no PR".
           pr_json=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
             --jq '.[0] // empty')
@@ -172,11 +216,17 @@ jobs:
         id: notes
         env:
           MATRIX: ${{ steps.tag.outputs.carla_matrix }}
+          DRIFT_REASON: ${{ needs.drift.outputs.reason }}
         run: |
           set -euo pipefail
           {
             echo "notes<<EOF"
+            # The lines tools/release_tag.py drift reads back: keep their form.
             echo "$MATRIX" | jq -r '.[] | "LibCarla: carla-simulator/carla `\(.ref)` at carla-simulator/carla@\(.commit)\(if .index == 0 then " (default)" else "" end)"'
+            if [ -n "$DRIFT_REASON" ]; then
+              echo ""
+              echo "Re-released for CARLA's wire format: ${DRIFT_REASON}"
+            fi
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -265,8 +315,8 @@ jobs:
             # A hand-cut tag: check it, resolve its CARLA commits, build and publish.
             python3 tools/release_tag.py check "$REF_NAME" --github-output "$out"
             proceed=true; publish=true; ref="$REF_NAME"; tag="$REF_NAME"
-          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
-            # The auto-release path: build and publish only if a tag was cut.
+          elif { [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; } || [ "$EVENT" = schedule ]; then
+            # The auto-release and drift paths: build and publish only if a tag was cut.
             # The CARLA commits come from `release`, not resolved a second time.
             if [ "$RELEASE_RESULT" = success ] && [ "$BUMP" != none ] && [ -n "$TAG" ]; then
               proceed=true; publish=true; ref="$TAG"; tag="$TAG"; version="${TAG%%-*}"
