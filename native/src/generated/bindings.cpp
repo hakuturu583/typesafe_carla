@@ -1391,14 +1391,16 @@ tsc_status_t tsc_traffic_manager_set_osm_mode(tsc_traffic_manager_t *tm, int32_t
 
 tsc_status_t tsc_traffic_manager_set_respawn_dormant_vehicles(tsc_traffic_manager_t *tm,
                                                               int32_t enabled) {
-  return TSC_GUARD({ tm_of(tm).SetRespawnDormantVehicles(enabled != 0); });
+  return TSC_GUARD({
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetRespawnDormantVehicles, "TrafficManager.set_respawn_dormant_vehicles", enabled != 0); }(tm_of(tm));
+  });
 }
 
 tsc_status_t tsc_traffic_manager_set_boundaries_respawn_dormant_vehicles(tsc_traffic_manager_t *tm,
                                                                          double lower_bound,
                                                                          double upper_bound) {
   return TSC_GUARD({
-    tm_of(tm).SetBoundariesRespawnDormantVehicles(check_non_negative(lower_bound, "lower_bound"), check_non_negative(upper_bound, "upper_bound"));
+    [&](auto &self_) { TSC_CALL_OPTIONAL(self_, SetBoundariesRespawnDormantVehicles, "TrafficManager.set_boundaries_respawn_dormant_vehicles", check_non_negative(lower_bound, "lower_bound"), check_non_negative(upper_bound, "upper_bound")); }(tm_of(tm));
   });
 }
 
