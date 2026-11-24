@@ -165,11 +165,16 @@ class TrafficManager:
         _check(tsc_traffic_manager_set_osm_mode(self._h.ptr, i32(int(mode_switch))))
 
     def set_respawn_dormant_vehicles(self, mode_switch: bool):
+        """Not in LibCarla ue58-dev or 1.0 (carla-simulator/carla#10254): a compile
+        error when built for them."""
+        carla_api_missing_in("TrafficManager.set_respawn_dormant_vehicles", "ue58-dev", "1.0")
         _check(tsc_traffic_manager_set_respawn_dormant_vehicles(self._h.ptr,
                                                                 i32(int(mode_switch))))
 
     def set_boundaries_respawn_dormant_vehicles(self, lower_bound: float, upper_bound: float):
-        """Distances (m) from the hero within which dormant vehicles respawn."""
+        """Distances (m) from the hero within which dormant vehicles respawn.
+        Not in LibCarla ue58-dev or 1.0: a compile error when built for them."""
+        carla_api_missing_in("TrafficManager.set_boundaries_respawn_dormant_vehicles", "ue58-dev", "1.0")
         _check(tsc_traffic_manager_set_boundaries_respawn_dormant_vehicles(
             self._h.ptr, lower_bound, upper_bound))
 

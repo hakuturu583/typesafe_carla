@@ -225,9 +225,8 @@ elseif(TSC_BACKEND STREQUAL "libcarla")
   endif()
   target_link_libraries(typesafe_carla_ffi PRIVATE carla-client)
 
-  file(STRINGS "${TSC_CARLA_DIR}/CMakeLists.txt" _tsc_carla_v REGEX "set \\(CARLA_VERSION_(MAJOR|MINOR|PATCH) [0-9]+\\)")
-  string(REGEX REPLACE ".*MAJOR ([0-9]+).*MINOR ([0-9]+).*PATCH ([0-9]+).*" "\\1.\\2.\\3"
-         TSC_CARLA_VERSION "${_tsc_carla_v}")
+  include(cmake/CarlaVersion.cmake)
+  tsc_carla_version("${TSC_CARLA_DIR}/CMakeLists.txt" TSC_CARLA_VERSION)
   set(TSC_CARLA_LICENSE_FILE "${TSC_CARLA_DIR}/LICENSE")
   # LibCarla (MIT) is linked statically; the wheel ships its license notice,
   # and the notices of everything else linked in with it (Boost, rpclib,
