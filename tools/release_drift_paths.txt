@@ -1,6 +1,7 @@
-# The carla-simulator/carla paths whose change between a release's LibCarla
-# and a listed ref's current commit makes the scheduled run cut a patch release
-# (tools/release_tag.py drift, .github/workflows/release.yml), one prefix per
+# The carla-simulator/carla paths (directories with a trailing /, or files)
+# whose content differing between a release's LibCarla commit and a listed
+# ref's current commit (by git object SHA) makes the scheduled run cut a patch
+# release (tools/release_tag.py drift, .github/workflows/release.yml), one per
 # line: what a client exchanges with the server, so that a client built before
 # the change may misread or be misread. A ref moved to another commit (a
 # re-pointed tag such as 1.0) counts by the same rule; a ref new to

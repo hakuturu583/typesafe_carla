@@ -469,11 +469,17 @@ So the workflow also runs daily (`schedule`). Its `drift` job
    notes, from the `LibCarla: carla-simulator/carla `<ref>` at ...@<sha>`
    lines the `release` job writes (keep their form);
 2. resolves each ref of `tools/release_carla_refs.txt` to its current commit;
-3. asks GitHub's compare API which files differ.
+3. compares, for each path of `tools/release_drift_paths.txt`, its git
+   object SHA at the released commit and at the current one, through GitHub's
+   Git database API (`git/commits`, `git/trees`).
 
-A changed file under a prefix of `tools/release_drift_paths.txt`, or a
-listed ref the release did not build, is a drift. The prefixes cover the RPC
-messages, the sensor data and their serializers, and the streaming protocol.
+A path whose SHA differs, or a listed ref the release did not build, is a
+drift. The paths cover the RPC messages, the sensor data and their
+serializers, and the streaming protocol. A tree's SHA is the hash of its
+content, so the two commits are compared as they are, whatever the history
+between them: a ref moved back to an ancestor, or to a diverged commit, is
+caught too. The compare API would miss both, because it follows
+`base..head` history, and it lists at most 300 changed files.
 Then `release` cuts a **patch** release, as a merged `release:patch` PR
 would, and adds `Re-released for CARLA's wire format: <reason>` to its notes.
 No drift, no release.

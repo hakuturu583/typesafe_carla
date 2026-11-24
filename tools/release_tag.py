@@ -44,10 +44,12 @@ without a tag (the release workflow's dry run).
 commit of every ref from the latest GitHub release's notes (the
 ``LibCarla: carla-simulator/carla `<ref>` at carla-simulator/carla@<sha>``
 lines the release workflow writes), resolves each listed ref's current commit,
-and asks GitHub which files differ between the two. A file under a prefix of
-``tools/release_drift_paths.txt`` (the wire format: RPC messages, sensor
-serializers, streaming), or a listed ref the release did not build, makes it a
-drift. Outputs ``bump`` (``patch`` on a drift, else ``none``) and ``reason``
+and compares, for each path of ``tools/release_drift_paths.txt`` (the wire
+format: RPC messages, sensor serializers, streaming), its git object SHA at the
+two commits (GitHub's Git database API). A path whose SHA differs, or a listed
+ref the release did not build, makes it a drift. The two endpoints are compared
+as they are, so a ref moved back to an ancestor or to a diverged commit counts,
+and no limit on the number of changed files applies. Outputs ``bump`` (``patch`` on a drift, else ``none``) and ``reason``
 (one line, for the release notes).
 
 ``unpublished`` fails if the package version (or ``--version``) is already on
@@ -365,34 +367,59 @@ def released_commits(fetch: Fetch = github_fetch, repo: str = OWN_REPO) -> tuple
     return tag, commits
 
 
-def changed_files(base: str, head: str, fetch: Fetch = github_fetch,
-                  repo: str = CARLA_REPO) -> list[str]:
-    """The files that differ between two commits (GitHub's compare, every page)."""
-    files: list[str] = []
-    page = 1
-    while True:
-        url = (f"https://api.github.com/repos/{repo}/compare/{base}...{head}"
-               f"?per_page=100&page={page}")
+class TreeReader:
+    """Git object SHAs of paths at a commit, through GitHub's Git database API.
+
+    A tree's SHA is the hash of its content, so a path whose SHA is the same at
+    two commits is the same, file for file; one that differs changed. This
+    compares the two endpoints themselves, whatever the history between them:
+    a ref re-pointed to an ancestor or a diverged commit, or a span with more
+    changed files than the compare API lists (300), is judged by what each
+    commit holds. Trees are fetched one level at a time and cached."""
+
+    def __init__(self, fetch: Fetch = github_fetch, repo: str = CARLA_REPO) -> None:
+        self._fetch = fetch
+        self._repo = repo
+        self._trees: dict[str, dict[str, str]] = {}
+
+    def _tree(self, sha: str) -> dict[str, str]:
+        if sha not in self._trees:
+            url = f"https://api.github.com/repos/{self._repo}/git/trees/{sha}"
+            try:
+                answer = self._fetch(url)
+                if answer.get("truncated"):
+                    raise TagError(f"GitHub truncated the tree {sha} of {self._repo}")
+                self._trees[sha] = {e["path"]: e["sha"] for e in answer["tree"]}
+            except (KeyError, TypeError, AttributeError) as e:
+                raise TagError(f"unexpected GitHub API response for {url}: {e!r}") from None
+        return self._trees[sha]
+
+    def sha_of(self, commit: str, path: str) -> str | None:
+        """The object SHA of ``path`` (a file, or a directory with or without a
+        trailing ``/``) at ``commit``; ``None`` if the commit has no such path."""
+        url = f"https://api.github.com/repos/{self._repo}/git/commits/{commit}"
         try:
-            answer = fetch(url)
-            batch = [f["filename"] for f in answer.get("files") or []]
-        except (KeyError, TypeError, AttributeError) as e:
+            sha: str = self._fetch(url)["tree"]["sha"]
+        except (KeyError, TypeError) as e:
             raise TagError(f"unexpected GitHub API response for {url}: {e!r}") from None
-        files.extend(batch)
-        if len(batch) < 100:
-            return files
-        page += 1
+        for part in path.strip("/").split("/"):
+            entry = self._tree(sha).get(part)
+            if entry is None:
+                return None
+            sha = entry
+        return sha
 
 
 def drift(refs: list[str], prefixes: list[str], fetch: Fetch = github_fetch,
           repo: str = OWN_REPO) -> tuple[Resolved, list[str]]:
     """Each listed ref's current commit, and why it calls for a release (empty: no need).
 
-    A reason per ref whose current commit changes a file under one of
-    ``prefixes`` from the latest release's commit, or that the release did not
-    build."""
+    A reason per ref whose current commit holds any of ``prefixes`` (a
+    directory or a file) other than the latest release's commit did (compared
+    by git object SHA, :class:`TreeReader`), or that the release did not build."""
     tag, released = released_commits(fetch, repo)
     resolved = resolve_refs(refs, None, fetch)
+    trees = TreeReader(fetch)
     reasons: list[str] = []
     for ref, commit in resolved:
         before = released.get(ref)
@@ -401,11 +428,10 @@ def drift(refs: list[str], prefixes: list[str], fetch: Fetch = github_fetch,
             continue
         if before == commit.sha:
             continue
-        hits = [f for f in changed_files(before, commit.sha, fetch)
-                if any(f.startswith(p) for p in prefixes)]
-        if hits:
-            shown = ", ".join(hits[:3]) + (f" and {len(hits) - 3} more" if len(hits) > 3 else "")
-            reasons.append(f"{ref} {before[:9]}..{commit.sha[:9]} changes {shown}")
+        changed = [p for p in prefixes
+                   if trees.sha_of(before, p) != trees.sha_of(commit.sha, p)]
+        if changed:
+            reasons.append(f"{ref} {before[:9]}..{commit.sha[:9]} changes {', '.join(changed)}")
     return resolved, reasons
 
 

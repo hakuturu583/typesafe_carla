@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 
 import pytest
@@ -417,7 +418,9 @@ def test_refs_cli_accepts_a_slash_only_in_the_first_ref(capsys):
 
 # --- drift: the scheduled re-release ------------------------------------------
 
+
 SHA3 = "fedcba9876543210fedcba9876543210fedcba98"
+SHA4 = "00112233445566778899aabbccddeeff00112233"
 
 
 def release_notes(*pairs):
@@ -426,20 +429,73 @@ def release_notes(*pairs):
     return "\n".join(lines) + "\n\n## What's Changed\n* something\n"
 
 
-def fake_github_drift(released, current, changed, tag="0.8.7-20261105"):
+def carla_tree(rpc="v1", sensor="v1", docs="v1", extra=None):
+    """A CARLA checkout's files: {path: content}."""
+    files = {
+        "LibCarla/source/carla/rpc/EpisodeSettings.h": rpc,
+        "LibCarla/source/carla/rpc/Actor.h": "actor",
+        "LibCarla/source/carla/sensor/s11n/Image.h": sensor,
+        "LibCarla/source/carla/client/World.cpp": "world",
+        "Docs/core_map.md": docs,
+    }
+    files.update(extra or {})
+    return files
+
+
+class FakeGitDatabase:
+    """GitHub's git/commits and git/trees for CARLA commits given as files.
+
+    Each object's SHA is a hash of its content, as git's is, so a directory
+    with the same files has the same SHA in every commit."""
+
+    def __init__(self, commits):
+        self.objects = {}  # sha -> {"tree": [...]} for trees
+        self.roots = {sha: self._store(self._nest(files)) for sha, files in commits.items()}
+
+    @staticmethod
+    def _nest(files):
+        root = {}
+        for path, content in files.items():
+            node = root
+            *dirs, name = path.split("/")
+            for d in dirs:
+                node = node.setdefault(d, {})
+            node[name] = content
+        return root
+
+    def _store(self, node):
+        entries = []
+        for name, child in sorted(node.items()):
+            if isinstance(child, dict):
+                sha = self._store(child)
+            else:
+                sha = hashlib.sha1(f"blob {child}".encode()).hexdigest()
+            entries.append({"path": name, "sha": sha})
+        sha = hashlib.sha1(repr(entries).encode()).hexdigest()
+        self.objects[sha] = {"tree": entries, "truncated": False}
+        return sha
+
+    def answer(self, url):
+        if "/git/commits/" in url:
+            return {"tree": {"sha": self.roots[url.rsplit("/", 1)[1]]}}
+        if "/git/trees/" in url:
+            return self.objects[url.rsplit("/", 1)[1]]
+        return None
+
+
+def fake_github_drift(released, current, commits, tag="0.8.7-20261105"):
     """A fetch() for drift: the latest release's notes, each ref's current
-    commit, and the files GitHub compares as changed (100 to a page)."""
+    commit, and the CARLA commits' trees."""
     calls = []
+    git = FakeGitDatabase(commits)
 
     def fetch(url):
         calls.append(url)
         if url.endswith("/releases/latest"):
             return {"tag_name": tag, "body": release_notes(*released)}
-        if "/compare/" in url:
-            span = url.split("/compare/")[1].split("?")[0]
-            page = int(url.split("&page=")[1])
-            files = changed[span]
-            return {"files": [{"filename": f} for f in files[(page - 1) * 100:page * 100]]}
+        found = git.answer(url)
+        if found is not None:
+            return found
         for ref, sha in current.items():
             if f"sha={ref}&" in url:
                 return [commit_json(sha, "2026-11-17T12:15:27Z")]
@@ -457,38 +513,71 @@ def test_no_drift_when_the_refs_have_not_moved():
                               {"ue5-dev": SHA, "1.0": SHA2}, {})
     _, reasons = release_tag.drift(["ue5-dev", "1.0"], PREFIXES, fetch)
     assert reasons == []
-    assert not [u for u in fetch.calls if "/compare/" in u]
+    assert not [u for u in fetch.calls if "/git/" in u]
 
 
 def test_a_move_outside_the_wire_format_is_no_drift():
-    fetch = fake_github_drift([("ue5-dev", SHA), ("1.0", SHA2)],
-                              {"ue5-dev": SHA, "1.0": SHA3},
-                              {f"{SHA2}...{SHA3}": ["Docs/core_map.md", "Unreal/x.cpp",
-                                                    "LibCarla/source/carla/client/World.cpp"]})
+    fetch = fake_github_drift(
+        [("ue5-dev", SHA), ("1.0", SHA2)], {"ue5-dev": SHA, "1.0": SHA3},
+        {SHA2: carla_tree(), SHA3: carla_tree(docs="v2", extra={"Unreal/x.cpp": "x"})})
     _, reasons = release_tag.drift(["ue5-dev", "1.0"], PREFIXES, fetch)
     assert reasons == []
 
 
 def test_a_retagged_ref_changing_an_rpc_message_is_a_drift():
     """CARLA's 1.0 tag moved after typesafe-carla 0.8.7 built it (EpisodeSettings
-    and Actor gained fields)."""
+    gained a field)."""
     fetch = fake_github_drift(
         [("ue5-dev", SHA), ("1.0", SHA2)], {"ue5-dev": SHA, "1.0": SHA3},
-        {f"{SHA2}...{SHA3}": ["CHANGELOG.md", "LibCarla/source/carla/rpc/EpisodeSettings.h",
-                              "LibCarla/source/carla/rpc/Actor.h"]})
+        {SHA2: carla_tree(), SHA3: carla_tree(rpc="v2")})
     resolved, reasons = release_tag.drift(["ue5-dev", "1.0"], PREFIXES, fetch)
     assert [(ref, c.sha) for ref, c in resolved] == [("ue5-dev", SHA), ("1.0", SHA3)]
-    assert reasons == [f"1.0 {SHA2[:9]}..{SHA3[:9]} changes "
-                       "LibCarla/source/carla/rpc/EpisodeSettings.h, "
-                       "LibCarla/source/carla/rpc/Actor.h"]
+    assert reasons == [f"1.0 {SHA2[:9]}..{SHA3[:9]} changes LibCarla/source/carla/rpc/"]
 
 
-def test_every_compare_page_is_read():
-    files = [f"Docs/{i}.md" for i in range(150)] + ["LibCarla/source/carla/sensor/s11n/X.h"]
-    fetch = fake_github_drift([("1.0", SHA2)], {"1.0": SHA3}, {f"{SHA2}...{SHA3}": files})
+def test_a_ref_moved_back_to_an_ancestor_is_a_drift():
+    """The endpoints are compared, not base..head history: a rollback that
+    drops an RPC field is caught (compare would list no incoming change)."""
+    fetch = fake_github_drift(
+        [("1.0", SHA3)], {"1.0": SHA2},
+        {SHA3: carla_tree(rpc="v2"), SHA2: carla_tree(rpc="v1")})
     _, reasons = release_tag.drift(["1.0"], PREFIXES, fetch)
-    assert len(reasons) == 1 and "sensor/s11n/X.h" in reasons[0]
-    assert len([u for u in fetch.calls if "/compare/" in u]) == 2
+    assert reasons == [f"1.0 {SHA3[:9]}..{SHA2[:9]} changes LibCarla/source/carla/rpc/"]
+
+
+def test_any_number_of_changed_files_is_judged():
+    """No cap on changed files (the compare API lists 300 at most)."""
+    many = {f"Docs/page{i}.md": "new" for i in range(1000)}
+    fetch = fake_github_drift(
+        [("1.0", SHA2)], {"1.0": SHA3},
+        {SHA2: carla_tree(), SHA3: carla_tree(sensor="v2", extra=many)})
+    _, reasons = release_tag.drift(["1.0"], PREFIXES, fetch)
+    assert reasons == [f"1.0 {SHA2[:9]}..{SHA3[:9]} changes LibCarla/source/carla/sensor/"]
+
+
+def test_a_watched_path_added_or_removed_is_a_drift():
+    without = {k: v for k, v in carla_tree().items() if "/sensor/" not in k}
+    fetch = fake_github_drift([("1.0", SHA2)], {"1.0": SHA3},
+                              {SHA2: carla_tree(), SHA3: without})
+    _, reasons = release_tag.drift(["1.0"], PREFIXES, fetch)
+    assert reasons == [f"1.0 {SHA2[:9]}..{SHA3[:9]} changes LibCarla/source/carla/sensor/"]
+
+
+def test_trees_are_fetched_once_per_object():
+    fetch = fake_github_drift(
+        [("ue58-dev", SHA2), ("1.0", SHA2)], {"ue58-dev": SHA3, "1.0": SHA4},
+        {SHA2: carla_tree(), SHA3: carla_tree(), SHA4: carla_tree()})
+    _, reasons = release_tag.drift(["ue58-dev", "1.0"], PREFIXES, fetch)
+    assert reasons == []
+    trees = [u for u in fetch.calls if "/git/trees/" in u]
+    assert len(trees) == len(set(trees))
+
+
+def test_a_truncated_tree_is_refused():
+    reader = release_tag.TreeReader(lambda url: (
+        {"tree": {"sha": "t"}} if "/git/commits/" in url else {"tree": [], "truncated": True}))
+    with pytest.raises(TagError, match="truncated"):
+        reader.sha_of(SHA, "LibCarla/source/carla/rpc/")
 
 
 def test_a_ref_the_release_did_not_build_is_a_drift():
@@ -511,12 +600,12 @@ def test_drift_cli_outputs_the_bump_and_the_reason(tmp_path, refs_file):
     out = tmp_path / "github_output"
     fetch = fake_github_drift(
         [("ue5-dev", SHA), ("ue58-dev", SHA2)], {"ue5-dev": SHA, "ue58-dev": SHA3},
-        {f"{SHA2}...{SHA3}": ["LibCarla/source/carla/rpc/Actor.h"]})
+        {SHA2: carla_tree(), SHA3: carla_tree(rpc="v2")})
     assert release_tag.main(["drift", "--github-output", str(out)], fetch,
                             refs_file=refs_file, drift_paths_file=paths) == 0
     lines = dict(ln.split("=", 1) for ln in out.read_text().splitlines())
     assert lines["bump"] == "patch"
-    assert "ue58-dev" in lines["reason"] and "rpc/Actor.h" in lines["reason"]
+    assert "ue58-dev" in lines["reason"] and "carla/rpc/" in lines["reason"]
 
 
 def test_drift_cli_without_drift_bumps_nothing(tmp_path, refs_file):
